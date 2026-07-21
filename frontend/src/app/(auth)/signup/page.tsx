@@ -21,7 +21,6 @@ export default function SignupPage() {
       last_name: '',
       email: '',
       password: '',
-      organization_name: '',
     },
   });
 
@@ -90,13 +89,6 @@ export default function SignupPage() {
           label="Email"
           placeholder="you@company.com"
           isRequired
-        />
-        <TextInput
-          name="organization_name"
-          control={control}
-          label="Organization Name"
-          placeholder="Acme Corp"
-          helperText="Optional"
         />
         <TextInput
           name="password"

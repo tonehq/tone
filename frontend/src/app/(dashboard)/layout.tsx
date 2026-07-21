@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Sidebar } from '@/components/layout/sidebar';
 import { AppLoader, ErrorBoundary } from '@/components/shared';
-import { LOGIN_DATA } from '@/constants';
+import { LOGIN_DATA, ROUTE_ONBOARDING } from '@/constants';
 import { NavigationProvider, useNavigation } from '@/contexts/navigation';
 import { authApi } from '@/lib/api/auth';
 import { getAssociatedTenants } from '@/services/organizationService';
@@ -17,6 +17,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const hydrate = useAuthStore((s) => s.hydrate);
   const setLoginResponse = useAuthStore((s) => s.setLoginResponse);
   const setOrganizations = useAuthStore((s) => s.setOrganizations);
+  const setOrganization = useAuthStore((s) => s.setOrganization);
   const clearAuth = useAuthStore((s) => s.clearAuth);
   const [ready, setReady] = useState(false);
   // Guard against React StrictMode double-invoke firing the org fetch twice in dev.
@@ -44,21 +45,37 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         try {
           const user = await authApi.me();
           if (user) setLoginResponse({ user, organizations: [] });
-        } catch {
-          // Cookie is invalid/expired — the next API 401 tears the session down.
+        } catch (err) {
+          console.warn('[dashboard] /me hydrate failed', err);
         }
       }
 
-      // Pull the full list of orgs the user belongs to and seed the auth store
-      // so the sidebar switcher shows every workspace, not just the active one.
-      try {
-        const orgs = await getAssociatedTenants({ page: 1, page_size: 200 });
-        setOrganizations(orgs.map((o) => ({ id: o.id, name: o.name, role: o.role })));
-      } catch {
-        // Sidebar will gracefully fall back to "one workspace" copy.
+      // Org record + org list are independent — fetch in parallel so first
+      // paint isn't blocked on the onboarding gate check. The redirect is
+      // applied as soon as the org record lands, regardless of the list.
+      const [orgResult, orgsResult] = await Promise.allSettled([
+        authApi.myOrg(),
+        getAssociatedTenants({ page: 1, page_size: 200 }),
+      ]);
+
+      if (orgResult.status === 'fulfilled' && orgResult.value) {
+        const org = orgResult.value;
+        setOrganization(org);
+        if (org.onboarding_completed === false) {
+          router.replace(ROUTE_ONBOARDING);
+          return;
+        }
+      } else if (orgResult.status === 'rejected') {
+        console.warn('[dashboard] /organization/me failed', orgResult.reason);
+      }
+
+      if (orgsResult.status === 'fulfilled') {
+        setOrganizations(orgsResult.value.map((o) => ({ id: o.id, name: o.name, role: o.role })));
+      } else {
+        console.warn('[dashboard] getAssociatedTenants failed', orgsResult.reason);
       }
     })();
-  }, [hydrate, setLoginResponse, setOrganizations]);
+  }, [hydrate, setLoginResponse, setOrganization, setOrganizations, router]);
 
   // Cross-tab logout sync: when another tab clears the readable session
   // (logout), mirror that here so this tab does not stay "logged in" visually

@@ -1,0 +1,154 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: staging-tone-outbound-call-headless
+  namespace: staging
+  labels:
+    app: staging-tone-outbound-call-worker
+    environment: staging
+    component: call
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: staging-tone-outbound-call-worker
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: staging-tone-outbound-call-worker-pdb
+  namespace: staging
+  labels:
+    app: staging-tone-outbound-call-worker
+    environment: staging
+    component: call
+spec:
+  maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: staging-tone-outbound-call-worker
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: staging-tone-outbound-call-worker
+  namespace: staging
+  labels:
+    app: staging-tone-outbound-call-worker
+    environment: staging
+    component: call
+spec:
+  serviceName: staging-tone-outbound-call-headless
+  podManagementPolicy: Parallel
+  replicas: 1
+  selector:
+    matchLabels:
+      app: staging-tone-outbound-call-worker
+  updateStrategy:
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app: staging-tone-outbound-call-worker
+        environment: staging
+        component: call
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      terminationGracePeriodSeconds: 300
+      containers:
+        - name: staging-tone-outbound-call-worker
+          image: developer390/tone:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+            - uvicorn
+            - "main:app"
+            - "--host"
+            - "0.0.0.0"
+            - "--port"
+            - "8080"
+            - "--workers"
+            - "1"
+            - "--timeout-keep-alive"
+            - "3600"
+            - "--log-level"
+            - "info"
+          ports:
+            - containerPort: 8080
+          resources:
+            requests:
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "2"
+              memory: "2Gi"
+          env:
+            - name: ENV
+              value: "staging"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['app']"
+            - name: WORKER_MODE
+              value: "voice"
+            - name: MAX_CONCURRENT_CALLS
+              value: "2"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+            - name: INFISICAL_HOST
+              value: "https://secrets.trytone.ai"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          startupProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            periodSeconds: 2
+            timeoutSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            periodSeconds: 2
+            timeoutSeconds: 3
+            failureThreshold: 2
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - "curl -sf http://localhost:8080/drain || true && sleep 280"
+      imagePullSecrets:
+        - name: dockerhub-auth

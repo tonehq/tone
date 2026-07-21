@@ -1,7 +1,7 @@
 """scheduled_calls per-batch concurrency columns
 
 Revision ID: d4f1b7c8e35a
-Revises: b7d2f0a91e4c
+Revises: f7a3c2b9e1d8
 Create Date: 2026-07-21 12:45:00.000000
 
 Per-batch outbound concurrency moves from ``metadata`` JSONB onto typed, indexed columns —
@@ -16,7 +16,11 @@ from sqlalchemy.dialects.postgresql import UUID
 
 # revision identifiers, used by Alembic.
 revision = "d4f1b7c8e35a"
-down_revision = "b7d2f0a91e4c"
+# Re-parented onto f7a3c2b9e1d8 (staging-aws's onboarding-fields migration, which also
+# branched from b7d2f0a91e4c) when staging-aws was merged in, so alembic keeps a single
+# linear head instead of a fork. Safe: this migration is new/undeployed, so re-pointing its
+# parent affects no already-migrated environment.
+down_revision = "f7a3c2b9e1d8"
 branch_labels = None
 depends_on = None
 
