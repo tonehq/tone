@@ -1,9 +1,11 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Response, status
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
+from core.services.auth_service import OnboardingIndustry, OnboardingUseCase
 from core.middleware.auth import (
     JWTClaims,
     REFRESH_COOKIE,
@@ -204,6 +206,35 @@ def get_me(claims: JWTClaims = Depends(get_jwt_claims), db: Session = Depends(ge
         "user": svc.get_user_me(claims.user_id),
         "organization": svc.get_organization_me(claims.user_id),
     }
+
+
+class OnboardingInviteEntry(BaseModel):
+    email: EmailStr
+    role: Literal["admin", "developer", "observer"] = "developer"
+
+
+class CompleteOnboardingRequest(BaseModel):
+    workspace_name: str = Field(..., min_length=1, max_length=100)
+    use_case: OnboardingUseCase
+    industry: Optional[OnboardingIndustry] = None
+    invites: List[OnboardingInviteEntry] = Field(default_factory=list)
+
+
+@router.post("/onboarding")
+def complete_onboarding(
+    body: CompleteOnboardingRequest,
+    claims: JWTClaims = Depends(get_jwt_claims),
+    db: Session = Depends(get_db),
+):
+    svc = AuthService(db)
+    result = svc.complete_onboarding(
+        user_id=claims.user_id,
+        workspace_name=body.workspace_name,
+        use_case=body.use_case,
+        industry=body.industry,
+        invites=[entry.model_dump() for entry in body.invites],
+    )
+    return svc.onboarding_response(*result)
 
 
 @router.get("/validate-invitation")

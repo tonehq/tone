@@ -26,6 +26,7 @@ import SearchBar from './SearchBar';
 import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
 import SliderField from './SliderField';
+import Stepper from './Stepper';
 import TextAreaField from './TextAreaField';
 import TextInput from './TextInput';
 import { ThemeToggle } from './ThemeToggle';
@@ -67,6 +68,7 @@ export type {
 export type { CollapsibleSectionProps } from './CollapsibleSection';
 export type { CustomCardProps } from './CustomCard';
 export type { SearchableSelectOption } from './SearchableSelect';
+export type { StepperStep } from './Stepper';
 export type { TabItem } from './CustomTab';
 export type { ActionMenuProps } from './ActionMenu';
 export {
@@ -110,6 +112,7 @@ export {
   SearchableSelect,
   SelectInput,
   SliderField,
+  Stepper,
   TextAreaField,
   TextInput,
   ThemeToggle,

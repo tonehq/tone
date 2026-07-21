@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.sql import false as sa_false
 
 from core.database.base import Base
 
@@ -34,6 +35,10 @@ class Organization(Base):
     # An agent's own log_level overrides this. See core/services/log_level_resolver.py.
     log_level = Column(String(20), nullable=True)
 
+    industry = Column(String(100), nullable=True)
+    use_case = Column(String(100), nullable=True)
+    onboarding_completed = Column(Boolean, nullable=False, default=False, server_default=sa_false())
+
     created_at = Column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at = Column(
         DateTime(timezone=True),
@@ -58,6 +63,9 @@ class Organization(Base):
             "max_production_calls_per_month": self.max_production_calls_per_month,
             "max_users": self.max_users,
             "sso_enabled": self.sso_enabled,
+            "industry": self.industry,
+            "use_case": self.use_case,
+            "onboarding_completed": self.onboarding_completed,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

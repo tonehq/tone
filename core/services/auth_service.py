@@ -19,7 +19,7 @@ import logging
 import secrets
 import uuid
 from datetime import timedelta
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Literal, Optional, Tuple, Union, get_args
 
 from fastapi import HTTPException, status
 from sqlalchemy import or_
@@ -54,6 +54,40 @@ _user_uuid = coerce_uuid
 def _slugify(value: str) -> str:
     slug = "".join(ch.lower() if ch.isalnum() else "-" for ch in value).strip("-")
     return slug[:50] or "org"
+
+
+# Canonical enums for the onboarding wizard. Mirrored in
+# frontend/src/constants/onboarding.ts — keep the two in sync.
+OnboardingUseCase = Literal[
+    "customer_support",
+    "sales",
+    "lead_qualification",
+    "appointment_booking",
+    "feedback_collection",
+    "other",
+]
+
+OnboardingIndustry = Literal[
+    "software",
+    "ecommerce",
+    "healthcare",
+    "financial_services",
+    "real_estate",
+    "education",
+    "travel_hospitality",
+    "insurance",
+    "legal",
+    "marketing",
+    "manufacturing",
+    "non_profit",
+    "other",
+]
+
+ONBOARDING_USE_CASES: Tuple[str, ...] = get_args(OnboardingUseCase)
+ONBOARDING_INDUSTRIES: Tuple[str, ...] = get_args(OnboardingIndustry)
+
+# Roles allowed to complete onboarding — the invitee flow is separate.
+_ONBOARDING_ADMIN_ROLES = frozenset({"owner", "admin"})
 
 
 class AuthService(BaseService):
@@ -356,29 +390,30 @@ class AuthService(BaseService):
                 detail="Email already registered",
             )
 
-        # Resolve organization (create new or attach to default).
-        org_display = (organization_name or "").strip() or f"{first_name} {last_name}".strip()
-        org_slug = _slugify(org_display)
+        # Every new signup gets a fresh org they own; the workspace name and
+        # onboarding fields (industry, use_case) are collected in the
+        # onboarding wizard via /auth/onboarding. Placeholder name used until
+        # the user completes step 1 of onboarding.
+        provided_name = (organization_name or "").strip()
+        placeholder_name = (first_name or "").strip() + "'s Workspace" if (first_name or "").strip() else "My Workspace"
+        org_display = provided_name or placeholder_name
+        org_slug = _slugify(org_display) or "workspace"
         existing_slug = (
             self.db.query(Organization).filter(Organization.slug == org_slug).first()
         )
         if existing_slug:
             org_slug = f"{org_slug}-{secrets.token_hex(3)}"
 
-        is_first_owner = bool((organization_name or "").strip())
-        if is_first_owner:
-            org = Organization(
-                name=org_display,
-                slug=org_slug,
-                subscription_tier="free",
-                status="active",
-            )
-            self.db.add(org)
-            self.db.flush()
-            user_role = "owner"
-        else:
-            org = self.ensure_default_organization()
-            user_role = "developer"
+        org = Organization(
+            name=org_display,
+            slug=org_slug,
+            subscription_tier="free",
+            status="active",
+            onboarding_completed=False,
+        )
+        self.db.add(org)
+        self.db.flush()
+        user_role = "owner"
 
         user = User(
             organization_id=org.id,
@@ -418,6 +453,117 @@ class AuthService(BaseService):
         return self._build_auth_tokens(
             user, org, email_verification_token=raw_token, device=device,
         )
+
+    # ── Onboarding ───────────────────────────────────────────────────
+
+    def complete_onboarding(
+        self,
+        user_id: Union[str, uuid.UUID],
+        workspace_name: str,
+        use_case: str,
+        industry: Optional[str] = None,
+        invites: Optional[List[Dict[str, str]]] = None,
+    ) -> Tuple[Organization, List[str], List[Dict[str, str]]]:
+        """Finish the post-signup onboarding wizard.
+
+        Returns the updated org and the invite fan-out results as separate
+        values so callers can shape the response themselves (see
+        ``onboarding_response`` for the default shape). The org update
+        commits before invites fire — each invite is its own transaction
+        via ``invite_user_to_organization`` — so a bad email cannot roll
+        back the org rename or previously-sent invites.
+        """
+        workspace_name = (workspace_name or "").strip()
+        if not workspace_name:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Workspace name is required",
+            )
+        use_case = (use_case or "").strip()
+        if not use_case:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Use case is required",
+            )
+
+        member = self._membership_for(user_id)
+        if not member:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No workspace found for user",
+            )
+        if member.role not in _ONBOARDING_ADMIN_ROLES:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only owners or admins can complete onboarding",
+            )
+
+        org = (
+            self.db.query(Organization)
+            .filter(Organization.id == member.organization_id)
+            .first()
+        )
+        if not org:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Workspace not found",
+            )
+
+        org.name = workspace_name
+        new_slug = _slugify(workspace_name)
+        if new_slug != org.slug:
+            clash = (
+                self.db.query(Organization)
+                .filter(Organization.slug == new_slug, Organization.id != org.id)
+                .first()
+            )
+            if clash:
+                new_slug = f"{new_slug}-{secrets.token_hex(3)}"
+            org.slug = new_slug
+        org.use_case = use_case
+        org.industry = (industry or "").strip() or None
+        org.onboarding_completed = True
+        self.db.commit()
+        self.db.refresh(org)
+        logger.info(
+            "[onboarding] org=%s renamed=%r use_case=%s industry=%s",
+            org.id, org.name, org.use_case, org.industry,
+        )
+
+        invites_sent: List[str] = []
+        invites_failed: List[Dict[str, str]] = []
+        for entry in invites or []:
+            email = (entry.get("email") or "").strip()
+            role = (entry.get("role") or "developer").strip() or "developer"
+            if not email:
+                continue
+            try:
+                self.invite_user_to_organization(
+                    email=email,
+                    role=role,
+                    invited_by=user_id,
+                    organization_id=org.id,
+                )
+                invites_sent.append(email)
+            except HTTPException as exc:
+                invites_failed.append({"email": email, "error": exc.detail})
+            except Exception as exc:
+                logger.exception("Failed to invite %s during onboarding", email)
+                invites_failed.append({"email": email, "error": str(exc)})
+
+        return org, invites_sent, invites_failed
+
+    def onboarding_response(
+        self,
+        org: Organization,
+        invites_sent: List[str],
+        invites_failed: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        return {
+            "organization": org.to_dict(),
+            "invites_sent": invites_sent,
+            "invites_failed": invites_failed,
+        }
 
     # ── Login / Refresh / Logout ─────────────────────────────────────
 

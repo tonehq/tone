@@ -10,6 +10,7 @@ export const FIREBASE_SIGNUP = '/auth/signup_with_firebase';
 
 export const ROUTE_LOGIN = '/login';
 export const ROUTE_HOME = '/home';
+export const ROUTE_ONBOARDING = '/onboarding';
 
 // When the dev API proxy is enabled the browser talks to the Next.js origin
 // (relative URL) so the httpOnly auth cookie is same-origin; otherwise it hits

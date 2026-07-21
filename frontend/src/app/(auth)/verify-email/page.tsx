@@ -53,10 +53,10 @@ function VerifyEmailContent() {
         </div>
         <h2 className="text-2xl font-bold">Email Verified!</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Your email has been verified successfully. Please log in to continue.
+          Your email is verified. Let&apos;s finish setting up your workspace.
         </p>
-        <Link href="/login">
-          <Button className="mt-6">Go to Login</Button>
+        <Link href="/onboarding">
+          <Button className="mt-6">Continue to Onboarding</Button>
         </Link>
       </div>
     );

@@ -47,8 +47,12 @@ function LoginPageInner() {
       const data = await login.mutateAsync(values);
       setLoginResponse(data);
       showToast.success('Welcome back!');
+      // Route new/returning users to onboarding until their workspace has
+      // captured use_case + workspace name. Existing orgs are backfilled to
+      // onboarding_completed=true so they land on /home as before.
+      const needsOnboarding = data.organization?.onboarding_completed === false;
       const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : '/home';
-      router.push(safeNext);
+      router.push(needsOnboarding ? '/onboarding' : safeNext);
     } catch (err) {
       handleApiError(err);
     }
