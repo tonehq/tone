@@ -195,6 +195,20 @@ class Settings:
         self.LOKI_SYNC_HTTP_TIMEOUT: int = int(get_secret("LOKI_SYNC_HTTP_TIMEOUT", "30"))
         self.LOKI_SYNC_MAX_RETRIES: int = int(get_secret("LOKI_SYNC_MAX_RETRIES", "5"))
 
+        # Per-batch outbound concurrency knob — the UI "Concurrent calls" selector's upper
+        # bound AND the default limit a batch gets when it doesn't request one. NOT a global
+        # in-flight ceiling: the limit is enforced per scheduling batch (rows sharing a
+        # ``batch_id``), so N concurrent batches can each run up to this many at once. 0
+        # (default) = unset: the selector has no cap and a batch with no requested value runs
+        # with no per-batch limit. See core/services/outbound_capacity.py for the resolver.
+        self.MAX_CONCURRENT_OUTBOUND_CALLS: int = int(get_secret("MAX_CONCURRENT_OUTBOUND_CALLS", "0"))
+        # Cap for the OUTBOUND best-effort background thread pools — pipeline cache pre-warming
+        # (after a dial, while it rings) and the completion refill (enqueueing a batch's next
+        # call off the status webhook). 0 (default) = ON-DEMAND: no threads are held idle; one
+        # is created at call time only when needed, up to the runtime's default cap. Set > 0 to
+        # pin an explicit ceiling. Kept as a knob for future tuning.
+        self.OUTBOUND_BG_WORKERS: int = int(get_secret("OUTBOUND_BG_WORKERS", "0"))
+
     def loki_read_configured(self) -> bool:
         """True only when we have enough to read a call's logs back from Loki.
 

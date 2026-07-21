@@ -29,11 +29,7 @@ from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
 from core.services.contact_ingestion.base import ParsedContact
 from core.services.contact_ingestion.pipeline import RecordParser, parsed_contact_to_row
-from core.services.contact_ingestion.validation import (
-    CompositeValidator,
-    RequiredIdentityValidator,
-    SchemaMetadataValidator,
-)
+from core.services.contact_ingestion.validation import build_contact_validator
 from core.services.contacts.contact_metadata_validation import (
     make_contact_metadata_validator,
     normalize_contact_metadata_dates,
@@ -157,8 +153,8 @@ class ContactService(BaseService):
         The Contact-Create API SKIPS the parse step (its rows are already structured) but
         runs them through the SAME loop + validators as file-upload / sync flows: convert
         each row to the common ``ParsedContact`` model, run the shared ``RecordParser`` loop
-        with a ``CompositeValidator`` (identity + the directory's schema), then upsert the
-        valid records. No per-request row cap — imports are unbounded.
+        with the validator from the shared ``build_contact_validator`` (identity + the
+        directory's schema), then upsert the valid records. No per-request row cap — unbounded.
         """
         directory = self._get_directory(directory_id)
         if not rows:
@@ -182,10 +178,10 @@ class ContactService(BaseService):
             prepared.append((i, {**row, "contact_metadata": metadata}))
 
         # Same validate/loop as every other data source — the ONLY difference is Parse is
-        # skipped here (the API hands us structured records, not a raw blob).
-        validator = CompositeValidator(
-            [RequiredIdentityValidator(), SchemaMetadataValidator(schema_fields)]
-        )
+        # skipped here (the API hands us structured records, not a raw blob). Directory contact
+        # (phone optional; identity = name or phone) validated via the ONE shared builder, which
+        # adds schema-metadata validation only when the directory has a schema.
+        validator = build_contact_validator(schema_fields)
         parsed = RecordParser(validator).process(
             self._row_to_parsed(row) for _i, row in prepared
         )

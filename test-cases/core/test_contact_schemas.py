@@ -319,3 +319,87 @@ class TestAdminGuard:
         ).json()
         resp = client_as_member.delete(f"/api/v1/contact-schemas/{created['id']}")
         assert resp.status_code == 403
+
+
+# ---------------------------------------------------------------------------
+# apply_scheduled_at_from_column — per-row file schedule time (outbound upload)
+# ---------------------------------------------------------------------------
+
+
+def _rec(**meta):
+    """A minimal ParsedContact carrying only the metadata under test."""
+    from core.services.contact_ingestion.base import ParsedContact
+
+    return ParsedContact(external_id=uuid.uuid4().hex, phone_number="+14155550123", metadata=meta)
+
+
+class TestApplyScheduledAtFromColumn:
+    """The service resolver that maps a user-named file column to
+    ``metadata['scheduled_at']`` using the matching schema field's format + timezone,
+    dropping unparseable/past rows to the caller's ``invalid`` bucket."""
+
+    def _dt_schema(self, svc, *, fmt="%d/%m/%Y %I:%M %p", tz="UTC", column="date_time"):
+        schema = _new_schema(svc)
+        svc.create_schema_field(
+            schema.id,
+            field_name=column,
+            type="string",
+            format="datetime",
+            field_metadata={"datetime_format": fmt, "timezone": tz},
+        )
+        return schema
+
+    def test_future_value_sets_scheduled_at_in_field_timezone(self, db_session):
+        svc = _svc(db_session)
+        schema = self._dt_schema(svc, tz="UTC")
+        rec = _rec(date_time="21/07/2099 11:00 AM")
+        errors = svc.apply_scheduled_at_from_column([rec], schema.id, "date_time")
+        assert errors == []
+        # UTC field tz → 11:00 stays 11:00 UTC.
+        assert rec.metadata["scheduled_at"].startswith("2099-07-21T11:00:00")
+
+    def test_field_timezone_is_honored(self, db_session):
+        svc = _svc(db_session)
+        schema = self._dt_schema(svc, tz="America/New_York")
+        rec = _rec(date_time="21/07/2099 11:00 AM")
+        svc.apply_scheduled_at_from_column([rec], schema.id, "date_time")
+        # 11:00 EDT (summer, -04:00) → 15:00 UTC.
+        assert rec.metadata["scheduled_at"].startswith("2099-07-21T15:00:00")
+
+    def test_past_value_reported_and_not_scheduled(self, db_session):
+        svc = _svc(db_session)
+        schema = self._dt_schema(svc)
+        rec = _rec(date_time="21/07/2020 11:00 AM")
+        errors = svc.apply_scheduled_at_from_column([rec], schema.id, "date_time")
+        assert len(errors) == 1 and errors[0][0] is rec
+        assert "past" in errors[0][1].lower()
+        assert "scheduled_at" not in rec.metadata
+
+    def test_unparseable_value_reported(self, db_session):
+        svc = _svc(db_session)
+        schema = self._dt_schema(svc)
+        rec = _rec(date_time="not a date")
+        errors = svc.apply_scheduled_at_from_column([rec], schema.id, "date_time")
+        assert len(errors) == 1 and rec.metadata.get("scheduled_at") is None
+
+    def test_empty_cell_is_left_untouched(self, db_session):
+        svc = _svc(db_session)
+        schema = self._dt_schema(svc)
+        rec = _rec(date_time="")
+        errors = svc.apply_scheduled_at_from_column([rec], schema.id, "date_time")
+        assert errors == []
+        assert "scheduled_at" not in rec.metadata
+
+    def test_blank_column_is_a_noop(self, db_session):
+        svc = _svc(db_session)
+        rec = _rec(date_time="21/07/2099 11:00 AM")
+        assert svc.apply_scheduled_at_from_column([rec], None, "") == []
+        assert "scheduled_at" not in rec.metadata
+
+    def test_no_schema_falls_back_to_iso_best_effort(self, db_session):
+        svc = _svc(db_session)
+        good = _rec(when="2099-07-21T11:00:00+00:00")
+        bad = _rec(when="21/07/2099 11:00 AM")  # non-ISO, no field format → unparseable
+        errors = svc.apply_scheduled_at_from_column([good, bad], None, "when")
+        assert good.metadata["scheduled_at"].startswith("2099-07-21T11:00:00")
+        assert any(rec is bad for rec, _ in errors)

@@ -23,7 +23,7 @@ from __future__ import annotations
 import csv
 import io
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
@@ -292,17 +292,11 @@ class ContactSchemaService(BaseService):
     # Base dial columns always present in a sample import file.
     _SAMPLE_BASE_COLUMNS = ("name", "phone_number")
 
-    def build_sample_file(self, schema_id, fmt: str = "csv") -> Tuple[str, str, bytes]:
-        """Generate a schema-shaped sample import file SERVER-SIDE (CSV or ``.xlsx``).
-
-        Columns = the base dial columns + each active field's external ``source_key`` (or
-        ``field_name``), with mandatory columns marked with a trailing ``*``; one example
-        row illustrates the expected shape. The example content (incl. any placeholder
-        values) is produced here, not in the client. Returns
-        ``(filename, media_type, content_bytes)``.
-        """
+    def _active_fields(self, schema_id) -> List[SchemaField]:
+        """The schema's ACTIVE, non-deleted fields (org-scoped, ordered) — the ONE loader
+        reused by the sample builder and the schedule-column resolver."""
         schema = self.get_schema(schema_id)  # org-scope + 404
-        fields = (
+        return (
             self.query(SchemaField)
             .filter(
                 SchemaField.schema_id == schema.id,
@@ -312,8 +306,94 @@ class ContactSchemaService(BaseService):
             .order_by(SchemaField.display_order.asc())
             .all()
         )
-        headers, example = self._sample_columns(fields)
-        slug = re.sub(r"\s+", "-", (schema.name or "schema").strip()).lower() or "schema"
+
+    def apply_scheduled_at_from_column(
+        self, records, schema_id, column
+    ) -> List[Tuple[Any, str]]:
+        """Set each record's ``metadata['scheduled_at']`` from the named source ``column``
+        (the per-row call time in an uploaded file), parsed with the matching schema field's
+        date/datetime FORMAT and TIMEZONE (field tz → org scheduling tz → UTC), so the
+        schedule column and the stored metadata resolve to the SAME instant. Mutates the
+        usable ``records`` in place.
+
+        Returns a list of ``(record, reason)`` for rows whose cell was PRESENT but unusable —
+        unparseable, or a time in the past — so the file scheduler drops them to ``invalid``
+        instead of dialing them (rather than the generic "past → dial ASAP" fallback). An
+        EMPTY cell (or a blank ``column``) is left untouched: that row falls back to the
+        request-level schedule time. The outbound scheduler reads ``metadata['scheduled_at']``.
+        """
+        from core.services.contact_ingestion.row_mapping import parse_datetime_value
+
+        col = (column or "").strip().lower()
+        if not col:
+            return []
+
+        # FORMAT comes from the schema field mapped to this column (matched by source_key or
+        # field_name) so a non-ISO format like DD/MM/YYYY parses. TIMEZONE is the field's own
+        # source tz when set, else the org's default scheduling tz, else UTC — keeping the
+        # schedule column consistent with how that same field is stored as contact metadata.
+        fmt = field_tz = None
+        if schema_id:
+            for field in self._active_fields(schema_id):
+                names = {
+                    (field.source_key or "").strip().lower(),
+                    (field.field_name or "").strip().lower(),
+                }
+                if col in names and getattr(field, "format", None) in ("date", "datetime"):
+                    cfg = getattr(field, "field_metadata", None) or {}
+                    fmt = cfg.get("datetime_format")
+                    field_tz = cfg.get("timezone")
+                    break
+        tz = field_tz or self._org_scheduling_timezone()
+
+        now = datetime.now(timezone.utc)
+        errors: List[Tuple[Any, str]] = []
+        for record in records:
+            raw_val = (record.metadata or {}).get(col)
+            if raw_val is None or not str(raw_val).strip():
+                continue  # empty cell → fall back to the request-level schedule time
+            iso = parse_datetime_value(str(raw_val), fmt=fmt, tz=tz)
+            if not iso:
+                errors.append(
+                    (record, f"Unparseable schedule time '{raw_val}' in column '{col}'.")
+                )
+                continue
+            # Allow a 60s grace so a just-now time isn't rejected as "past".
+            if datetime.fromisoformat(iso) <= now - timedelta(seconds=60):
+                errors.append((record, f"Scheduled time '{raw_val}' is in the past."))
+                continue
+            record.metadata["scheduled_at"] = iso
+        return errors
+
+    def _org_scheduling_timezone(self) -> str:
+        """The org's default scheduling timezone (IANA), via the single ``org_settings``
+        resolver — the fallback source tz for a schedule column whose schema field carries
+        no timezone of its own."""
+        from core.models.organization import Organization
+        from core.services.org_settings import get_scheduling_timezone
+
+        org = (
+            self.db.query(Organization)
+            .filter(Organization.id == self.org_id)
+            .first()
+        )
+        return get_scheduling_timezone(org.settings if org else None)
+
+    def build_sample_file(self, schema_id, fmt: str = "csv") -> Tuple[str, str, bytes]:
+        """Generate a schema-shaped sample import file SERVER-SIDE (CSV or ``.xlsx``).
+
+        Columns = the base dial columns + each active field's external ``source_key`` (or
+        ``field_name``), with mandatory columns marked with a trailing ``*``; one example
+        row illustrates the expected shape. The example content (incl. any placeholder
+        values) is produced here, not in the client. Returns
+        ``(filename, media_type, content_bytes)``.
+        """
+        schema = self.get_schema(schema_id)
+        headers, example = self._sample_columns(self._active_fields(schema_id))
+        # Collapse whitespace to '-', then drop any char outside [a-z0-9-] so an odd schema
+        # name (e.g. containing a double-quote) can't corrupt the quoted Content-Disposition
+        # filename parameter.
+        slug = re.sub(r"[^a-z0-9-]", "", re.sub(r"\s+", "-", (schema.name or "schema").strip()).lower()) or "schema"
         if (fmt or "csv").lower() == "xlsx":
             return (
                 f"sample-{slug}.xlsx",
@@ -322,17 +402,26 @@ class ContactSchemaService(BaseService):
             )
         return f"sample-{slug}.csv", "text/csv; charset=utf-8", self._sample_csv_bytes(headers, example)
 
+    # A fixed sample instant so example date/time cells are deterministic.
+    _SAMPLE_INSTANT = datetime(2026, 1, 31, 14, 30, 0)
+
     @classmethod
     def _sample_columns(cls, fields) -> Tuple[List[str], List[str]]:
-        """Header row + one example row for a schema's sample file (shared by CSV/xlsx)."""
+        """Header row + one example row for a schema's sample file (shared by CSV/xlsx).
+
+        Date/time fields render an example value in the field's CONFIGURED format (the
+        strptime string in ``field_metadata.datetime_format``, or ISO when none) so the
+        sample shows exactly the shape the importer expects."""
         headers: List[str] = list(cls._SAMPLE_BASE_COLUMNS)
         seen = set(cls._SAMPLE_BASE_COLUMNS)
+        field_by_col: Dict[str, Any] = {}
         for f in fields:
             key = (f.source_key or f.field_name or "").strip()
             if not key or key in seen:
                 continue
             seen.add(key)
             headers.append(f"{key}*" if f.is_mandatory else key)
+            field_by_col[key] = f
         example: List[str] = []
         for h in headers:
             col = h.rstrip("*")
@@ -341,8 +430,30 @@ class ContactSchemaService(BaseService):
             elif col == "phone_number":
                 example.append("+14155550123")
             else:
-                example.append("")
+                example.append(cls._sample_value_for_field(field_by_col.get(col)))
         return headers, example
+
+    @classmethod
+    def _sample_value_for_field(cls, field) -> str:
+        """Example cell value for a schema field. A date/datetime field renders the fixed
+        sample instant in its configured format (``field_metadata.datetime_format``) — or
+        ISO when unset; every other field is left blank."""
+        fmt_kind = getattr(field, "format", None) if field is not None else None
+        if fmt_kind not in ("date", "datetime"):
+            return ""
+        meta = (getattr(field, "field_metadata", None) or {}) if field is not None else {}
+        strptime_fmt = meta.get("datetime_format")
+        if strptime_fmt:
+            try:
+                return cls._SAMPLE_INSTANT.strftime(strptime_fmt)
+            except (ValueError, TypeError):
+                pass
+        # No configured format → ISO (date-only for `date`, full for `datetime`).
+        return (
+            cls._SAMPLE_INSTANT.date().isoformat()
+            if fmt_kind == "date"
+            else cls._SAMPLE_INSTANT.isoformat()
+        )
 
     @staticmethod
     def _sample_csv_bytes(headers: List[str], example: List[str]) -> bytes:
@@ -378,18 +489,6 @@ class ContactSchemaService(BaseService):
         return {"ok": True}
 
     # ------------------------------------------------------------------ helpers
-
-    def _active_fields(self, schema_id) -> List[SchemaField]:
-        return (
-            self.query(SchemaField)
-            .filter(
-                SchemaField.schema_id == schema_id,
-                SchemaField.is_active.is_(True),
-                SchemaField.deleted_at.is_(None),
-            )
-            .order_by(SchemaField.display_order.asc(), SchemaField.created_at.asc())
-            .all()
-        )
 
     def _referenced_by(self, schema_id) -> Dict[str, int]:
         """Count how many directories default to this schema and how many syncs use it."""

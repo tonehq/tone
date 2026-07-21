@@ -7,10 +7,13 @@ import pytest
 
 from core.services.outbound_call_service import (
     OutboundCallService as Svc,
+    _ACTIVE_OUTBOUND_STATES,
     _STATUS_RANK,
     _TERMINAL,
     _TWILIO_STATUS_MAP,
 )
+from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
+from shared.config import settings
 from fastapi import HTTPException
 
 
@@ -114,3 +117,44 @@ class TestRankGuard:
         sc = _FakeSc("completed")
         assert svc._apply_status(sc, "in_progress") is False
         assert sc.status == "completed"
+
+
+class TestOutboundConcurrency:
+    """Per-batch concurrency: the env value is only the selector ceiling + default; the
+    resolver turns a requested value into the effective per-batch limit. The dispatch-time
+    admission, drain safety-net and completion refill are covered in
+    ``test-cases/core/test_outbound_calls.py`` (TestDispatchConcurrencyAdmission /
+    TestDrainOutboundCapacity / TestCompletionRefill)."""
+
+    def test_active_states_are_inflight_and_disjoint_from_terminal(self):
+        assert set(_ACTIVE_OUTBOUND_STATES) == {"processing", "dispatched", "in_progress"}
+        assert not (set(_ACTIVE_OUTBOUND_STATES) & _TERMINAL)
+
+    def test_env_ceiling_resolver(self, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 8)
+        assert get_env_outbound_ceiling() == 8
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 0)
+        assert get_env_outbound_ceiling() is None
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", -5)
+        assert get_env_outbound_ceiling() is None
+
+    def test_requested_is_clamped_to_ceiling(self, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 5)
+        assert resolve_batch_concurrency(3) == 3
+        assert resolve_batch_concurrency(99) == 5  # clamped down to the env ceiling
+
+    def test_empty_or_zero_defaults_to_env_ceiling(self, monkeypatch):
+        # API-without-UI / empty field → the env ceiling is the default.
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 7)
+        assert resolve_batch_concurrency(None) == 7
+        assert resolve_batch_concurrency(0) == 7
+        assert resolve_batch_concurrency("") == 7
+
+    def test_requested_used_as_is_when_no_env_ceiling(self, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 0)
+        assert resolve_batch_concurrency(4) == 4
+
+    def test_no_request_and_no_ceiling_means_unlimited(self, monkeypatch):
+        monkeypatch.setattr(settings, "MAX_CONCURRENT_OUTBOUND_CALLS", 0)
+        assert resolve_batch_concurrency(None) is None
+        assert resolve_batch_concurrency(0) is None

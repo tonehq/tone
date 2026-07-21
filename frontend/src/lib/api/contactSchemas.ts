@@ -84,11 +84,12 @@ export const schemasApi = {
 };
 
 /** Paginated org-schema list. */
-export function useSchemasList(params: PaginatedListParams = {}) {
+export function useSchemasList(params: PaginatedListParams = {}, options?: { enabled?: boolean }) {
   return usePaginatedList<ContactSchema>(
     contactKeys.schemas.list(params),
     () => schemasApi.list(params),
     params,
+    options,
   );
 }
 

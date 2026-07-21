@@ -271,3 +271,116 @@ class TestReconcileOrphans:
             n = svc.reconcile_orphaned_scheduled_calls()
         assert n == 0
         disp.assert_not_called()
+
+
+def _sc(**over):
+    """A ScheduledCall-like row for the dispatch path (only the attributes it touches)."""
+    base = dict(
+        id=uuid4(), organization_id=uuid4(), agent_id=uuid4(), provider="twilio",
+        to_number="+15552220000", from_number="+15551110000", provider_call_sid=None,
+        status="scheduled", batch_id=None, max_concurrency=None,
+    )
+    base.update(over)
+    return SimpleNamespace(**base)
+
+
+def _dispatch_db(sc, *, claimed, batch_active=0):
+    """DB double for ``dispatch_scheduled_call``.
+
+    The batch admission folds a live in-flight COUNT subquery into the claim's WHERE, so the
+    ``func.count(...)`` query must return a REAL scalar element (a ``literal``) — a bare
+    MagicMock would raise on ``batch_active < batch_limit``. ``claimed`` is what the atomic
+    ``UPDATE ... WHERE`` reports (1 = won the claim, 0 = held back by the batch limit)."""
+    from sqlalchemy import literal
+
+    db = MagicMock()
+    sc_qm = MagicMock()
+    sc_qm.filter.return_value = sc_qm
+    sc_qm.first.return_value = sc
+    sc_qm.update.return_value = claimed
+
+    count_qm = MagicMock()
+    count_qm.filter.return_value = count_qm
+    count_qm.scalar_subquery.return_value = literal(batch_active)
+
+    db.query.side_effect = lambda model: sc_qm if model is ScheduledCall else count_qm
+    return db
+
+
+class TestDispatchConcurrencyAdmission:
+    """The per-batch limiter enforced inside ``dispatch_scheduled_call``: a fresh 'scheduled'
+    row is only claimed while its batch has headroom; a row held by the limit stays 'scheduled'
+    and is never dialed. (The admission predicate is decided in-DB by the atomic UPDATE; here we
+    drive its two observable outcomes via the claim result.)"""
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_batch_at_limit_holds_row_without_dialing(self, mock_engine):
+        # Batch limit 2, already 2 in flight → the atomic claim matches nothing (claimed=0).
+        sc = _sc(batch_id=uuid4(), max_concurrency=2)
+        svc = OutboundCallService(_dispatch_db(sc, claimed=0, batch_active=2), org_id=uuid4())
+
+        res = svc.dispatch_scheduled_call(sc.id)
+
+        # Held back: still 'scheduled', and the dial engine was never touched.
+        assert res is sc and res.status == "scheduled"
+        mock_engine.assert_not_called()
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_batch_with_headroom_claims_and_dials(self, mock_engine):
+        # Batch limit 2, 0 in flight → the claim wins (claimed=1) and the row dials.
+        mock_engine.return_value.initiate_call.return_value = SimpleNamespace(call_id="CA9")
+        sc = _sc(batch_id=uuid4(), max_concurrency=2)
+        svc = OutboundCallService(_dispatch_db(sc, claimed=1, batch_active=0), org_id=uuid4())
+
+        with patch.object(svc, "_public_base", return_value="https://api.x"), \
+                patch.object(svc, "_prewarm_pipeline"):
+            res = svc.dispatch_scheduled_call(sc.id)
+
+        assert res.status == "dispatched" and res.provider_call_sid == "CA9"
+        mock_engine.return_value.initiate_call.assert_called_once()
+
+
+class TestDrainOutboundCapacity:
+    """The per-minute safety net that re-dispatches DUE, batch-limited rows a prior claim held
+    back — each re-applies the atomic admission, so it can't overshoot the limit."""
+
+    def test_dispatches_due_rows_and_counts_only_dialed(self):
+        held, dialed = _sc(), _sc()
+        db = make_db({(ScheduledCall, "all"): [held, dialed]})
+        svc = OutboundCallService(db, org_id=uuid4())
+        with patch.object(svc, "dispatch_scheduled_call") as disp:
+            # First stays held (still 'scheduled'), second wins a freed slot ('dispatched').
+            disp.side_effect = [
+                SimpleNamespace(status="scheduled"),
+                SimpleNamespace(status="dispatched"),
+            ]
+            n = svc.drain_outbound_capacity()
+        assert disp.call_count == 2
+        assert n == 1  # only the row that actually dialed is counted
+
+    def test_no_due_rows_is_noop(self):
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        with patch.object(svc, "dispatch_scheduled_call") as disp:
+            assert svc.drain_outbound_capacity() == 0
+        disp.assert_not_called()
+
+
+class TestCompletionRefill:
+    """On a terminal status a batch-limited call frees a slot; the refill offloads enqueuing the
+    batch's next DUE row to a worker thread. A call with no per-batch limit refills nothing."""
+
+    def test_refill_submits_for_limited_batch(self):
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        completed = SimpleNamespace(batch_id=uuid4(), max_concurrency=3)
+        with patch("core.services.outbound_call_service._get_refill_executor") as ex:
+            svc._refill_after_completion(completed)
+        ex.return_value.submit.assert_called_once()
+        # Only the batch_id crosses the thread boundary (never the ORM object).
+        assert ex.return_value.submit.call_args.args[1] == completed.batch_id
+
+    def test_refill_noop_without_batch_limit(self):
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        with patch("core.services.outbound_call_service._get_refill_executor") as ex:
+            svc._refill_after_completion(SimpleNamespace(batch_id=None, max_concurrency=None))
+            svc._refill_after_completion(SimpleNamespace(batch_id=uuid4(), max_concurrency=0))
+        ex.return_value.submit.assert_not_called()

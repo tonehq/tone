@@ -8,6 +8,7 @@ import {
   DateTimePicker,
   SelectInput,
   TextAreaField,
+  TextInput,
 } from '@/components/shared';
 import AdvancedDirectoryConfig from '@/components/contacts/shared/AdvancedDirectoryConfig';
 import ContactFileInput from '@/components/contacts/shared/ContactFileInput';
@@ -17,12 +18,13 @@ import { useSchema, useSchemasList } from '@/lib/api/contactSchemas';
 import { listAgents } from '@/services/agentsService';
 import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
 import { getOrganizationSettings } from '@/services/organizationService';
+import { getOutboundConcurrencyMax } from '@/services/outboundCallService';
 import type { CreateOutboundCallPayload, CreateOutboundCallResponse } from '@/types/outboundCall';
 import { getBrowserTimeZone, getTimeZoneAbbreviation } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useSetAtom } from 'jotai';
-import { Upload } from 'lucide-react';
+import { AlertTriangle, Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
@@ -88,18 +90,6 @@ export default function NewOutboundCallModal({
   const createCall = useSetAtom(createOutboundCallAtom);
   const createCallFromFile = useSetAtom(createOutboundCallFromFileAtom);
 
-  // Schema + directory pickers for the upload path (mirrors the contacts Upload modal):
-  // the schema drives the downloadable sample; the directory (default "Global") is where
-  // the uploaded contacts are created + assigned.
-  const { data: schemasPage } = useSchemasList({ page_size: 100 });
-  const { data: directoriesPage } = useDirectoriesList({ page_size: 100 });
-  const schemaOptions = (schemasPage?.data ?? []).map((s) => ({ value: s.id, label: s.name }));
-  const directoryOptions = (directoriesPage?.data ?? []).map((d) => ({
-    value: d.id,
-    label: d.name,
-  }));
-  const globalDirectory = directoriesPage?.data?.find((d) => d.name === 'Global');
-
   const { control, handleSubmit, watch, reset, setValue } = useForm<OutboundCallForm>({
     defaultValues: {
       agent_id: defaultAgentId ?? '',
@@ -127,6 +117,31 @@ export default function NewOutboundCallModal({
   const [uploadMode, setUploadMode] = useState(false);
   const [schemaId, setSchemaId] = useState<string>('');
   const [pickedDirectoryId, setPickedDirectoryId] = useState<string>('');
+
+  // Schema + directory pickers for the upload path (mirrors the contacts Upload modal): the
+  // schema drives the downloadable sample; the directory (default "Global") is where the
+  // uploaded contacts are created + assigned. Only fetched for the upload path — a user who
+  // just types numbers manually never triggers these list queries (matches the sibling
+  // UploadContactsModal, which gates its list too).
+  const { data: schemasPage } = useSchemasList({ page_size: 100 }, { enabled: open && uploadMode });
+  const { data: directoriesPage } = useDirectoriesList(
+    { page_size: 100 },
+    { enabled: open && uploadMode },
+  );
+  const schemaOptions = (schemasPage?.data ?? []).map((s) => ({ value: s.id, label: s.name }));
+  const directoryOptions = (directoriesPage?.data ?? []).map((d) => ({
+    value: d.id,
+    label: d.name,
+  }));
+  const globalDirectory = directoriesPage?.data?.find((d) => d.name === 'Global');
+  // Optional file column holding each row's OWN call time (parsed with the schema's datetime
+  // field format/timezone). When set, per-row times override the single "Schedule for later".
+  const [scheduleColumn, setScheduleColumn] = useState<string>('');
+  // Per-batch concurrency: how many of THIS batch's calls dial at once. `concurrencyMax` is the
+  // env ceiling the field is capped to + defaults to (null = no upper bound); `concurrencyValue`
+  // is the user's choice, sent with the request (empty → the backend applies the env default).
+  const [concurrencyMax, setConcurrencyMax] = useState<number | null>(null);
+  const [concurrencyValue, setConcurrencyValue] = useState<number | null>(null);
 
   const { data: schemaDetail } = useSchema(schemaId || null);
 
@@ -161,6 +176,7 @@ export default function NewOutboundCallModal({
     setUploadMode(false);
     setSchemaId('');
     setPickedDirectoryId('');
+    setScheduleColumn('');
 
     let active = true;
     setOptionsLoading(true);
@@ -220,6 +236,24 @@ export default function NewOutboundCallModal({
     }
   }, [open, pickedDirectoryId, globalDirectory]);
 
+  // Load the env ceiling so the per-batch "Concurrent calls" field can cap + default to it.
+  useEffect(() => {
+    if (!open) return;
+    let active = true;
+    getOutboundConcurrencyMax()
+      .then((c) => {
+        if (!active) return;
+        setConcurrencyMax(c.max);
+        setConcurrencyValue(c.max); // default the batch to the env max (user can lower it)
+      })
+      .catch(() => {
+        if (active) setConcurrencyMax(null);
+      });
+    return () => {
+      active = false;
+    };
+  }, [open]);
+
   const onSubmit = useCallback(
     async (values: OutboundCallForm) => {
       const usingFile = uploadMode;
@@ -235,6 +269,8 @@ export default function NewOutboundCallModal({
       setSubmitting(true);
       setInvalidNumbers([]);
       try {
+        // Per-batch concurrency for THIS submission (empty → backend applies the env default).
+        const maxConcurrency = concurrencyValue && concurrencyValue > 0 ? concurrencyValue : null;
         const scheduled = values.schedule && values.scheduled_at;
         // Omit from_number when left on "Auto" so the backend selects one.
         const fromNumber =
@@ -253,6 +289,9 @@ export default function NewOutboundCallModal({
           if (fromNumber) fd.append('from_number', fromNumber);
           if (scheduledAt) fd.append('scheduled_at', scheduledAt);
           if (pickedDirectoryId) fd.append('directory_id', pickedDirectoryId);
+          if (schemaId) fd.append('schema_id', schemaId);
+          if (scheduleColumn.trim()) fd.append('schedule_column', scheduleColumn.trim());
+          if (maxConcurrency) fd.append('max_concurrency', String(maxConcurrency));
           fd.append('file', csvFile);
           res = await createCallFromFile(fd);
         } else {
@@ -262,14 +301,15 @@ export default function NewOutboundCallModal({
             to_numbers: numbers,
             scheduled_at: scheduledAt,
             directory_id: pickedDirectoryId || undefined,
+            max_concurrency: maxConcurrency ?? undefined,
           };
           res = await createCall(payload);
         }
         if (res?.invalid?.length) {
           setInvalidNumbers(res.invalid);
           showToast.warning(
-            `${res.invalid.length} number(s) skipped`,
-            'They were not valid E.164.',
+            `${res.invalid.length} row(s) skipped`,
+            'See the reasons listed in the form (invalid number, or an unusable/past schedule time).',
           );
         }
         onClose();
@@ -296,6 +336,9 @@ export default function NewOutboundCallModal({
       uploadMode,
       csvFile,
       pickedDirectoryId,
+      schemaId,
+      scheduleColumn,
+      concurrencyValue,
       createCall,
       createCallFromFile,
       onClose,
@@ -304,10 +347,26 @@ export default function NewOutboundCallModal({
     ],
   );
 
+  // Intimate the user when the current settings would place calls IMMEDIATELY instead of
+  // scheduling them. In upload mode a row dials now whenever it has no future time: with
+  // "Schedule for later" off there is no fallback, so an empty schedule column (or empty
+  // cells within it) means an immediate call. Manual "Call now" is already explicit.
+  const immediateNotice = useMemo(() => {
+    if (!uploadMode || scheduleOn) return null;
+    const col = scheduleColumn.trim();
+    return col
+      ? `Contacts whose “${col}” cell is empty will be called immediately (rows with a valid future time are scheduled). Turn on “Schedule for later” to give the rest a fallback time.`
+      : 'Every contact in the file will be called immediately. Name a “Schedule column” above to use per-row times, or turn on “Schedule for later”.';
+  }, [uploadMode, scheduleOn, scheduleColumn]);
+
+  // In upload mode the action is "scheduling" whenever a time source exists — either the
+  // "Schedule for later" fallback or a per-row schedule column — so the button should read
+  // "Schedule call" rather than "Call … now" (only a bare upload with neither dials now).
+  const uploadSchedules = uploadMode && (scheduleOn || !!scheduleColumn.trim());
   const submitLabel = uploadMode
-    ? scheduleOn
-      ? 'Schedule from file'
-      : 'Call from file'
+    ? uploadSchedules
+      ? 'Schedule call'
+      : 'Call from file now'
     : scheduleOn
       ? numberCount > 1
         ? `Schedule ${numberCount} calls`
@@ -359,6 +418,34 @@ export default function NewOutboundCallModal({
           options={fromSelectOptions}
         />
 
+        {/* Per-batch concurrency — capped to the env max when one is configured. */}
+        <TextInput
+          label="Concurrent calls"
+          type="number"
+          min={1}
+          max={concurrencyMax ?? undefined}
+          value={concurrencyValue ?? ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') {
+              setConcurrencyValue(null);
+              return;
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n)) {
+              setConcurrencyValue(null);
+              return;
+            }
+            const bounded = concurrencyMax !== null ? Math.min(concurrencyMax, n) : n;
+            setConcurrencyValue(Math.max(1, bounded));
+          }}
+          helperText={
+            concurrencyMax !== null
+              ? `How many of this batch's calls dial at once (max ${concurrencyMax}). The next fires as one finishes.`
+              : "How many of this batch's calls dial at once. Leave empty for no limit. The next fires as one finishes."
+          }
+        />
+
         {/* Mapping schema — drives the downloadable sample template (always visible). */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
@@ -387,6 +474,7 @@ export default function NewOutboundCallModal({
                 onClick={() => {
                   setUploadMode(false);
                   setCsvFile(null);
+                  setScheduleColumn('');
                 }}
               >
                 Enter numbers manually
@@ -402,21 +490,30 @@ export default function NewOutboundCallModal({
             )}
           </div>
           {uploadMode ? (
-            <ContactFileInput
-              label="Contact file"
-              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-              allowedExtensions={['.csv', '.xlsx']}
-              value={csvFile}
-              onChange={setCsvFile}
-              hint="Upload a CSV or .xlsx (matching the selected schema — download the sample above). It is parsed on the server; the file needs a phone_number column."
-            />
+            <>
+              <ContactFileInput
+                label="Contact file"
+                accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                allowedExtensions={['.csv', '.xlsx']}
+                value={csvFile}
+                onChange={setCsvFile}
+                hint="Upload a CSV or .xlsx (matching the selected schema — download the sample above). It is parsed on the server; the file needs a phone_number column."
+              />
+              <TextInput
+                label="Schedule column (optional)"
+                placeholder="e.g. date_time"
+                value={scheduleColumn}
+                onChange={(e) => setScheduleColumn(e.target.value)}
+                helperText="Name the file column holding each row's call time. It's parsed with the selected schema's date/datetime field format and overrides 'Schedule for later' per row. Rows with a blank cell use the time below; unparseable or past times are skipped."
+              />
+            </>
           ) : (
             <>
               <TextAreaField
                 name="to_numbers_text"
                 control={control}
                 rows={4}
-                placeholder={'+14155550123\n+14155550124\n…one per line, or paste'}
+                placeholder="+14155550123, +14155550124, …comma-separated, or paste"
               />
               <p className="text-xs text-muted-foreground">
                 {numberCount > 0
@@ -431,19 +528,28 @@ export default function NewOutboundCallModal({
               className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800 ring-1 ring-inset ring-red-200"
             >
               <p className="font-medium">
-                {invalidNumbers.length} number{invalidNumbers.length > 1 ? 's were' : ' was'}{' '}
-                skipped (not valid E.164):
+                {invalidNumbers.length} row{invalidNumbers.length > 1 ? 's were' : ' was'} skipped:
               </p>
               <ul className="mt-1 list-disc pl-4">
-                {invalidNumbers.map((n) => (
-                  <li key={n.to_number} className="truncate">
-                    {n.to_number}
+                {invalidNumbers.map((n, i) => (
+                  <li key={`${n.to_number}-${i}`} className="truncate">
+                    <span className="font-medium">{n.to_number}</span>
+                    {n.error ? ` — ${n.error}` : ''}
                   </li>
                 ))}
               </ul>
             </div>
           )}
         </div>
+        {immediateNotice && (
+          <div
+            role="alert"
+            className="flex items-start gap-2 rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800 ring-1 ring-inset ring-amber-200"
+          >
+            <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
+            <span>{immediateNotice}</span>
+          </div>
+        )}
         <CheckboxField id="schedule" control={control} label="Schedule for later" />
         {scheduleOn && (
           <Controller

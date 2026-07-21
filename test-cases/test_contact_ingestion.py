@@ -19,6 +19,12 @@ from core.services.contact_ingestion import (
     select_source_for_upload,
 )
 from core.services.contact_ingestion.base import ParsedContact
+from core.services.contact_ingestion.validation import (
+    PhoneNumberValidator,
+    RequiredIdentityValidator,
+    SchemaMetadataValidator,
+    build_contact_validator,
+)
 from core.services.contact_ingestion.csv_source import CSVContactSource
 from core.services.contact_ingestion.excel_source import ExcelContactSource
 from core.services.outbound_call_service import OutboundCallService as Svc
@@ -120,6 +126,16 @@ class TestCSVParsing:
         assert rows[0].name == "Alice"
         assert rows[0].phone_number == "+14155550123"
         assert rows[1].name == "Bob"
+
+    def test_ragged_row_without_phone_hashes_without_crash(self):
+        # A ragged row (extra trailing cell → None restkey) that ALSO lacks a phone and
+        # external_id falls into the content-hash branch; sorting row.items() there must not
+        # choke on the None key (would raise TypeError and abort the whole import).
+        rows = _parse("name,city\nAlice,NYC,extra\n")
+        assert len(rows) == 1
+        assert rows[0].name == "Alice"
+        assert rows[0].phone_number is None
+        assert rows[0].external_id.startswith("csv-")
 
 
 class _FakeDatasource:
@@ -468,3 +484,74 @@ class TestRecordParser:
         result = parser.parse(CSVContactSource(), csv_text.encode("utf-8"))
         assert result.valid_count == 1 and result.invalid_count == 1
         assert result.valid[0].name == "Alice"
+
+
+class TestSchemaSampleValue:
+    """A schema's sample file shows a date/time example in the field's configured format."""
+
+    @staticmethod
+    def _cs():
+        from core.services.contacts.contact_schema_service import ContactSchemaService
+
+        return ContactSchemaService
+
+    def test_configured_format_is_applied(self):
+        f = SimpleNamespace(format="datetime", field_metadata={"datetime_format": "%m/%d/%Y %H:%M"})
+        assert self._cs()._sample_value_for_field(f) == "01/31/2026 14:30"
+
+    def test_am_pm_format(self):
+        f = SimpleNamespace(format="datetime", field_metadata={"datetime_format": "%m/%d/%Y %I:%M %p"})
+        assert self._cs()._sample_value_for_field(f) == "01/31/2026 02:30 PM"
+
+    def test_date_no_format_is_iso_date(self):
+        f = SimpleNamespace(format="date", field_metadata={})
+        assert self._cs()._sample_value_for_field(f) == "2026-01-31"
+
+    def test_datetime_no_format_is_iso(self):
+        f = SimpleNamespace(format="datetime", field_metadata=None)
+        assert self._cs()._sample_value_for_field(f) == "2026-01-31T14:30:00"
+
+    def test_non_datetime_and_none_are_blank(self):
+        assert self._cs()._sample_value_for_field(SimpleNamespace(format=None, field_metadata={})) == ""
+        assert self._cs()._sample_value_for_field(None) == ""
+
+
+class TestBuildContactValidator:
+    """The ONE shared validator builder — composes rules from the destination context so the
+    outbound file upload and the contact-create API validate the same way."""
+
+    def _pc(self, name=None, phone=None, meta=None):
+        return ParsedContact(external_id="x", name=name, phone_number=phone, metadata=meta or {})
+
+    def test_require_phone_composes_phone_rule(self):
+        v = build_contact_validator(require_phone=True)
+        assert [type(r) for r in v._rules] == [PhoneNumberValidator]
+        # dialing → a valid E.164 phone is required.
+        assert v.validate(self._pc(phone="+14155550123")) == []
+        assert v.validate(self._pc(name="Jo")) != []          # no phone → rejected
+        assert v.validate(self._pc(phone="415")) != []         # bad phone → rejected
+
+    def test_no_phone_composes_identity_rule(self):
+        v = build_contact_validator()  # require_phone=False, no schema
+        assert [type(r) for r in v._rules] == [RequiredIdentityValidator]
+        assert v.validate(self._pc(name="Jo")) == []           # name-only is a valid contact
+        assert v.validate(self._pc(phone="+14155550123")) == []
+        assert v.validate(self._pc()) != []                    # neither → rejected
+
+    def test_no_schema_skips_metadata_rule(self):
+        assert len(build_contact_validator(None)._rules) == 1
+        assert len(build_contact_validator([])._rules) == 1     # empty is falsy → skipped
+
+    def test_schema_adds_metadata_rule(self):
+        from core.models.schema_field import SchemaField
+
+        fields = [SchemaField(field_name="city", type="string", is_mandatory=False, validators={})]
+        v = build_contact_validator(fields)
+        assert [type(r) for r in v._rules] == [RequiredIdentityValidator, SchemaMetadataValidator]
+
+    def test_require_phone_with_schema(self):
+        from core.models.schema_field import SchemaField
+
+        fields = [SchemaField(field_name="city", type="string", is_mandatory=False, validators={})]
+        v = build_contact_validator(fields, require_phone=True)
+        assert [type(r) for r in v._rules] == [PhoneNumberValidator, SchemaMetadataValidator]

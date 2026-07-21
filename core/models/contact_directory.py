@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Index
+from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, Index, text
 from sqlalchemy.dialects.postgresql import UUID
 
 from core.models.base import OrgScopedModel
@@ -17,6 +17,16 @@ class ContactDirectory(OrgScopedModel):
     __tablename__ = "contact_directories"
     __table_args__ = (
         Index("ix_contact_directories_org_name", "organization_id", "name"),
+        # At most one LIVE default "Global" directory per org — closes the check-then-create
+        # race in ``get_or_create_default_directory`` (concurrent misses would otherwise both
+        # insert). Partial + case-insensitive so it only constrains the default name and lets a
+        # soft-deleted one be recreated.
+        Index(
+            "uq_contact_directories_org_default_global",
+            "organization_id",
+            unique=True,
+            postgresql_where=text("lower(name) = 'global' AND deleted_at IS NULL"),
+        ),
     )
 
     name = Column(String(120), nullable=False)
