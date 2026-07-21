@@ -23,6 +23,24 @@ export interface UpdateProfilePayload {
   avatar_url?: string | null;
 }
 
+export interface OnboardingInvitePayload {
+  email: string;
+  role: string;
+}
+
+export interface CompleteOnboardingPayload {
+  workspace_name: string;
+  use_case: string;
+  industry?: string | null;
+  invites: OnboardingInvitePayload[];
+}
+
+export interface CompleteOnboardingResponse {
+  organization: Organization;
+  invites_sent: string[];
+  invites_failed: { email: string; error: string }[];
+}
+
 export const authApi = {
   login: async (payload: LoginFormData): Promise<AuthLoginResponse> => {
     const { data } = await axios.post<AuthLoginResponse>('/auth/login', payload);
@@ -34,7 +52,6 @@ export const authApi = {
       password: payload.password,
       first_name: payload.first_name,
       last_name: payload.last_name,
-      organization_name: payload.organization_name?.trim() || undefined,
     });
     return data;
   },
@@ -89,6 +106,17 @@ export const authApi = {
   validateInvitation: async (token: string): Promise<InvitationValidation> => {
     const { data } = await axios.get<InvitationValidation>('/auth/validate-invitation', {
       params: { token },
+    });
+    return data;
+  },
+  completeOnboarding: async (
+    payload: CompleteOnboardingPayload,
+  ): Promise<CompleteOnboardingResponse> => {
+    const { data } = await axios.post<CompleteOnboardingResponse>('/auth/onboarding', {
+      workspace_name: payload.workspace_name,
+      use_case: payload.use_case,
+      industry: payload.industry || null,
+      invites: payload.invites,
     });
     return data;
   },
@@ -150,6 +178,10 @@ export function useValidateInvitation(token: string, enabled: boolean = true) {
 
 export function useAcceptInvitation() {
   return useMutation({ mutationFn: authApi.acceptInvitation });
+}
+
+export function useCompleteOnboarding() {
+  return useMutation({ mutationFn: authApi.completeOnboarding });
 }
 
 export function useMe(enabled = true) {
