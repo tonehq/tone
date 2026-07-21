@@ -14,7 +14,7 @@ spec:
   pollingInterval: 15
   cooldownPeriod: 300
   minReplicaCount: 0
-  maxReplicaCount: 5
+  maxReplicaCount: 2
   advanced:
     restoreToOriginalReplicaCount: true
     horizontalPodAutoscalerConfig:
@@ -54,7 +54,7 @@ spec:
   pollingInterval: 15
   cooldownPeriod: 600
   minReplicaCount: 0
-  maxReplicaCount: 10
+  maxReplicaCount: 4
   advanced:
     restoreToOriginalReplicaCount: true
     horizontalPodAutoscalerConfig:
