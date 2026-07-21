@@ -810,10 +810,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // providers mounted so the agent's unsaved state survives the round-trip and
   // returning to a section counts as internal navigation (no discard prompt).
   const isBuilderRoute = /\/workflow\/[^/]+$/.test(pathname);
-  // Call History and Contacts host full-width tables + toolbars — they need the
-  // entire content width. The form sections (Basics, Prompt, …) stay in the
+  // Call History, Contacts and Schedule host full-width tables + toolbars — they need
+  // the entire content width. The form sections (Basics, Prompt, …) stay in the
   // narrow, centered max-w-3xl column that reads better for forms.
-  const isWideSection = /\/(call-history|contacts)$/.test(pathname);
+  const isWideSection = /\/(call-history|contacts|schedule)$/.test(pathname);
   if (isBuilderRoute) {
     return (
       <FormProvider {...methods}>

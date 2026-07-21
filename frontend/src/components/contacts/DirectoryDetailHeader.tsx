@@ -24,7 +24,7 @@ import { showToast } from '@/utils/toast';
  * delete actions (admin/owner only). Delete opens `ConfirmDeleteModal` with the
  * `delete-impact` blast radius (permanent-deletion warning) before calling the
  * hard-delete endpoint, then navigates back to `/contacts/directories`. Datasource
- * schemas are now a section inside Contacts (`/contacts/datasource`), so this header no
+ * schemas are now a section inside Contacts (`/contacts/schema`), so this header no
  * longer carries a General/Schema tab — a directory detail shows only its contacts.
  *
  * WHEN: rendered by the directory-detail (General) route page.

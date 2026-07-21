@@ -1,23 +1,15 @@
 'use client';
 
 import { CalendarDays, ChevronDown, Clock } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 import CustomButton from '@/components/shared/CustomButton';
 import CustomPopover from '@/components/shared/CustomPopover';
-import SearchableSelect, {
-  type SearchableSelectOption,
-} from '@/components/shared/SearchableSelect';
+import TimezoneSelect from '@/components/shared/TimezoneSelect';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateTimePickerProps } from '@/types/components';
 import { cn } from '@/utils/cn';
-import {
-  combineToIso,
-  formatTzDateTime,
-  getBrowserTimeZone,
-  getTimeZones,
-  splitFromIso,
-} from '@/utils/date';
+import { combineToIso, formatTzDateTime, getBrowserTimeZone, splitFromIso } from '@/utils/date';
 
 export type { DateTimePickerProps, DateTimeValue } from '@/types/components';
 
@@ -67,12 +59,6 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
       setTime('09:00');
     }
   }, [open, value?.value, value?.timeZone]);
-
-  const tzOptions = useMemo<SearchableSelectOption[]>(() => {
-    const zones = getTimeZones();
-    if (!zones.includes(BROWSER_TZ)) zones.unshift(BROWSER_TZ);
-    return zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }));
-  }, []);
 
   const handleApply = () => {
     if (!day) {
@@ -144,6 +130,13 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
           onSelect={setDay}
           numberOfMonths={1}
           defaultMonth={day}
+          // The shared Calendar leaves `selected` unstyled (so it never fights the range
+          // modifiers in DateRangePicker). This is single-select, so give the chosen day a
+          // clear filled highlight here.
+          classNames={{
+            selected:
+              '[&>button]:bg-primary [&>button]:font-medium [&>button]:text-primary-foreground [&>button]:hover:bg-primary [&>button]:hover:text-primary-foreground',
+          }}
         />
       </div>
 
@@ -176,13 +169,7 @@ const DateTimePicker: React.FC<DateTimePickerProps> = ({
           Timezone
         </span>
         <div className="min-w-0 flex-1">
-          <SearchableSelect
-            name="dtp-timezone"
-            options={tzOptions}
-            value={timeZone}
-            onValueChange={setTimeZone}
-            searchPlaceholder="Search timezone..."
-          />
+          <TimezoneSelect name="dtp-timezone" value={timeZone} onValueChange={setTimeZone} />
         </div>
       </div>
     </CustomPopover>

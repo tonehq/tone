@@ -1,24 +1,16 @@
 'use client';
 
 import { CalendarDays, ChevronDown, Clock } from 'lucide-react';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import type { DateRange } from 'react-day-picker';
 
 import CustomButton from '@/components/shared/CustomButton';
 import CustomPopover from '@/components/shared/CustomPopover';
-import SearchableSelect, {
-  type SearchableSelectOption,
-} from '@/components/shared/SearchableSelect';
+import TimezoneSelect from '@/components/shared/TimezoneSelect';
 import { Calendar } from '@/components/ui/calendar';
 import type { DateRangePickerProps } from '@/types/components';
 import { cn } from '@/utils/cn';
-import {
-  combineToIso,
-  formatTzDateTime,
-  getBrowserTimeZone,
-  getTimeZones,
-  splitFromIso,
-} from '@/utils/date';
+import { combineToIso, formatTzDateTime, getBrowserTimeZone, splitFromIso } from '@/utils/date';
 
 export type { DateRangePickerProps, DateRangeValue } from '@/types/components';
 
@@ -82,12 +74,6 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
       setEndTime('23:59');
     }
   }, [open, value?.start, value?.end, value?.timeZone]);
-
-  const tzOptions = useMemo<SearchableSelectOption[]>(() => {
-    const zones = getTimeZones();
-    if (!zones.includes(BROWSER_TZ)) zones.unshift(BROWSER_TZ);
-    return zones.map((z) => ({ value: z, label: z.replace(/_/g, ' ') }));
-  }, []);
 
   // Manual edits to the calendar/time clear the highlighted preset.
   const handleSelectRange = (next: DateRange | undefined) => {
@@ -250,13 +236,7 @@ const DateRangePicker: React.FC<DateRangePickerProps> = ({
           Timezone
         </span>
         <div className="min-w-0 flex-1">
-          <SearchableSelect
-            name="drp-timezone"
-            options={tzOptions}
-            value={timeZone}
-            onValueChange={setTimeZone}
-            searchPlaceholder="Search timezone..."
-          />
+          <TimezoneSelect name="drp-timezone" value={timeZone} onValueChange={setTimeZone} />
         </div>
       </div>
     </CustomPopover>

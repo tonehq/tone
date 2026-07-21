@@ -1,6 +1,6 @@
 'use client';
 
-import { createOutboundCallAtom } from '@/atoms/OutboundCallsAtom';
+import { createOutboundCallAtom, createOutboundCallFromFileAtom } from '@/atoms/OutboundCallsAtom';
 import {
   CheckboxField,
   CustomButton,
@@ -9,17 +9,22 @@ import {
   SelectInput,
   TextAreaField,
 } from '@/components/shared';
+import AdvancedDirectoryConfig from '@/components/contacts/shared/AdvancedDirectoryConfig';
+import ContactFileInput from '@/components/contacts/shared/ContactFileInput';
+import SampleDownloadMenu from '@/components/contacts/shared/SampleDownloadMenu';
+import { useDirectoriesList } from '@/lib/api/contactDirectories';
+import { useSchema, useSchemasList } from '@/lib/api/contactSchemas';
 import { listAgents } from '@/services/agentsService';
 import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
-import type { CreateOutboundCallPayload } from '@/types/outboundCall';
-import { getBrowserTimeZone } from '@/utils/date';
-import { triggerCsvDownload } from '@/utils/download';
+import { getOrganizationSettings } from '@/services/organizationService';
+import type { CreateOutboundCallPayload, CreateOutboundCallResponse } from '@/types/outboundCall';
+import { getBrowserTimeZone, getTimeZoneAbbreviation } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useSetAtom } from 'jotai';
-import { Download, Upload } from 'lucide-react';
+import { Upload } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
 
 interface Option {
@@ -46,8 +51,9 @@ interface NewOutboundCallModalProps {
   onScheduled?: () => void;
 }
 
-// datetime-local (local wall-clock) → ISO string the backend parses as a future instant.
-const toIso = (local: string): string => new Date(local).toISOString();
+// Sentinel for the "let the backend pick a number" option. Radix Select forbids an
+// empty-string item value, so we use a non-empty sentinel and drop it on submit.
+const AUTO_FROM_NUMBER = '__auto__';
 
 /** Parse a free-text / CSV blob into a de-duplicated list of E.164 destination numbers.
  *  - Splits on newlines, commas and semicolons; strips spaces/dashes/parens/dots.
@@ -80,12 +86,24 @@ export default function NewOutboundCallModal({
 }: NewOutboundCallModalProps) {
   const router = useRouter();
   const createCall = useSetAtom(createOutboundCallAtom);
-  const fileRef = useRef<HTMLInputElement>(null);
+  const createCallFromFile = useSetAtom(createOutboundCallFromFileAtom);
 
-  const { control, handleSubmit, watch, reset, setValue, getValues } = useForm<OutboundCallForm>({
+  // Schema + directory pickers for the upload path (mirrors the contacts Upload modal):
+  // the schema drives the downloadable sample; the directory (default "Global") is where
+  // the uploaded contacts are created + assigned.
+  const { data: schemasPage } = useSchemasList({ page_size: 100 });
+  const { data: directoriesPage } = useDirectoriesList({ page_size: 100 });
+  const schemaOptions = (schemasPage?.data ?? []).map((s) => ({ value: s.id, label: s.name }));
+  const directoryOptions = (directoriesPage?.data ?? []).map((d) => ({
+    value: d.id,
+    label: d.name,
+  }));
+  const globalDirectory = directoriesPage?.data?.find((d) => d.name === 'Global');
+
+  const { control, handleSubmit, watch, reset, setValue } = useForm<OutboundCallForm>({
     defaultValues: {
       agent_id: defaultAgentId ?? '',
-      from_number: '',
+      from_number: AUTO_FROM_NUMBER,
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
@@ -96,31 +114,67 @@ export default function NewOutboundCallModal({
   const [fromOptions, setFromOptions] = useState<Option[]>([]);
   const [optionsLoading, setOptionsLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  // The org's default scheduling timezone (settings JSONB); seeds the picker.
+  const [orgTz, setOrgTz] = useState<string>('');
+  // The timezone the user last applied in the picker — drives the tz label + default.
+  const [scheduledTz, setScheduledTz] = useState<string>('');
+  // Numbers the backend rejected on the last submit (listed so the user can fix them).
+  const [invalidNumbers, setInvalidNumbers] = useState<{ to_number: string; error: string }[]>([]);
+  // A chosen CSV/Excel file — parsed SERVER-SIDE (never read in the browser).
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  // Upload mode: switches the "To numbers" area from the manual textarea to the
+  // schema + file + directory upload panel (like the contacts Upload modal).
+  const [uploadMode, setUploadMode] = useState(false);
+  const [schemaId, setSchemaId] = useState<string>('');
+  const [pickedDirectoryId, setPickedDirectoryId] = useState<string>('');
+
+  const { data: schemaDetail } = useSchema(schemaId || null);
 
   const scheduleOn = watch('schedule');
+  const scheduledAtValue = watch('scheduled_at');
   const numbersText = watch('to_numbers_text');
   const numberCount = useMemo(() => parseNumbers(numbersText).length, [numbersText]);
   const browserTz = useMemo(() => getBrowserTimeZone(), []);
+  // Default zone for the schedule picker: the org's configured zone, else the browser's.
+  const defaultTz = orgTz || browserTz;
+  const effectiveTz = scheduledTz || defaultTz;
+
+  // From-number options with a leading "auto" entry — leaving it on lets the backend
+  // pick the org's configured number (single → that one; multiple → round-robin).
+  const fromSelectOptions = useMemo<Option[]>(
+    () => [{ value: AUTO_FROM_NUMBER, label: 'Auto — use configured number(s)' }, ...fromOptions],
+    [fromOptions],
+  );
 
   useEffect(() => {
     if (!open) return;
     reset({
       agent_id: defaultAgentId ?? '',
-      from_number: '',
+      from_number: AUTO_FROM_NUMBER,
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
     });
+    setInvalidNumbers([]);
+    setScheduledTz('');
+    setCsvFile(null);
+    setUploadMode(false);
+    setSchemaId('');
+    setPickedDirectoryId('');
 
     let active = true;
     setOptionsLoading(true);
     (async () => {
       try {
-        const [agents, channels] = await Promise.all([
+        const [agents, channels, settings] = await Promise.all([
           listAgents({ page_size: 200 }),
           getChannelsByType('twilio'),
+          getOrganizationSettings().catch(() => ({})),
         ]);
         if (!active) return;
+
+        const tz = (settings as Record<string, unknown>)?.scheduling_timezone;
+        if (typeof tz === 'string' && tz) setOrgTz(tz);
 
         setAgentOptions(
           (agents.items ?? [])
@@ -150,47 +204,69 @@ export default function NewOutboundCallModal({
     };
   }, [open, defaultAgentId, reset]);
 
-  const onCsvSelected = useCallback(
-    async (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      e.target.value = ''; // allow re-selecting the same file
-      if (!file) return;
-      try {
-        const text = await file.text();
-        const parsed = parseNumbers(text);
-        if (!parsed.length) {
-          showToast.warning('No numbers found', 'The CSV had no recognizable phone numbers.');
-          return;
-        }
-        const existing = parseNumbers(getValues('to_numbers_text'));
-        const merged = Array.from(new Set([...existing, ...parsed]));
-        setValue('to_numbers_text', merged.join('\n'), { shouldValidate: true });
-        showToast.success(`${parsed.length} number(s) imported`);
-      } catch {
-        showToast.error('Could not read the CSV file');
-      }
-    },
-    [getValues, setValue],
-  );
+  // When "Schedule for later" is turned on, default the time to the current instant (shown
+  // as the current wall-clock time in the selected timezone) so the field isn't empty.
+  useEffect(() => {
+    if (scheduleOn && !scheduledAtValue) {
+      setValue('scheduled_at', new Date().toISOString());
+    }
+  }, [scheduleOn, scheduledAtValue, setValue]);
+
+  // Default the target directory to the org's "Global" directory (like the Upload modal)
+  // once directories load and the user hasn't picked another.
+  useEffect(() => {
+    if (open && !pickedDirectoryId && globalDirectory) {
+      setPickedDirectoryId(globalDirectory.id);
+    }
+  }, [open, pickedDirectoryId, globalDirectory]);
 
   const onSubmit = useCallback(
     async (values: OutboundCallForm) => {
-      const numbers = parseNumbers(values.to_numbers_text);
-      if (!numbers.length) {
-        showToast.error('Add at least one destination number');
+      const usingFile = uploadMode;
+      const numbers = usingFile ? [] : parseNumbers(values.to_numbers_text);
+      if (usingFile && !csvFile) {
+        showToast.error('Choose a CSV or Excel file to upload');
+        return;
+      }
+      if (!usingFile && !numbers.length) {
+        showToast.error('Add at least one destination number or upload a file');
         return;
       }
       setSubmitting(true);
+      setInvalidNumbers([]);
       try {
         const scheduled = values.schedule && values.scheduled_at;
-        const payload: CreateOutboundCallPayload = {
-          agent_id: values.agent_id,
-          from_number: values.from_number,
-          to_numbers: numbers,
-          scheduled_at: scheduled ? toIso(values.scheduled_at) : null,
-        };
-        const res = await createCall(payload);
+        // Omit from_number when left on "Auto" so the backend selects one.
+        const fromNumber =
+          values.from_number && values.from_number !== AUTO_FROM_NUMBER
+            ? values.from_number
+            : undefined;
+        // DateTimePicker already emits a UTC ISO instant, so use it as-is.
+        const scheduledAt = scheduled ? values.scheduled_at : null;
+
+        let res: CreateOutboundCallResponse;
+        if (usingFile && csvFile) {
+          // File path: contacts are parsed SERVER-SIDE (never read in the browser) and
+          // created in the selected directory (default "Global"), then scheduled.
+          const fd = new FormData();
+          fd.append('agent_id', values.agent_id);
+          if (fromNumber) fd.append('from_number', fromNumber);
+          if (scheduledAt) fd.append('scheduled_at', scheduledAt);
+          if (pickedDirectoryId) fd.append('directory_id', pickedDirectoryId);
+          fd.append('file', csvFile);
+          res = await createCallFromFile(fd);
+        } else {
+          const payload: CreateOutboundCallPayload = {
+            agent_id: values.agent_id,
+            from_number: fromNumber,
+            to_numbers: numbers,
+            scheduled_at: scheduledAt,
+            directory_id: pickedDirectoryId || undefined,
+          };
+          res = await createCall(payload);
+        }
         if (res?.invalid?.length) {
+          setInvalidNumbers(res.invalid);
           showToast.warning(
             `${res.invalid.length} number(s) skipped`,
             'They were not valid E.164.',
@@ -203,10 +279,11 @@ export default function NewOutboundCallModal({
         } else {
           showToast.success(
             res?.mode === 'bulk' ? `${res.count} calls queued` : 'Call scheduled',
-            'Track them on the Scheduled Calls page.',
+            'Track them on the agent’s Schedule tab.',
           );
-          if (onScheduled) onScheduled();
-          else router.push('/scheduled-calls');
+          // The Schedule view always passes onScheduled to refresh in place; there is no
+          // global scheduled-calls route to navigate to anymore.
+          onScheduled?.();
         }
       } catch (err) {
         // Keep the modal open so the user can correct + retry (error-recovery).
@@ -215,23 +292,36 @@ export default function NewOutboundCallModal({
         setSubmitting(false);
       }
     },
-    [createCall, onClose, onScheduled, router],
+    [
+      uploadMode,
+      csvFile,
+      pickedDirectoryId,
+      createCall,
+      createCallFromFile,
+      onClose,
+      onScheduled,
+      router,
+    ],
   );
 
-  const submitLabel = scheduleOn
-    ? numberCount > 1
-      ? `Schedule ${numberCount} calls`
-      : 'Schedule call'
-    : numberCount > 1
-      ? `Call ${numberCount} numbers`
-      : 'Call now';
+  const submitLabel = uploadMode
+    ? scheduleOn
+      ? 'Schedule from file'
+      : 'Call from file'
+    : scheduleOn
+      ? numberCount > 1
+        ? `Schedule ${numberCount} calls`
+        : 'Schedule call'
+      : numberCount > 1
+        ? `Call ${numberCount} numbers`
+        : 'Call now';
 
   return (
     <CustomModal
       open={open}
       onClose={onClose}
       title="New outbound call"
-      width="sm:max-w-md"
+      width="sm:max-w-2xl"
       footer={
         <>
           <CustomButton type="default" onClick={onClose} disabled={submitting}>
@@ -240,7 +330,7 @@ export default function NewOutboundCallModal({
           <CustomButton
             type="primary"
             loading={submitting}
-            disabled={numberCount === 0}
+            disabled={uploadMode ? !csvFile : numberCount === 0}
             onClick={handleSubmit(onSubmit)}
           >
             {submitLabel}
@@ -263,61 +353,96 @@ export default function NewOutboundCallModal({
         <SelectInput
           name="from_number"
           control={control}
-          rules={{ required: 'Select a from number' }}
-          label="From number"
-          isRequired
-          placeholder="Select a Twilio number"
+          label="From number (optional)"
+          placeholder="Auto — use configured number(s)"
           loading={optionsLoading}
-          options={fromOptions}
+          options={fromSelectOptions}
         />
+
+        {/* Mapping schema — drives the downloadable sample template (always visible). */}
+        <div className="flex flex-col gap-1.5">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-foreground">Mapping schema</span>
+            {schemaId && schemaDetail ? (
+              <SampleDownloadMenu schemaId={schemaId} schemaName={schemaDetail.name} />
+            ) : null}
+          </div>
+          <SelectInput
+            name="upload-schema"
+            options={schemaOptions}
+            value={schemaId}
+            onValueChange={setSchemaId}
+            placeholder="Select a schema to download a sample"
+          />
+        </div>
+
         <div className="space-y-1.5">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">
               To numbers <span className="text-destructive">*</span>
             </span>
-            <div className="flex items-center gap-1">
+            {uploadMode ? (
               <CustomButton
                 type="text"
-                icon={<Download className="size-3.5" />}
-                onClick={() =>
-                  triggerCsvDownload(
-                    'outbound-numbers-sample.csv',
-                    ['phone_number', '+14155550123', '+14155550124', '+442071838750'].join('\n'),
-                  )
-                }
+                onClick={() => {
+                  setUploadMode(false);
+                  setCsvFile(null);
+                }}
               >
-                Sample CSV
+                Enter numbers manually
               </CustomButton>
+            ) : (
               <CustomButton
                 type="text"
                 icon={<Upload className="size-3.5" />}
-                onClick={() => fileRef.current?.click()}
+                onClick={() => setUploadMode(true)}
               >
-                Import CSV
+                Upload CSV/Excel
               </CustomButton>
-            </div>
-            <input
-              ref={fileRef}
-              type="file"
-              accept=".csv,text/csv,text/plain"
-              className="hidden"
-              onChange={onCsvSelected}
-            />
+            )}
           </div>
-          <TextAreaField
-            name="to_numbers_text"
-            control={control}
-            rows={4}
-            placeholder={'+14155550123\n+14155550124\n…one per line, or paste / import a CSV'}
-            rules={{
-              validate: (v: string) => parseNumbers(v).length > 0 || 'Add at least one number',
-            }}
-          />
-          <p className="text-xs text-muted-foreground">
-            {numberCount > 0
-              ? `${numberCount} number${numberCount > 1 ? 's' : ''} — E.164 format (e.g. +14155550123). Multiple numbers are queued and shown on Scheduled Calls.`
-              : 'Enter E.164 numbers (e.g. +14155550123), one per line, or import a CSV.'}
-          </p>
+          {uploadMode ? (
+            <ContactFileInput
+              label="Contact file"
+              accept=".csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              allowedExtensions={['.csv', '.xlsx']}
+              value={csvFile}
+              onChange={setCsvFile}
+              hint="Upload a CSV or .xlsx (matching the selected schema — download the sample above). It is parsed on the server; the file needs a phone_number column."
+            />
+          ) : (
+            <>
+              <TextAreaField
+                name="to_numbers_text"
+                control={control}
+                rows={4}
+                placeholder={'+14155550123\n+14155550124\n…one per line, or paste'}
+              />
+              <p className="text-xs text-muted-foreground">
+                {numberCount > 0
+                  ? `${numberCount} number${numberCount > 1 ? 's' : ''} — E.164 format (e.g. +14155550123). Multiple comma- or line-separated numbers are queued and shown on Scheduled Calls.`
+                  : 'Enter E.164 numbers (e.g. +14155550123), separated by commas or new lines, or upload a CSV/Excel file.'}
+              </p>
+            </>
+          )}
+          {invalidNumbers.length > 0 && (
+            <div
+              role="alert"
+              className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-800 ring-1 ring-inset ring-red-200"
+            >
+              <p className="font-medium">
+                {invalidNumbers.length} number{invalidNumbers.length > 1 ? 's were' : ' was'}{' '}
+                skipped (not valid E.164):
+              </p>
+              <ul className="mt-1 list-disc pl-4">
+                {invalidNumbers.map((n) => (
+                  <li key={n.to_number} className="truncate">
+                    {n.to_number}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
         <CheckboxField id="schedule" control={control} label="Schedule for later" />
         {scheduleOn && (
@@ -325,9 +450,12 @@ export default function NewOutboundCallModal({
             name="scheduled_at"
             control={control}
             rules={{
-              required: 'Pick a time in the future',
+              required: 'Pick a date & time',
+              // Allow "now" (default) — the backend keeps a 60s grace and dials ASAP for
+              // near-now times; only a clearly past time is rejected.
               validate: (v: string) =>
-                (!!v && new Date(v).getTime() > Date.now()) || 'Pick a time in the future',
+                (!!v && new Date(v).getTime() > Date.now() - 60_000) ||
+                'Pick a time that is not in the past',
             }}
             render={({ field, fieldState }) => (
               <div className="flex flex-col gap-1.5">
@@ -335,10 +463,19 @@ export default function NewOutboundCallModal({
                   Scheduled time <span className="text-destructive">*</span>
                 </label>
                 <DateTimePicker
-                  value={{ value: field.value || null, timeZone: browserTz }}
-                  onChange={(v) => field.onChange(v.value ?? '')}
+                  value={{ value: field.value || null, timeZone: effectiveTz }}
+                  onChange={(v) => {
+                    field.onChange(v.value ?? '');
+                    if (v.timeZone) setScheduledTz(v.timeZone);
+                  }}
                   placeholder="Pick a date & time"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Timezone: {effectiveTz}
+                  {getTimeZoneAbbreviation(effectiveTz, field.value || undefined)
+                    ? ` (${getTimeZoneAbbreviation(effectiveTz, field.value || undefined)})`
+                    : ''}
+                </p>
                 {fieldState.error && (
                   <span className="text-xs text-destructive">{fieldState.error.message}</span>
                 )}
@@ -346,6 +483,15 @@ export default function NewOutboundCallModal({
             )}
           />
         )}
+
+        {/* Directory the created contacts land in — defaults to "Global", tucked behind the
+            same "Advanced configuration" disclosure the Upload modal uses. Kept last. */}
+        <AdvancedDirectoryConfig
+          options={directoryOptions}
+          value={pickedDirectoryId}
+          onChange={setPickedDirectoryId}
+          loading={!directoriesPage}
+        />
       </form>
     </CustomModal>
   );

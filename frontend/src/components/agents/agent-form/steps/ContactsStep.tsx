@@ -9,7 +9,7 @@ import AddContactsModal from '@/components/contacts/general/AddContactsModal';
 import AssignContactsModal from '@/components/contacts/shared/AssignContactsModal';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import ContactsTable from '@/components/contacts/shared/ContactsTable';
-import SyncContactsModal from '@/components/contacts/shared/SyncContactsModal';
+import UploadContactsModal from '@/components/contacts/shared/UploadContactsModal';
 import type { AgentContactRow } from '@/types/agentContact';
 import type { CustomTableColumn } from '@/types/components';
 import type { PaginatedListParams } from '@/types/contactList';
@@ -20,7 +20,7 @@ export default function ContactsStep({ agentId }: { agentId: string | null }) {
   const [params, setParams] = useState<PaginatedListParams>({ page_no: 1, page_size: 10 });
   const [assignOpen, setAssignOpen] = useState(false);
   const [addContactOpen, setAddContactOpen] = useState(false);
-  const [syncOpen, setSyncOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
   const [unassignTarget, setUnassignTarget] = useState<AgentContactRow | null>(null);
 
   const { data, isLoading, refetch } = useAgentContactsList(agentId, params);
@@ -105,7 +105,7 @@ export default function ContactsStep({ agentId }: { agentId: string | null }) {
             <Users className="size-8 text-muted-foreground" aria-hidden />
             <p className="text-sm font-medium">No contacts assigned</p>
             <p className="text-xs text-muted-foreground">
-              Assign contacts from a directory or import a CSV to get started.
+              Assign contacts from a directory or upload a CSV / Excel file to get started.
             </p>
           </div>
         }
@@ -123,9 +123,9 @@ export default function ContactsStep({ agentId }: { agentId: string | null }) {
               type="default"
               size="sm"
               icon={<Upload className="size-4" />}
-              onClick={() => setSyncOpen(true)}
+              onClick={() => setUploadOpen(true)}
             >
-              Sync contacts
+              Upload contacts
             </CustomButton>
             <CustomButton
               type="primary"
@@ -153,9 +153,9 @@ export default function ContactsStep({ agentId }: { agentId: string | null }) {
         onCompleted={() => refetch()}
       />
 
-      <SyncContactsModal
-        open={syncOpen}
-        onClose={() => setSyncOpen(false)}
+      <UploadContactsModal
+        open={uploadOpen}
+        onClose={() => setUploadOpen(false)}
         agentId={agentId}
         onCompleted={() => refetch()}
       />

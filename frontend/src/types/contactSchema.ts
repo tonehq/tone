@@ -116,6 +116,8 @@ export interface CreateSchemaFieldPayload {
   options?: SchemaFieldOption[] | null;
   source_key?: string | null;
   display_order?: number;
+  /** Per-field config; for date/datetime fields: `{ datetime_format, timezone }`. */
+  field_metadata?: Record<string, unknown> | null;
 }
 
 /** Body for `PATCH /schema-fields/{id}` (update field; admin/owner). */
@@ -129,4 +131,5 @@ export interface UpdateSchemaFieldPayload {
   source_key?: string | null;
   display_order?: number;
   is_active?: boolean;
+  field_metadata?: Record<string, unknown> | null;
 }

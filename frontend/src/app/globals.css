@@ -112,6 +112,48 @@
     height: 100%;
     overflow: hidden;
   }
+  /* Clickable elements always use a pointer cursor — Tailwind's preflight otherwise
+     leaves native buttons at the default arrow. Any interactive control (buttons,
+     role="button", links, form labels, summary, custom-select triggers) is covered
+     here so individual components don't need to add `cursor-pointer`. Disabled
+     controls fall back to not-allowed. */
+  button:not(:disabled),
+  [role='button']:not([aria-disabled='true']):not([data-disabled]),
+  [role='option'],
+  [role='menuitem'],
+  [role='radio'],
+  [role='switch'],
+  [role='tab'],
+  a[href],
+  label[for],
+  summary,
+  select:not(:disabled),
+  /* Clickable input types (date/time pickers, checkbox, radio, file, range, color,
+     button-like inputs). Text-like inputs keep the default text cursor. */
+  input[type='checkbox']:not(:disabled),
+  input[type='radio']:not(:disabled),
+  input[type='file']:not(:disabled),
+  input[type='color']:not(:disabled),
+  input[type='range']:not(:disabled),
+  input[type='submit']:not(:disabled),
+  input[type='button']:not(:disabled),
+  input[type='reset']:not(:disabled),
+  input[type='date']:not(:disabled),
+  input[type='time']:not(:disabled),
+  input[type='datetime-local']:not(:disabled),
+  input[type='month']:not(:disabled),
+  input[type='week']:not(:disabled) {
+    cursor: pointer;
+  }
+  /* The native date/time picker's clock/calendar indicator button. */
+  ::-webkit-calendar-picker-indicator {
+    cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled='true'],
+  [data-disabled] {
+    cursor: not-allowed;
+  }
 }
 
 ::selection {

@@ -2,7 +2,7 @@ from datetime import datetime
 from typing import List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -20,12 +20,16 @@ router = APIRouter()
 
 class CreateOutboundCallRequest(BaseModel):
     agent_id: UUID
-    from_number: str
+    # Optional caller-id. When omitted, the service auto-selects the org's configured
+    # outbound number (single → that one; multiple → round-robin).
+    from_number: Optional[str] = None
     # One or many destinations. Accepts `to_numbers` (bulk / CSV) or a single `to_number`.
     to_numbers: Optional[List[str]] = None
     to_number: Optional[str] = None
     # When set, the call(s) are queued in scheduled_calls instead of dialing now.
     scheduled_at: Optional[datetime] = None
+    # Directory the created contacts land in (default the org's "Global" directory).
+    directory_id: Optional[UUID] = None
 
     def resolved_numbers(self) -> List[str]:
         nums = list(self.to_numbers or [])
@@ -83,6 +87,71 @@ def create_outbound_call(
         from_number=body.from_number,
         to_numbers=body.resolved_numbers(),
         scheduled_at=body.scheduled_at,
+        created_by_user_id=service.user_id,
+        directory_id=body.directory_id,
+    )
+
+
+@router.post("/create-from-file")
+def create_outbound_call_from_file(
+    agent_id: UUID = Form(...),
+    from_number: Optional[str] = Form(None),
+    scheduled_at: Optional[datetime] = Form(None),
+    directory_id: Optional[UUID] = Form(None),
+    file: UploadFile = File(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Place/queue outbound calls from an uploaded CSV/Excel of contacts.
+
+    Runs the shared ingestion pipeline — Parse → loop → Validate → Schedule
+    (Assign → Create) — so every data source flows through the same framework:
+    ``select_source_for_upload`` picks a ``ContactSource`` (CSV/Excel/…), ``RecordParser``
+    loops the parsed ``ParsedContact`` stream once and validates each via a composable
+    ``RecordValidator``, and the valid records are created in ``directory_id`` (default the
+    org's "Global" directory), assigned to the agent, and scheduled. The client picks a
+    mapping schema only to download a matching sample; the file is parsed SERVER-SIDE."""
+    from core.services.contact_ingestion import select_source_for_upload
+    from core.services.contact_ingestion.pipeline import RecordParser, parsed_contact_to_row
+    from core.services.contact_ingestion.validation import (
+        CompositeValidator,
+        PhoneNumberValidator,
+    )
+
+    raw = file.file.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="The uploaded file is empty.")
+    try:
+        source = select_source_for_upload(raw)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    # Parse → loop → validate through the shared, extensible framework. Add a rule here
+    # (e.g. a SchemaMetadataValidator) without touching the loop or the schedule path.
+    validator = CompositeValidator([PhoneNumberValidator()])
+    parsed = RecordParser(validator).parse(source, raw)  # unlimited
+    if not parsed.valid:
+        raise HTTPException(
+            status_code=400,
+            detail="No valid phone numbers found in the file. Include a 'phone_number' column.",
+        )
+    rows = [parsed_contact_to_row(record) for record in parsed.valid]
+    invalid = [
+        {
+            "to_number": bad.get("phone_number") or f"row {bad['index'] + 1}",
+            "error": "; ".join(bad.get("errors") or []),
+        }
+        for bad in parsed.invalid
+    ]
+
+    service = _get_service(claims, db)
+    return service.create_outbound_calls_from_rows(
+        agent_id=agent_id,
+        from_number=from_number,
+        rows=rows,
+        invalid=invalid,
+        directory_id=directory_id,
+        scheduled_at=scheduled_at,
         created_by_user_id=service.user_id,
     )
 

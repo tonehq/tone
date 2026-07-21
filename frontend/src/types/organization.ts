@@ -18,6 +18,8 @@ export interface OrganizationDetails {
   member_count: number;
   created_at: number;
   updated_at: number;
+  /** Org default scheduling timezone (IANA), from the settings JSONB. */
+  scheduling_timezone?: string | null;
 }
 
 export interface OrganizationUpdatePayload {
@@ -25,6 +27,7 @@ export interface OrganizationUpdatePayload {
   description?: string;
   logo_url?: string;
   website_url?: string;
+  scheduling_timezone?: string;
 }
 
 export interface OrganizationUpdateResponse {
