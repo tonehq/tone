@@ -101,6 +101,6 @@ jobs:
         run: |
           kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
           kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=180s
+          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=420s
           kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
           kubectl rollout status deployment/staging-tone-orchestrator -n staging --timeout=180s
