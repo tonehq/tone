@@ -64,8 +64,10 @@ jobs:
       - name: Substitute IMAGE_TAG in deployment manifests
         run: |
           sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/api/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/call/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/worker/deployment.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/call/inbound-call-worker.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/call/outbound-call-worker.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/worker/doc-worker.yaml
+          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging-aws/worker/orchestrator.yaml
 
       - name: Apply manifests
         run: |
@@ -74,11 +76,13 @@ jobs:
           kubectl apply -f build/kubernetes/staging-aws/api/ingress.yaml
           kubectl apply -f build/kubernetes/staging-aws/call/pdb.yaml
           kubectl apply -f build/kubernetes/staging-aws/call/service.yaml
-          kubectl apply -f build/kubernetes/staging-aws/call/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/inbound-call-worker.yaml
+          kubectl apply -f build/kubernetes/staging-aws/call/outbound-call-worker.yaml
           kubectl apply -f build/kubernetes/staging-aws/call/pod-routing.yaml
           kubectl apply -f build/kubernetes/staging-aws/call/ingress.yaml
           kubectl apply -f build/kubernetes/staging-aws/worker/rbac.yaml
-          kubectl apply -f build/kubernetes/staging-aws/worker/deployment.yaml
+          kubectl apply -f build/kubernetes/staging-aws/worker/doc-worker.yaml
+          kubectl apply -f build/kubernetes/staging-aws/worker/orchestrator.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/rbac.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/configmap.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/daemonset.yaml
@@ -87,10 +91,14 @@ jobs:
         run: |
           kubectl rollout restart deployment/staging-tone-api-deployment -n staging
           kubectl rollout restart statefulset/staging-tone-call-worker -n staging
+          kubectl rollout restart statefulset/staging-tone-outbound-call-worker -n staging
           kubectl rollout restart deployment/staging-tone-worker -n staging
+          kubectl rollout restart deployment/staging-tone-orchestrator -n staging
 
       - name: Wait for rollouts
         run: |
           kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
           kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
+          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=180s
           kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
+          kubectl rollout status deployment/staging-tone-orchestrator -n staging --timeout=180s
