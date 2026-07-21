@@ -17,6 +17,7 @@ from uuid import UUID
 from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import func
+from sqlalchemy.exc import IntegrityError
 
 from core.models.contact import Contact
 from core.models.contact_directory import ContactDirectory
@@ -38,11 +39,9 @@ class ContactDirectoryService(BaseService):
     # which defaults the sync/upload target to a directory named "Global".
     DEFAULT_DIRECTORY_NAME = "Global"
 
-    def get_or_create_default_directory(self) -> ContactDirectory:
-        """Return the org's default "Global" directory, creating it (with its CSV
-        datasource) if absent. Idempotent, org-scoped — the ONE way any flow lands ad-hoc
-        contacts in a shared directory without re-implementing the resolve-or-provision."""
-        existing = (
+    def _find_default_directory(self) -> Optional[ContactDirectory]:
+        """The org's oldest live default directory, or None."""
+        return (
             self.query(ContactDirectory)
             .filter(
                 func.lower(ContactDirectory.name) == self.DEFAULT_DIRECTORY_NAME.lower(),
@@ -51,10 +50,30 @@ class ContactDirectoryService(BaseService):
             .order_by(ContactDirectory.created_at.asc())
             .first()
         )
+
+    def get_or_create_default_directory(self) -> ContactDirectory:
+        """Return the org's default "Global" directory, creating it (with its CSV
+        datasource) if absent. Idempotent, org-scoped — the ONE way any flow lands ad-hoc
+        contacts in a shared directory without re-implementing the resolve-or-provision.
+
+        The partial unique index ``uq_contact_directories_org_default_global`` guarantees at
+        most one live "Global" per org, so a concurrent create loses the insert race with an
+        IntegrityError; we roll back and return the winner's row rather than duplicating."""
+        existing = self._find_default_directory()
         if existing is not None:
             return existing
-        logger.info("[contact-directory] provisioning default '%s' directory", self.DEFAULT_DIRECTORY_NAME)
-        return self.create_directory(name=self.DEFAULT_DIRECTORY_NAME, description="Default contacts directory")
+        logger.info("[contact-directory] provisioning default '{}' directory", self.DEFAULT_DIRECTORY_NAME)
+        try:
+            return self.create_directory(
+                name=self.DEFAULT_DIRECTORY_NAME, description="Default contacts directory"
+            )
+        except IntegrityError:
+            # A concurrent request created it first; the unique index rejected our insert.
+            self.db.rollback()
+            winner = self._find_default_directory()
+            if winner is None:
+                raise
+            return winner
 
     def create_directory(
         self,

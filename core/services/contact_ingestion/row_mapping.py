@@ -171,7 +171,10 @@ def map_rows_to_parsed_contacts(
                 external_id = phone
             else:
                 digest = hashlib.sha256(
-                    "|".join(f"{k}={v}" for k, v in sorted(row.items())).encode("utf-8")
+                    # Sort by the stringified key: a ragged row (more cells than headers)
+                    # carries a None restkey from csv.DictReader, and comparing None to str
+                    # keys would raise TypeError and abort the whole import.
+                    "|".join(f"{k}={v}" for k, v in sorted(row.items(), key=lambda kv: str(kv[0]))).encode("utf-8")
                 ).hexdigest()[:32]
                 external_id = f"csv-{digest}"
 

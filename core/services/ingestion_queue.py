@@ -139,6 +139,20 @@ def reconcile_outbound_calls(timestamp: int) -> None:
         OutboundCallService(db).reconcile_orphaned_scheduled_calls()
 
 
+@app.periodic(cron="* * * * *")
+@app.task(name="drain_outbound_calls", queue="outbound_calls")
+def drain_outbound_calls(timestamp: int) -> None:
+    """Concurrency safety net: for batches carrying a per-batch limit, fill any free slots
+    with due, waiting scheduled calls that were held back at dispatch. Instant refill happens
+    on each call's completion webhook; this catches slots stranded by a missed/late terminal
+    callback. No-op when there are no batch-limited waiting rows."""
+    from core.database.session import get_db_context
+    from core.services.outbound_call_service import OutboundCallService
+
+    with get_db_context() as db:
+        OutboundCallService(db).drain_outbound_capacity()
+
+
 def enqueue_outbound_calls_batch(items):
     """Defer one or many scheduled outbound calls over a single Procrastinate connection.
 
