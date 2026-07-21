@@ -44,6 +44,8 @@ from dev.seed import (  # noqa: E402  (import after sys.path fix)
     _slugify,
     load_seed_data,
     prompt_setup_inputs,
+    seed_agent_templates,
+    seed_contact_directory,
     seed_member,
     seed_organization,
     seed_user,
@@ -92,6 +94,9 @@ class OrgSeeder:
             "api_keys_created": 0,
             "api_keys_none": 0,
             "api_keys_skipped": 0,
+            "contact_directory_created": False,
+            "agent_templates_created": 0,
+            "agent_templates_skipped": 0,
         }
 
     def run(self):
@@ -118,6 +123,18 @@ class OrgSeeder:
 
         if self.seed_api_keys:
             self._seed_api_keys_from_env(org.id)
+
+        # Default 'Global' ContactDirectory + its CSV datasource.
+        # ContactDirectoryService commits internally, which persists the
+        # pending user/org/member and any API-key rows above — so the
+        # trailing db.commit() becomes a safe no-op.
+        seed_contact_directory(self.db, org.id, user.id)
+        self.stats["contact_directory_created"] = True
+
+        # Default agent-config templates from dev/dev-templates.json.
+        tpl_stats = seed_agent_templates(self.db, org.id, user.id)
+        self.stats["agent_templates_created"] = tpl_stats["created"]
+        self.stats["agent_templates_skipped"] = tpl_stats["skipped"]
 
         self.db.commit()
         return self.stats, org
@@ -279,6 +296,13 @@ def main():
             )
         else:
             print("   API keys:         skipped (pass --api-keys-from-env to seed)")
+        print(
+            f"   Contact Directory: {'created' if stats['contact_directory_created'] else 'skipped'} (Global)"
+        )
+        print(
+            f"   Agent Templates:  {stats['agent_templates_created']} created, "
+            f"{stats['agent_templates_skipped']} already existed"
+        )
 
         # Scope the chained seeders to the new org only — avoids re-scanning
         # every existing org on each new-org bootstrap. Both seeders open

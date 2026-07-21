@@ -7,8 +7,9 @@ import { useNavigation } from '@/contexts/navigation';
 import { getCallLogById } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
 import { cn } from '@/utils/cn';
+import { buildGrafanaLogsUrl, isGrafanaConfigured } from '@/utils/grafana';
 import { handleApiError } from '@/utils/helpers';
-import { ArrowLeft, Check, ChevronRight, Copy } from 'lucide-react';
+import { ArrowLeft, Check, ChevronRight, Copy, ScrollText } from 'lucide-react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -162,7 +163,10 @@ const CallDetailShell: React.FC<CallDetailShellProps> = ({ callId, children }) =
                   </h1>
                   <CallIdPill callId={callId} />
                 </div>
-                <CopyLinkButton />
+                <div className="flex flex-wrap items-center gap-2">
+                  <ViewLogsButton callLog={callLog} />
+                  <CopyLinkButton />
+                </div>
               </div>
             </div>
           </header>
@@ -237,6 +241,37 @@ function CallIdPill({ callId }: { callId: string }) {
     <CustomTooltip content={callId}>
       <span className="inline-flex shrink-0 items-center rounded-md bg-muted/60 px-2 py-0.5 font-mono text-[11px] text-muted-foreground">
         {truncateCallId(callId)}
+      </span>
+    </CustomTooltip>
+  );
+}
+
+/**
+ * Top-right action — opens the call's logs in Grafana in a new tab. Hidden
+ * entirely when Grafana isn't configured (env flag off); disabled with a
+ * tooltip when the call has no trace id yet.
+ */
+function ViewLogsButton({ callLog }: { callLog: CallLogRow | null }) {
+  if (!isGrafanaConfigured()) return null;
+  const hasTrace = !!callLog?.trace_id;
+  const openLogs = () => {
+    if (!callLog) return;
+    const url = buildGrafanaLogsUrl(callLog);
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  };
+  return (
+    <CustomTooltip content={hasTrace ? 'View logs in Grafana' : 'No trace id for this call'}>
+      <span>
+        <CustomButton
+          type="default"
+          size="xs"
+          icon={<ScrollText className="size-3" />}
+          disabled={!hasTrace}
+          onClick={openLogs}
+          aria-label="View logs in Grafana"
+        >
+          View logs
+        </CustomButton>
       </span>
     </CustomTooltip>
   );

@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import React, { useMemo } from 'react';
 
+import { EndToEndLatencyPercentileSection } from './EndToEndLatencyPercentileSection';
 import { LLMUsageSection } from './LLMUsageSection';
 import { MetricsCategory } from './MetricsCategory';
 import { MetricsCollapseProvider, useMetricsCollapse } from './MetricsCollapseContext';
@@ -23,6 +24,7 @@ import { StatCard } from './StatCard';
 import { STTUsageSection } from './STTUsageSection';
 import { TTSUsageSection } from './TTSUsageSection';
 import { TurnLatencySection } from './TurnLatencySection';
+import { UserBotLatencySection } from './UserBotLatencySection';
 import { formatAudioMs, formatMs } from './utils';
 
 function CollapseToolbar() {
@@ -89,9 +91,14 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
     return { avgLatency, totalTokens, totalChars, totalSttAudioMs, totalTurns };
   }, [userBotLatency, llmUsage, ttsUsage, sttUsage, turnsList, turnMetrics]);
 
+  const userBotLatencyValues = useMemo(
+    () => userBotLatency.map((l) => l.latency),
+    [userBotLatency],
+  );
+
   const hasProcessing = processingList.some((p) => p.model && p.value > 0);
   const hasTurnMetrics = turnMetrics.length > 0;
-  const hasLatency = hasTurnMetrics || hasProcessing;
+  const hasLatency = hasTurnMetrics || hasProcessing || userBotLatency.length > 0;
   const hasUsage = llmUsage.length > 0 || ttsUsage.length > 0 || sttUsage.length > 0;
   const llmModels = [...new Set(llmUsage.map((u) => u.model))].join(', ');
 
@@ -144,6 +151,8 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
             {hasTurnMetrics && (
               <TurnLatencySection turns={turnMetrics} toolExecutions={toolExecutions} />
             )}
+            <UserBotLatencySection latencies={userBotLatencyValues} />
+            <EndToEndLatencyPercentileSection latencies={userBotLatencyValues} />
             {hasTurnMetrics && <PerTurnCallsSection turns={turnMetrics} />}
             {hasProcessing && <ProcessingTimesSection processing={processingList} />}
           </MetricsCategory>

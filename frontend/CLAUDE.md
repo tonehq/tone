@@ -312,6 +312,7 @@ Applies **solid-checklist.md** in full — SRP, OCP, LSP, ISP, DIP, code smells,
 - **This project**: Service functions in `src/services/` must not import Jotai atoms directly (DIP). Atoms call services; services do not know about atoms.
 - Components must not call `src/services/` directly — all side effects go through Jotai write atoms; all HTTP goes through the service / `src/lib/api` layer (never raw `fetch`/`axios` in a component).
 - `agentFormUtils.ts` owns `AgentFormState` shape, `defaultFormState`, and serialisation — do not duplicate this logic in components.
+- **No inlined constants or pure helpers in a component.** Magic strings/values go in a co-located constants file (e.g. `readinessConstants.ts`); stateless helpers/formatters (label maps, `countLabel`-style utilities) go in a helper file (e.g. `readinessHelpers.ts`) or `@/utils` once a second feature needs them. Keeps components JSX-only and the logic reusable + unit-testable.
 
 #### 5. Security
 

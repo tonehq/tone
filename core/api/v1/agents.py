@@ -14,6 +14,7 @@ from core.models.agent import Agent
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.services.agent_service import AgentService
+from core.services.readiness import ReadinessService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
 from shared.config import settings
@@ -234,7 +235,11 @@ def _phone_numbers_for(db: Session, org_id: UUID, agent_ids: list[UUID]) -> dict
     return grouped
 
 
-def _serialize_agent(agent: Agent, phone_map: dict[UUID, list[dict]]) -> dict:
+def _serialize_agent(
+    agent: Agent,
+    phone_map: dict[UUID, list[dict]],
+    readiness_map: dict[UUID, dict],
+) -> dict:
     return {
         "id": str(agent.id),
         "uuid": str(agent.id),
@@ -243,6 +248,8 @@ def _serialize_agent(agent: Agent, phone_map: dict[UUID, list[dict]]) -> dict:
         "agent_type": agent.agent_type,
         "is_active": agent.is_active,
         "phone_number": phone_map.get(agent.id, []),
+        # Last-known readiness for the list badge; None until a run is stored.
+        "readiness": readiness_map.get(agent.id),
         "created_at": agent.created_at.timestamp() if agent.created_at else None,
         "updated_at": agent.updated_at.timestamp() if agent.updated_at else None,
     }
@@ -276,9 +283,11 @@ def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
 
     offset = (page - 1) * page_size
     items = query.offset(offset).limit(page_size).all()
-    phone_map = _phone_numbers_for(db, org_id, [a.id for a in items])
+    agent_ids = [a.id for a in items]
+    phone_map = _phone_numbers_for(db, org_id, agent_ids)
+    readiness_map = ReadinessService(db, org_id=org_id).latest_for_agents(agent_ids)
     return {
-        "items": [_serialize_agent(a, phone_map) for a in items],
+        "items": [_serialize_agent(a, phone_map, readiness_map) for a in items],
         "total": total,
         "page": page,
         "page_size": page_size,
@@ -512,8 +521,6 @@ async def switch_active_version(
     # Publish gate: verify the target version is safe to promote before we
     # flip the FK. Raises HTTPException(400) on blockers or unforced warnings,
     # which happens before any DB write so the transaction stays clean.
-    from core.services.readiness import ReadinessService
-
     readiness = ReadinessService(
         db,
         user_id=UUID(claims.user_id) if claims.user_id else None,

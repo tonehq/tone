@@ -3,6 +3,7 @@ import type {
   ReadinessCategory,
   ReadinessDepth,
   ReadinessReport,
+  ReadinessRunList,
   ReadinessSummary,
   ReadinessTrigger,
 } from '@/types/readiness';
@@ -17,6 +18,10 @@ interface ReadinessRequestBody {
    * only these categories live; the rest return SKIPPED. Used by save flows
    * that know exactly which resources changed. */
   categories?: ReadinessCategory[];
+  /** Force a fresh run + persisted event, bypassing the backend read-through
+   * caches. Set by the "Run deep test" button so each explicit run appears as a
+   * new entry in the run-history list. */
+  force?: boolean;
 }
 
 /** Derive a badge-shaped {@link ReadinessSummary} from a full report. Kept
@@ -113,11 +118,13 @@ export const getAgentReadiness = async (
   configId?: string,
   trigger?: ReadinessTrigger | string,
   categories?: ReadinessCategory[],
+  force?: boolean,
 ): Promise<ReadinessReport> => {
   const body: ReadinessRequestBody = { depth };
   if (configId) body.config_id = configId;
   if (trigger) body.trigger = trigger;
   if (categories && categories.length > 0) body.categories = categories;
+  if (force) body.force = true;
   const res = await axiosInstance.post<ReadinessReport>(`/agent/${agentId}/readiness`, body);
   return res.data;
 };
@@ -135,5 +142,30 @@ export const getAgentReadinessSummary = async (
   const res = await axiosInstance.get<ReadinessSummary>(`/agent/${agentId}/readiness/summary`, {
     params: { ...(configId ? { config_id: configId } : {}), trigger },
   });
+  return res.data;
+};
+
+/**
+ * List past deep readiness runs (newest first) for the run-history dropdown.
+ * Metadata only — call {@link getAgentReadinessRun} to load one run's checks.
+ */
+export const listAgentReadinessRuns = async (
+  agentId: string,
+  limit = 20,
+): Promise<ReadinessRunList> => {
+  const res = await axiosInstance.get<ReadinessRunList>(`/agent/${agentId}/readiness/runs`, {
+    params: { limit },
+  });
+  return res.data;
+};
+
+/** Fetch the full stored report (with checks) for one past run. */
+export const getAgentReadinessRun = async (
+  agentId: string,
+  runNumber: number,
+): Promise<ReadinessReport> => {
+  const res = await axiosInstance.get<ReadinessReport>(
+    `/agent/${agentId}/readiness/runs/${runNumber}`,
+  );
   return res.data;
 };

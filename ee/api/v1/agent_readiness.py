@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from core.api.v1.agent_readiness import ReadinessRequest
 from core.database.session import get_db
 from core.services.readiness import ReadinessService
-from core.services.readiness.schemas import ReadinessReport, ReadinessSummary
+from core.services.readiness.schemas import (
+    ReadinessReport,
+    ReadinessRunList,
+    ReadinessSummary,
+)
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
 router = APIRouter()
@@ -41,6 +45,7 @@ async def check_readiness(
         config_id=body.config_id,
         trigger=body.trigger or "api",
         deep_categories=set(body.categories) if body.categories is not None else None,
+        force=body.force,
     )
 
 
@@ -56,3 +61,25 @@ async def readiness_summary(
     return await svc.summary(
         agent_id, config_id=config_id, trigger=trigger or "list_page"
     )
+
+
+@router.get("/{agent_id}/readiness/runs", response_model=ReadinessRunList)
+async def list_readiness_runs(
+    agent_id: str,
+    limit: int = Query(20, ge=1, le=100, description="Max runs to return"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+) -> ReadinessRunList:
+    svc = _get_service(claims, db)
+    return svc.list_runs(agent_id, limit=limit)
+
+
+@router.get("/{agent_id}/readiness/runs/{run_number}", response_model=ReadinessReport)
+async def get_readiness_run(
+    agent_id: str,
+    run_number: int,
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+) -> ReadinessReport:
+    svc = _get_service(claims, db)
+    return svc.get_run(agent_id, run_number)

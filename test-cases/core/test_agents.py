@@ -921,3 +921,126 @@ class TestDeleteAgentVersion:
             f"/api/v1/agent/delete_version?agent_id={_SENTINEL_UUID}&config_id={_SENTINEL_UUID}",
         )
         assert resp.status_code in (401, 403)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/v1/agent/list — readiness badge is embedded per row (no N+1)
+# ---------------------------------------------------------------------------
+
+def _seed_snapshot(
+    db,
+    *,
+    org_id,
+    agent_id,
+    depth,
+    overall_status="not_ready",
+    counts=None,
+    run_number=1,
+    computed_at=None,
+):
+    """Insert one AgentReadinessSnapshot row so the list endpoint's embedded
+    readiness field can be asserted deterministically without running a live
+    check. The (agent_id, config_id, depth) uniqueness constraint means each
+    depth is its own slot for a config_id=None agent."""
+    from datetime import datetime, timezone
+
+    from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
+
+    now = computed_at or datetime.now(timezone.utc)
+    row = AgentReadinessSnapshot(
+        organization_id=org_id,
+        agent_id=agent_id,
+        config_id=None,
+        depth=depth,
+        overall_status=overall_status,
+        counts=counts if counts is not None else {"blockers": 2, "warnings": 1, "info": 0},
+        checks=[],
+        trigger="list_page",
+        triggered_by_user_id=None,
+        duration_ms=5,
+        started_at=now,
+        computed_at=now,
+        run_number=run_number,
+        dependency_stamp="seed-stamp",
+        error=None,
+    )
+    db.add(row)
+    return row
+
+
+def _org_and_agent(db_session, client):
+    """Create an agent via the API and return (agent_json, agent_row, org_id)."""
+    from core.models.agent import Agent
+
+    agent = _create_agent(client)
+    agent_row = db_session.query(Agent).filter(Agent.id == uuid.UUID(agent["id"])).first()
+    assert agent_row is not None
+    return agent, agent_row, agent_row.organization_id
+
+
+class TestListAgentsReadiness:
+    """The list endpoint embeds last-known readiness on each row so the badge
+    needs no per-row fetch (replaces the old N+1)."""
+
+    def _find(self, items, agent_id):
+        return next((it for it in items if it["id"] == agent_id), None)
+
+    def test_readiness_field_present_and_null_without_a_run(self, db_session, client_as_member):
+        """A brand-new agent has no stored run → readiness is present but null."""
+        agent = _create_agent(client_as_member)
+        resp = client_as_member.post("/api/v1/agent/list", json={})
+        assert resp.status_code == 200
+        item = self._find(resp.json()["items"], agent["id"])
+        assert item is not None
+        assert "readiness" in item
+        assert item["readiness"] is None
+
+    def test_readiness_reflects_stored_snapshot(self, db_session, client_as_member):
+        agent, agent_row, org_id = _org_and_agent(db_session, client_as_member)
+        _seed_snapshot(
+            db_session,
+            org_id=org_id,
+            agent_id=agent_row.id,
+            depth="shallow",
+            overall_status="not_ready",
+            counts={"blockers": 3, "warnings": 1, "info": 2},
+            run_number=4,
+        )
+        db_session.flush()
+
+        resp = client_as_member.post("/api/v1/agent/list", json={})
+        item = self._find(resp.json()["items"], agent["id"])
+        assert item is not None
+        r = item["readiness"]
+        assert r["overall_status"] == "not_ready"
+        assert r["blocker_count"] == 3
+        assert r["warning_count"] == 1
+        assert r["info_count"] == 2
+        assert r["run_number"] == 4
+        assert r["computed_at"] is not None
+
+    def test_readiness_uses_newest_snapshot_across_depths(self, db_session, client_as_member):
+        """When an agent has both a shallow and a deep snapshot, the row shows
+        the most recently computed one regardless of depth."""
+        from datetime import datetime, timedelta, timezone
+
+        agent, agent_row, org_id = _org_and_agent(db_session, client_as_member)
+        older = datetime.now(timezone.utc) - timedelta(minutes=5)
+        newer = datetime.now(timezone.utc)
+        _seed_snapshot(
+            db_session, org_id=org_id, agent_id=agent_row.id, depth="shallow",
+            overall_status="ready", counts={"blockers": 0, "warnings": 0, "info": 0},
+            run_number=1, computed_at=older,
+        )
+        _seed_snapshot(
+            db_session, org_id=org_id, agent_id=agent_row.id, depth="deep",
+            overall_status="not_ready", counts={"blockers": 5, "warnings": 0, "info": 0},
+            run_number=2, computed_at=newer,
+        )
+        db_session.flush()
+
+        resp = client_as_member.post("/api/v1/agent/list", json={})
+        item = self._find(resp.json()["items"], agent["id"])
+        assert item["readiness"]["overall_status"] == "not_ready"  # newer deep wins
+        assert item["readiness"]["blocker_count"] == 5
+        assert item["readiness"]["run_number"] == 2
