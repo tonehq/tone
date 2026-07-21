@@ -61,6 +61,34 @@ class CompositeValidator(RecordValidator):
         return errors
 
 
+def build_contact_validator(
+    schema_fields: Optional[Sequence] = None,
+    *,
+    require_phone: bool = False,
+) -> CompositeValidator:
+    """The ONE place contact-import validation is composed, so every source and destination
+    validates the same way. Rules are assembled from the DESTINATION context, not the source:
+
+    - dialing destinations (``require_phone=True``) require a valid E.164 phone (which also
+      satisfies identity, so it replaces the name-or-phone check);
+    - other destinations require at least a name OR phone (``RequiredIdentityValidator``);
+    - when the destination has a schema (``schema_fields`` non-empty), the record's metadata is
+      validated against it (``SchemaMetadataValidator``); with no schema that rule is skipped.
+
+    Reused by the outbound file upload (phone-required, no schema) and the contact-create /
+    multi-add API (schema-aware, phone optional). Extend the rule set HERE — never rebuild a
+    ``CompositeValidator`` at a call site. (Directory syncs upsert by ``external_id`` and emit
+    structured per-field errors, so they compose their own identity check but share the same
+    underlying metadata validator via ``make_contact_metadata_validator``.)
+    """
+    rules: List[RecordValidator] = [
+        PhoneNumberValidator() if require_phone else RequiredIdentityValidator()
+    ]
+    if schema_fields:
+        rules.append(SchemaMetadataValidator(schema_fields))
+    return CompositeValidator(rules)
+
+
 class PhoneNumberValidator(RecordValidator):
     """Require a valid E.164 phone number — the dial target for an outbound call."""
 

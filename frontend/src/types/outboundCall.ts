@@ -7,6 +7,8 @@ export interface CreateOutboundCallPayload {
   scheduled_at?: string | null;
   /** Directory the created contacts land in (default the org's "Global" directory). */
   directory_id?: string;
+  /** How many of this batch's calls dial at once. Omit → the backend applies the env default. */
+  max_concurrency?: number;
 }
 
 /** Response from POST /outbound-call/create. `mode` says whether it dialed now or queued. */

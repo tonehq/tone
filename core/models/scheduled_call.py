@@ -1,6 +1,6 @@
 import uuid
 
-from sqlalchemy import Column, String, Integer, ForeignKey, DateTime
+from sqlalchemy import Column, String, Integer, ForeignKey, DateTime, Index
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 
 from core.models.base import OrgScopedModel
@@ -15,6 +15,11 @@ class ScheduledCall(OrgScopedModel):
     """
 
     __tablename__ = "scheduled_calls"
+    # Composite index for the per-batch in-flight count on the dispatch hot path
+    # (COUNT(*) WHERE batch_id = ? AND status IN (active...)).
+    __table_args__ = (
+        Index("ix_scheduled_calls_batch_status", "batch_id", "status"),
+    )
 
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="RESTRICT"), nullable=False)
     channel_id = Column(UUID(as_uuid=True), ForeignKey("channels.id", ondelete="SET NULL"), nullable=True)
@@ -33,4 +38,9 @@ class ScheduledCall(OrgScopedModel):
     queue_job_id = Column(Integer, nullable=True)
     error = Column(String(500), nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), nullable=True)
+    # Per-batch concurrency: rows created in one schedule action share a ``batch_id`` and carry
+    # the batch's ``max_concurrency`` (how many of the batch may be in flight at once). NULL =
+    # no per-batch limit. Enforced at dispatch via the ``(batch_id, status)`` index above.
+    batch_id = Column(UUID(as_uuid=True), nullable=True)
+    max_concurrency = Column(Integer, nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=True)

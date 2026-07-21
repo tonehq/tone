@@ -30,6 +30,8 @@ class CreateOutboundCallRequest(BaseModel):
     scheduled_at: Optional[datetime] = None
     # Directory the created contacts land in (default the org's "Global" directory).
     directory_id: Optional[UUID] = None
+    # How many of this batch's calls run at once (UI selector). None/omitted → the env default.
+    max_concurrency: Optional[int] = None
 
     def resolved_numbers(self) -> List[str]:
         nums = list(self.to_numbers or [])
@@ -89,6 +91,7 @@ def create_outbound_call(
         scheduled_at=body.scheduled_at,
         created_by_user_id=service.user_id,
         directory_id=body.directory_id,
+        max_concurrency=body.max_concurrency,
     )
 
 
@@ -98,6 +101,9 @@ def create_outbound_call_from_file(
     from_number: Optional[str] = Form(None),
     scheduled_at: Optional[datetime] = Form(None),
     directory_id: Optional[UUID] = Form(None),
+    schema_id: Optional[UUID] = Form(None),
+    schedule_column: Optional[str] = Form(None),
+    max_concurrency: Optional[int] = Form(None),
     file: UploadFile = File(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
@@ -110,13 +116,17 @@ def create_outbound_call_from_file(
     loops the parsed ``ParsedContact`` stream once and validates each via a composable
     ``RecordValidator``, and the valid records are created in ``directory_id`` (default the
     org's "Global" directory), assigned to the agent, and scheduled. The client picks a
-    mapping schema only to download a matching sample; the file is parsed SERVER-SIDE."""
+    mapping schema only to download a matching sample; the file is parsed SERVER-SIDE.
+
+    When ``schedule_column`` is given, that file column supplies each row's OWN call time
+    (parsed with the matching ``schema_id`` datetime field's format + timezone); such rows
+    override the request-level ``scheduled_at`` (which becomes the fallback for rows with no
+    value). A row whose schedule cell is unparseable or in the past is reported as invalid
+    rather than dialed immediately."""
     from core.services.contact_ingestion import select_source_for_upload
     from core.services.contact_ingestion.pipeline import RecordParser, parsed_contact_to_row
-    from core.services.contact_ingestion.validation import (
-        CompositeValidator,
-        PhoneNumberValidator,
-    )
+    from core.services.contact_ingestion.validation import build_contact_validator
+    from core.services.contacts.contact_schema_service import ContactSchemaService
 
     raw = file.file.read()
     if not raw:
@@ -126,16 +136,16 @@ def create_outbound_call_from_file(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    # Parse → loop → validate through the shared, extensible framework. Add a rule here
-    # (e.g. a SchemaMetadataValidator) without touching the loop or the schedule path.
-    validator = CompositeValidator([PhoneNumberValidator()])
+    # Parse → loop → validate through the shared, extensible framework. Dialing destination
+    # (Global directory, no schema) → the ONE shared builder composes a phone-required validator.
+    validator = build_contact_validator(require_phone=True)
     parsed = RecordParser(validator).parse(source, raw)  # unlimited
     if not parsed.valid:
         raise HTTPException(
             status_code=400,
             detail="No valid phone numbers found in the file. Include a 'phone_number' column.",
         )
-    rows = [parsed_contact_to_row(record) for record in parsed.valid]
+
     invalid = [
         {
             "to_number": bad.get("phone_number") or f"row {bad['index'] + 1}",
@@ -143,6 +153,32 @@ def create_outbound_call_from_file(
         }
         for bad in parsed.invalid
     ]
+
+    # Per-row schedule time: read the user-named column into metadata['scheduled_at'] using
+    # the schema field's datetime format/timezone. Rows with an unparseable/past cell are
+    # dropped to `invalid` (not dialed); rows with an empty cell keep the request fallback.
+    usable = parsed.valid
+    if schedule_column and schedule_column.strip():
+        org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
+        user_id = UUID(str(claims.user_id)) if getattr(claims, "user_id", None) else None
+        schema_service = ContactSchemaService(db, user_id=user_id, org_id=org_id)
+        schedule_errors = schema_service.apply_scheduled_at_from_column(
+            parsed.valid, schema_id, schedule_column
+        )
+        if schedule_errors:
+            errored = {id(rec) for rec, _ in schedule_errors}
+            usable = [rec for rec in parsed.valid if id(rec) not in errored]
+            invalid += [
+                {"to_number": rec.phone_number or "unknown", "error": reason}
+                for rec, reason in schedule_errors
+            ]
+        if not usable:
+            raise HTTPException(
+                status_code=400,
+                detail="No rows had a usable schedule time in the selected column.",
+            )
+
+    rows = [parsed_contact_to_row(record) for record in usable]
 
     service = _get_service(claims, db)
     return service.create_outbound_calls_from_rows(
@@ -153,7 +189,18 @@ def create_outbound_call_from_file(
         directory_id=directory_id,
         scheduled_at=scheduled_at,
         created_by_user_id=service.user_id,
+        max_concurrency=max_concurrency,
     )
+
+
+@router.get("/concurrency-max")
+def get_outbound_concurrency_max(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """``{max}`` — the env ceiling (``MAX_CONCURRENT_OUTBOUND_CALLS``) the UI caps the per-batch
+    'Concurrent calls' selector to and defaults it to. ``null`` = unset (no upper bound)."""
+    return _get_service(claims, db).get_concurrency_max()
 
 
 @router.post("/scheduled/list")
