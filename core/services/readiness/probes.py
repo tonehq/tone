@@ -133,6 +133,22 @@ async def probe_llm(ctx) -> ProbeResult:
 
     provider = spec["provider_name"]
 
+    # Bake the probe's cost cap into metadata so ``build_input_params``
+    # (see service_factory) filters each key against the provider's
+    # ``InputParams.model_fields`` before construction. Keys the provider
+    # doesn't declare are dropped silently — e.g. Google/Anthropic/AWS
+    # Bedrock don't have ``max_completion_tokens``; sending it via
+    # ``LLMUpdateSettingsFrame`` at runtime instead trips Google's
+    # strict-mode ``GenerateContentConfig`` (``extra_forbidden``) and
+    # false-flags a healthy provider. Overriding the user's own
+    # ``max_tokens`` is intentional: probe cost must stay bounded even
+    # when the agent's model is configured with a large budget.
+    spec["metadata"] = {
+        **(spec["metadata"] or {}),
+        "max_tokens": 1024,
+        "max_completion_tokens": 1024,
+    }
+
     try:
         service = service_factory.build_llm(spec)
     except Exception as exc:  # noqa: BLE001
@@ -156,7 +172,6 @@ async def probe_llm(ctx) -> ProbeResult:
         LLMContextFrame,
         LLMFullResponseEndFrame,
         LLMTextFrame,
-        LLMUpdateSettingsFrame,
     )
     from pipecat.pipeline.task import PipelineParams
     from pipecat.processors.aggregators.llm_context import LLMContext
@@ -174,18 +189,7 @@ async def probe_llm(ctx) -> ProbeResult:
         return isinstance(frame, LLMFullResponseEndFrame)
 
     llm_context = LLMContext(messages=[{"role": "user", "content": _LLM_PROBE_PROMPT}])
-    # Budget sized for reasoning models, not for cost. OpenAI o1/o3/o4 enforce
-    # a hard minimum of max_completion_tokens=1024 (anything smaller 400s);
-    # Anthropic claude-*-thinking and Google gemini-*-thinking spend most of
-    # the budget on internal reasoning before emitting visible output, so a
-    # tight cap would either error or yield an empty response and false-flag
-    # a healthy provider. 1024 keeps cost negligible (~$0.015 worst case) and
-    # covers every reasoning model in the wild. Non-reasoning models rarely
-    # come close to the cap. Pipecat drops NOT_GIVEN keys, so sending both
-    # max_tokens and max_completion_tokens is safe — whichever the provider
-    # honours wins.
     input_frames = [
-        LLMUpdateSettingsFrame(settings={"max_tokens": 1024, "max_completion_tokens": 1024}),
         LLMContextFrame(context=llm_context),
         EndFrame(),
     ]
@@ -317,6 +321,15 @@ async def probe_stt(ctx) -> ProbeResult:
             params=params,
             timeout_s=25.0,   # under the check's 30s wrapper — leave room for teardown
             provider=provider,
+            # Streaming STTs (Deepgram, AssemblyAI, Soniox, Gladia, Sarvam,
+            # Azure, Speechmatics) schedule their WebSocket handshake in a
+            # background task from ``_connect``; audio pushed before the
+            # handshake completes is silently dropped by their per-service
+            # ``if self._connection/._websocket:`` guards. 3s covers a cold
+            # WS handshake in unusual regions (Deepgram nova-3 India, etc.).
+            # Deepgram exits early via ``_connection_ready`` if ready sooner;
+            # other providers fall back to a fixed sleep of this length.
+            warmup_s=3.0,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} STT pipeline harness raised", provider)
@@ -482,6 +495,23 @@ async def probe_tts(ctx) -> ProbeResult:
 
     provider = spec["provider_name"]
 
+    # Voice resolution — mirror service_resolver:283-287. Agent config stores
+    # the tone-internal ``ModelVoice.id`` (UUID), but every provider SDK
+    # expects its own native voice id (Cartesia UUID, ElevenLabs string,
+    # etc.) — those live on ``ModelVoice.voice_id``. Passing the tone-
+    # internal UUID straight through hits providers as ``voice_not_found``
+    # (Cartesia) or a silent fallback to a default voice. The readiness
+    # context builder already resolved and attached the ``ModelVoice`` row
+    # as ``ctx.voice``; use its ``voice_id`` here to match what real calls
+    # send. When ``ctx.voice`` is None (raw non-UUID string like Gemini's
+    # "Puck", or nothing configured) the existing metadata passes through
+    # untouched and ``build_tts``'s per-provider default kicks in.
+    if ctx.voice is not None and getattr(ctx.voice, "voice_id", None):
+        spec["metadata"] = {
+            **(spec["metadata"] or {}),
+            "voice_id": ctx.voice.voice_id,
+        }
+
     try:
         service = service_factory.build_tts(spec)
     except Exception as exc:  # noqa: BLE001
@@ -527,6 +557,17 @@ async def probe_tts(ctx) -> ProbeResult:
             params=params,
             timeout_s=18.0,   # under the check's 22s wrapper — leave room for teardown
             provider=provider,
+            # Streaming TTSs (ElevenLabs, Cartesia, LMNT, Play.ht, Fish,
+            # Rime, Neuphonic, Sarvam, Deepgram TTS, MiniMax) use the same
+            # background-handshake pattern as streaming STTs: ``_connect``
+            # schedules the WS handshake, and each ``send`` call is guarded
+            # by ``if self._websocket and .state is OPEN``. A TTSSpeakFrame
+            # pushed before the handshake completes is silently dropped and
+            # no audio comes back — a healthy provider looks broken. 2s is
+            # enough for typical WS-TTS handshakes without inflating probe
+            # latency; services with a readiness event exit early via the
+            # harness's ``_connection_ready`` fast path.
+            warmup_s=2.0,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} TTS pipeline harness raised", provider)
