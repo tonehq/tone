@@ -62,6 +62,8 @@ jobs:
           kubectl apply -f build/kubernetes/staging/worker/rbac.yaml
           kubectl apply -f build/kubernetes/staging/worker/doc-worker.yaml
           kubectl apply -f build/kubernetes/staging/worker/orchestrator.yaml
+          kubectl apply -f build/kubernetes/staging/keda/trigger-auth.yaml
+          kubectl apply -f build/kubernetes/staging/keda/scaledobjects.yaml
 
       - name: Rollout restart deployments
         run: |

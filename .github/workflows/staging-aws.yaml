@@ -84,6 +84,8 @@ jobs:
           kubectl apply -f build/kubernetes/staging-aws/worker/doc-worker.yaml
           kubectl apply -f build/kubernetes/staging-aws/worker/orchestrator.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/rbac.yaml
+          kubectl apply -f build/kubernetes/staging-aws/keda/trigger-auth.yaml
+          kubectl apply -f build/kubernetes/staging-aws/keda/scaledobjects.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/configmap.yaml
           kubectl apply -f build/kubernetes/staging-aws/monitoring/daemonset.yaml
 
