@@ -11,11 +11,10 @@ import type { CustomTableColumn } from '@/components/shared';
 import { CustomButton, CustomModal, CustomTable, CustomTooltip } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { ScheduledCallRow, ScheduledCallStatus } from '@/types/outboundCall';
-import { triggerCsvDownload } from '@/utils/download';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { Ban, Download, PhoneForwarded, PhoneOutgoing } from 'lucide-react';
+import { Ban, PhoneForwarded, PhoneOutgoing } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -36,7 +35,12 @@ function formatDateTime(iso: string | null): string {
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString();
 }
 
-export default function ScheduledCallsPage() {
+interface ScheduledCallsPageProps {
+  /** When set, scopes the list + locks the create modal to this agent (Agent → Schedule tab). */
+  agentId?: string;
+}
+
+export default function ScheduledCallsPage({ agentId }: ScheduledCallsPageProps = {}) {
   const { rows, total, loading } = useAtomValue(scheduledCallsAtom);
   const fetchCalls = useSetAtom(fetchScheduledCalls);
   const cancelCall = useSetAtom(cancelScheduledCallAtom);
@@ -56,14 +60,19 @@ export default function ScheduledCallsPage() {
     async (pageNo: number, silent = false) => {
       try {
         await fetchCalls({
-          params: { page_no: pageNo, page_size: PAGE_SIZE, sort_order: 'desc' },
+          params: {
+            page_no: pageNo,
+            page_size: PAGE_SIZE,
+            sort_order: 'desc',
+            ...(agentId ? { filters: [{ field: 'agent_id', value: agentId }] } : {}),
+          },
           silent,
         });
       } catch (err) {
         handleApiError(err);
       }
     },
-    [fetchCalls],
+    [fetchCalls, agentId],
   );
 
   // First load (per page) shows the skeleton; the refreshes below are silent.
@@ -177,6 +186,8 @@ export default function ScheduledCallsPage() {
         <span className="font-medium tabular-nums">{(value as string) ?? '—'}</span>
       ),
     },
+    // The Agent column is redundant inside a single agent's Schedule tab, so it's dropped
+    // when the view is agent-scoped (see `visibleColumns` below).
     {
       key: 'agent_name',
       title: 'Agent',
@@ -236,8 +247,11 @@ export default function ScheduledCallsPage() {
 
   const selectedCount = selectedIds.size;
 
+  // Agent-scoped view (agent Schedule tab) hides the repeating Agent column.
+  const visibleColumns = agentId ? columns.filter((c) => c.key !== 'agent_name') : columns;
+
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
           <h1 className="text-xl font-semibold tracking-tight">Scheduled Calls</h1>
@@ -246,18 +260,6 @@ export default function ScheduledCallsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <CustomButton
-            type="default"
-            icon={<Download className="size-4" />}
-            onClick={() =>
-              triggerCsvDownload(
-                'outbound-numbers-sample.csv',
-                ['phone_number', '+14155550123', '+14155550124', '+442071838750'].join('\n'),
-              )
-            }
-          >
-            Sample CSV
-          </CustomButton>
           <CustomButton
             type="primary"
             icon={<PhoneOutgoing className="size-4" />}
@@ -287,10 +289,11 @@ export default function ScheduledCallsPage() {
       )}
 
       <CustomTable
-        columns={columns}
+        columns={visibleColumns}
         dataSource={rows}
         rowKey="id"
         loading={loading}
+        fillHeight
         pagination={{ current: page, pageSize: PAGE_SIZE, total, onChange: setPage }}
         emptyState={
           <div className="flex flex-col items-center gap-3 py-12 text-center">
@@ -311,6 +314,8 @@ export default function ScheduledCallsPage() {
       <NewOutboundCallModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
+        defaultAgentId={agentId}
+        lockAgent={!!agentId}
         onScheduled={() => {
           if (page === 1) load(1, true);
           else setPage(1);

@@ -13,6 +13,18 @@ export const createOutboundCall = async (
   return res.data;
 };
 
+/**
+ * Place/queue outbound calls from an uploaded CSV/Excel of numbers. The file is parsed
+ * SERVER-SIDE (the browser never reads it); `formData` carries `agent_id`, optional
+ * `from_number` / `scheduled_at`, and `file`.
+ */
+export const createOutboundCallFromFile = async (
+  formData: FormData,
+): Promise<CreateOutboundCallResponse> => {
+  const res = await axiosInstance.post('/outbound-call/create-from-file', formData);
+  return res.data;
+};
+
 export const getScheduledCalls = async (
   params: ScheduledCallsQueryParams,
 ): Promise<{ data: ScheduledCallRow[]; total: number }> => {

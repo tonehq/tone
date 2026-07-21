@@ -2,6 +2,7 @@ import {
   cancelScheduledCall,
   cancelScheduledCalls,
   createOutboundCall,
+  createOutboundCallFromFile,
   getScheduledCalls,
 } from '@/services/outboundCallService';
 import type {
@@ -43,6 +44,11 @@ export const fetchScheduledCalls = atom(
 export const createOutboundCallAtom = atom(
   null,
   async (_get, _set, payload: CreateOutboundCallPayload) => createOutboundCall(payload),
+);
+
+// Placing calls from an uploaded CSV/Excel — the file is parsed server-side.
+export const createOutboundCallFromFileAtom = atom(null, async (_get, _set, formData: FormData) =>
+  createOutboundCallFromFile(formData),
 );
 
 export const cancelScheduledCallAtom = atom(null, async (_get, _set, id: string) =>

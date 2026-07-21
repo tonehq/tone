@@ -65,6 +65,13 @@ Formatting is tool-enforced (Ruff/formatter). **Review the substance below, not 
   possible (expand/contract), since code and schema deploy at different instants.
 - `[should]` Data migrations are idempotent and batched for large tables — no single `UPDATE` over
   millions of rows in one lock.
+- `[should]` **Index an already-populated column with `CREATE INDEX CONCURRENTLY`**
+  (`op.create_index(..., postgresql_concurrently=True)` in a non-transactional migration —
+  `with op.get_context().autocommit_block():`, and an idempotent/`if_not_exists` build since a failed
+  concurrent index leaves an `INVALID` index). A plain `CREATE INDEX` takes a write-blocking lock for
+  the whole build. **Exception:** an index on a column added *in the same migration* (all-`NULL`, empty)
+  builds instantly — a plain `CREATE INDEX` is fine and simpler there; don't reach for `CONCURRENTLY`
+  when there's nothing to scan.
 
 ## 5. Pydantic schemas & validation
 

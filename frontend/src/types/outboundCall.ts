@@ -1,9 +1,12 @@
 export interface CreateOutboundCallPayload {
   agent_id: string;
-  from_number: string;
+  /** Optional caller-id. Omit to let the backend auto-select the org's configured number. */
+  from_number?: string;
   /** One or many destinations (bulk / CSV). */
   to_numbers: string[];
   scheduled_at?: string | null;
+  /** Directory the created contacts land in (default the org's "Global" directory). */
+  directory_id?: string;
 }
 
 /** Response from POST /outbound-call/create. `mode` says whether it dialed now or queued. */

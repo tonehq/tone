@@ -15,7 +15,7 @@ Guards: writes = admin/owner (``require_admin_or_owner``), reads = member
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -62,6 +62,9 @@ class CreateSchemaFieldRequest(BaseModel):
     options: Optional[List[Dict[str, Any]]] = None
     source_key: Optional[str] = None
     display_order: int = 0
+    # Free-form per-field config; for date/datetime fields carries
+    # {"datetime_format": "...", "timezone": "IANA/Zone"} used by the importer.
+    field_metadata: Optional[Dict[str, Any]] = None
 
 
 class UpdateSchemaFieldRequest(BaseModel):
@@ -74,6 +77,7 @@ class UpdateSchemaFieldRequest(BaseModel):
     source_key: Optional[str] = None
     display_order: Optional[int] = None
     is_active: Optional[bool] = None
+    field_metadata: Optional[Dict[str, Any]] = None
 
 
 # ---------------------------------------------------------------------------
@@ -129,6 +133,25 @@ def get_schema(
     return _schema_service(claims, db).get_schema_detail(schema_id)
 
 
+@router.get("/{schema_id}/sample")
+def download_schema_sample(
+    schema_id: UUID,
+    format: str = Query("csv", pattern="^(csv|xlsx)$"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Download a schema-shaped sample import file (CSV or ``.xlsx``), generated
+    server-side from the schema's fields."""
+    filename, media_type, content = _schema_service(claims, db).build_sample_file(
+        schema_id, format
+    )
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
 @router.patch("/{schema_id}")
 def update_schema(
     schema_id: UUID,
@@ -172,6 +195,7 @@ def create_schema_field(
         options=body.options,
         source_key=body.source_key,
         display_order=body.display_order,
+        field_metadata=body.field_metadata,
     )
     return field.to_dict()
 

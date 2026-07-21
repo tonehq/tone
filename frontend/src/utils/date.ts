@@ -86,6 +86,24 @@ export function getTimeZones(): string[] {
 }
 
 /**
+ * Short timezone abbreviation (e.g. `EDT`, `IST`) for `timeZone` at instant `at`
+ * (defaults to now, so DST is resolved correctly). Returns `''` on unsupported
+ * runtimes/invalid zones. Used to show `Zone (ABBR)` under the schedule-time field.
+ */
+export function getTimeZoneAbbreviation(timeZone: string, at?: string | Date): string {
+  try {
+    const date = at ? new Date(at) : new Date();
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone,
+      timeZoneName: 'short',
+    }).formatToParts(date);
+    return parts.find((p) => p.type === 'timeZoneName')?.value ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Format a UTC ISO instant for display in a specific IANA timezone
  * (e.g. `Jun 5, 4:44 PM`). Used by the shared DateRangePicker trigger so the
  * label always reflects the user's chosen zone, not the browser default.

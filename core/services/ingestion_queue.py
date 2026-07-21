@@ -144,8 +144,8 @@ def enqueue_outbound_calls_batch(items):
 
     ``items`` is a sequence of ``(scheduled_call_id, org_id, schedule_at)`` tuples. Opens
     the app once and defers every job inside it, instead of a connect/defer/close cycle
-    per row — so a bulk batch (up to ``MAX_BULK``) doesn't churn connections. Sync-friendly
-    (runs its own loop) so the API route (a sync ``def`` in the threadpool) can call it.
+    per row — so a bulk batch doesn't churn connections. Sync-friendly (runs its own loop)
+    so the API route (a sync ``def`` in the threadpool) can call it.
 
     Returns a list of ``(job_id, error)`` tuples aligned to ``items``: ``job_id`` is the
     Procrastinate job id on success (store it to allow cancellation), or ``None`` with a

@@ -7,7 +7,7 @@ import type { SidebarNavGroup, SidebarNavItem } from '@/components/layout/Sideba
 // their navigation from this list so the two can never drift. Mirrors the
 // settings navConfig.ts shape.
 //
-// Distinct leading segments (`directories` vs `datasource`) mean
+// Distinct leading segments (`directories` vs `schema`) mean
 // `isSidebarItemActive` highlights each item without collision — no `exact`
 // needed. `General` stays active across `/contacts/directories` and
 // `/contacts/directories/[id]`.
@@ -17,7 +17,7 @@ export const CONTACTS_NAV_GROUPS: SidebarNavGroup[] = [
     heading: null,
     items: [
       { label: 'General', href: '/contacts/directories', icon: Users },
-      { label: 'Datasource', href: '/contacts/datasource', icon: Table2 },
+      { label: 'Schema', href: '/contacts/schema', icon: Table2 },
       { label: 'Sync History', href: '/contacts/sync-history', icon: History },
     ],
   },

@@ -130,10 +130,13 @@ def accept_invitation_with_password(
 @router.post("/create_tenants")
 def create_tenants(
     name: str = Query(...),
+    scheduling_timezone: Optional[str] = Query(None),
     claims: EEJWTClaims = Depends(get_ee_jwt_claims),
     db: Session = Depends(get_db),
 ):
-    return EEAuthService(db, user_id=claims.user_id).create_organization(name, claims.user_id)
+    return EEAuthService(db, user_id=claims.user_id).create_organization(
+        name, claims.user_id, scheduling_timezone=scheduling_timezone
+    )
 
 
 # ── Membership management ────────────────────────────────────────────

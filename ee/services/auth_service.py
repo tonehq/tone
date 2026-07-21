@@ -61,7 +61,12 @@ class EEAuthService(AuthService):
 
     # ── Create a new organization for the current user ──────────────
 
-    def create_organization(self, name: str, user_id: Union[str, UUID]) -> Dict[str, Any]:
+    def create_organization(
+        self,
+        name: str,
+        user_id: Union[str, UUID],
+        scheduling_timezone: Optional[str] = None,
+    ) -> Dict[str, Any]:
         uid = _user_uuid(user_id)
         if not uid:
             raise HTTPException(
@@ -71,11 +76,20 @@ class EEAuthService(AuthService):
         if self.db.query(Organization).filter(Organization.slug == slug).first():
             slug = f"{slug}-{secrets.token_hex(3)}"
 
+        # Seed the org's default scheduling timezone into its settings when provided at
+        # create time (optional; the frontend defaults it to the browser zone).
+        settings_bag: Dict[str, Any] = {}
+        if scheduling_timezone and scheduling_timezone.strip():
+            from core.services.org_settings import SCHEDULING_TIMEZONE_KEY
+
+            settings_bag[SCHEDULING_TIMEZONE_KEY] = scheduling_timezone.strip()
+
         org = Organization(
             name=name,
             slug=slug,
             subscription_tier="free",
             status="active",
+            settings=settings_bag,
         )
         self.db.add(org)
         self.db.flush()
@@ -180,8 +194,11 @@ class EEAuthService(AuthService):
                 status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found"
             )
         member_count = self.db.query(Member).filter(Member.organization_id == oid).count()
+        from core.services.org_settings import get_scheduling_timezone
+
         payload = org.to_dict()
         payload["member_count"] = member_count
+        payload["scheduling_timezone"] = get_scheduling_timezone(org.settings)
         return payload
 
     def update_organization_details(
@@ -199,6 +216,20 @@ class EEAuthService(AuthService):
         for key, value in update_data.items():
             if key in allowed:
                 setattr(org, key, value)
+
+        # Scheduling timezone lives in the settings JSONB (not a column). Merge it in when
+        # provided so admins/owners can set an org's default scheduling timezone here.
+        if "scheduling_timezone" in update_data:
+            from core.services.org_settings import SCHEDULING_TIMEZONE_KEY
+
+            tz = update_data.get("scheduling_timezone")
+            settings_bag = {**(org.settings or {})}
+            if tz:
+                settings_bag[SCHEDULING_TIMEZONE_KEY] = str(tz).strip()
+            else:
+                settings_bag.pop(SCHEDULING_TIMEZONE_KEY, None)
+            org.settings = settings_bag
+
         new_name = update_data.get("name")
         if new_name and new_name != org.name:
             new_slug = _slugify(new_name)
@@ -213,7 +244,10 @@ class EEAuthService(AuthService):
                 org.slug = new_slug
         self.db.commit()
         self.db.refresh(org)
+        from core.services.org_settings import get_scheduling_timezone
+
         payload = org.to_dict()
+        payload["scheduling_timezone"] = get_scheduling_timezone(org.settings)
         payload["message"] = "Organization updated successfully"
         return payload
 

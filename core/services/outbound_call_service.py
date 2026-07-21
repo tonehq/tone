@@ -17,7 +17,7 @@ from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException
 from loguru import logger
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, func, or_
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
@@ -132,11 +132,72 @@ class OutboundCallService(BaseService):
             )
         return normalized
 
-    def _validate_agent_and_from(self, agent_id, from_number: str):
-        """Validate the agent + from-number once (shared across a bulk batch).
-        Returns (agent, channel_id, from_number)."""
+    def select_from_number(self, agent, explicit: Optional[str] = None) -> str:
+        """Resolve the outbound caller-id — the SINGLE place outbound number choice lives.
+
+        Explicit selection always wins (validated E.164). When omitted, auto-select from
+        the org's configured Twilio numbers: prefer numbers assigned to ``agent``, else any
+        org Twilio number; a single number is used directly, multiple numbers round-robin
+        by least-recently-used (from recent ``scheduled_calls`` usage — no extra state).
+        Every outbound path calls this so number choice is never re-implemented.
+        """
+        if explicit and str(explicit).strip():
+            return self._normalize_e164(explicit, "from_number")
+
+        candidates = (
+            self.db.query(PhoneNumber)
+            .join(Channel, Channel.id == PhoneNumber.channel_id)
+            .filter(
+                PhoneNumber.organization_id == self.org_id,
+                Channel.channel_type == "twilio",
+            )
+            .all()
+        )
+        # Prefer this agent's assigned numbers; otherwise any org Twilio number.
+        agent_numbers = [pn.number for pn in candidates if pn.agent_id == agent.id]
+        pool = agent_numbers or [pn.number for pn in candidates]
+
+        seen: set = set()
+        numbers: List[str] = []
+        for n in pool:
+            nn = (n or "").strip()
+            if nn and _E164_RE.match(nn) and nn not in seen:
+                seen.add(nn)
+                numbers.append(nn)
+
+        if not numbers:
+            raise HTTPException(
+                status_code=400,
+                detail="No outbound phone number is configured for this organization. "
+                       "Add a Twilio number or pick one explicitly.",
+            )
+        if len(numbers) == 1:
+            return numbers[0]
+        return self._least_recently_used_number(numbers)
+
+    def _least_recently_used_number(self, numbers: List[str]) -> str:
+        """Round-robin across ``numbers`` by picking the one used least recently as a
+        ``scheduled_calls.from_number`` (org-scoped). Never-used numbers go first, then the
+        oldest last-use. Note: the caller resolves the from-number once per request
+        (``_validate_agent_and_from``), so rotation spreads across successive batches — every
+        call within a single bulk batch shares the one selected number, by design."""
+        rows = (
+            self.query(ScheduledCall)
+            .filter(ScheduledCall.from_number.in_(numbers))
+            .with_entities(ScheduledCall.from_number, func.max(ScheduledCall.created_at))
+            .group_by(ScheduledCall.from_number)
+            .all()
+        )
+        last_used = {num: ts for num, ts in rows}
+        epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+        # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
+        return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
+
+    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None):
+        """Validate the agent and resolve the from-number once (shared across a bulk
+        batch). ``from_number`` may be None/blank — it is then auto-selected via
+        ``select_from_number``. Returns (agent, channel_id, from_number)."""
         org_id = self.org_id
-        from_number = self._normalize_e164(from_number, "from_number")
 
         agent = self.query(Agent).filter(Agent.id == agent_id).first()
         if not agent:
@@ -148,6 +209,9 @@ class OutboundCallService(BaseService):
             )
         if getattr(agent, "is_active", True) is False:
             raise HTTPException(status_code=400, detail="Agent is inactive.")
+
+        # Explicit number wins; otherwise auto-select (single → that one; many → rotate).
+        from_number = self.select_from_number(agent, explicit=from_number)
 
         pn = (
             self.db.query(PhoneNumber)
@@ -172,16 +236,14 @@ class OutboundCallService(BaseService):
 
     # ------------------------------------------------------------------ create
 
-    # Cap per request so a huge CSV can't queue unbounded work in one call.
-    MAX_BULK = 500
-
     def create_outbound_call(
         self,
         agent_id,
-        from_number: str,
+        from_number: Optional[str],
         to_numbers: List[str],
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
+        directory_id=None,
     ) -> Dict[str, Any]:
         """Place one or many outbound calls. A single immediate number dials right away;
         multiple numbers (or a scheduled time) are queued as ``scheduled_calls`` rows that
@@ -189,13 +251,8 @@ class OutboundCallService(BaseService):
         Calls page."""
         if not to_numbers:
             raise HTTPException(status_code=400, detail="Provide at least one destination number.")
-        if len(to_numbers) > self.MAX_BULK:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Too many numbers in one request (max {self.MAX_BULK}).",
-            )
 
-        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
 
         # Per-number validation: collect invalid ones instead of failing the whole batch.
         valid: List[str] = []
@@ -227,8 +284,83 @@ class OutboundCallService(BaseService):
         if len(valid) == 1 and scheduled_at is None:
             return self._dial_now(agent, from_number, valid[0], invalid)
 
-        # Bulk and/or scheduled: one queued row per number (dialed at scheduled_at, or now).
-        return self._queue_batch(agent, channel_id, from_number, valid, invalid, scheduled_at, created_by_user_id)
+        # Bulk and/or scheduled: route through the shared create+assign+schedule path so
+        # every scheduled number becomes an agent-assigned contact (single implementation —
+        # Schedule → Assign Contact to Agent → Create Contact). See _schedule_via_contacts.
+        rows = [{"phone_number": num} for num in valid]
+        return self._schedule_via_contacts(
+            agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
+            directory_id=directory_id,
+        )
+
+    def create_outbound_calls_from_rows(
+        self,
+        agent_id,
+        from_number: Optional[str],
+        rows: List[Dict[str, Any]],
+        *,
+        directory_id=None,
+        scheduled_at: Optional[datetime] = None,
+        created_by_user_id=None,
+        invalid: Optional[List[Dict[str, str]]] = None,
+    ) -> Dict[str, Any]:
+        """Create contacts from parsed ``rows`` (e.g. an uploaded CSV/Excel), assign them to
+        the agent, and schedule outbound calls — the file-upload counterpart of
+        ``create_outbound_call``. ``directory_id`` selects the target contact directory
+        (defaults to the org's "Global" directory). Reuses the same Schedule→Assign→Create
+        path (``_schedule_via_contacts``)."""
+        if not rows:
+            raise HTTPException(status_code=400, detail="No contacts were found in the file.")
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        if scheduled_at is not None and scheduled_at.tzinfo is None:
+            scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
+        if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
+            raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
+        return self._schedule_via_contacts(
+            agent, from_number, rows, invalid or [], scheduled_at, created_by_user_id,
+            directory_id=directory_id,
+        )
+
+    def _schedule_via_contacts(
+        self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id, directory_id=None
+    ) -> Dict[str, Any]:
+        """Create each ``rows`` entry as a contact in ``directory_id`` (default the org's
+        "Global" directory) AND assign it to ``agent`` (reusing
+        ``ContactService.create_contacts(..., agent_id=)`` — which itself reuses
+        ``AgentContactService`` for the assignment), then schedule the calls via
+        ``schedule_calls_for_contacts``. This is the single Schedule→Assign→Create path; no
+        contact create/assign logic is duplicated here."""
+        from core.services.contacts.contact_directory_service import ContactDirectoryService
+        from core.services.contacts.contact_service import ContactService
+
+        dir_service = ContactDirectoryService(self.db, user_id=self.user_id, org_id=self.org_id)
+        directory = (
+            dir_service.get_directory(directory_id)
+            if directory_id
+            else dir_service.get_or_create_default_directory()
+        )
+
+        create_result = ContactService(
+            self.db, user_id=self.user_id, org_id=self.org_id
+        ).create_contacts(directory.id, rows, agent_id=agent.id)
+
+        from uuid import UUID as _UUID
+
+        contact_ids = [_UUID(c["id"]) for c in create_result.get("created", [])]
+        if not contact_ids:
+            raise HTTPException(
+                status_code=400,
+                detail="No contacts could be created from the provided data.",
+            )
+
+        # Pass the already-resolved from_number explicitly so it isn't re-rotated.
+        result = self.schedule_calls_for_contacts(
+            agent.id, from_number, contact_ids, scheduled_at, created_by_user_id
+        )
+        result["mode"] = "scheduled" if scheduled_at is not None else "bulk"
+        result["invalid"] = (result.get("invalid") or []) + invalid
+        result["assigned"] = create_result.get("assigned", len(contact_ids))
+        return result
 
     def _dial_now(self, agent, from_number, to_number, invalid) -> Dict[str, Any]:
         # No calls row is created here — the call log is written by the pipeline
@@ -261,34 +393,6 @@ class OutboundCallService(BaseService):
             "invalid": invalid,
         }
 
-    def _queue_batch(self, agent, channel_id, from_number, numbers, invalid, scheduled_at, created_by_user_id) -> Dict[str, Any]:
-        when = scheduled_at or datetime.now(timezone.utc)
-        rows = [
-            ScheduledCall(
-                agent_id=agent.id,
-                organization_id=self.org_id,
-                channel_id=channel_id,
-                from_number=from_number,
-                to_number=num,
-                scheduled_at=when,
-                status="scheduled",
-                created_by_user_id=created_by_user_id,
-                metadata_={},
-            )
-            for num in numbers
-        ]
-        self._persist_and_enqueue_rows(rows)
-        logger.info(
-            "[outbound] queued batch agent={} count={} invalid={} scheduled_at={}",
-            agent.id, len(rows), len(invalid), scheduled_at,
-        )
-        return {
-            "mode": "bulk" if len(numbers) > 1 else "scheduled",
-            "count": len(rows),
-            "invalid": invalid,
-            "data": [self._to_response(sc) for sc in rows],
-        }
-
     def _persist_and_enqueue_rows(self, rows: List[ScheduledCall]) -> None:
         """Persist ``scheduled_calls`` rows then defer one Procrastinate job per row at
         that row's own ``scheduled_at`` (so a batch can carry per-contact times). Enqueue
@@ -296,6 +400,19 @@ class OutboundCallService(BaseService):
         the rest of the batch."""
         if not rows:
             return
+
+        # Ask the single capacity function before dispatching (currently a permissive
+        # stub — see core/services/outbound_capacity.py). Logged only for now (never gates),
+        # but every outbound path routes its capacity question through here.
+        from core.services.outbound_capacity import get_outbound_call_capacity
+
+        capacity = get_outbound_call_capacity(self.org_id)
+        if len(rows) > capacity:
+            logger.info(
+                "[outbound] batch of {} exceeds current outbound capacity {} (org={})",
+                len(rows), capacity, self.org_id,
+            )
+
         self.db.add_all(rows)
         # flush() assigns PKs while the instances' attributes are still live; reading
         # sc.id / sc.scheduled_at here avoids the per-row reload a post-commit access
@@ -345,7 +462,7 @@ class OutboundCallService(BaseService):
     def schedule_calls_for_contacts(
         self,
         agent_id,
-        from_number: str,
+        from_number: Optional[str],
         contact_ids: List,
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
@@ -359,11 +476,6 @@ class OutboundCallService(BaseService):
         rather than failing the whole batch."""
         if not contact_ids:
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
-        if len(contact_ids) > self.MAX_BULK:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Too many contacts in one request (max {self.MAX_BULK}).",
-            )
 
         agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
 

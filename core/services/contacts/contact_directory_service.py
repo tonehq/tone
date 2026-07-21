@@ -33,6 +33,29 @@ from core.services.contacts.directory_delete import (
 class ContactDirectoryService(BaseService):
     """Manage contact directories (the container that owns contacts + a CSV datasource)."""
 
+    # The org's default landing directory — where ad-hoc contacts (e.g. numbers typed into
+    # the Schedule modal) are created + assigned. Resolved by name to match the frontend,
+    # which defaults the sync/upload target to a directory named "Global".
+    DEFAULT_DIRECTORY_NAME = "Global"
+
+    def get_or_create_default_directory(self) -> ContactDirectory:
+        """Return the org's default "Global" directory, creating it (with its CSV
+        datasource) if absent. Idempotent, org-scoped — the ONE way any flow lands ad-hoc
+        contacts in a shared directory without re-implementing the resolve-or-provision."""
+        existing = (
+            self.query(ContactDirectory)
+            .filter(
+                func.lower(ContactDirectory.name) == self.DEFAULT_DIRECTORY_NAME.lower(),
+                ContactDirectory.deleted_at.is_(None),
+            )
+            .order_by(ContactDirectory.created_at.asc())
+            .first()
+        )
+        if existing is not None:
+            return existing
+        logger.info("[contact-directory] provisioning default '%s' directory", self.DEFAULT_DIRECTORY_NAME)
+        return self.create_directory(name=self.DEFAULT_DIRECTORY_NAME, description="Default contacts directory")
+
     def create_directory(
         self,
         *,

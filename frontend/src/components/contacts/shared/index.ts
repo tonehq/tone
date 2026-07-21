@@ -19,8 +19,20 @@ export type { ContactFormValues } from './buildContactFormSchema';
 export { default as SchemaFieldsEditor } from './SchemaFieldsEditor';
 export type { SchemaFieldsEditorProps } from './SchemaFieldsEditor';
 
+export { default as UploadContactsModal } from './UploadContactsModal';
+export type { UploadContactsModalProps } from './UploadContactsModal';
+
+// Dormant (unmounted) — reserved for a future third-party ("rest") datasource sync.
 export { default as SyncContactsModal } from './SyncContactsModal';
 export type { SyncContactsModalProps } from './SyncContactsModal';
+
+export { default as ContactFileInput } from './ContactFileInput';
+export type { ContactFileInputProps } from './ContactFileInput';
+
+export { default as SyncProgressPanel } from './SyncProgressPanel';
+export type { SyncProgressPanelProps } from './SyncProgressPanel';
+
+export { default as SampleDownloadMenu } from './SampleDownloadMenu';
 
 export { default as SyncStatusChip } from './SyncStatusChip';
 

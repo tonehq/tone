@@ -21,6 +21,10 @@ from jsonschema import Draft7Validator
 _STRING_VALIDATORS = {"minLength", "maxLength", "pattern"}
 _NUMBER_VALIDATORS = {"minimum", "maximum"}
 
+# Field ``format`` values that denote a datetime instant (mirrors the CSV path's
+# ``contact_ingestion.contact_mapping._DATETIME_FORMATS``) — stored as a UTC ISO string.
+_DATETIME_FORMATS = {"date", "datetime"}
+
 
 def build_contact_field_json_schema(fields: Sequence) -> Dict[str, Any]:
     """Compose a schema's ``SchemaField`` rows into one JSON Schema object.
@@ -80,6 +84,41 @@ def _is_empty(value: Any) -> bool:
     or a blank/whitespace-only string (e.g. an empty CSV cell). Numbers/booleans —
     including ``0`` and ``False`` — are real values and never treated as empty."""
     return value is None or (isinstance(value, str) and value.strip() == "")
+
+
+def normalize_contact_metadata_dates(
+    metadata: Optional[Dict[str, Any]],
+    fields: Sequence,
+) -> Tuple[Dict[str, Any], List[str]]:
+    """Normalize managed date/datetime metadata values to a UTC ISO-8601 string — the SAME
+    stored shape the CSV sync path produces via ``parse_datetime_value`` — so manual entry
+    and import agree on how a date/datetime field is stored.
+
+    Manual entry sends an ISO instant from the shared ``DateTimePicker`` (a field's
+    ``datetime_format``/``timezone`` are CSV-import config and are NOT applied here). A
+    value that is present but unparseable yields a per-field error string, so an interactive
+    caller can reject it (400) rather than silently dropping it the way the sync path does.
+    The input dict is not mutated; returns ``(normalized_metadata, errors)``.
+    """
+    # Lazy import: contact_ingestion.validation imports this module, so importing the
+    # ingestion package at module load could cycle. Import at call time instead.
+    from core.services.contact_ingestion.row_mapping import parse_datetime_value
+
+    result = dict(metadata or {})
+    date_fields = [
+        f.field_name for f in (fields or []) if getattr(f, "format", None) in _DATETIME_FORMATS
+    ]
+    errors: List[str] = []
+    for name in date_fields:
+        raw = result.get(name)
+        if _is_empty(raw):
+            continue
+        iso = parse_datetime_value(str(raw))
+        if iso is None:
+            errors.append(f"{name}: not a valid date/time.")
+        else:
+            result[name] = iso
+    return result, errors
 
 
 def validate_contact_metadata(
