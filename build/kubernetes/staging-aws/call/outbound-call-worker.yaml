@@ -63,7 +63,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-      terminationGracePeriodSeconds: 20
+      terminationGracePeriodSeconds: 300
       containers:
         - name: staging-tone-outbound-call-worker
           image: developer390/tone:${IMAGE_TAG}
@@ -108,7 +108,7 @@ spec:
             - name: WORKER_MODE
               value: "voice"
             - name: MAX_CONCURRENT_CALLS
-              value: "5"
+              value: "2"
             - name: INFISICAL_TOKEN
               valueFrom:
                 secretKeyRef:

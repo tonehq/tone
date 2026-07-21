@@ -1,0 +1,13 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: keda-postgres-auth
+  namespace: staging
+  labels:
+    environment: staging
+    component: autoscaling
+spec:
+  secretTargetRef:
+    - parameter: connection
+      name: keda-postgres
+      key: connectionString
