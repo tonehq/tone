@@ -147,8 +147,11 @@ export default function SchemaFieldsEditor({
     setDraft({
       field_name: field.field_name,
       label: field.label ?? '',
-      // Surface a date/datetime-formatted string field as the "Date"/"Date & time" type.
-      type: isDatetime ? (field.format as UiFieldType) : field.type,
+      // Surface any date/datetime-formatted string field as the "Date & time" type. `date`
+      // is no longer offered as a distinct choice (see FIELD_TYPES), so a legacy `date` field
+      // maps to `datetime` here — otherwise the Type selector would have no matching option
+      // and render blank. The actual date-vs-datetime shape is carried by `datetimeFormat`.
+      type: isDatetime ? 'datetime' : field.type,
       is_mandatory: field.is_mandatory,
       source_key: field.source_key ?? '',
       optionsText: (field.options ?? []).map((o) => o.value).join(', '),

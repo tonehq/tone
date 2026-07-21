@@ -21,7 +21,21 @@ export const createOutboundCall = async (
 export const createOutboundCallFromFile = async (
   formData: FormData,
 ): Promise<CreateOutboundCallResponse> => {
-  const res = await axiosInstance.post('/outbound-call/create-from-file', formData);
+  // Override the instance's default `application/json` Content-Type so axios sends real
+  // multipart/form-data (with the boundary) — otherwise the File is JSON-serialized to `{}`.
+  const res = await axiosInstance.post('/outbound-call/create-from-file', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return res.data;
+};
+
+export interface OutboundConcurrencyMax {
+  /** Env ceiling the per-batch selector is capped to and defaults to; null = no upper bound. */
+  max: number | null;
+}
+
+export const getOutboundConcurrencyMax = async (): Promise<OutboundConcurrencyMax> => {
+  const res = await axiosInstance.get('/outbound-call/concurrency-max');
   return res.data;
 };
 

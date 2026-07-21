@@ -11,6 +11,8 @@ Dialing always goes through the provider-agnostic ``call_engines``.
 """
 
 import re
+import threading
+import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -27,6 +29,7 @@ from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
 from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
+from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
 from core.services.transport.telephony_credentials import get_twilio_credentials
 from shared.config import settings
 
@@ -47,6 +50,15 @@ _STATUS_RANK = {
 }
 _TERMINAL = {"completed", "busy", "no_answer", "failed", "canceled"}
 
+# Non-terminal, post-claim states that occupy a concurrency slot (a live outbound leg):
+# claimed but not yet dialed, ringing, and connected. Used by the concurrency limiter to
+# count "in-flight" calls against MAX_CONCURRENT_OUTBOUND_CALLS.
+_ACTIVE_OUTBOUND_STATES = ("processing", "dispatched", "in_progress")
+
+# Upper bound on how many held/waiting rows the per-minute drain safety-net attempts per tick,
+# so a large backlog can't scan unboundedly in one run.
+_DRAIN_MAX = 500
+
 # Twilio CallStatus -> scheduled_calls status. Pre-answer in-flight states collapse to
 # "dispatched"; Twilio "in-progress" (the call is connected/live) maps to "in_progress"
 # so the list can show an "In progress" chip. The connected call's own log carries detail.
@@ -62,9 +74,100 @@ _TWILIO_STATUS_MAP = {
     "canceled": "canceled",
 }
 
-# Bounded pool for best-effort pipeline pre-warming (see _prewarm_pipeline). Caps the
-# number of concurrent warm threads so a burst of dials can't exhaust the DB pool.
-_PREWARM_EXECUTOR = ThreadPoolExecutor(max_workers=4, thread_name_prefix="prewarm")
+# Best-effort OUTBOUND background thread pools, created LAZILY on first use (not at import), so
+# nothing is allocated until a call actually needs it and the size reflects the CURRENT
+# settings.OUTBOUND_BG_WORKERS at that moment:
+#   - _PREWARM_EXECUTOR: pipeline-config cache pre-warming (after a dial, while it rings).
+#   - _REFILL_EXECUTOR: the completion refill, which enqueues via asyncio.run() — that CANNOT run
+#     inside the status webhook's async event loop, so it must run on a worker thread.
+# Cap = settings.OUTBOUND_BG_WORKERS (env); 0/negative → None = the runtime's default cap
+# (on-demand, no idle threads). A positive value pins an explicit ceiling.
+_PREWARM_EXECUTOR: Optional[ThreadPoolExecutor] = None
+_REFILL_EXECUTOR: Optional[ThreadPoolExecutor] = None
+_EXECUTOR_LOCK = threading.Lock()
+
+
+def _bg_max_workers() -> Optional[int]:
+    n = settings.OUTBOUND_BG_WORKERS
+    return n if isinstance(n, int) and n > 0 else None
+
+
+def _get_prewarm_executor() -> ThreadPoolExecutor:
+    global _PREWARM_EXECUTOR
+    if _PREWARM_EXECUTOR is None:
+        with _EXECUTOR_LOCK:
+            if _PREWARM_EXECUTOR is None:
+                _PREWARM_EXECUTOR = ThreadPoolExecutor(
+                    max_workers=_bg_max_workers(), thread_name_prefix="prewarm"
+                )
+    return _PREWARM_EXECUTOR
+
+
+def _get_refill_executor() -> ThreadPoolExecutor:
+    global _REFILL_EXECUTOR
+    if _REFILL_EXECUTOR is None:
+        with _EXECUTOR_LOCK:
+            if _REFILL_EXECUTOR is None:
+                _REFILL_EXECUTOR = ThreadPoolExecutor(
+                    max_workers=_bg_max_workers(), thread_name_prefix="outbound-refill"
+                )
+    return _REFILL_EXECUTOR
+
+
+def _refill_batch_job(batch_id) -> None:
+    """Enqueue the next DUE waiting call(s) of ``batch_id`` to fill slot(s) a just-finished
+    call freed. Runs in a worker thread with its OWN DB session (never shares the request's).
+    Best-effort — the periodic drain covers any miss."""
+    from sqlalchemy import func as _func
+
+    from core.database.session import get_db_context
+    from core.services.ingestion_queue import enqueue_outbound_calls_batch
+
+    try:
+        with get_db_context() as db:
+            sample = (
+                db.query(ScheduledCall).filter(ScheduledCall.batch_id == batch_id).first()
+            )
+            if sample is None or not sample.max_concurrency:
+                return
+            active = (
+                db.query(_func.count(ScheduledCall.id))
+                .filter(
+                    ScheduledCall.batch_id == batch_id,
+                    ScheduledCall.status.in_(_ACTIVE_OUTBOUND_STATES),
+                )
+                .scalar()
+                or 0
+            )
+            free = sample.max_concurrency - active
+            if free <= 0:
+                return
+            now = datetime.now(timezone.utc)
+            rows = (
+                db.query(ScheduledCall)
+                .filter(
+                    ScheduledCall.batch_id == batch_id,
+                    ScheduledCall.status == "scheduled",
+                    ScheduledCall.scheduled_at <= now,
+                )
+                .order_by(ScheduledCall.scheduled_at.asc())
+                .limit(free)
+                .all()
+            )
+            if not rows:
+                return
+            items = [(sc.id, sc.organization_id, now) for sc in rows]
+            results = enqueue_outbound_calls_batch(items)
+            for sc, (job_id, err) in zip(rows, results):
+                if err is None and job_id is not None:
+                    sc.queue_job_id = job_id
+            db.commit()
+            logger.info(
+                "[outbound] completion refill enqueued {} waiting call(s) for batch {}",
+                len(rows), batch_id,
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception("[outbound] completion refill job failed batch={}", batch_id)
 
 # How long a 'scheduled' row may sit with no queue job before reconcile re-enqueues it.
 # Longer than the enqueue round-trip so we never race a batch that's mid-creation.
@@ -120,7 +223,7 @@ class OutboundCallService(BaseService):
         # Submit to a bounded pool rather than spawning a raw thread per dial — under a
         # burst of scheduled dispatches, one thread (and pooled DB session) per call would
         # otherwise pile up and exhaust the connection pool.
-        _PREWARM_EXECUTOR.submit(_warm)
+        _get_prewarm_executor().submit(_warm)
 
     @staticmethod
     def _normalize_e164(number: str, field: str) -> str:
@@ -244,6 +347,7 @@ class OutboundCallService(BaseService):
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
         directory_id=None,
+        max_concurrency: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Place one or many outbound calls. A single immediate number dials right away;
         multiple numbers (or a scheduled time) are queued as ``scheduled_calls`` rows that
@@ -290,7 +394,7 @@ class OutboundCallService(BaseService):
         rows = [{"phone_number": num} for num in valid]
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-            directory_id=directory_id,
+            directory_id=directory_id, max_concurrency=max_concurrency,
         )
 
     def create_outbound_calls_from_rows(
@@ -303,6 +407,7 @@ class OutboundCallService(BaseService):
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
         invalid: Optional[List[Dict[str, str]]] = None,
+        max_concurrency: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Create contacts from parsed ``rows`` (e.g. an uploaded CSV/Excel), assign them to
         the agent, and schedule outbound calls — the file-upload counterpart of
@@ -318,11 +423,12 @@ class OutboundCallService(BaseService):
             raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid or [], scheduled_at, created_by_user_id,
-            directory_id=directory_id,
+            directory_id=directory_id, max_concurrency=max_concurrency,
         )
 
     def _schedule_via_contacts(
-        self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id, directory_id=None
+        self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
+        directory_id=None, max_concurrency=None,
     ) -> Dict[str, Any]:
         """Create each ``rows`` entry as a contact in ``directory_id`` (default the org's
         "Global" directory) AND assign it to ``agent`` (reusing
@@ -355,7 +461,8 @@ class OutboundCallService(BaseService):
 
         # Pass the already-resolved from_number explicitly so it isn't re-rotated.
         result = self.schedule_calls_for_contacts(
-            agent.id, from_number, contact_ids, scheduled_at, created_by_user_id
+            agent.id, from_number, contact_ids, scheduled_at, created_by_user_id,
+            max_concurrency=max_concurrency,
         )
         result["mode"] = "scheduled" if scheduled_at is not None else "bulk"
         result["invalid"] = (result.get("invalid") or []) + invalid
@@ -401,18 +508,9 @@ class OutboundCallService(BaseService):
         if not rows:
             return
 
-        # Ask the single capacity function before dispatching (currently a permissive
-        # stub — see core/services/outbound_capacity.py). Logged only for now (never gates),
-        # but every outbound path routes its capacity question through here.
-        from core.services.outbound_capacity import get_outbound_call_capacity
-
-        capacity = get_outbound_call_capacity(self.org_id)
-        if len(rows) > capacity:
-            logger.info(
-                "[outbound] batch of {} exceeds current outbound capacity {} (org={})",
-                len(rows), capacity, self.org_id,
-            )
-
+        # NB: the concurrency cap (MAX_CONCURRENT_OUTBOUND_CALLS) is enforced at DISPATCH
+        # time, not here — every row is enqueued at its own schedule_at, and the dispatcher
+        # only dials while a slot is free (see dispatch_scheduled_call / drain_outbound_capacity).
         self.db.add_all(rows)
         # flush() assigns PKs while the instances' attributes are still live; reading
         # sc.id / sc.scheduled_at here avoids the per-row reload a post-commit access
@@ -466,6 +564,7 @@ class OutboundCallService(BaseService):
         contact_ids: List,
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
+        max_concurrency: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Schedule outbound calls to the given org-owned contacts.
 
@@ -473,7 +572,13 @@ class OutboundCallService(BaseService):
         from-number) and the ``scheduled_calls`` pipeline. Each row carries its
         ``contact_id`` and a per-contact effective time (CSV ``scheduled_at`` overrides
         the request time). Contacts with no/invalid phone are collected into ``invalid``
-        rather than failing the whole batch."""
+        rather than failing the whole batch.
+
+        ``max_concurrency`` (from the UI) limits how many of THIS batch's calls run at once:
+        the batch gets a shared ``batch_id`` and each row stores the limit in the typed
+        ``batch_id`` / ``max_concurrency`` columns, so the dispatcher only dials while fewer
+        than ``max_concurrency`` of the batch are in flight (the next fires as one finishes).
+        Clamped to the env ceiling when configured."""
         if not contact_ids:
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
 
@@ -483,6 +588,12 @@ class OutboundCallService(BaseService):
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
         if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
             raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
+
+        # Resolve the effective per-batch limit ONCE (UI value → clamp; empty/API → env default;
+        # no env → None). One id groups the batch; the limit + id ride on each row's typed
+        # columns (``batch_id`` is indexed for the dispatch-time in-flight count).
+        batch_limit = resolve_batch_concurrency(max_concurrency)
+        batch_id = uuid.uuid4() if batch_limit is not None else None
 
         # Org-scoped load; a spoofed id from another org simply won't be found.
         contacts = (
@@ -516,6 +627,8 @@ class OutboundCallService(BaseService):
                 scheduled_at=self._resolve_contact_when(contact, scheduled_at),
                 status="scheduled",
                 created_by_user_id=created_by_user_id,
+                batch_id=batch_id,
+                max_concurrency=batch_limit,
                 metadata_={},
             ))
 
@@ -549,12 +662,39 @@ class OutboundCallService(BaseService):
         ``processing`` forever. (Relies on Procrastinate not running the same job twice
         concurrently; the narrow window between Twilio accepting the call and us persisting
         the SID is the only residual double-dial risk.)"""
+        # Pre-read the row to resolve its batch — a per-batch concurrency limit lives on the
+        # typed ``max_concurrency`` column (grouped by the indexed ``batch_id`` column).
+        sc = self.db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
+        if sc is None:
+            logger.warning("[outbound] dispatch: scheduled call {} not found", scheduled_call_id)
+            return None
+
+        # Concurrency admission: a FRESH 'scheduled' row is claimed only while its BATCH has
+        # headroom (fewer than ``max_concurrency`` of the batch in flight). The count is folded
+        # into the claim's WHERE so admission + claim are one atomic statement (a small transient
+        # overshoot is still possible under READ COMMITTED with many concurrent workers —
+        # acceptable for a soft call cap). A crashed-'processing' recovery is EXEMPT — that row
+        # already holds its slot, so re-dialing it never exceeds the limit.
+        batch_id = sc.batch_id
+        batch_limit = sc.max_concurrency
+        limited = batch_id is not None and isinstance(batch_limit, int) and batch_limit > 0
+        scheduled_cond = ScheduledCall.status == "scheduled"
+        if limited:
+            batch_active = (
+                self.db.query(func.count(ScheduledCall.id))
+                .filter(
+                    ScheduledCall.batch_id == batch_id,
+                    ScheduledCall.status.in_(_ACTIVE_OUTBOUND_STATES),
+                )
+                .scalar_subquery()
+            )
+            scheduled_cond = and_(scheduled_cond, batch_active < batch_limit)
         claimed = (
             self.db.query(ScheduledCall)
             .filter(
                 ScheduledCall.id == scheduled_call_id,
                 or_(
-                    ScheduledCall.status == "scheduled",
+                    scheduled_cond,
                     and_(
                         ScheduledCall.status == "processing",
                         ScheduledCall.provider_call_sid.is_(None),
@@ -566,10 +706,17 @@ class OutboundCallService(BaseService):
         self.db.commit()
         sc = self.db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
         if sc is None:
-            logger.warning("[outbound] dispatch: scheduled call {} not found", scheduled_call_id)
             return None
         if not claimed:
-            logger.info("[outbound] dispatch no-op id={} status={}", scheduled_call_id, sc.status)
+            # A still-'scheduled' row that failed to claim under a batch limit was held back by
+            # concurrency — leave it queued; the completion/periodic drain retries it.
+            if limited and sc.status == "scheduled":
+                logger.info(
+                    "[outbound] batch concurrency limit reached; holding scheduled call id={} (batch={})",
+                    scheduled_call_id, batch_id,
+                )
+            else:
+                logger.info("[outbound] dispatch no-op id={} status={}", scheduled_call_id, sc.status)
             return sc
 
         base = self._public_base()
@@ -641,6 +788,56 @@ class OutboundCallService(BaseService):
         logger.warning("[outbound] reconciled {} orphaned scheduled call(s)", dispatched)
         return dispatched
 
+    # ------------------------------------------------------ concurrency limiter
+
+    def get_concurrency_max(self) -> Dict[str, Optional[int]]:
+        """UI payload: ``{max}`` — the env ceiling the selector is capped to and defaults to
+        (``None`` = unset, so the UI shows the field with no upper bound). The actual limit is
+        chosen per batch at schedule time."""
+        return {"max": get_env_outbound_ceiling()}
+
+    def drain_outbound_capacity(self) -> int:
+        """Safety net (per-minute worker task): retry DUE calls that a per-batch limit held
+        back at dispatch. Only batch-limited rows can be held, so we target those; each
+        ``dispatch_scheduled_call`` re-applies the atomic per-batch check, so this can't
+        overshoot a batch's limit. Dispatches INLINE (never re-defers from inside the worker).
+        Bounded per tick. Returns the number dispatched."""
+        now = datetime.now(timezone.utc)
+        rows = (
+            self.db.query(ScheduledCall)
+            .filter(
+                ScheduledCall.status == "scheduled",
+                ScheduledCall.scheduled_at <= now,
+                ScheduledCall.batch_id.isnot(None),
+            )
+            .order_by(ScheduledCall.scheduled_at.asc())
+            .limit(_DRAIN_MAX)
+            .all()
+        )
+        dispatched = 0
+        for sc in rows:
+            try:
+                result = self.dispatch_scheduled_call(sc.id)
+                if result is not None and result.status == "dispatched":
+                    dispatched += 1
+            except Exception:  # noqa: BLE001
+                logger.exception("[outbound] drain dispatch failed id={}", sc.id)
+        if dispatched:
+            logger.info("[outbound] concurrency drain dispatched {} waiting call(s)", dispatched)
+        return dispatched
+
+    def _refill_after_completion(self, completed: ScheduledCall) -> None:
+        """A batch-limited call just reached a terminal state, freeing a slot in ITS batch —
+        refill the next DUE waiting call(s) of the SAME batch so they dial immediately (no
+        waiting for the periodic tick). No-op when the completed call carried no per-batch limit.
+
+        Offloaded to a worker thread: the enqueue uses ``asyncio.run()``, which cannot run inside
+        the status webhook's async event loop, and the thread owns its own DB session — so we
+        pass only ``batch_id`` (never the ORM object) across the boundary."""
+        if completed.batch_id is None or not completed.max_concurrency:
+            return
+        _get_refill_executor().submit(_refill_batch_job, completed.batch_id)
+
     # ---------------------------------------------------------- status webhook
 
     def _apply_status(self, sc: ScheduledCall, new_status: str) -> bool:
@@ -686,6 +883,12 @@ class OutboundCallService(BaseService):
             "[outbound] scheduled status callback applied id={} {}->{} (twilio={})",
             scheduled_call_id, prev, sc.status, twilio_status,
         )
+        # A finished call frees a slot in its batch — immediately pull the next batch call.
+        if internal in _TERMINAL:
+            try:
+                self._refill_after_completion(sc)
+            except Exception:  # noqa: BLE001
+                logger.exception("[outbound] completion refill failed after id={}", scheduled_call_id)
         return sc
 
     def link_call(self, scheduled_call_id, call_id) -> None:
