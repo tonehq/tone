@@ -29,6 +29,7 @@ import SliderField from './SliderField';
 import TextAreaField from './TextAreaField';
 import TextInput from './TextInput';
 import { ThemeToggle } from './ThemeToggle';
+import TimezoneSelect from './TimezoneSelect';
 import TokenSearchBar from './TokenSearchBar';
 
 export type {
@@ -113,5 +114,6 @@ export {
   TextAreaField,
   TextInput,
   ThemeToggle,
+  TimezoneSelect,
   TokenSearchBar,
 };

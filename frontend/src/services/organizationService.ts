@@ -22,11 +22,14 @@ export const getOrganizationDetails = async (orgId: string): Promise<Organizatio
   return data;
 };
 
-export const createOrganization = async (name: string): Promise<OrganizationCreateResponse> => {
+export const createOrganization = async (
+  name: string,
+  schedulingTimezone?: string,
+): Promise<OrganizationCreateResponse> => {
   const { data } = await axios.post<OrganizationCreateResponse>(
     '/organization/create_tenants',
     null,
-    { params: { name } },
+    { params: { name, scheduling_timezone: schedulingTimezone || undefined } },
   );
   return data;
 };
@@ -39,6 +42,12 @@ export const updateOrganization = async (
     params: { org_id: orgId },
   });
   return data;
+};
+
+/** Read the active org's `settings` JSONB bag (default scheduling timezone, etc.). */
+export const getOrganizationSettings = async (): Promise<Record<string, unknown>> => {
+  const { data } = await axios.get<Record<string, unknown>>('/organization/settings');
+  return data ?? {};
 };
 
 export const deleteOrganization = async (orgId: string): Promise<void> => {

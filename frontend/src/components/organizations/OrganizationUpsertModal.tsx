@@ -1,17 +1,20 @@
 'use client';
 
-import { CustomModal, TextAreaField, TextInput } from '@/components/shared';
+import { CustomModal, TextAreaField, TextInput, TimezoneSelect } from '@/components/shared';
 import { type OrganizationUpsertFormData, organizationUpsertSchema } from '@/schemas/organization';
 import type { OrganizationDetails, OrganizationUpdatePayload } from '@/types/organization';
+import { getBrowserTimeZone } from '@/utils/date';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
 interface OrganizationUpsertModalProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (
-    data: { name: string } | { orgId: string; payload: OrganizationUpdatePayload },
+    data:
+      | { name: string; schedulingTimezone?: string }
+      | { orgId: string; payload: OrganizationUpdatePayload },
   ) => Promise<void>;
   organization?: OrganizationDetails | null;
   loading?: boolean;
@@ -26,6 +29,12 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
 }) => {
   const isEdit = !!organization;
 
+  // Default scheduling timezone (org `settings` JSONB, saved via `/organization/details`).
+  // Editable for any org the user manages: on edit it's prefilled from the fetched org, on
+  // create it defaults to the browser zone and is sent through the create endpoint.
+  const [schedulingTz, setSchedulingTz] = useState<string>('');
+  const [initialTz, setInitialTz] = useState<string>('');
+
   const { control, handleSubmit, reset, formState } = useForm<OrganizationUpsertFormData>({
     resolver: zodResolver(organizationUpsertSchema),
     defaultValues: {
@@ -37,17 +46,21 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
   });
 
   useEffect(() => {
-    if (open) {
-      if (organization) {
-        reset({
-          name: organization.name,
-          description: organization.description ?? '',
-          website_url: organization.website_url ?? '',
-          logo_url: organization.logo_url ?? '',
-        });
-      } else {
-        reset({ name: '', description: '', website_url: '', logo_url: '' });
-      }
+    if (!open) return;
+    if (organization) {
+      reset({
+        name: organization.name,
+        description: organization.description ?? '',
+        website_url: organization.website_url ?? '',
+        logo_url: organization.logo_url ?? '',
+      });
+      const tz = organization.scheduling_timezone || getBrowserTimeZone();
+      setSchedulingTz(tz);
+      setInitialTz(tz);
+    } else {
+      reset({ name: '', description: '', website_url: '', logo_url: '' });
+      setSchedulingTz(getBrowserTimeZone());
+      setInitialTz('');
     }
   }, [open, organization, reset]);
 
@@ -61,10 +74,15 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
         payload.website_url = values.website_url;
       if ((values.logo_url ?? '') !== (organization.logo_url ?? ''))
         payload.logo_url = values.logo_url;
+      // Persist the scheduling timezone through the same /details update when it changed.
+      if (schedulingTz && schedulingTz !== initialTz) {
+        payload.scheduling_timezone = schedulingTz;
+      }
 
       await onSubmit({ orgId: organization.id, payload });
     } else {
-      await onSubmit({ name: values.name });
+      // Create: the timezone is optional and sent through the create endpoint.
+      await onSubmit({ name: values.name, schedulingTimezone: schedulingTz || undefined });
     }
   };
 
@@ -115,6 +133,18 @@ const OrganizationUpsertModal: React.FC<OrganizationUpsertModalProps> = ({
             />
           </>
         )}
+        <div className="flex flex-col gap-1.5">
+          <TimezoneSelect
+            name="scheduling_timezone"
+            label="Default scheduling timezone"
+            value={schedulingTz}
+            onValueChange={setSchedulingTz}
+          />
+          <p className="text-xs text-muted-foreground">
+            Optional. Used as the default timezone when scheduling outbound calls; defaults to your
+            browser timezone.
+          </p>
+        </div>
       </div>
     </CustomModal>
   );

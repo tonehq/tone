@@ -20,9 +20,11 @@ Reference-safety rules (edit/delete of a shared schema):
 
 from __future__ import annotations
 
+import csv
+import io
 import re
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from loguru import logger
@@ -194,6 +196,7 @@ class ContactSchemaService(BaseService):
         options: Optional[List[Dict[str, Any]]] = None,
         source_key: Optional[str] = None,
         display_order: int = 0,
+        field_metadata: Optional[Dict[str, Any]] = None,
     ) -> SchemaField:
         """Add a field to a schema. Validates type/validator/enum guardrails, then
         composes the JSON Schema once to prove the field is well-formed before commit.
@@ -232,6 +235,7 @@ class ContactSchemaService(BaseService):
         target.options = options
         target.source_key = source_key
         target.display_order = display_order
+        target.field_metadata = field_metadata or {}
         target.is_active = True
         target.deleted_at = None
         if existing is None:
@@ -269,6 +273,7 @@ class ContactSchemaService(BaseService):
             "source_key",
             "display_order",
             "is_active",
+            "field_metadata",
         }
         for key, value in changes.items():
             if key in allowed:
@@ -281,6 +286,84 @@ class ContactSchemaService(BaseService):
         self.db.refresh(field)
         logger.info("[contact-schema] updated field id={}", field_id)
         return field
+
+    # ----------------------------------------------------------- sample files
+
+    # Base dial columns always present in a sample import file.
+    _SAMPLE_BASE_COLUMNS = ("name", "phone_number")
+
+    def build_sample_file(self, schema_id, fmt: str = "csv") -> Tuple[str, str, bytes]:
+        """Generate a schema-shaped sample import file SERVER-SIDE (CSV or ``.xlsx``).
+
+        Columns = the base dial columns + each active field's external ``source_key`` (or
+        ``field_name``), with mandatory columns marked with a trailing ``*``; one example
+        row illustrates the expected shape. The example content (incl. any placeholder
+        values) is produced here, not in the client. Returns
+        ``(filename, media_type, content_bytes)``.
+        """
+        schema = self.get_schema(schema_id)  # org-scope + 404
+        fields = (
+            self.query(SchemaField)
+            .filter(
+                SchemaField.schema_id == schema.id,
+                SchemaField.deleted_at.is_(None),
+                SchemaField.is_active.is_(True),
+            )
+            .order_by(SchemaField.display_order.asc())
+            .all()
+        )
+        headers, example = self._sample_columns(fields)
+        slug = re.sub(r"\s+", "-", (schema.name or "schema").strip()).lower() or "schema"
+        if (fmt or "csv").lower() == "xlsx":
+            return (
+                f"sample-{slug}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                self._sample_xlsx_bytes(headers, example),
+            )
+        return f"sample-{slug}.csv", "text/csv; charset=utf-8", self._sample_csv_bytes(headers, example)
+
+    @classmethod
+    def _sample_columns(cls, fields) -> Tuple[List[str], List[str]]:
+        """Header row + one example row for a schema's sample file (shared by CSV/xlsx)."""
+        headers: List[str] = list(cls._SAMPLE_BASE_COLUMNS)
+        seen = set(cls._SAMPLE_BASE_COLUMNS)
+        for f in fields:
+            key = (f.source_key or f.field_name or "").strip()
+            if not key or key in seen:
+                continue
+            seen.add(key)
+            headers.append(f"{key}*" if f.is_mandatory else key)
+        example: List[str] = []
+        for h in headers:
+            col = h.rstrip("*")
+            if col == "name":
+                example.append("John Doe")
+            elif col == "phone_number":
+                example.append("+14155550123")
+            else:
+                example.append("")
+        return headers, example
+
+    @staticmethod
+    def _sample_csv_bytes(headers: List[str], example: List[str]) -> bytes:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        writer.writerow(headers)
+        writer.writerow(example)
+        return buf.getvalue().encode("utf-8")
+
+    @staticmethod
+    def _sample_xlsx_bytes(headers: List[str], example: List[str]) -> bytes:
+        import openpyxl
+
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Contacts"
+        ws.append(headers)
+        ws.append(example)
+        buf = io.BytesIO()
+        wb.save(buf)
+        return buf.getvalue()
 
     def delete_schema_field(self, field_id) -> Dict[str, Any]:
         """Soft-delete (disable) a field. Existing contacts keep their metadata and are

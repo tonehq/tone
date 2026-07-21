@@ -1,11 +1,10 @@
 'use client';
 
-import { useAtom, useSetAtom } from 'jotai';
 import { AlertTriangle, Check, Pencil, Plus, Rows3, Star, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { authAtom, getCurrentUserAtom } from '@/atoms/AuthAtom';
 import { useDirectory, useUpdateDirectory } from '@/lib/api/contactDirectories';
+import { useAuthStore } from '@/stores/auth';
 import {
   useCreateSchema,
   useDeleteSchema,
@@ -42,7 +41,7 @@ import ConfirmDeleteModal from '../shared/ConfirmDeleteModal';
  * warning (from the schema detail's `referenced_by`), and deleting a schema that is some
  * directory's default is blocked by the backend (409) — surfaced via toast.
  *
- * WHEN: rendered standalone on the `/contacts/datasource` page (no `directoryId`)
+ * WHEN: rendered standalone on the `/contacts/schema` page (no `directoryId`)
  * as a pure org-level library. When a `directoryId` is passed, it additionally exposes a
  * "set as this directory's default" control writing to that directory's `default_schema_id`.
  * Members see everything read-only; create/edit/delete + set-default are admin/owner only.
@@ -51,7 +50,7 @@ export interface ContactSchemaSectionProps {
   /**
    * Optional. When set, the section also renders a "set as this directory's default"
    * control that writes to the directory's `default_schema_id`. Omit for the pure
-   * org-level library (`/contacts/datasource` page).
+   * org-level library (`/contacts/schema` page).
    */
   directoryId?: string;
 }
@@ -78,13 +77,9 @@ function referencedBySummary(ref: SchemaReferencedBy | undefined): string | null
 }
 
 export default function ContactSchemaSection({ directoryId }: ContactSchemaSectionProps) {
-  // --- current-user role (admin/owner gate) — same pattern as userMenu.tsx ---
-  const [authState] = useAtom(authAtom);
-  const getCurrentUser = useSetAtom(getCurrentUserAtom);
-  useEffect(() => {
-    if (!authState.user && !authState.isLoading) getCurrentUser();
-  }, [authState.user, authState.isLoading, getCurrentUser]);
-  const role = authState.user?.role;
+  // --- current-user role (admin/owner gate) — single source, matching the rest of the
+  // contacts feature (ContactDirectoryRail / DirectoryDetailHeader use the same store). ---
+  const role = useAuthStore((s) => s.user?.role);
   const canEdit = role === 'admin' || role === 'owner';
 
   // --- data ---

@@ -27,8 +27,16 @@ from core.models.contact_directory import ContactDirectory
 from core.models.schema_field import SchemaField
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
+from core.services.contact_ingestion.base import ParsedContact
+from core.services.contact_ingestion.pipeline import RecordParser, parsed_contact_to_row
+from core.services.contact_ingestion.validation import (
+    CompositeValidator,
+    RequiredIdentityValidator,
+    SchemaMetadataValidator,
+)
 from core.services.contacts.contact_metadata_validation import (
     make_contact_metadata_validator,
+    normalize_contact_metadata_dates,
     validate_contact_metadata,
 )
 from core.services.contacts.contact_upsert import upsert_contact
@@ -37,9 +45,6 @@ from core.services.contacts.contact_upsert import upsert_contact
 class ContactService(BaseService):
     """Directory-scoped CRUD for ``Contact`` rows."""
 
-    # Cap a single multi-add so one request can't create unbounded rows in one commit.
-    MAX_CREATE_ROWS = 1_000
-
     # --------------------------------------------------------------- directory
 
     def _get_directory(self, directory_id: UUID) -> ContactDirectory:
@@ -47,16 +52,13 @@ class ContactService(BaseService):
         directory-scoped operation)."""
         return self.get_or_404(ContactDirectory, directory_id, name="Directory")
 
-    def _metadata_validator(self, directory: ContactDirectory):
-        """Build the ``(managed_keys, validator)`` pair from the directory's default
-        schema, or ``(set(), None)`` when the directory has no default schema (so
-        contacts still work before any schema is attached).
-
-        Only the schema's ACTIVE, non-deleted fields are used.
-        """
+    def _schema_fields(self, directory: ContactDirectory) -> List[SchemaField]:
+        """The directory's default-schema ACTIVE, non-deleted fields (``[]`` if no default
+        schema). The single source both the framework validator and ``_metadata_validator``
+        build from."""
         if not directory.default_schema_id:
-            return set(), None
-        fields = (
+            return []
+        return (
             self.query(SchemaField)
             .filter(
                 SchemaField.schema_id == directory.default_schema_id,
@@ -65,7 +67,28 @@ class ContactService(BaseService):
             )
             .all()
         )
-        return make_contact_metadata_validator(fields)
+
+    def _metadata_validator(self, directory: ContactDirectory):
+        """Build the ``(managed_keys, validator)`` pair from the directory's default schema,
+        or ``(set(), None)`` when there is none (so contacts still work before any schema is
+        attached). Used by ``update_contact``."""
+        return make_contact_metadata_validator(self._schema_fields(directory))
+
+    @staticmethod
+    def _row_to_parsed(row: Dict[str, Any]) -> ParsedContact:
+        """Convert a Contact-Create API row into the common :class:`ParsedContact` model —
+        the same model every data source produces — so the API can be fed straight into the
+        shared validate/loop (skipping the parse step). Synthesizes a stable ``external_id``
+        (explicit → phone → ``manual-<uuid>``) exactly as before."""
+        name = (row.get("name") or "").strip() or None
+        phone_number = (row.get("phone_number") or "").strip() or None
+        external_id = (row.get("external_id") or "").strip() or (phone_number or "") or f"manual-{uuid4().hex[:16]}"
+        return ParsedContact(
+            external_id=external_id,
+            name=name,
+            phone_number=phone_number,
+            metadata=row.get("contact_metadata") or {},
+        )
 
     # -------------------------------------------------------------------- read
 
@@ -130,56 +153,58 @@ class ContactService(BaseService):
         Returns ``{"created": [contact_dict, ...], "failed": [{"index", "errors"}, ...]}``
         (plus ``"assigned"`` when ``agent_id`` was provided). Valid rows commit even when
         some rows fail (all-or-nothing is NOT used).
+
+        The Contact-Create API SKIPS the parse step (its rows are already structured) but
+        runs them through the SAME loop + validators as file-upload / sync flows: convert
+        each row to the common ``ParsedContact`` model, run the shared ``RecordParser`` loop
+        with a ``CompositeValidator`` (identity + the directory's schema), then upsert the
+        valid records. No per-request row cap — imports are unbounded.
         """
         directory = self._get_directory(directory_id)
         if not rows:
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
-        if len(rows) > self.MAX_CREATE_ROWS:
-            raise HTTPException(
-                status_code=400,
-                detail=f"Too many contacts in one request (max {self.MAX_CREATE_ROWS}).",
-            )
 
-        managed, validator = self._metadata_validator(directory)
+        schema_fields = self._schema_fields(directory)
+
+        # Normalize date/datetime metadata to a UTC ISO string up-front (same stored shape as
+        # the sync path). A row with an unparseable date is collected as failed and never
+        # created; the rest flow through the shared validate/loop below. `prepared` keeps each
+        # kept row's ORIGINAL index so pipeline errors map back to the caller's row numbers.
+        failed: List[Dict[str, Any]] = []
+        prepared: List[Any] = []
+        for i, row in enumerate(rows):
+            metadata, date_errors = normalize_contact_metadata_dates(
+                row.get("contact_metadata"), schema_fields
+            )
+            if date_errors:
+                failed.append({"index": i, "errors": date_errors})
+                continue
+            prepared.append((i, {**row, "contact_metadata": metadata}))
+
+        # Same validate/loop as every other data source — the ONLY difference is Parse is
+        # skipped here (the API hands us structured records, not a raw blob).
+        validator = CompositeValidator(
+            [RequiredIdentityValidator(), SchemaMetadataValidator(schema_fields)]
+        )
+        parsed = RecordParser(validator).process(
+            self._row_to_parsed(row) for _i, row in prepared
+        )
+
+        # Pipeline indices are positions within `prepared`; map them back to original rows.
+        for bad in parsed.invalid:
+            failed.append({"index": prepared[bad["index"]][0], "errors": bad["errors"]})
+        failed.sort(key=lambda f: f["index"])
 
         created_by_ext: Dict[str, Contact] = {}
-        failed: List[Dict[str, Any]] = []
-
-        for index, row in enumerate(rows):
-            metadata = row.get("contact_metadata") or {}
-            errors = validate_contact_metadata(metadata, managed, validator)
-            if errors:
-                failed.append({"index": index, "errors": errors})
-                continue
-
-            name = (row.get("name") or "").strip() or None
-            phone_number = (row.get("phone_number") or "").strip() or None
-            # A contact must carry at least one identifying value — never create a
-            # fully-empty row (name + phone both blank).
-            if not name and not phone_number:
-                failed.append(
-                    {"index": index, "errors": ["A contact needs at least a name or phone number."]}
-                )
-                continue
-            external_id = (
-                (row.get("external_id") or "").strip()
-                or (phone_number or "")
-                or f"manual-{uuid4().hex[:16]}"
-            )
-            parsed = {
-                "external_id": external_id,
-                "name": name,
-                "phone_number": phone_number,
-                "contact_metadata": metadata,
-            }
+        for record in parsed.valid:
             contact, _action = upsert_contact(
                 self.db,
                 directory_id,
-                parsed,
+                parsed_contact_to_row(record),
                 organization_id=self.org_id,
                 created_by_user_id=self.user_id,
             )
-            created_by_ext[external_id] = contact
+            created_by_ext[record.external_id] = contact
 
         created = list(created_by_ext.values())
 
@@ -249,11 +274,25 @@ class ContactService(BaseService):
         contact = self.get_contact(contact_id)
         if contact_metadata is not None:
             directory = self._get_directory(contact.directory_id)
-            managed, validator = self._metadata_validator(directory)
-            errors = validate_contact_metadata(contact_metadata, managed, validator)
+            schema_fields = self._schema_fields(directory)
+            managed, validator = make_contact_metadata_validator(schema_fields)
+            # Normalize date/datetime fields to a UTC ISO string (same stored shape as the
+            # CSV sync path). Manual entry sends an ISO instant from the DateTimePicker; an
+            # unparseable value is rejected here rather than silently dropped.
+            contact_metadata, date_errors = normalize_contact_metadata_dates(
+                contact_metadata, schema_fields
+            )
+            errors = date_errors + validate_contact_metadata(contact_metadata, managed, validator)
             if errors:
                 raise HTTPException(status_code=400, detail="; ".join(errors))
-            contact.contact_metadata = contact_metadata
+            # The edit form only submits keys managed by the directory's default schema, so
+            # replacing the whole column would silently wipe metadata owned by another
+            # schema or by since-removed fields. Preserve existing UNMANAGED keys and overlay
+            # the submitted (managed) ones — a managed key omitted from the payload is still
+            # cleared, so editing/clearing a schema field keeps working.
+            existing = contact.contact_metadata or {}
+            preserved = {k: v for k, v in existing.items() if k not in managed}
+            contact.contact_metadata = {**preserved, **contact_metadata}
         # Preserve the create-time invariant: a contact must keep at least one of
         # name / phone_number, otherwise it becomes an identity-less, un-dialable row.
         # Validate the resulting identity BEFORE mutating so a rejected update leaves

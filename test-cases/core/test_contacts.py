@@ -122,6 +122,31 @@ def _make_schema_with_mandatory_field(db, field_name="priority"):
     return schema
 
 
+def _make_schema_with_datetime_field(db, field_name="call_at"):
+    """Create an org schema with one optional date/datetime field (a string field carrying
+    ``format='datetime'``), return the schema."""
+    schema = ContactSchema(
+        organization_id=uuid.UUID(str(ORG_ID)),
+        name=f"Schema {uuid.uuid4().hex[:6]}",
+        is_active=True,
+    )
+    db.add(schema)
+    db.commit()
+    db.refresh(schema)
+    field = SchemaField(
+        organization_id=uuid.UUID(str(ORG_ID)),
+        schema_id=schema.id,
+        field_name=field_name,
+        type="string",
+        format="datetime",
+        is_mandatory=False,
+        is_active=True,
+    )
+    db.add(field)
+    db.commit()
+    return schema
+
+
 # --------------------------------------------------------------------- API auth
 
 class TestContactApiAuth:
@@ -328,6 +353,82 @@ class TestUpdateContactInvariant:
         contact_id = created["created"][0]["id"]
         r = client.patch(f"/api/v1/contacts/{contact_id}", json={"name": ""})
         assert r.status_code == 400
+
+    def test_update_normalizes_datetime_field_to_utc_iso(self, db_session):
+        # A date/datetime field value is normalized to a UTC ISO string on update — the same
+        # stored shape the CSV sync path produces, so both entry points agree.
+        schema = _make_schema_with_datetime_field(db_session, "call_at")
+        directory = _make_directory(db_session, default_schema_id=schema.id)
+        svc = _svc(db_session)
+        res = svc.create_contacts(
+            directory.id,
+            [{"name": "DT", "phone_number": "+14155550200",
+              "external_id": f"dt-{uuid.uuid4().hex[:6]}"}],
+        )
+        cid = uuid.UUID(res["created"][0]["id"])
+        # Explicit-offset value keeps its instant; naive value is assumed UTC.
+        updated = svc.update_contact(cid, contact_metadata={"call_at": "2026-08-01T15:30:00Z"})
+        assert updated.contact_metadata["call_at"] == "2026-08-01T15:30:00+00:00"
+
+    def test_update_rejects_unparseable_datetime_field(self, db_session):
+        schema = _make_schema_with_datetime_field(db_session, "call_at")
+        directory = _make_directory(db_session, default_schema_id=schema.id)
+        svc = _svc(db_session)
+        res = svc.create_contacts(
+            directory.id,
+            [{"name": "DT", "phone_number": "+14155550201",
+              "external_id": f"dt-{uuid.uuid4().hex[:6]}"}],
+        )
+        cid = uuid.UUID(res["created"][0]["id"])
+        with pytest.raises(HTTPException) as exc:
+            svc.update_contact(cid, contact_metadata={"call_at": "not-a-date"})
+        assert exc.value.status_code == 400
+
+    def test_create_normalizes_good_and_fails_bad_datetime_rows(self, db_session):
+        # Partial success: a row with a valid date is created (stored UTC ISO); a row with an
+        # unparseable date lands in `failed` and is never created.
+        schema = _make_schema_with_datetime_field(db_session, "call_at")
+        directory = _make_directory(db_session, default_schema_id=schema.id)
+        svc = _svc(db_session)
+        res = svc.create_contacts(
+            directory.id,
+            [
+                {"name": "Good", "phone_number": "+14155550202",
+                 "external_id": f"good-{uuid.uuid4().hex[:6]}",
+                 "contact_metadata": {"call_at": "2026-08-01T09:00:00"}},
+                {"name": "Bad", "phone_number": "+14155550203",
+                 "external_id": f"bad-{uuid.uuid4().hex[:6]}",
+                 "contact_metadata": {"call_at": "nope"}},
+            ],
+        )
+        assert len(res["created"]) == 1
+        assert res["created"][0]["contact_metadata"]["call_at"] == "2026-08-01T09:00:00+00:00"
+        assert len(res["failed"]) == 1
+        assert res["failed"][0]["index"] == 1
+
+    def test_update_preserves_metadata_keys_outside_default_schema(self, db_session):
+        # Regression: an edit only re-submits the directory's default-schema keys, so a
+        # wholesale replace would wipe metadata owned by another schema (or a removed
+        # field). update_contact must preserve unmanaged keys while still applying the
+        # submitted managed ones.
+        schema = _make_schema_with_mandatory_field(db_session, "priority")
+        directory = _make_directory(db_session, default_schema_id=schema.id)
+        svc = _svc(db_session)
+        res = svc.create_contacts(
+            directory.id,
+            [{"name": "Meta", "phone_number": "+14155550190",
+              "external_id": f"meta-{uuid.uuid4().hex[:6]}",
+              "contact_metadata": {"priority": "high"}}],
+        )
+        cid = uuid.UUID(res["created"][0]["id"])
+        # Simulate metadata carried in via a different schema (unmanaged by this directory).
+        contact = svc.get_contact(cid)
+        contact.contact_metadata = {**contact.contact_metadata, "legacy_note": "keep me"}
+        db_session.commit()
+        # The edit form re-submits only the managed field.
+        updated = svc.update_contact(cid, contact_metadata={"priority": "low"})
+        assert updated.contact_metadata["priority"] == "low"
+        assert updated.contact_metadata["legacy_note"] == "keep me"
 
 
 # ----------------------------------------------------- partial multi-add

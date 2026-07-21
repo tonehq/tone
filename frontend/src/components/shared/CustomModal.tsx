@@ -47,13 +47,20 @@ const CustomModal: React.FC<CustomModalProps> = ({
   return (
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent
-        className={cn('gap-0 p-0', width ?? 'sm:max-w-lg', className)}
+        // Cap the modal to the viewport and lay it out as header / scrollable body / footer
+        // so a tall form (e.g. a searchable timezone select) never overflows off-screen —
+        // the body scrolls internally while the header + footer stay pinned.
+        className={cn(
+          'flex max-h-[calc(100dvh-2rem)] flex-col gap-0 p-0',
+          width ?? 'sm:max-w-lg',
+          className,
+        )}
         showCloseButton={false}
         onClick={(e) => e.stopPropagation()}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {title && (
-          <DialogHeader className="px-6 pt-4 pb-2">
+          <DialogHeader className="shrink-0 px-6 pt-4 pb-2">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
               {showCloseButton && (
@@ -72,11 +79,18 @@ const CustomModal: React.FC<CustomModalProps> = ({
         )}
 
         {children && (
-          <div className={cn('min-w-0 py-4 pl-6 pr-6', contentClassName)}>{children}</div>
+          <div
+            className={cn(
+              'min-h-0 min-w-0 flex-1 overflow-y-auto py-4 pl-6 pr-6',
+              contentClassName,
+            )}
+          >
+            {children}
+          </div>
         )}
 
         {showFooter && (
-          <DialogFooter className="bg-muted/30 px-6 py-4">
+          <DialogFooter className="shrink-0 bg-muted/30 px-6 py-4">
             {hasDefaultFooter ? (
               <>
                 <CustomButton type="default" onClick={handleCancel} disabled={confirmLoading}>

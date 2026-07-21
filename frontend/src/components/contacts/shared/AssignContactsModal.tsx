@@ -9,7 +9,7 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
 import DirectoryContactTree from './DirectoryContactTree';
-import SyncContactsModal from './SyncContactsModal';
+import UploadContactsModal from './UploadContactsModal';
 import {
   useDirectoryContactTreeSelection,
   type DirectorySelectionMeta,
@@ -20,8 +20,8 @@ import {
  *  - Option 1 — `DirectoryContactTree` tri-state tree-select → confirm sends
  *    `{ directory_ids, contact_ids }` to the assign endpoint (directories expanded to
  *    their active contacts server-side).
- *  - Option 2 — the shared `SyncContactsModal` with this `agentId`, so a fresh CSV import
- *    auto-assigns its imported contacts to the agent on completion.
+ *  - Option 2 — the shared `UploadContactsModal` with this `agentId`, so a fresh CSV / Excel
+ *    upload auto-assigns its imported contacts to the agent on completion.
  *
  * WHEN: opened from the agent editor's Contacts tab (`ContactsStep`).
  */
@@ -41,7 +41,7 @@ export default function AssignContactsModal({
 }: AssignContactsModalProps) {
   const treeSelection = useDirectoryContactTreeSelection();
   const assign = useAssignContacts(agentId);
-  const [syncOpen, setSyncOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // Directory counts for the "N selected" summary (whole-directory picks contribute their
   // live contact_count). One list fetch; the tree does its own paginated/search fetches.
@@ -84,7 +84,7 @@ export default function AssignContactsModal({
   return (
     <>
       <CustomModal
-        open={open && !syncOpen}
+        open={open && !uploadOpen}
         onClose={handleClose}
         title="Assign contacts"
         hideFooter
@@ -92,8 +92,8 @@ export default function AssignContactsModal({
       >
         <div className="flex flex-col gap-4">
           <p className="text-sm text-muted-foreground">
-            Pick whole directories or individual contacts to assign to this agent, or import a new
-            CSV that auto-assigns as it lands.
+            Pick whole directories or individual contacts to assign to this agent, or upload a CSV /
+            Excel file that auto-assigns as it lands.
           </p>
 
           <DirectoryContactTree selection={treeSelection} />
@@ -103,8 +103,8 @@ export default function AssignContactsModal({
               <span className="text-sm text-muted-foreground" aria-live="polite">
                 {selectedCount} selected
               </span>
-              <CustomButton type="link" size="sm" onClick={() => setSyncOpen(true)}>
-                Import from CSV instead
+              <CustomButton type="link" size="sm" onClick={() => setUploadOpen(true)}>
+                Upload a file instead
               </CustomButton>
             </div>
             <div className="flex gap-2">
@@ -125,15 +125,16 @@ export default function AssignContactsModal({
       </CustomModal>
 
       {/*
-        Option 2 — CSV import with auto-assign. We pass ONLY `agentId` (no `directoryId`), so
-        `SyncContactsModal` enters its agent context (`isAgentContext = !directoryId && !!agentId`)
-        and shows its own directory picker — defaulting to the org's "Global" directory. Passing
-        a concrete `directoryId` here would disable that picker.
+        Option 2 — file upload (CSV / Excel) with auto-assign. We pass ONLY `agentId` (no
+        `directoryId`), so `UploadContactsModal` enters its agent context
+        (`isAgentContext = !directoryId && !!agentId`) and shows its own directory picker —
+        defaulting to the org's "Global" directory. Passing a concrete `directoryId` here would
+        disable that picker.
       */}
-      {syncOpen && (
-        <SyncContactsModal
-          open={syncOpen}
-          onClose={() => setSyncOpen(false)}
+      {uploadOpen && (
+        <UploadContactsModal
+          open={uploadOpen}
+          onClose={() => setUploadOpen(false)}
           agentId={agentId}
           defaultSchemaId={null}
           onCompleted={() => {

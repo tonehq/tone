@@ -106,14 +106,18 @@ const OrganizationListPage: React.FC = () => {
   }, []);
 
   const handleModalSubmit = useCallback(
-    async (formData: { name: string } | { orgId: string; payload: OrganizationUpdatePayload }) => {
+    async (
+      formData:
+        | { name: string; schedulingTimezone?: string }
+        | { orgId: string; payload: OrganizationUpdatePayload },
+    ) => {
       setModalLoading(true);
       try {
         if ('orgId' in formData) {
           await updateOrg(formData);
           showToast.success('Organization updated successfully');
         } else {
-          await createOrg(formData.name);
+          await createOrg({ name: formData.name, schedulingTimezone: formData.schedulingTimezone });
           showToast.success('Organization created successfully');
         }
         handleModalClose();
