@@ -1,14 +1,20 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import or_
+from sqlalchemy import and_, or_
 
 from core.models.call import Call
 from core.services.base import BaseService
+
+# Max realistic call length is ~1 hour; 2 hours gives a safety buffer for
+# clock skew and delayed writes. Rows with ended_at IS NULL whose started_at
+# is older than this are stale (worker crash, missed update) and skipped so
+# they don't get counted as "still-running" overlaps forever.
+_ACTIVE_CALL_MAX_AGE = timedelta(hours=2)
 
 
 class CallOverlapService(BaseService):
@@ -83,9 +89,15 @@ class CallOverlapService(BaseService):
     @staticmethod
     def _time_overlap_clauses(started_at: datetime, ended_at: Optional[datetime]) -> list:
         """SQL clauses for "other call's window intersects [started_at, ended_at]".
-        Treats ``ended_at=None`` (still running) as "now" for the comparison."""
-        window_end = ended_at or datetime.now(timezone.utc)
+        Treats ``ended_at=None`` as "still running" only when ``started_at`` is
+        within ``_ACTIVE_CALL_MAX_AGE`` — older null-ended rows are stale."""
+        now = datetime.now(timezone.utc)
+        window_end = ended_at or now
+        active_cutoff = now - _ACTIVE_CALL_MAX_AGE
         return [
             Call.started_at <= window_end,
-            or_(Call.ended_at.is_(None), Call.ended_at >= started_at),
+            or_(
+                and_(Call.ended_at.is_(None), Call.started_at >= active_cutoff),
+                Call.ended_at >= started_at,
+            ),
         ]
