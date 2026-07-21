@@ -495,6 +495,23 @@ async def probe_tts(ctx) -> ProbeResult:
 
     provider = spec["provider_name"]
 
+    # Voice resolution — mirror service_resolver:283-287. Agent config stores
+    # the tone-internal ``ModelVoice.id`` (UUID), but every provider SDK
+    # expects its own native voice id (Cartesia UUID, ElevenLabs string,
+    # etc.) — those live on ``ModelVoice.voice_id``. Passing the tone-
+    # internal UUID straight through hits providers as ``voice_not_found``
+    # (Cartesia) or a silent fallback to a default voice. The readiness
+    # context builder already resolved and attached the ``ModelVoice`` row
+    # as ``ctx.voice``; use its ``voice_id`` here to match what real calls
+    # send. When ``ctx.voice`` is None (raw non-UUID string like Gemini's
+    # "Puck", or nothing configured) the existing metadata passes through
+    # untouched and ``build_tts``'s per-provider default kicks in.
+    if ctx.voice is not None and getattr(ctx.voice, "voice_id", None):
+        spec["metadata"] = {
+            **(spec["metadata"] or {}),
+            "voice_id": ctx.voice.voice_id,
+        }
+
     try:
         service = service_factory.build_tts(spec)
     except Exception as exc:  # noqa: BLE001
@@ -540,6 +557,17 @@ async def probe_tts(ctx) -> ProbeResult:
             params=params,
             timeout_s=18.0,   # under the check's 22s wrapper — leave room for teardown
             provider=provider,
+            # Streaming TTSs (ElevenLabs, Cartesia, LMNT, Play.ht, Fish,
+            # Rime, Neuphonic, Sarvam, Deepgram TTS, MiniMax) use the same
+            # background-handshake pattern as streaming STTs: ``_connect``
+            # schedules the WS handshake, and each ``send`` call is guarded
+            # by ``if self._websocket and .state is OPEN``. A TTSSpeakFrame
+            # pushed before the handshake completes is silently dropped and
+            # no audio comes back — a healthy provider looks broken. 2s is
+            # enough for typical WS-TTS handshakes without inflating probe
+            # latency; services with a readiness event exit early via the
+            # harness's ``_connection_ready`` fast path.
+            warmup_s=2.0,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} TTS pipeline harness raised", provider)
