@@ -5,6 +5,8 @@ from typing import AsyncGenerator, Optional
 import httpx
 from loguru import logger
 
+from core.logging import get_trace_id
+
 from pipecat.frames.frames import (
     ErrorFrame,
     Frame,
@@ -126,7 +128,13 @@ class QwenOmniTTSService(TTSService):
             "response_format": "pcm",
             "stream": True,
         }
-        params = {"trace_id": self._trace_id} if self._trace_id else None
+        trace_id = get_trace_id()
+        if not trace_id or trace_id == "none":
+            trace_id = self._trace_id
+        params = {"trace_id": trace_id} if trace_id else None
+        headers = {"Accept": "text/event-stream"}
+        if trace_id:
+            headers["X-Request-Id"] = trace_id
         started = False
 
         try:
@@ -137,7 +145,7 @@ class QwenOmniTTSService(TTSService):
                     f"{self._base_url}/audio/speech",
                     json=payload,
                     params=params,
-                    headers={"Accept": "text/event-stream"},
+                    headers=headers,
                 ) as resp:
                     if resp.status_code != 200:
                         detail = (await resp.aread()).decode(errors="replace")[:400]
