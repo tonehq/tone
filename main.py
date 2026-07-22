@@ -1,5 +1,6 @@
 import sys
 import os
+from uuid import uuid4
 
 from core.logging import setup_logging
 setup_logging()
@@ -315,6 +316,78 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         except Exception:
             logger.debug("[inbound] /ws close failed")
         logger.info("[inbound] /ws connection closed")
+
+
+@app.websocket("/ws/test")
+async def ws_test_endpoint(websocket: WebSocket) -> None:
+    """Telephony-free WebSocket test endpoint — raw PCM in/out, no Twilio.
+
+    Lets a client (``test-cases/pipeline/ws_test_client.py``) drive an agent's pipeline
+    directly for testing: connect with ``?agent_id=<uuid>`` or ``?phone_number=<E.164>``,
+    stream raw 16-bit PCM, and receive the bot's raw-PCM audio back. It rides the same
+    ``bot()`` → ``TelephonyTransport`` path as a real call via the ``"test"`` provider
+    (``core/services/transport/test_provider.py``), so the pipeline is identical.
+
+    Gated behind ``ENABLE_WS_TEST_ENDPOINT`` (off in prod): it runs a real, paid
+    LLM/STT/TTS pipeline and carries no auth, so it must not be reachable in production.
+    """
+    if not settings.ENABLE_WS_TEST_ENDPOINT:
+        logger.warning("[ws-test] /ws/test rejected — ENABLE_WS_TEST_ENDPOINT is off")
+        await websocket.close(code=1008)
+        return
+
+    agent_id = (websocket.query_params.get("agent_id") or "").strip()
+    phone_number = (websocket.query_params.get("phone_number") or "").strip()
+    if not agent_id and not phone_number:
+        logger.warning("[ws-test] /ws/test rejected — pass agent_id or phone_number")
+        await websocket.close(code=1008)
+        return
+    try:
+        sample_rate = int(websocket.query_params.get("sample_rate") or 16000)
+    except (TypeError, ValueError):
+        sample_rate = 16000
+
+    await websocket.accept()
+    logger.info(
+        "[ws-test] /ws/test accepted agent_id={} phone_number={} sample_rate={} from={}",
+        agent_id, phone_number, sample_rate, getattr(websocket.client, "host", "?"),
+    )
+
+    # Pre-seed call_data + transport_type so TelephonyTransport.build skips the Twilio
+    # frame parser (there is no <start> frame on a raw-PCM stream) and resolves the
+    # "test" provider directly. agent_id rides in call_data["body"] (promoted by build)
+    # and is also set top-level so get_agent_for_call resolves it without the promotion.
+    call_data = {
+        "from": "",
+        "to": phone_number,
+        "body": {"agent_id": agent_id} if agent_id else {},
+        "stream_id": uuid4().hex,
+        "call_id": uuid4().hex,
+        "sample_rate": sample_rate,
+    }
+    body = {"transport_type": "test", "call_data": call_data}
+    if agent_id:
+        body["agent_id"] = agent_id
+    runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
+
+    try:
+        active_calls_inc()
+    except Exception:
+        logger.debug("[ws-test] active_calls_inc failed (metric only)")
+    try:
+        await bot(runner_args)
+    except Exception:
+        logger.exception("[ws-test] /ws/test bot crashed")
+    finally:
+        try:
+            active_calls_dec()
+        except Exception:
+            logger.debug("[ws-test] active_calls_dec failed (metric only)")
+        try:
+            await websocket.close()
+        except Exception:
+            logger.debug("[ws-test] /ws/test close failed")
+        logger.info("[ws-test] /ws/test connection closed")
 
 
 if __name__ == "__main__":

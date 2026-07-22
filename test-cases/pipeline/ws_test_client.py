@@ -143,7 +143,7 @@ async def run_test(ws_url: str, input_wav: str):
 
 def main():
     parser = argparse.ArgumentParser(description="WebSocket pipeline test client")
-    parser.add_argument("--agent-id", type=int, default=None, help="Agent ID from DB")
+    parser.add_argument("--agent-id", type=str, default=None, help="Agent ID (UUID) from DB")
     parser.add_argument("--phone-number", type=str, default=None, help="Phone number mapped to agent (e.g. +1234567890)")
     parser.add_argument("--text", type=str, default=None, help="Text to speak (generates WAV)")
     parser.add_argument("--input", type=str, default=None, help="Path to existing WAV file")

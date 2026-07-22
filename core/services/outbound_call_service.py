@@ -296,10 +296,39 @@ class OutboundCallService(BaseService):
         # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
         return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
 
-    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None):
+    _SUPPORTED_PROVIDERS = ("twilio", "websocket")
+
+    def _validate_provider(self, provider: Optional[str]) -> str:
+        """Normalize + validate the trigger provider. ``websocket`` additionally requires
+        the remote /ws/test target to be configured, checked here so the user gets an
+        immediate 400 instead of a silent worker failure at dispatch time."""
+        provider = (provider or "twilio").strip().lower()
+        if provider not in self._SUPPORTED_PROVIDERS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown trigger provider '{provider}'. Supported: {', '.join(self._SUPPORTED_PROVIDERS)}.",
+            )
+        if provider == "websocket" and not (settings.WS_CALL_TARGET_URL or "").strip():
+            # Fail fast at create time (not silently at dispatch) if the remote /ws/test host
+            # is unset. The remote agent is resolved by the dialed to_number on that side, so
+            # only the target host is required here (WS_CALL_TARGET_AGENT_ID is an optional
+            # fallback used by the engine when a call carries no number).
+            raise HTTPException(
+                status_code=400,
+                detail="WebSocket trigger is not configured (WS_CALL_TARGET_URL is unset).",
+            )
+        return provider
+
+    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = "twilio"):
         """Validate the agent and resolve the from-number once (shared across a bulk
         batch). ``from_number`` may be None/blank — it is then auto-selected via
-        ``select_from_number``. Returns (agent, channel_id, from_number)."""
+        ``select_from_number``. Returns (agent, channel_id, from_number).
+
+        The ``websocket`` trigger places no PSTN call (it bridges to a remote /ws/test and
+        routes by ``to_number``), so it requires NO Twilio number/channel/credentials: only the
+        agent is validated, there is no channel, and any explicit ``from_number`` is passed
+        through solely as a display label. This keeps the telephony-free /ws/test bridge usable
+        in dev/staging orgs that have no Twilio set up."""
         org_id = self.org_id
 
         agent = self.query(Agent).filter(Agent.id == agent_id).first()
@@ -312,6 +341,11 @@ class OutboundCallService(BaseService):
             )
         if getattr(agent, "is_active", True) is False:
             raise HTTPException(status_code=400, detail="Agent is inactive.")
+
+        # WebSocket bridge: no telephony, so skip the Twilio from-number/channel/credentials gate.
+        # There is no channel; keep any explicit from_number purely as a label (the engine ignores it).
+        if provider == "websocket":
+            return agent, None, (from_number or "").strip()
 
         # Explicit number wins; otherwise auto-select (single → that one; many → rotate).
         from_number = self.select_from_number(agent, explicit=from_number)
@@ -348,15 +382,18 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         directory_id=None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Place one or many outbound calls. A single immediate number dials right away;
         multiple numbers (or a scheduled time) are queued as ``scheduled_calls`` rows that
         the worker dials at ``scheduled_at`` (or now), and they show up on the Scheduled
-        Calls page."""
+        Calls page. ``provider`` selects the trigger engine (``twilio`` = real PSTN;
+        ``websocket`` = bridge to a remote /ws/test)."""
         if not to_numbers:
             raise HTTPException(status_code=400, detail="Provide at least one destination number.")
 
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         # Per-number validation: collect invalid ones instead of failing the whole batch.
         valid: List[str] = []
@@ -384,9 +421,16 @@ class OutboundCallService(BaseService):
             if scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
                 raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
 
+        # WebSocket provider (immediate): max_concurrency is the NUMBER OF PARALLEL bridge
+        # calls to fire at once — a load/parallel test — not a dial-rate limit. Each bridge
+        # opens its own WS to the remote /ws/test, so they run concurrently. Deliberately
+        # bypasses the dedupe/contacts path (we want N calls to the SAME target).
+        if provider == "websocket" and scheduled_at is None:
+            return self._dial_parallel_ws(agent, from_number, valid, max_concurrency, invalid)
+
         # Single immediate call: dial inline for instant feedback (surfaces in Call History).
         if len(valid) == 1 and scheduled_at is None:
-            return self._dial_now(agent, from_number, valid[0], invalid)
+            return self._dial_now(agent, from_number, valid[0], invalid, provider=provider)
 
         # Bulk and/or scheduled: route through the shared create+assign+schedule path so
         # every scheduled number becomes an agent-assigned contact (single implementation —
@@ -394,7 +438,7 @@ class OutboundCallService(BaseService):
         rows = [{"phone_number": num} for num in valid]
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-            directory_id=directory_id, max_concurrency=max_concurrency,
+            directory_id=directory_id, max_concurrency=max_concurrency, provider=provider,
         )
 
     def create_outbound_calls_from_rows(
@@ -408,6 +452,7 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         invalid: Optional[List[Dict[str, str]]] = None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Create contacts from parsed ``rows`` (e.g. an uploaded CSV/Excel), assign them to
         the agent, and schedule outbound calls — the file-upload counterpart of
@@ -416,19 +461,20 @@ class OutboundCallService(BaseService):
         path (``_schedule_via_contacts``)."""
         if not rows:
             raise HTTPException(status_code=400, detail="No contacts were found in the file.")
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
         if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
             raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid or [], scheduled_at, created_by_user_id,
-            directory_id=directory_id, max_concurrency=max_concurrency,
+            directory_id=directory_id, max_concurrency=max_concurrency, provider=provider,
         )
 
     def _schedule_via_contacts(
         self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-        directory_id=None, max_concurrency=None,
+        directory_id=None, max_concurrency=None, provider="twilio",
     ) -> Dict[str, Any]:
         """Create each ``rows`` entry as a contact in ``directory_id`` (default the org's
         "Global" directory) AND assign it to ``agent`` (reusing
@@ -462,19 +508,22 @@ class OutboundCallService(BaseService):
         # Pass the already-resolved from_number explicitly so it isn't re-rotated.
         result = self.schedule_calls_for_contacts(
             agent.id, from_number, contact_ids, scheduled_at, created_by_user_id,
-            max_concurrency=max_concurrency,
+            max_concurrency=max_concurrency, provider=provider,
         )
         result["mode"] = "scheduled" if scheduled_at is not None else "bulk"
         result["invalid"] = (result.get("invalid") or []) + invalid
         result["assigned"] = create_result.get("assigned", len(contact_ids))
         return result
 
-    def _dial_now(self, agent, from_number, to_number, invalid) -> Dict[str, Any]:
+    def _dial_now(self, agent, from_number, to_number, invalid, provider="twilio") -> Dict[str, Any]:
         # No calls row is created here — the call log is written by the pipeline
         # (create_call_log) when the media stream connects.
-        logger.info("[outbound] placing immediate call agent={} from={} to={}", agent.id, from_number, to_number)
+        logger.info(
+            "[outbound] placing immediate call agent={} from={} to={} provider={}",
+            agent.id, from_number, to_number, provider,
+        )
         base = self._public_base()
-        engine = get_call_engine("twilio", org_id=self.org_id)
+        engine = get_call_engine(provider, org_id=self.org_id)
         try:
             info = engine.initiate_call(
                 to_number=to_number,
@@ -496,7 +545,64 @@ class OutboundCallService(BaseService):
             "agent_id": str(agent.id),
             "from_number": from_number,
             "to_number": to_number,
+            "provider": provider,
             "provider_call_id": info.call_id,
+            "invalid": invalid,
+        }
+
+    # Hard ceiling on parallel WS bridges from one request, so a large max_concurrency can't
+    # spawn unbounded threads. Each bridge is a live media session (a thread) — keep it sane.
+    _MAX_PARALLEL_WS = 25
+
+    def _dial_parallel_ws(
+        self, agent, from_number, valid: List[str], max_concurrency, invalid
+    ) -> Dict[str, Any]:
+        """Fire N parallel WebSocket bridge calls at once (N = ``max_concurrency`` from the
+        modal). Each ``initiate_call`` spawns its own bridge thread, so all N run concurrently.
+        When ``max_concurrency`` is unset, place one call per destination. Cycles through
+        ``valid`` when N exceeds the number of destinations (so 1 target + N → N calls to it)."""
+        try:
+            count = int(max_concurrency) if max_concurrency else 0
+        except (TypeError, ValueError):
+            count = 0
+        # No explicit count → one bridge per destination; else exactly `count` bridges.
+        count = count if count > 0 else len(valid)
+        if count > self._MAX_PARALLEL_WS:
+            logger.warning(
+                "[outbound][ws] requested {} parallel bridges; capping to {}",
+                count, self._MAX_PARALLEL_WS,
+            )
+            count = self._MAX_PARALLEL_WS
+
+        engine = get_call_engine("websocket", org_id=self.org_id)
+        base = settings.BASE_CALL_URL or ""  # unused by the WS engine (it uses WS_CALL_TARGET_URL)
+        placed: List[Dict[str, Any]] = []
+        for i in range(count):
+            to_number = valid[i % len(valid)]
+            try:
+                info = engine.initiate_call(
+                    to_number=to_number,
+                    from_number=from_number,
+                    agent_id=str(agent.id),
+                    callback_base_url=base,
+                )
+                placed.append({"to_number": to_number, "provider_call_id": info.call_id})
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("[outbound][ws] parallel bridge {} failed to={}", i, to_number)
+                invalid.append({"to_number": to_number, "error": str(exc)})
+        logger.info(
+            "[outbound][ws] placed {}/{} parallel bridge call(s) agent={}",
+            len(placed), count, agent.id,
+        )
+        return {
+            "mode": "parallel_websocket",
+            "status": "dialing",
+            "provider": "websocket",
+            "agent_id": str(agent.id),
+            "from_number": from_number,
+            "requested": count,
+            "placed": len(placed),
+            "calls": placed,
             "invalid": invalid,
         }
 
@@ -565,6 +671,7 @@ class OutboundCallService(BaseService):
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Schedule outbound calls to the given org-owned contacts.
 
@@ -582,7 +689,8 @@ class OutboundCallService(BaseService):
         if not contact_ids:
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
 
-        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
@@ -626,6 +734,7 @@ class OutboundCallService(BaseService):
                 to_number=to_number,
                 scheduled_at=self._resolve_contact_when(contact, scheduled_at),
                 status="scheduled",
+                provider=provider,
                 created_by_user_id=created_by_user_id,
                 batch_id=batch_id,
                 max_concurrency=batch_limit,

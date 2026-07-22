@@ -91,3 +91,76 @@ def test_missing_credentials_raises(_creds):
     with pytest.raises(ValueError):
         engine.initiate_call("+15550000000", "+15551111111", agent_id="ag-1",
                              callback_base_url="https://api.example")
+
+
+class TestWebSocketEngine:
+    """The websocket trigger engine (bridges to a remote /ws/test)."""
+
+    def test_factory_returns_websocket_engine(self):
+        from core.services.call_engines import WebSocketCallEngine
+        engine = get_call_engine("websocket", org_id="org-1")
+        assert isinstance(engine, WebSocketCallEngine)
+        assert isinstance(engine, CallEngine)
+        assert engine.provider_name == "websocket"
+
+    def test_generate_twiml_not_supported(self):
+        engine = get_call_engine("websocket")
+        with pytest.raises(NotImplementedError):
+            engine.generate_twiml("wss://x/ws", {})
+
+    def test_initiate_raises_when_target_unconfigured(self, monkeypatch):
+        # No thread should be spawned when the remote target is missing.
+        monkeypatch.setattr("core.services.call_engines.websocket_engine.settings.WS_CALL_TARGET_URL", "")
+        engine = get_call_engine("websocket")
+        with pytest.raises(ValueError):
+            engine.initiate_call("+1", "+1", agent_id="ag-1", callback_base_url="https://api.x")
+
+    def test_initiate_routes_by_to_number(self, monkeypatch):
+        # Only the target host is configured; the remote resolves its agent by the dialed
+        # number, so the bridge URI carries ?phone_number=<to_number> (url-encoded).
+        monkeypatch.setattr(
+            "core.services.call_engines.websocket_engine.settings.WS_CALL_TARGET_URL",
+            "wss://remote.example",
+        )
+        monkeypatch.setattr(
+            "core.services.call_engines.websocket_engine.settings.WS_CALL_TARGET_AGENT_ID", ""
+        )
+        engine = get_call_engine("websocket")
+        # Replace the bridge so no socket is opened; just record it ran.
+        ran = {}
+        def fake_bridge(call_id, remote_uri, agent_id, scheduled_call_id):
+            ran["remote_uri"] = remote_uri
+        monkeypatch.setattr(engine, "_bridge_thread", fake_bridge)
+
+        info = engine.initiate_call("+19894742667", "+1", agent_id="ag-1", callback_base_url="https://api.x")
+        assert info.provider == "websocket"
+        assert info.status == "dialing"
+        assert info.call_id  # a generated id
+        import time
+        time.sleep(0.05)
+        assert ran.get("remote_uri") == (
+            "wss://remote.example/ws/test?phone_number=%2B19894742667&sample_rate=24000"
+        )
+
+    def test_initiate_falls_back_to_agent_id_when_no_number(self, monkeypatch):
+        # With no to_number, the engine uses the configured fallback agent id.
+        monkeypatch.setattr(
+            "core.services.call_engines.websocket_engine.settings.WS_CALL_TARGET_URL",
+            "wss://remote.example",
+        )
+        monkeypatch.setattr(
+            "core.services.call_engines.websocket_engine.settings.WS_CALL_TARGET_AGENT_ID",
+            "remote-agent",
+        )
+        engine = get_call_engine("websocket")
+        ran = {}
+        monkeypatch.setattr(
+            engine, "_bridge_thread",
+            lambda call_id, remote_uri, agent_id, scheduled_call_id: ran.__setitem__("remote_uri", remote_uri),
+        )
+        engine.initiate_call("", "+1", agent_id="ag-1", callback_base_url="https://api.x")
+        import time
+        time.sleep(0.05)
+        assert ran.get("remote_uri") == (
+            "wss://remote.example/ws/test?agent_id=remote-agent&sample_rate=24000"
+        )
