@@ -145,6 +145,7 @@ class DocumentProcessingService:
                     KnowledgeBase.upload_id == upload_id
                 ).update(
                     {
+                        KnowledgeBase.status: "ready",
                         KnowledgeBase.doc_type: doc_type,
                         KnowledgeBase.ingestion_stats: ingestion_stats,
                     },
@@ -161,7 +162,13 @@ class DocumentProcessingService:
                     if upload:
                         upload.status = "failed"
                         upload.meta_data = {**(upload.meta_data or {}), "error": str(e)}
-                        db.commit()
+                    db.query(KnowledgeBase).filter(
+                        KnowledgeBase.upload_id == upload_id
+                    ).update(
+                        {KnowledgeBase.status: "failed"},
+                        synchronize_session=False,
+                    )
+                    db.commit()
             except Exception as meta_err:
                 logger.error("Failed to update error metadata: {}", meta_err)
 

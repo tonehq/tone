@@ -1,0 +1,17 @@
+# Per-doc RAG eval data is generated locally and may contain customer content.
+# The folder structure is intentionally committed (via this .gitignore) so
+# `rag-testing/documents/` exists in fresh clones, but its contents stay local.
+#
+# Contents ignored:
+#   <slug>/source.pdf        - the actual document (may contain customer data)
+#   <slug>/metadata.json     - real upload_id / kb_id / org_id from the DB
+#   <slug>/questions.json    - LLM-generated Q&A referencing the doc's text
+#   <slug>/results/          - eval runs with retrieved chunks + generated answers
+#
+# To share a *specific* doc's eval dataset (e.g., a synthetic test KB), add an
+# explicit whitelist rule below, for example:
+#   !<slug>/
+#   !<slug>/**
+
+*
+!.gitignore
