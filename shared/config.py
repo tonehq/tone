@@ -111,6 +111,10 @@ class Settings:
         # call carries no number to route on.
         self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL", "").rstrip("/")
         self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID", "")
+        # NB: the allowlist of users permitted to use the WebSocket ("test bridge") trigger is a
+        # GLOBAL DB table (``ws_trigger_allowed_users``, read-only from the app, managed directly in
+        # the DB) — see OutboundCallService.is_ws_trigger_allowed — not an env var, so it can change
+        # without a redeploy.
 
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")

@@ -155,6 +155,9 @@ export default function NewOutboundCallModal({
   // is the user's choice, sent with the request (empty → the backend applies the env default).
   const [concurrencyMax, setConcurrencyMax] = useState<number | null>(null);
   const [concurrencyValue, setConcurrencyValue] = useState<number | null>(null);
+  // Whether this user may use the WebSocket trigger (backend env allowlist). Default false so the
+  // "Trigger via" selector stays hidden until the capabilities call confirms access.
+  const [wsTriggerAllowed, setWsTriggerAllowed] = useState<boolean>(false);
 
   const { data: schemaDetail } = useSchema(schemaId || null);
 
@@ -259,9 +262,12 @@ export default function NewOutboundCallModal({
         if (!active) return;
         setConcurrencyMax(c.max);
         setConcurrencyValue(c.max); // default the batch to the env max (user can lower it)
+        setWsTriggerAllowed(!!c.ws_trigger_allowed);
       })
       .catch(() => {
-        if (active) setConcurrencyMax(null);
+        if (!active) return;
+        setConcurrencyMax(null);
+        setWsTriggerAllowed(false);
       });
     return () => {
       active = false;
@@ -329,7 +335,8 @@ export default function NewOutboundCallModal({
           );
         }
         onClose();
-        if (res?.mode === 'immediate') {
+        // parallel_websocket (immediate WS test-bridge fan-out) dials right away, same as immediate.
+        if (res?.mode === 'immediate' || res?.mode === 'parallel_websocket') {
           showToast.success('Calling now', 'The call will appear in Call History.');
           router.push('/call-history');
         } else {
@@ -433,40 +440,16 @@ export default function NewOutboundCallModal({
           loading={optionsLoading}
           options={fromSelectOptions}
         />
-        <SelectInput
-          name="provider"
-          control={control}
-          label="Trigger via"
-          options={TRIGGER_PROVIDER_OPTIONS}
-        />
-
-        {/* Per-batch concurrency — capped to the env max when one is configured. */}
-        <TextInput
-          label="Concurrent calls"
-          type="number"
-          min={1}
-          max={concurrencyMax ?? undefined}
-          value={concurrencyValue ?? ''}
-          onChange={(e) => {
-            const raw = e.target.value;
-            if (raw === '') {
-              setConcurrencyValue(null);
-              return;
-            }
-            const n = parseInt(raw, 10);
-            if (Number.isNaN(n)) {
-              setConcurrencyValue(null);
-              return;
-            }
-            const bounded = concurrencyMax !== null ? Math.min(concurrencyMax, n) : n;
-            setConcurrencyValue(Math.max(1, bounded));
-          }}
-          helperText={
-            concurrencyMax !== null
-              ? `How many of this batch's calls dial at once (max ${concurrencyMax}). The next fires as one finishes.`
-              : "How many of this batch's calls dial at once. Leave empty for no limit. The next fires as one finishes."
-          }
-        />
+        {/* Trigger selector shown only to allowlisted users (WS is an internal test tool);
+            everyone else stays on the default Twilio provider with no selector. */}
+        {wsTriggerAllowed && (
+          <SelectInput
+            name="provider"
+            control={control}
+            label="Trigger via"
+            options={TRIGGER_PROVIDER_OPTIONS}
+          />
+        )}
 
         {/* Per-batch concurrency — capped to the env max when one is configured. */}
         <TextInput
