@@ -147,6 +147,7 @@ class BaseBenchmark(ABC):
             logger.exception("[benchmark] {} input preparation failed", self.provider)
             return self._failed(iteration, 0.0, f"input preparation failed: {exc}")
 
+        timings: Dict[str, float] = {}
         started = time.perf_counter()
         try:
             ok, frame, err = await probe_in_pipeline(
@@ -158,6 +159,7 @@ class BaseBenchmark(ABC):
                 provider=self.provider,
                 warmup_s=self.warmup_s,
                 end_frame_after_s=self.end_frame_after_s,
+                timings=timings,
             )
         except Exception as exc:
             logger.exception("[benchmark] {} {} harness raised", self.service_type, self.provider)
@@ -167,11 +169,13 @@ class BaseBenchmark(ABC):
         if not ok:
             return self._failed(iteration, elapsed_ms, err or "no target frame within budget")
 
+        sent_at, target_at = timings.get("sent_at"), timings.get("target_at")
+        ttfb_ms = (target_at - sent_at) * 1000.0 if sent_at and target_at else None
         return BenchmarkSample(
             iteration,
             True,
             round(elapsed_ms, 2),
-            ttfb_ms=round(max(0.0, elapsed_ms - self.warmup_s * 1000.0), 2),
+            ttfb_ms=round(ttfb_ms, 2) if ttfb_ms is not None else None,
             detail=self.sample_detail(frame),
         )
 
