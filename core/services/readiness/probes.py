@@ -178,11 +178,25 @@ async def probe_llm(ctx) -> ProbeResult:
     # false-flags a healthy provider. Overriding the user's own
     # ``max_tokens`` is intentional: probe cost must stay bounded even
     # when the agent's model is configured with a large budget.
-    spec["metadata"] = {
-        **(spec["metadata"] or {}),
-        "max_tokens": 1024,
-        "max_completion_tokens": 1024,
+    # Provider-aware token cap injection. Sending BOTH ``max_tokens`` and
+    # ``max_completion_tokens`` trips Cohere's server with HTTP 422 ("setting
+    # max_tokens and max_completion_tokens at the same time is not
+    # supported"), because Cohere's Pydantic ``InputParams`` (inherited from
+    # the OpenAI base) accepts both fields — so ``build_input_params`` filters
+    # nothing out — and Cohere's actual API rejects the pair. The generic
+    # workaround: always send ``max_tokens`` (universally accepted); only add
+    # ``max_completion_tokens`` for OpenAI-family providers whose SDKs route
+    # it to reasoning models (o1/o3/o4/gpt-5) that need it. Anything else
+    # accepts a single-key request without complaint.
+    _OPENAI_FAMILY = {
+        "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
+        "fireworks", "perplexity", "sambanova", "nebius", "together",
+        "xai", "grok", "novita", "qwen", "inception",
     }
+    token_cap: Dict[str, Any] = {"max_tokens": 1024}
+    if provider in _OPENAI_FAMILY:
+        token_cap["max_completion_tokens"] = 1024
+    spec["metadata"] = {**(spec["metadata"] or {}), **token_cap}
 
     try:
         service = service_factory.build_llm(spec)
@@ -346,9 +360,17 @@ async def probe_stt(ctx) -> ProbeResult:
     bytes_per_sample = 2  # linear16
     ms_per_chunk = 20
     chunk_bytes = int(target_rate * ms_per_chunk / 1000) * bytes_per_sample
+    # Append 1s of trailing silence so server-side endpointing (Gladia
+    # solaria-1, some Whisper deployments, Sarvam) can naturally detect
+    # end-of-speech and emit a final transcript. Real calls always have
+    # natural post-utterance pauses; the bundled probe WAV is dense speech
+    # right up to the end, and pure-server-side-VAD providers keep waiting
+    # for more audio until we force a shutdown — which is too late.
+    trailing_silence = b"\x00\x00" * target_rate  # 1s of PCM silence
+    padded_audio = audio_bytes + trailing_silence
     audio_chunks = [
-        audio_bytes[i:i + chunk_bytes]
-        for i in range(0, len(audio_bytes), chunk_bytes)
+        padded_audio[i:i + chunk_bytes]
+        for i in range(0, len(padded_audio), chunk_bytes)
     ]
 
     input_frames = [
