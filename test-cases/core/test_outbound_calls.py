@@ -15,6 +15,7 @@ from core.models.channel import Channel
 from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
+from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.call_log_service import CallLogService
 from core.services.outbound_call_service import OutboundCallService
 
@@ -460,14 +461,44 @@ class TestDispatchConcurrencyAdmission:
         # Batch limit 2, 0 in flight → the claim wins (claimed=1) and the row dials.
         mock_engine.return_value.initiate_call.return_value = SimpleNamespace(call_id="CA9")
         sc = _sc(batch_id=uuid4(), max_concurrency=2)
-        svc = OutboundCallService(_dispatch_db(sc, claimed=1, batch_active=0), org_id=uuid4())
+        db = _dispatch_db(sc, claimed=1, batch_active=0)
+        svc = OutboundCallService(db, org_id=uuid4())
 
         with patch.object(svc, "_public_base", return_value="https://api.x"), \
                 patch.object(svc, "_prewarm_pipeline"):
             res = svc.dispatch_scheduled_call(sc.id)
 
-        assert res.status == "dispatched" and res.provider_call_sid == "CA9"
+        assert res is sc
         mock_engine.return_value.initiate_call.assert_called_once()
+        # The dispatched-mark is a compare-and-set (only advances a row still 'processing'), so a
+        # WS bridge that already finalized in its own session isn't clobbered back to an active
+        # state. Assert the mark carries status='dispatched' + the returned provider call id.
+        mark = db.query(ScheduledCall).update.call_args_list[-1].args[0]
+        assert mark[ScheduledCall.status] == "dispatched"
+        assert mark[ScheduledCall.provider_call_sid] == "CA9"
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_terminal_row_not_clobbered_back_to_dispatched(self, mock_engine):
+        # The WebSocket bridge returns immediately, and its thread's _finalize_scheduled_call can
+        # write a terminal status before the dispatched-mark runs. The mark is a compare-and-set
+        # (WHERE status='processing'), so it then matches 0 rows and dispatch must NOT overwrite
+        # the terminal status (which would strand the row in an active state, holding its batch
+        # slot forever). Regression for the dispatch/finalize race.
+        mock_engine.return_value.initiate_call.return_value = SimpleNamespace(call_id="WS9")
+        sc = _sc(batch_id=uuid4(), max_concurrency=2, provider="websocket")
+        db = _dispatch_db(sc, claimed=1, batch_active=0)
+        # Claim update wins (1); the later dispatched-mark compare-and-set matches nothing (0)
+        # because the bridge already advanced the row to a terminal status in its own session.
+        db.query(ScheduledCall).update.side_effect = [1, 0]
+        sc.status = "failed"  # what refresh() loads after the bridge finalized the row
+        svc = OutboundCallService(db, org_id=uuid4())
+
+        with patch.object(svc, "_public_base", return_value="https://api.x"), \
+                patch.object(svc, "_prewarm_pipeline") as prewarm:
+            res = svc.dispatch_scheduled_call(sc.id)
+
+        assert res.status == "failed"  # terminal status preserved, not clobbered to 'dispatched'
+        prewarm.assert_not_called()  # no point warming a call that already ended
 
 
 class TestDrainOutboundCapacity:
@@ -514,3 +545,55 @@ class TestCompletionRefill:
             svc._refill_after_completion(SimpleNamespace(batch_id=None, max_concurrency=None))
             svc._refill_after_completion(SimpleNamespace(batch_id=uuid4(), max_concurrency=0))
         ex.return_value.submit.assert_not_called()
+
+
+class TestWsTriggerAllowlist:
+    """The WebSocket trigger is an internal test tool gated by the GLOBAL
+    ``ws_trigger_allowed_users`` DB table (read-only; managed directly in the DB). See
+    OutboundCallService.is_ws_trigger_allowed / assert_ws_trigger_allowed and the capabilities
+    payload. ``make_db`` returns the seeded row for a WsTriggerAllowedUser query (filters are
+    not evaluated by the mock), so a seeded row = 'a matching allowlist row exists'."""
+
+    def _db(self, allowed_row=False):
+        seeded = SimpleNamespace(id=uuid4()) if allowed_row else None
+        return make_db({WsTriggerAllowedUser: seeded})
+
+    def test_no_row_denies_and_403(self):
+        svc = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
+        assert svc.is_ws_trigger_allowed("dev@x.com") is False
+        with pytest.raises(HTTPException) as exc:
+            svc.assert_ws_trigger_allowed("dev@x.com", "websocket")
+        assert exc.value.status_code == 403
+
+    def test_matching_row_allows(self):
+        svc = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
+        assert svc.is_ws_trigger_allowed("dev@x.com") is True
+        svc.assert_ws_trigger_allowed("dev@x.com", "websocket")  # no raise
+
+    def test_blank_email_is_denied(self):
+        svc = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
+        assert svc.is_ws_trigger_allowed("") is False
+        assert svc.is_ws_trigger_allowed(None) is False
+
+    def test_twilio_provider_is_never_gated(self):
+        svc = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
+        svc.assert_ws_trigger_allowed("anyone@x.com", "twilio")  # no raise
+
+    def test_missing_table_fails_closed(self):
+        # If the allowlist table doesn't exist yet (migration not applied), the check must deny
+        # + roll back rather than 500 the capabilities/create call.
+        from sqlalchemy.exc import SQLAlchemyError
+        db = MagicMock()
+        q = MagicMock()
+        q.filter.return_value = q
+        q.first.side_effect = SQLAlchemyError("relation ws_trigger_allowed_users does not exist")
+        db.query.return_value = q
+        svc = OutboundCallService(db, org_id=uuid4())
+        assert svc.is_ws_trigger_allowed("dev@x.com") is False
+        db.rollback.assert_called_once()
+
+    def test_capabilities_payload_reports_ws_flag(self):
+        allowed = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
+        denied = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
+        assert allowed.get_concurrency_max(caller_email="dev@x.com")["ws_trigger_allowed"] is True
+        assert denied.get_concurrency_max(caller_email="dev@x.com")["ws_trigger_allowed"] is False
