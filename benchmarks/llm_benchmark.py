@@ -36,6 +36,9 @@ class LLMBenchmark(BaseBenchmark):
             return bool((getattr(frame, "text", "") or "").strip())
         return isinstance(frame, LLMFullResponseEndFrame)
 
+    def is_complete(self, frame: Any) -> bool:
+        return isinstance(frame, LLMFullResponseEndFrame)
+
     def sample_detail(self, frame: Any) -> Dict[str, Any]:
         text = (getattr(frame, "text", "") or "").strip()
         return {"first_token": text[:60]} if text else {}

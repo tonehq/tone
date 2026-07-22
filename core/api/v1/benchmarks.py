@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends
@@ -22,6 +22,7 @@ class BenchmarkRequest(BaseModel):
     warmup_iterations: int = Field(default=1, ge=0, le=5)
     concurrency: int = Field(default=1, ge=1, le=MAX_CONCURRENCY)
     timeout_s: Optional[float] = Field(default=None, gt=0, le=120)
+    measure: Literal["ttfb", "total"] = "ttfb"
     prompt: Optional[str] = None
     sentence: Optional[str] = None
 
@@ -55,6 +56,7 @@ async def run_benchmark(
         warmup_iterations=body.warmup_iterations,
         concurrency=body.concurrency,
         timeout_s=body.timeout_s,
+        measure=body.measure,
         prompt=body.prompt,
         sentence=body.sentence,
     )
