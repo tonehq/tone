@@ -31,6 +31,7 @@ from core.models.scheduled_call import ScheduledCall
 from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
+from core.services.call_engines.websocket_engine import NoOutboundCapacity
 from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
 from core.services.transport.telephony_credentials import get_twilio_credentials
 from shared.config import settings
@@ -561,10 +562,15 @@ class OutboundCallService(BaseService):
     def _dial_parallel_ws(
         self, agent, from_number, valid: List[str], max_concurrency, invalid
     ) -> Dict[str, Any]:
-        """Fire N parallel WebSocket bridge calls at once (N = ``max_concurrency`` from the
-        modal). Each ``initiate_call`` spawns its own bridge thread, so all N run concurrently.
-        When ``max_concurrency`` is unset, place one call per destination. Cycles through
-        ``valid`` when N exceeds the number of destinations (so 1 target + N → N calls to it)."""
+        """Fan out N parallel WebSocket bridge calls (N = ``max_concurrency`` from the modal;
+        default one per destination, cycling ``valid`` so 1 target + N → N calls to it).
+
+        The media must run on the dedicated outbound voice pods, never in THIS originating process
+        (that OOMs under load). So instead of spawning bridge threads here, this queues N
+        ``scheduled_calls`` rows due NOW, sharing a ``batch_id``: the normal dispatch path hands
+        each off to an outbound pod (``WebSocketCallEngine.initiate_call``), the per-pod
+        ``MAX_CONCURRENT_CALLS`` throttles real concurrency, and overflow that a pod refuses (429)
+        is held + retried by the drain/refill as pods free. Fires near-instantly (jobs are due now)."""
         try:
             count = int(max_concurrency) if max_concurrency else 0
         except (TypeError, ValueError):
@@ -578,35 +584,44 @@ class OutboundCallService(BaseService):
             )
             count = self._MAX_PARALLEL_WS
 
-        engine = get_call_engine("websocket", org_id=self.org_id)
-        base = settings.BASE_CALL_URL or ""  # unused by the WS engine (it uses WS_CALL_TARGET_URL)
-        placed: List[Dict[str, Any]] = []
-        for i in range(count):
-            to_number = valid[i % len(valid)]
-            try:
-                info = engine.initiate_call(
-                    to_number=to_number,
-                    from_number=from_number,
-                    agent_id=str(agent.id),
-                    callback_base_url=base,
-                )
-                placed.append({"to_number": to_number, "provider_call_id": info.call_id})
-            except Exception as exc:  # noqa: BLE001
-                logger.exception("[outbound][ws] parallel bridge {} failed to={}", i, to_number)
-                invalid.append({"to_number": to_number, "error": str(exc)})
+        # One batch id groups the fan-out; max_concurrency = count makes dispatch admit all N (the
+        # per-pod cap is the real throttle) AND enables the completion-refill fast path so a held
+        # row dials the instant a pod frees. batch_id also lets drain_outbound_capacity retry holds.
+        batch_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        rows: List[ScheduledCall] = [
+            ScheduledCall(
+                agent_id=agent.id,
+                organization_id=self.org_id,
+                channel_id=None,
+                from_number=from_number,
+                to_number=valid[i % len(valid)],
+                scheduled_at=now,
+                status="scheduled",
+                provider="websocket",
+                created_by_user_id=None,
+                batch_id=batch_id,
+                max_concurrency=count,
+                metadata_={},
+            )
+            for i in range(count)
+        ]
+        self._persist_and_enqueue_rows(rows)
         logger.info(
-            "[outbound][ws] placed {}/{} parallel bridge call(s) agent={}",
-            len(placed), count, agent.id,
+            "[outbound][ws] queued {} parallel bridge(s) for hand-off to outbound pods agent={} batch={}",
+            len(rows), agent.id, batch_id,
         )
         return {
             "mode": "parallel_websocket",
-            "status": "dialing",
+            "status": "queued",
             "provider": "websocket",
             "agent_id": str(agent.id),
             "from_number": from_number,
             "requested": count,
-            "placed": len(placed),
-            "calls": placed,
+            "queued": len(rows),
+            "placed": 0,
+            "batch_id": str(batch_id),
+            "calls": [],
             "invalid": invalid,
         }
 
@@ -832,7 +847,9 @@ class OutboundCallService(BaseService):
                 logger.info("[outbound] dispatch no-op id={} status={}", scheduled_call_id, sc.status)
             return sc
 
-        base = self._public_base()
+        # The WebSocket bridge places no PSTN call and ignores callback_base_url (it hands off to
+        # an outbound voice pod), so it must NOT require the Twilio BASE_CALL_URL gate.
+        base = "" if sc.provider == "websocket" else self._public_base()
         engine = get_call_engine(sc.provider, org_id=sc.organization_id)
         try:
             info = engine.initiate_call(
@@ -842,6 +859,20 @@ class OutboundCallService(BaseService):
                 callback_base_url=base,
                 scheduled_call_id=str(sc.id),
             )
+        except NoOutboundCapacity as exc:
+            # No outbound voice pod free right now — HOLD the row (revert the claim to 'scheduled')
+            # instead of failing it, so the periodic drain / batch refill retries the hand-off when
+            # a pod frees. This is the backpressure seam for the WS load-test path.
+            self.db.query(ScheduledCall).filter(
+                ScheduledCall.id == sc.id, ScheduledCall.status == "processing"
+            ).update({ScheduledCall.status: "scheduled"}, synchronize_session=False)
+            self.db.commit()
+            self.db.refresh(sc)
+            logger.info(
+                "[outbound] dispatch held id={} — no outbound capacity ({})",
+                scheduled_call_id, exc,
+            )
+            return sc
         except Exception as exc:  # noqa: BLE001
             sc.status = "failed"
             sc.error = str(exc)[:500]
@@ -971,18 +1002,23 @@ class OutboundCallService(BaseService):
         }
 
     def drain_outbound_capacity(self) -> int:
-        """Safety net (per-minute worker task): retry DUE calls that a per-batch limit held
-        back at dispatch. Only batch-limited rows can be held, so we target those; each
-        ``dispatch_scheduled_call`` re-applies the atomic per-batch check, so this can't
-        overshoot a batch's limit. Dispatches INLINE (never re-defers from inside the worker).
-        Bounded per tick. Returns the number dispatched."""
+        """Safety net (per-minute worker task): retry DUE calls that were HELD at dispatch — either
+        by a per-batch limit, or (WebSocket) by no outbound voice pod being free. Both leave the row
+        'scheduled' after its Procrastinate job already fired, so nothing else re-dials them. Each
+        ``dispatch_scheduled_call`` re-applies the atomic per-batch + capacity check, so this can't
+        overshoot. Dispatches INLINE (never re-defers from inside the worker). Bounded per tick.
+        Returns the number dispatched."""
         now = datetime.now(timezone.utc)
         rows = (
             self.db.query(ScheduledCall)
             .filter(
                 ScheduledCall.status == "scheduled",
                 ScheduledCall.scheduled_at <= now,
-                ScheduledCall.batch_id.isnot(None),
+                # Batch-limited rows OR WS rows (which can be pod-capacity-held without a batch limit).
+                or_(
+                    ScheduledCall.batch_id.isnot(None),
+                    ScheduledCall.provider == "websocket",
+                ),
             )
             .order_by(ScheduledCall.scheduled_at.asc())
             .limit(_DRAIN_MAX)
