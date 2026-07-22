@@ -524,6 +524,23 @@ class TestDispatchConcurrencyAdmission:
         held = db.query(ScheduledCall).update.call_args_list[-1].args[0]
         assert held[ScheduledCall.status] == "scheduled"
 
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_claim_stamps_updated_at_for_reclaim_age_gate(self, mock_engine):
+        # The claim must stamp updated_at so the crashed-'processing' recovery clause can age-gate
+        # re-claims (a fresh in-flight hand-off must NOT be re-grabbed, or a second bridge starts —
+        # this is the concurrency=1 → 2 calls double-dial). A Core .update() skips the ORM onupdate,
+        # so updated_at is set explicitly on the claim.
+        mock_engine.return_value.initiate_call.return_value = SimpleNamespace(call_id="CA1")
+        sc = _sc(batch_id=uuid4(), max_concurrency=2)
+        db = _dispatch_db(sc, claimed=1, batch_active=0)
+        svc = OutboundCallService(db, org_id=uuid4())
+        with patch.object(svc, "_public_base", return_value="https://api.x"), \
+                patch.object(svc, "_prewarm_pipeline"):
+            svc.dispatch_scheduled_call(sc.id)
+        claim = db.query(ScheduledCall).update.call_args_list[0].args[0]
+        assert claim[ScheduledCall.status] == "processing"
+        assert ScheduledCall.updated_at in claim  # updated_at stamped on the claim
+
 
 class TestDrainOutboundCapacity:
     """The per-minute safety net that re-dispatches DUE, batch-limited rows a prior claim held
@@ -548,6 +565,36 @@ class TestDrainOutboundCapacity:
         with patch.object(svc, "dispatch_scheduled_call") as disp:
             assert svc.drain_outbound_capacity() == 0
         disp.assert_not_called()
+
+    def test_also_recovers_crashed_processing_rows(self):
+        # Regression: a dispatch that crashed mid hand-off leaves the row 'processing' with no
+        # provider_call_sid, and nothing else re-drives a 'processing' row (drain/reconcile
+        # otherwise only touch 'scheduled'), so it would strand forever holding its batch slot.
+        # The drain's WHERE must ALSO sweep aged crashed-'processing' rows (age-gated so a live
+        # hand-off isn't grabbed), not only rows a limit held back as 'scheduled'.
+        from sqlalchemy.dialects import postgresql
+
+        captured = {}
+        qm = MagicMock()
+
+        def _filter(expr):
+            captured["expr"] = expr
+            return qm
+
+        qm.filter.side_effect = _filter
+        qm.order_by.return_value = qm
+        qm.limit.return_value = qm
+        qm.all.return_value = []
+        db = MagicMock()
+        db.query.return_value = qm
+
+        svc = OutboundCallService(db, org_id=uuid4())
+        assert svc.drain_outbound_capacity() == 0
+
+        sql = str(captured["expr"].compile(dialect=postgresql.dialect()))
+        assert "provider_call_sid IS NULL" in sql  # the crashed-'processing' recovery branch
+        assert "updated_at <" in sql               # age-gated so a live hand-off isn't grabbed
+        assert "batch_id IS NOT NULL" in sql       # the held-at-dispatch branch is retained
 
 
 class TestCompletionRefill:
