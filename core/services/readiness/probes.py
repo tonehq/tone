@@ -178,11 +178,30 @@ async def probe_llm(ctx) -> ProbeResult:
     # false-flags a healthy provider. Overriding the user's own
     # ``max_tokens`` is intentional: probe cost must stay bounded even
     # when the agent's model is configured with a large budget.
-    spec["metadata"] = {
-        **(spec["metadata"] or {}),
-        "max_tokens": 1024,
-        "max_completion_tokens": 1024,
+    # Provider-aware token cap: send EXACTLY ONE cap key per provider family.
+    # Sending BOTH ``max_tokens`` and ``max_completion_tokens`` is rejected by
+    # both Cohere (HTTP 422) and OpenAI (HTTP 400 "Setting 'max_tokens' and
+    # 'max_completion_tokens' at the same time is not supported"). Pipecat's
+    # ``InputParams`` for OpenAI-family services declares BOTH fields — so
+    # ``build_input_params`` doesn't filter either out — but the underlying
+    # SDK/API server insists we pick one. We pick:
+    #   * OpenAI-family (openai, azure, groq, openrouter, deepseek, cerebras,
+    #     fireworks, perplexity, sambanova, nebius, together, xai, grok,
+    #     novita, qwen, inception) → ``max_completion_tokens`` (the newer,
+    #     non-deprecated field; required by reasoning models o1/o3/o4/gpt-5
+    #     and accepted by legacy chat models on modern SDK versions).
+    #   * Everyone else (Anthropic, Google, Bedrock, Cohere, Mistral, Nvidia,
+    #     Sarvam, Ollama) → ``max_tokens`` (their SDKs only declare this).
+    _OPENAI_FAMILY = {
+        "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
+        "fireworks", "perplexity", "sambanova", "nebius", "together",
+        "xai", "grok", "novita", "qwen", "inception",
     }
+    if provider in _OPENAI_FAMILY:
+        token_cap: Dict[str, Any] = {"max_completion_tokens": 1024}
+    else:
+        token_cap = {"max_tokens": 1024}
+    spec["metadata"] = {**(spec["metadata"] or {}), **token_cap}
 
     try:
         service = service_factory.build_llm(spec)
@@ -346,9 +365,17 @@ async def probe_stt(ctx) -> ProbeResult:
     bytes_per_sample = 2  # linear16
     ms_per_chunk = 20
     chunk_bytes = int(target_rate * ms_per_chunk / 1000) * bytes_per_sample
+    # Append 1s of trailing silence so server-side endpointing (Gladia
+    # solaria-1, some Whisper deployments, Sarvam) can naturally detect
+    # end-of-speech and emit a final transcript. Real calls always have
+    # natural post-utterance pauses; the bundled probe WAV is dense speech
+    # right up to the end, and pure-server-side-VAD providers keep waiting
+    # for more audio until we force a shutdown — which is too late.
+    trailing_silence = b"\x00\x00" * target_rate  # 1s of PCM silence
+    padded_audio = audio_bytes + trailing_silence
     audio_chunks = [
-        audio_bytes[i:i + chunk_bytes]
-        for i in range(0, len(audio_bytes), chunk_bytes)
+        padded_audio[i:i + chunk_bytes]
+        for i in range(0, len(padded_audio), chunk_bytes)
     ]
 
     input_frames = [
