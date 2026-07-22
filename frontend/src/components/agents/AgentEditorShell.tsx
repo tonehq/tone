@@ -446,7 +446,17 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const handleSave = useCallback(async () => {
     const valid = await methods.trigger();
     if (!valid) {
-      router.push(`${basePath}/basics`);
+      // Stay on the current tab so the user sees the highlighted invalid
+      // field. Previously this unconditionally routed to `/basics`, hiding
+      // the actual error (e.g. an invalid Voice-tab field would silently
+      // teleport the user to Basics with nothing visibly wrong).
+      const errorFields = Object.keys(methods.formState.errors);
+      showToast.error(
+        'Cannot save',
+        errorFields.length
+          ? `Fix ${errorFields.length === 1 ? 'the highlighted error' : `${errorFields.length} highlighted errors`} and try again.`
+          : 'Fix the highlighted errors and try again.',
+      );
       return;
     }
     // No edits → nothing to write. The create flow always proceeds because

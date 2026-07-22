@@ -54,8 +54,31 @@ def build_input_params(service_class, metadata: dict):
     try:
         return input_params_class(**filtered)
     except Exception:
-        logger.exception(f"Failed to build InputParams for {service_class.__name__}")
-        return input_params_class()
+        # Bulk validation failed — one bad field would otherwise nuke ALL
+        # user settings (e.g. MiniMax rejects language='English' because its
+        # Pydantic enum wants a code like 'en-US' → the whole InputParams
+        # falls back to defaults, losing the user's valid speed/voice/etc.,
+        # which then corrupts the API request and yields no audio).
+        # Retry additively: add fields one at a time, drop only the ones
+        # Pydantic rejects. Preserves every valid setting.
+        result_kwargs: dict = {}
+        for key, value in filtered.items():
+            trial = {**result_kwargs, key: value}
+            try:
+                input_params_class(**trial)
+                result_kwargs = trial
+            except Exception:
+                logger.warning(
+                    "Dropping invalid {}.InputParams field '{}'={!r} — rejected by Pydantic validation",
+                    service_class.__name__,
+                    key,
+                    value,
+                )
+        try:
+            return input_params_class(**result_kwargs)
+        except Exception:
+            logger.exception(f"Failed to build InputParams for {service_class.__name__} even after per-field retry")
+            return input_params_class()
 
 
 def build_llm(spec: dict) -> Optional[Any]:

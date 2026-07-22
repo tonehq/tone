@@ -270,3 +270,51 @@ def with_retry(
         return wrapper
 
     return deco
+
+
+def with_timeout_and_retry(
+    seconds: float,
+    attempts: int = 2,
+    message: Optional[str] = None,
+) -> Callable:
+    """Bound each attempt to ``seconds`` and retry up to ``attempts`` times on timeout.
+
+    Stacking ``@with_retry`` over ``@with_timeout`` does NOT retry on timeouts —
+    ``with_timeout`` catches ``asyncio.TimeoutError`` and returns a FAIL result,
+    so ``with_retry``'s exception handler never sees it. This decorator gives
+    EACH attempt its own fresh ``asyncio.wait_for`` budget and retries
+    specifically on ``asyncio.TimeoutError``, closing that gap for the deep
+    LLM/STT/TTS probes where a single transient network hiccup caused a
+    healthy provider to be reported as a BLOCKER.
+
+    Configuration errors (bad key, 4xx) already surface as ``ProbeResult(ok=
+    False, ...)`` from the probes and are returned as-is by the wrapped ``run``
+    — no exception, no retry, no false hope. Only bona-fide timeouts trigger a
+    second attempt."""
+
+    def deco(fn: Callable) -> Callable:
+        @functools.wraps(fn)
+        async def wrapper(self: BaseCheck, ctx: CheckContext) -> CheckResult:
+            for attempt in range(1, attempts + 1):
+                try:
+                    return await asyncio.wait_for(fn(self, ctx), timeout=seconds)
+                except asyncio.TimeoutError:
+                    if attempt == attempts:
+                        return self._fail(
+                            message
+                            or (
+                                f"Provider did not respond within {seconds:g}s "
+                                f"across {attempts} attempts."
+                            ),
+                            remediation=(
+                                "The provider may be temporarily slow or "
+                                "unreachable. Try again in a moment."
+                            ),
+                        )
+            # unreachable — the loop either returns or falls through the
+            # final-attempt branch above.
+            raise RuntimeError("with_timeout_and_retry: exhausted loop without decision")
+
+        return wrapper
+
+    return deco
