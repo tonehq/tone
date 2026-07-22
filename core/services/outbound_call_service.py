@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
@@ -27,6 +28,7 @@ from core.models.channel import Channel
 from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
+from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
 from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
@@ -172,6 +174,8 @@ def _refill_batch_job(batch_id) -> None:
 # How long a 'scheduled' row may sit with no queue job before reconcile re-enqueues it.
 # Longer than the enqueue round-trip so we never race a batch that's mid-creation.
 _ORPHAN_GRACE = timedelta(minutes=2)
+
+
 
 
 class OutboundCallService(BaseService):
@@ -845,10 +849,29 @@ class OutboundCallService(BaseService):
             logger.exception("[outbound] dispatch dial failed id={}", scheduled_call_id)
             return sc
 
-        sc.provider_call_sid = info.call_id
-        sc.status = "dispatched"
+        # Compare-and-set the status: only advance a row that is still 'processing' to
+        # 'dispatched'. For the WebSocket bridge, initiate_call returns immediately and the
+        # bridge thread's _finalize_scheduled_call may already have written a terminal status
+        # from its own session (e.g. an instant connect failure whose teardown beats this
+        # commit's round-trip). A plain assign+commit would clobber that back to an active
+        # state, stranding the row in 'dispatched' where it holds its batch concurrency slot
+        # forever and is never retried by the drain (which only re-dispatches 'scheduled').
+        advanced = (
+            self.db.query(ScheduledCall)
+            .filter(ScheduledCall.id == sc.id, ScheduledCall.status == "processing")
+            .update(
+                {ScheduledCall.status: "dispatched", ScheduledCall.provider_call_sid: info.call_id},
+                synchronize_session=False,
+            )
+        )
         self.db.commit()
         self.db.refresh(sc)
+        if not advanced:
+            logger.info(
+                "[outbound] dispatch: row already terminal (status={}) before dispatched-mark id={}",
+                sc.status, scheduled_call_id,
+            )
+            return sc
         logger.info("[outbound] dispatched id={} sid={}", scheduled_call_id, info.call_id)
         # Warm the pipeline config cache while it rings so the voice pod cache-hits on answer.
         self._prewarm_pipeline(sc.agent_id, sc.organization_id)
@@ -899,11 +922,53 @@ class OutboundCallService(BaseService):
 
     # ------------------------------------------------------ concurrency limiter
 
-    def get_concurrency_max(self) -> Dict[str, Optional[int]]:
-        """UI payload: ``{max}`` — the env ceiling the selector is capped to and defaults to
-        (``None`` = unset, so the UI shows the field with no upper bound). The actual limit is
-        chosen per batch at schedule time."""
-        return {"max": get_env_outbound_ceiling()}
+    def is_ws_trigger_allowed(self, email: Optional[str]) -> bool:
+        """True when ``email`` is on the GLOBAL ``ws_trigger_allowed_users`` allowlist (managed
+        directly in the DB, case-insensitive). The WebSocket ("test bridge") trigger is an
+        internal test tool, so an empty table means nobody is allowed. Single source of truth for
+        the gate — used by both the UI-capabilities payload and the create-time enforcement."""
+        if not email or not email.strip():
+            return False
+        # Global lookup (the table has no organization_id), so query the raw session rather than
+        # the org-scoped self.query.
+        try:
+            row = (
+                self.db.query(WsTriggerAllowedUser)
+                .filter(func.lower(WsTriggerAllowedUser.email) == email.strip().lower())
+                .first()
+            )
+            return row is not None
+        except SQLAlchemyError:
+            # The allowlist table may not exist yet on an environment where the migration hasn't
+            # run. Fail CLOSED (deny the WS trigger) rather than 500 the capabilities/create call,
+            # and roll back so the aborted transaction doesn't break the rest of the request.
+            self.db.rollback()
+            logger.exception(
+                "[outbound] ws_trigger allowlist check failed — denying (is the migration applied?)"
+            )
+            return False
+
+    def assert_ws_trigger_allowed(self, email: Optional[str], provider: Optional[str]) -> None:
+        """Reject provider='websocket' for a caller not on the allowlist (403). No-op for twilio /
+        non-websocket requests. Enforced server-side because the UI gate (hiding the selector) is
+        advisory only."""
+        if (provider or "").strip().lower() == "websocket" and not self.is_ws_trigger_allowed(email):
+            raise HTTPException(
+                status_code=403,
+                detail="You are not permitted to use the WebSocket trigger.",
+            )
+
+    def get_concurrency_max(self, caller_email: Optional[str] = None) -> Dict[str, Any]:
+        """UI capabilities payload for the New Outbound Call modal:
+        - ``max``: the env ceiling the concurrency selector is capped to and defaults to
+          (``None`` = unset, so the field has no upper bound); the actual limit is chosen per
+          batch at schedule time.
+        - ``ws_trigger_allowed``: whether ``caller_email`` may use the WebSocket trigger (global
+          DB allowlist), so the UI can show the "Trigger via" selector for allowed users only."""
+        return {
+            "max": get_env_outbound_ceiling(),
+            "ws_trigger_allowed": self.is_ws_trigger_allowed(caller_email),
+        }
 
     def drain_outbound_capacity(self) -> int:
         """Safety net (per-minute worker task): retry DUE calls that a per-batch limit held
