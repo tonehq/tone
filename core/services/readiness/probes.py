@@ -91,24 +91,59 @@ _S2S_LLM = frozenset({"openai_realtime", "gemini_live"})
 # ── spec builder — same shape service_factory expects ────────────────────────
 
 
-def _build_spec(leg_spec, provider) -> Optional[Dict[str, Any]]:
-    """Assemble the ``{provider_name, api_key, model_name, metadata, model_meta_data}``
-    dict that ``service_factory.build_*`` consumes. Returns None if the leg is
-    missing the essentials — the calling check will already have caught that
-    at the shallow level, so we just skip the probe."""
-    if not leg_spec or not provider:
+def _build_spec(ctx, service_type: str) -> Optional[Dict[str, Any]]:
+    """Resolve the ``{provider_name, api_key, model_name, metadata, model_meta_data}``
+    spec by delegating to the SAME resolver real calls use
+    (``service_resolver._build_service_specs``).
+
+    Historical bugs (Cartesia ``voice_not_found``, Google ``extra_forbidden
+    max_completion_tokens``, MiniMax language enum validation, ``base_url``
+    ignored on self-hosted deployments) all traced to the probe hand-rolling
+    a simplified copy of the resolver and missing individual transformations
+    one by one. Routing through the resolver instead means every
+    transformation flows automatically: voice-ID resolution, ``language_code``
+    preference, ``Model.base_url`` injection with provider-match guard,
+    model-schema filtering, ``ApiKey`` fallback by service_type, S2S
+    system-prompt injection — and any future transformation the resolver
+    adds for real calls.
+
+    The resolver's output is cached on the readiness ``ctx`` so probing all
+    three service types (LLM/STT/TTS) only builds specs once per readiness
+    run.
+
+    Returns ``None`` if the required inputs (config/org_id/db, or the leg
+    itself) aren't resolvable — the calling shallow checks will already have
+    surfaced that as a specific FAIL, so we just skip the deep probe.
+    """
+    config = getattr(ctx, "config", None)
+    org_id = getattr(ctx, "org_id", None)
+    db = getattr(ctx, "db", None)
+    if config is None or org_id is None or db is None:
         return None
-    key = leg_spec.decrypted_key
-    if not key:
-        return None
-    model_name = leg_spec.model.name if leg_spec.model else (leg_spec.settings or {}).get("model")
-    return {
-        "provider_name": (provider.slug or "").strip().lower(),
-        "api_key": key,
-        "model_name": model_name,
-        "metadata": dict(leg_spec.settings or {}),
-        "model_meta_data": {},
-    }
+
+    cached = getattr(ctx, "_probe_service_specs_cache", None)
+    if cached is None:
+        try:
+            from core.services.pipeline.service_resolver import _build_service_specs
+            llm_spec, stt_spec, tts_spec, _is_s2s = _build_service_specs(
+                db, org_id, config
+            )
+        except Exception:
+            logger.exception(
+                "[readiness] service_resolver._build_service_specs failed — "
+                "probe cannot proceed without a resolved spec"
+            )
+            return None
+        cached = {"llm": llm_spec, "stt": stt_spec, "tts": tts_spec}
+        try:
+            ctx._probe_service_specs_cache = cached  # type: ignore[attr-defined]
+        except AttributeError:
+            # ctx may be a dataclass with slots or immutable — caching is an
+            # optimization, not correctness-critical. Fall through and pay
+            # the resolver cost per probe.
+            pass
+
+    return cached.get(service_type)
 
 
 # ── LLM probe (dispatched by provider family) ────────────────────────────────
@@ -127,7 +162,7 @@ async def probe_llm(ctx) -> ProbeResult:
     """
     from core.services.pipeline import service_factory
 
-    spec = _build_spec(ctx.llm, ctx.llm.provider)
+    spec = _build_spec(ctx, "llm")
     if spec is None:
         return ProbeResult(False, "LLM spec incomplete — check shallow config first.")
 
@@ -243,7 +278,7 @@ async def probe_stt(ctx) -> ProbeResult:
     """
     from core.services.pipeline import service_factory
 
-    spec = _build_spec(ctx.stt, ctx.stt.provider)
+    spec = _build_spec(ctx, "stt")
     if spec is None:
         return ProbeResult(False, "STT spec incomplete — check shallow config first.")
 
@@ -300,15 +335,35 @@ async def probe_stt(ctx) -> ProbeResult:
     # closing the WS in that window drops the response and the probe times
     # out on a HEALTHY provider. The harness's ``_teardown`` will
     # ``task.cancel()`` once we've captured a transcript OR hit the timeout.
+    # Chunk audio into 20ms frames to mirror real-transport delivery.
+    # Streaming STTs (Cartesia ink-whisper, Gladia solaria-1) run inference
+    # on chunks as they arrive; dumping all 5.3s as ONE giant frame confuses
+    # some servers into never emitting a final transcript (probe times out
+    # on a HEALTHY provider). 20ms is the standard telephony/WebRTC frame
+    # size — 640 bytes at 16 kHz mono 16-bit. Deepgram/AssemblyAI/Whisper
+    # already worked with single-shot; chunking keeps them working (same
+    # total audio, same VAD boundaries) while fixing Cartesia/Gladia.
+    bytes_per_sample = 2  # linear16
+    ms_per_chunk = 20
+    chunk_bytes = int(target_rate * ms_per_chunk / 1000) * bytes_per_sample
+    audio_chunks = [
+        audio_bytes[i:i + chunk_bytes]
+        for i in range(0, len(audio_bytes), chunk_bytes)
+    ]
+
     input_frames = [
         # Start the "user turn" — resets TTFB tracking, kicks metrics, and
         # tells segmented STTs to begin buffering. Without this, some
         # services never see a turn boundary and silently discard audio.
         VADUserStartedSpeakingFrame(),
-        InputAudioRawFrame(audio=audio_bytes, sample_rate=target_rate, num_channels=1),
+        *[
+            InputAudioRawFrame(audio=c, sample_rate=target_rate, num_channels=1)
+            for c in audio_chunks
+        ],
         # Stop the turn — triggers ``request_finalize()`` on streaming STTs
-        # (Deepgram: connection.finalize; AssemblyAI: force_endpoint) so the
-        # provider flushes buffered audio and emits its final transcript.
+        # (Deepgram: connection.finalize; AssemblyAI: force_endpoint;
+        # Cartesia: WS "finalize"; Sarvam: socket.flush()) so the provider
+        # flushes buffered audio and emits its final transcript.
         VADUserStoppedSpeakingFrame(),
     ]
     params = PipelineParams(
@@ -334,6 +389,14 @@ async def probe_stt(ctx) -> ProbeResult:
             # Deepgram exits early via ``_connection_ready`` if ready sooner;
             # other providers fall back to a fixed sleep of this length.
             warmup_s=3.0,
+            # Delayed EndFrame for Gladia and any future streaming STT that
+            # only emits a final transcript from ``stop(EndFrame)`` (Gladia's
+            # ``_send_stop_recording`` runs there, not on the VAD frame).
+            # Well-behaved services (Deepgram, Speechmatics, ElevenLabs
+            # Realtime, Soniox, AssemblyAI, Sarvam) finalize on the VAD frame
+            # and complete before the sleep — teardown cancels the pending
+            # EndFrame, so they're unaffected.
+            end_frame_after_s=3.0,
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} STT pipeline harness raised", provider)
@@ -493,28 +556,17 @@ async def probe_tts(ctx) -> ProbeResult:
     """
     from core.services.pipeline import service_factory
 
-    spec = _build_spec(ctx.tts, ctx.tts.provider)
+    spec = _build_spec(ctx, "tts")
     if spec is None:
         return ProbeResult(False, "TTS spec incomplete — check shallow config first.")
 
     provider = spec["provider_name"]
 
-    # Voice resolution — mirror service_resolver:283-287. Agent config stores
-    # the tone-internal ``ModelVoice.id`` (UUID), but every provider SDK
-    # expects its own native voice id (Cartesia UUID, ElevenLabs string,
-    # etc.) — those live on ``ModelVoice.voice_id``. Passing the tone-
-    # internal UUID straight through hits providers as ``voice_not_found``
-    # (Cartesia) or a silent fallback to a default voice. The readiness
-    # context builder already resolved and attached the ``ModelVoice`` row
-    # as ``ctx.voice``; use its ``voice_id`` here to match what real calls
-    # send. When ``ctx.voice`` is None (raw non-UUID string like Gemini's
-    # "Puck", or nothing configured) the existing metadata passes through
-    # untouched and ``build_tts``'s per-provider default kicks in.
-    if ctx.voice is not None and getattr(ctx.voice, "voice_id", None):
-        spec["metadata"] = {
-            **(spec["metadata"] or {}),
-            "voice_id": ctx.voice.voice_id,
-        }
+    # Voice-ID resolution is now handled centrally by
+    # ``service_resolver._build_service_specs`` (see resolver line 283-287).
+    # The old manual ``ctx.voice.voice_id`` injection here was made
+    # redundant by the resolver refactor — removing it prevents double-
+    # writes / drift between probe and real-call spec shapes.
 
     try:
         service = service_factory.build_tts(spec)
@@ -532,7 +584,7 @@ async def probe_tts(ctx) -> ProbeResult:
     # TTSSpeakFrame(text=first_message_text))``). Using it here means every
     # TTS service that works in production works in the probe — WS lifecycle,
     # StartFrame setup, TaskManager, all provided by ``PipelineTask``.
-    from pipecat.frames.frames import EndFrame, TTSAudioRawFrame, TTSSpeakFrame
+    from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
     from pipecat.pipeline.task import PipelineParams
     from core.services.readiness.probe_pipeline import probe_in_pipeline
 
@@ -544,7 +596,15 @@ async def probe_tts(ctx) -> ProbeResult:
         audio = getattr(frame, "audio", None)
         return bool(audio) and hasattr(frame, "sample_rate")
 
-    input_frames = [TTSSpeakFrame(text=_TTS_PROBE_TEXT), EndFrame()]
+    # NO ``EndFrame`` — same reason as probe_stt: EndFrame triggers
+    # ``service.stop()`` → ``_disconnect()`` which closes the WebSocket.
+    # Streaming TTSs (MiniMax, ElevenLabs, Cartesia, LMNT, Play.ht, …)
+    # stream synthesized audio back ASYNC over that same WS a few hundred
+    # ms after receiving TTSSpeakFrame; closing the WS in that window
+    # drops the audio and the probe times out on a HEALTHY provider. The
+    # harness's ``_teardown`` will ``task.cancel()`` once we've captured
+    # the first audio frame OR hit the timeout.
+    input_frames = [TTSSpeakFrame(text=_TTS_PROBE_TEXT)]
     params = PipelineParams(
         audio_in_sample_rate=16000,
         audio_out_sample_rate=int(
@@ -572,6 +632,17 @@ async def probe_tts(ctx) -> ProbeResult:
             # latency; services with a readiness event exit early via the
             # harness's ``_connection_ready`` fast path.
             warmup_s=2.0,
+            # NO delayed EndFrame for TTS. Unlike STT (where Gladia needs
+            # EndFrame to trigger ``_send_stop_recording``), TTS providers
+            # stream audio naturally as they synthesize — no explicit
+            # "flush" signal exists. Sending EndFrame mid-synthesis triggers
+            # ``service.stop()`` → ``_disconnect()`` which for HTTP-based
+            # streaming TTS (MiniMax via aiohttp, OpenAI, Google, Azure,
+            # Hume) cancels the in-flight response BEFORE first audio bytes
+            # arrive in slower regions. Result: probe times out on a
+            # healthy provider that just needed a few more seconds of
+            # streaming. Natural teardown (``task.cancel()`` on capture or
+            # timeout) handles cleanup correctly for both WS and HTTP TTS.
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("[readiness] {} TTS pipeline harness raised", provider)
