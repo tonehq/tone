@@ -43,6 +43,7 @@ async def probe_in_pipeline(
     provider: str,
     warmup_s: float = 0.3,
     end_frame_after_s: Optional[float] = None,
+    timings: Optional[dict] = None,
 ) -> Tuple[bool, Optional[object], Optional[str]]:
     """Run ``service`` inside a minimal pipecat pipeline, feed ``input_frames``,
     and wait for a downstream frame satisfying ``is_target``.
@@ -192,6 +193,11 @@ async def probe_in_pipeline(
             await asyncio.sleep(0.2)
         for f in input_frames:
             await task.queue_frame(f)
+        # Benchmark timing seam: mark the instant every input frame is in the
+        # pipeline. Paired with ``target_at`` below this yields a TTFB that
+        # excludes harness warmup/teardown. ``None`` for readiness callers.
+        if timings is not None:
+            timings["sent_at"] = time.monotonic()
         # Delayed EndFrame — some services (Gladia STT) only send their
         # server-side flush signal from ``stop(EndFrame)`` rather than from
         # ``VADUserStoppedSpeakingFrame``; without an EndFrame the probe
@@ -249,6 +255,8 @@ async def probe_in_pipeline(
                 break
             if is_target(frame):
                 target_frame = frame
+                if timings is not None:
+                    timings["target_at"] = time.monotonic()
                 break
     finally:
         # ``_teardown`` returns the runner's stored exception (if any) so we
