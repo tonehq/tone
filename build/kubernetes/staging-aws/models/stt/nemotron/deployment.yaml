@@ -19,8 +19,8 @@ spec:
         app: staging-stt-nemotron
       annotations:
         prometheus.io/scrape: "true"
-        prometheus.io/port: "8002"
-        prometheus.io/path: /metrics
+        prometheus.io/port: "9000"
+        prometheus.io/path: /v1/metrics
     spec:
       nodeSelector:
         gpu: speech
@@ -52,8 +52,6 @@ spec:
               containerPort: 9000
             - name: grpc
               containerPort: 50051
-            - name: metrics
-              containerPort: 8002
           resources:
             limits:
               nvidia.com/gpu: 1
