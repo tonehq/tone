@@ -77,6 +77,19 @@ data:
         drop_counter_reason = "readiness_check"
       }
 
+      // ──── Extract trace_id uniformly across app and model pods ────
+      stage.regex {
+        expression = "trace_id=(?P<trace_id>[^\\s|]+)"
+      }
+      stage.regex {
+        expression = "chatcmpl-(?P<trace_id>[A-Za-z0-9-]+)"
+      }
+      stage.structured_metadata {
+        values = {
+          trace_id = "",
+        }
+      }
+
       forward_to = [loki.write.grafana_cloud.receiver]
     }
 

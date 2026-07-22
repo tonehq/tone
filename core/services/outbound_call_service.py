@@ -20,6 +20,7 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import and_, func, or_
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
@@ -27,8 +28,10 @@ from core.models.channel import Channel
 from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
+from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
+from core.services.call_engines.websocket_engine import NoOutboundCapacity
 from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
 from core.services.transport.telephony_credentials import get_twilio_credentials
 from shared.config import settings
@@ -173,6 +176,16 @@ def _refill_batch_job(batch_id) -> None:
 # Longer than the enqueue round-trip so we never race a batch that's mid-creation.
 _ORPHAN_GRACE = timedelta(minutes=2)
 
+# A row stuck in 'processing' with no provider_call_sid is only re-claimed (crash recovery) once
+# it has sat that way longer than this. Guards against a DOUBLE-DIAL: while a dispatch is mid
+# hand-off (for WebSocket, an HTTP POST to another pod — a wide window), the row is
+# 'processing'+sid=NULL; without this age gate a concurrent dispatcher (the Procrastinate job AND
+# the periodic drain) would re-claim it and start a SECOND bridge. Must exceed the hand-off /
+# provider-call round-trip (WS hand-off httpx timeout is 10s).
+_PROCESSING_RECLAIM_GRACE = timedelta(seconds=90)
+
+
+
 
 class OutboundCallService(BaseService):
     def __init__(self, db: Session, user_id=None, org_id=None):
@@ -296,10 +309,39 @@ class OutboundCallService(BaseService):
         # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
         return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
 
-    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None):
+    _SUPPORTED_PROVIDERS = ("twilio", "websocket")
+
+    def _validate_provider(self, provider: Optional[str]) -> str:
+        """Normalize + validate the trigger provider. ``websocket`` additionally requires
+        the remote /ws/test target to be configured, checked here so the user gets an
+        immediate 400 instead of a silent worker failure at dispatch time."""
+        provider = (provider or "twilio").strip().lower()
+        if provider not in self._SUPPORTED_PROVIDERS:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Unknown trigger provider '{provider}'. Supported: {', '.join(self._SUPPORTED_PROVIDERS)}.",
+            )
+        if provider == "websocket" and not (settings.WS_CALL_TARGET_URL or "").strip():
+            # Fail fast at create time (not silently at dispatch) if the remote /ws/test host
+            # is unset. The remote agent is resolved by the dialed to_number on that side, so
+            # only the target host is required here (WS_CALL_TARGET_AGENT_ID is an optional
+            # fallback used by the engine when a call carries no number).
+            raise HTTPException(
+                status_code=400,
+                detail="WebSocket trigger is not configured (WS_CALL_TARGET_URL is unset).",
+            )
+        return provider
+
+    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = "twilio"):
         """Validate the agent and resolve the from-number once (shared across a bulk
         batch). ``from_number`` may be None/blank — it is then auto-selected via
-        ``select_from_number``. Returns (agent, channel_id, from_number)."""
+        ``select_from_number``. Returns (agent, channel_id, from_number).
+
+        The ``websocket`` trigger places no PSTN call (it bridges to a remote /ws/test and
+        routes by ``to_number``), so it requires NO Twilio number/channel/credentials: only the
+        agent is validated, there is no channel, and any explicit ``from_number`` is passed
+        through solely as a display label. This keeps the telephony-free /ws/test bridge usable
+        in dev/staging orgs that have no Twilio set up."""
         org_id = self.org_id
 
         agent = self.query(Agent).filter(Agent.id == agent_id).first()
@@ -312,6 +354,11 @@ class OutboundCallService(BaseService):
             )
         if getattr(agent, "is_active", True) is False:
             raise HTTPException(status_code=400, detail="Agent is inactive.")
+
+        # WebSocket bridge: no telephony, so skip the Twilio from-number/channel/credentials gate.
+        # There is no channel; keep any explicit from_number purely as a label (the engine ignores it).
+        if provider == "websocket":
+            return agent, None, (from_number or "").strip()
 
         # Explicit number wins; otherwise auto-select (single → that one; many → rotate).
         from_number = self.select_from_number(agent, explicit=from_number)
@@ -348,15 +395,18 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         directory_id=None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Place one or many outbound calls. A single immediate number dials right away;
         multiple numbers (or a scheduled time) are queued as ``scheduled_calls`` rows that
         the worker dials at ``scheduled_at`` (or now), and they show up on the Scheduled
-        Calls page."""
+        Calls page. ``provider`` selects the trigger engine (``twilio`` = real PSTN;
+        ``websocket`` = bridge to a remote /ws/test)."""
         if not to_numbers:
             raise HTTPException(status_code=400, detail="Provide at least one destination number.")
 
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         # Per-number validation: collect invalid ones instead of failing the whole batch.
         valid: List[str] = []
@@ -384,9 +434,16 @@ class OutboundCallService(BaseService):
             if scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
                 raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
 
+        # WebSocket provider (immediate): max_concurrency is the NUMBER OF PARALLEL bridge
+        # calls to fire at once — a load/parallel test — not a dial-rate limit. Each bridge
+        # opens its own WS to the remote /ws/test, so they run concurrently. Deliberately
+        # bypasses the dedupe/contacts path (we want N calls to the SAME target).
+        if provider == "websocket" and scheduled_at is None:
+            return self._dial_parallel_ws(agent, from_number, valid, max_concurrency, invalid)
+
         # Single immediate call: dial inline for instant feedback (surfaces in Call History).
         if len(valid) == 1 and scheduled_at is None:
-            return self._dial_now(agent, from_number, valid[0], invalid)
+            return self._dial_now(agent, from_number, valid[0], invalid, provider=provider)
 
         # Bulk and/or scheduled: route through the shared create+assign+schedule path so
         # every scheduled number becomes an agent-assigned contact (single implementation —
@@ -394,7 +451,7 @@ class OutboundCallService(BaseService):
         rows = [{"phone_number": num} for num in valid]
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-            directory_id=directory_id, max_concurrency=max_concurrency,
+            directory_id=directory_id, max_concurrency=max_concurrency, provider=provider,
         )
 
     def create_outbound_calls_from_rows(
@@ -408,6 +465,7 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         invalid: Optional[List[Dict[str, str]]] = None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Create contacts from parsed ``rows`` (e.g. an uploaded CSV/Excel), assign them to
         the agent, and schedule outbound calls — the file-upload counterpart of
@@ -416,19 +474,20 @@ class OutboundCallService(BaseService):
         path (``_schedule_via_contacts``)."""
         if not rows:
             raise HTTPException(status_code=400, detail="No contacts were found in the file.")
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
         if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
             raise HTTPException(status_code=400, detail="scheduled_at must be in the future.")
         return self._schedule_via_contacts(
             agent, from_number, rows, invalid or [], scheduled_at, created_by_user_id,
-            directory_id=directory_id, max_concurrency=max_concurrency,
+            directory_id=directory_id, max_concurrency=max_concurrency, provider=provider,
         )
 
     def _schedule_via_contacts(
         self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-        directory_id=None, max_concurrency=None,
+        directory_id=None, max_concurrency=None, provider="twilio",
     ) -> Dict[str, Any]:
         """Create each ``rows`` entry as a contact in ``directory_id`` (default the org's
         "Global" directory) AND assign it to ``agent`` (reusing
@@ -462,19 +521,22 @@ class OutboundCallService(BaseService):
         # Pass the already-resolved from_number explicitly so it isn't re-rotated.
         result = self.schedule_calls_for_contacts(
             agent.id, from_number, contact_ids, scheduled_at, created_by_user_id,
-            max_concurrency=max_concurrency,
+            max_concurrency=max_concurrency, provider=provider,
         )
         result["mode"] = "scheduled" if scheduled_at is not None else "bulk"
         result["invalid"] = (result.get("invalid") or []) + invalid
         result["assigned"] = create_result.get("assigned", len(contact_ids))
         return result
 
-    def _dial_now(self, agent, from_number, to_number, invalid) -> Dict[str, Any]:
+    def _dial_now(self, agent, from_number, to_number, invalid, provider="twilio") -> Dict[str, Any]:
         # No calls row is created here — the call log is written by the pipeline
         # (create_call_log) when the media stream connects.
-        logger.info("[outbound] placing immediate call agent={} from={} to={}", agent.id, from_number, to_number)
+        logger.info(
+            "[outbound] placing immediate call agent={} from={} to={} provider={}",
+            agent.id, from_number, to_number, provider,
+        )
         base = self._public_base()
-        engine = get_call_engine("twilio", org_id=self.org_id)
+        engine = get_call_engine(provider, org_id=self.org_id)
         try:
             info = engine.initiate_call(
                 to_number=to_number,
@@ -496,7 +558,78 @@ class OutboundCallService(BaseService):
             "agent_id": str(agent.id),
             "from_number": from_number,
             "to_number": to_number,
+            "provider": provider,
             "provider_call_id": info.call_id,
+            "invalid": invalid,
+        }
+
+    # Hard ceiling on parallel WS bridges from one request, so a large max_concurrency can't
+    # spawn unbounded threads. Each bridge is a live media session (a thread) — keep it sane.
+    _MAX_PARALLEL_WS = 25
+
+    def _dial_parallel_ws(
+        self, agent, from_number, valid: List[str], max_concurrency, invalid
+    ) -> Dict[str, Any]:
+        """Fan out N parallel WebSocket bridge calls (N = ``max_concurrency`` from the modal;
+        default one per destination, cycling ``valid`` so 1 target + N → N calls to it).
+
+        The media must run on the dedicated outbound voice pods, never in THIS originating process
+        (that OOMs under load). So instead of spawning bridge threads here, this queues N
+        ``scheduled_calls`` rows due NOW, sharing a ``batch_id``: the normal dispatch path hands
+        each off to an outbound pod (``WebSocketCallEngine.initiate_call``), the per-pod
+        ``MAX_CONCURRENT_CALLS`` throttles real concurrency, and overflow that a pod refuses (429)
+        is held + retried by the drain/refill as pods free. Fires near-instantly (jobs are due now)."""
+        try:
+            count = int(max_concurrency) if max_concurrency else 0
+        except (TypeError, ValueError):
+            count = 0
+        # No explicit count → one bridge per destination; else exactly `count` bridges.
+        count = count if count > 0 else len(valid)
+        if count > self._MAX_PARALLEL_WS:
+            logger.warning(
+                "[outbound][ws] requested {} parallel bridges; capping to {}",
+                count, self._MAX_PARALLEL_WS,
+            )
+            count = self._MAX_PARALLEL_WS
+
+        # One batch id groups the fan-out; max_concurrency = count makes dispatch admit all N (the
+        # per-pod cap is the real throttle) AND enables the completion-refill fast path so a held
+        # row dials the instant a pod frees. batch_id also lets drain_outbound_capacity retry holds.
+        batch_id = uuid.uuid4()
+        now = datetime.now(timezone.utc)
+        rows: List[ScheduledCall] = [
+            ScheduledCall(
+                agent_id=agent.id,
+                organization_id=self.org_id,
+                channel_id=None,
+                from_number=from_number,
+                to_number=valid[i % len(valid)],
+                scheduled_at=now,
+                status="scheduled",
+                provider="websocket",
+                created_by_user_id=None,
+                batch_id=batch_id,
+                max_concurrency=count,
+                metadata_={},
+            )
+            for i in range(count)
+        ]
+        self._persist_and_enqueue_rows(rows)
+        logger.info(
+            "[outbound][ws] queued {} parallel bridge(s) for hand-off to outbound pods agent={} batch={}",
+            len(rows), agent.id, batch_id,
+        )
+        return {
+            "mode": "parallel_websocket",
+            "status": "queued",
+            "provider": "websocket",
+            "agent_id": str(agent.id),
+            "from_number": from_number,
+            "requested": count,
+            "queued": len(rows),
+            "placed": 0,
+            "batch_id": str(batch_id),
+            "calls": [],
             "invalid": invalid,
         }
 
@@ -565,6 +698,7 @@ class OutboundCallService(BaseService):
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
         max_concurrency: Optional[int] = None,
+        provider: str = "twilio",
     ) -> Dict[str, Any]:
         """Schedule outbound calls to the given org-owned contacts.
 
@@ -582,7 +716,8 @@ class OutboundCallService(BaseService):
         if not contact_ids:
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
 
-        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number)
+        provider = self._validate_provider(provider)
+        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
@@ -626,6 +761,7 @@ class OutboundCallService(BaseService):
                 to_number=to_number,
                 scheduled_at=self._resolve_contact_when(contact, scheduled_at),
                 status="scheduled",
+                provider=provider,
                 created_by_user_id=created_by_user_id,
                 batch_id=batch_id,
                 max_concurrency=batch_limit,
@@ -678,6 +814,7 @@ class OutboundCallService(BaseService):
         batch_id = sc.batch_id
         batch_limit = sc.max_concurrency
         limited = batch_id is not None and isinstance(batch_limit, int) and batch_limit > 0
+        now = datetime.now(timezone.utc)
         scheduled_cond = ScheduledCall.status == "scheduled"
         if limited:
             batch_active = (
@@ -689,6 +826,10 @@ class OutboundCallService(BaseService):
                 .scalar_subquery()
             )
             scheduled_cond = and_(scheduled_cond, batch_active < batch_limit)
+        # ``updated_at`` is stamped on the claim below so the recovery clause can tell a FRESH
+        # in-flight claim (do not re-grab — its hand-off is still running) from a genuinely
+        # crashed one (safe to recover). A Core ``.update()`` does not fire the ORM ``onupdate``,
+        # so we set it explicitly.
         claimed = (
             self.db.query(ScheduledCall)
             .filter(
@@ -698,10 +839,14 @@ class OutboundCallService(BaseService):
                     and_(
                         ScheduledCall.status == "processing",
                         ScheduledCall.provider_call_sid.is_(None),
+                        ScheduledCall.updated_at < now - _PROCESSING_RECLAIM_GRACE,
                     ),
                 ),
             )
-            .update({ScheduledCall.status: "processing"}, synchronize_session=False)
+            .update(
+                {ScheduledCall.status: "processing", ScheduledCall.updated_at: now},
+                synchronize_session=False,
+            )
         )
         self.db.commit()
         sc = self.db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
@@ -719,7 +864,9 @@ class OutboundCallService(BaseService):
                 logger.info("[outbound] dispatch no-op id={} status={}", scheduled_call_id, sc.status)
             return sc
 
-        base = self._public_base()
+        # The WebSocket bridge places no PSTN call and ignores callback_base_url (it hands off to
+        # an outbound voice pod), so it must NOT require the Twilio BASE_CALL_URL gate.
+        base = "" if sc.provider == "websocket" else self._public_base()
         engine = get_call_engine(sc.provider, org_id=sc.organization_id)
         try:
             info = engine.initiate_call(
@@ -729,6 +876,20 @@ class OutboundCallService(BaseService):
                 callback_base_url=base,
                 scheduled_call_id=str(sc.id),
             )
+        except NoOutboundCapacity as exc:
+            # No outbound voice pod free right now — HOLD the row (revert the claim to 'scheduled')
+            # instead of failing it, so the periodic drain / batch refill retries the hand-off when
+            # a pod frees. This is the backpressure seam for the WS load-test path.
+            self.db.query(ScheduledCall).filter(
+                ScheduledCall.id == sc.id, ScheduledCall.status == "processing"
+            ).update({ScheduledCall.status: "scheduled"}, synchronize_session=False)
+            self.db.commit()
+            self.db.refresh(sc)
+            logger.info(
+                "[outbound] dispatch held id={} — no outbound capacity ({})",
+                scheduled_call_id, exc,
+            )
+            return sc
         except Exception as exc:  # noqa: BLE001
             sc.status = "failed"
             sc.error = str(exc)[:500]
@@ -736,10 +897,29 @@ class OutboundCallService(BaseService):
             logger.exception("[outbound] dispatch dial failed id={}", scheduled_call_id)
             return sc
 
-        sc.provider_call_sid = info.call_id
-        sc.status = "dispatched"
+        # Compare-and-set the status: only advance a row that is still 'processing' to
+        # 'dispatched'. For the WebSocket bridge, initiate_call returns immediately and the
+        # bridge thread's _finalize_scheduled_call may already have written a terminal status
+        # from its own session (e.g. an instant connect failure whose teardown beats this
+        # commit's round-trip). A plain assign+commit would clobber that back to an active
+        # state, stranding the row in 'dispatched' where it holds its batch concurrency slot
+        # forever and is never retried by the drain (which only re-dispatches 'scheduled').
+        advanced = (
+            self.db.query(ScheduledCall)
+            .filter(ScheduledCall.id == sc.id, ScheduledCall.status == "processing")
+            .update(
+                {ScheduledCall.status: "dispatched", ScheduledCall.provider_call_sid: info.call_id},
+                synchronize_session=False,
+            )
+        )
         self.db.commit()
         self.db.refresh(sc)
+        if not advanced:
+            logger.info(
+                "[outbound] dispatch: row already terminal (status={}) before dispatched-mark id={}",
+                sc.status, scheduled_call_id,
+            )
+            return sc
         logger.info("[outbound] dispatched id={} sid={}", scheduled_call_id, info.call_id)
         # Warm the pipeline config cache while it rings so the voice pod cache-hits on answer.
         self._prewarm_pipeline(sc.agent_id, sc.organization_id)
@@ -790,25 +970,91 @@ class OutboundCallService(BaseService):
 
     # ------------------------------------------------------ concurrency limiter
 
-    def get_concurrency_max(self) -> Dict[str, Optional[int]]:
-        """UI payload: ``{max}`` — the env ceiling the selector is capped to and defaults to
-        (``None`` = unset, so the UI shows the field with no upper bound). The actual limit is
-        chosen per batch at schedule time."""
-        return {"max": get_env_outbound_ceiling()}
+    def is_ws_trigger_allowed(self, email: Optional[str]) -> bool:
+        """True when ``email`` is on the GLOBAL ``ws_trigger_allowed_users`` allowlist (managed
+        directly in the DB, case-insensitive). The WebSocket ("test bridge") trigger is an
+        internal test tool, so an empty table means nobody is allowed. Single source of truth for
+        the gate — used by both the UI-capabilities payload and the create-time enforcement."""
+        if not email or not email.strip():
+            return False
+        # Global lookup (the table has no organization_id), so query the raw session rather than
+        # the org-scoped self.query.
+        try:
+            row = (
+                self.db.query(WsTriggerAllowedUser)
+                .filter(func.lower(WsTriggerAllowedUser.email) == email.strip().lower())
+                .first()
+            )
+            return row is not None
+        except SQLAlchemyError:
+            # The allowlist table may not exist yet on an environment where the migration hasn't
+            # run. Fail CLOSED (deny the WS trigger) rather than 500 the capabilities/create call,
+            # and roll back so the aborted transaction doesn't break the rest of the request.
+            self.db.rollback()
+            logger.exception(
+                "[outbound] ws_trigger allowlist check failed — denying (is the migration applied?)"
+            )
+            return False
+
+    def assert_ws_trigger_allowed(self, email: Optional[str], provider: Optional[str]) -> None:
+        """Reject provider='websocket' for a caller not on the allowlist (403). No-op for twilio /
+        non-websocket requests. Enforced server-side because the UI gate (hiding the selector) is
+        advisory only."""
+        if (provider or "").strip().lower() == "websocket" and not self.is_ws_trigger_allowed(email):
+            raise HTTPException(
+                status_code=403,
+                detail="You are not permitted to use the WebSocket trigger.",
+            )
+
+    def get_concurrency_max(self, caller_email: Optional[str] = None) -> Dict[str, Any]:
+        """UI capabilities payload for the New Outbound Call modal:
+        - ``max``: the env ceiling the concurrency selector is capped to and defaults to
+          (``None`` = unset, so the field has no upper bound); the actual limit is chosen per
+          batch at schedule time.
+        - ``ws_trigger_allowed``: whether ``caller_email`` may use the WebSocket trigger (global
+          DB allowlist), so the UI can show the "Trigger via" selector for allowed users only."""
+        return {
+            "max": get_env_outbound_ceiling(),
+            "ws_trigger_allowed": self.is_ws_trigger_allowed(caller_email),
+        }
 
     def drain_outbound_capacity(self) -> int:
-        """Safety net (per-minute worker task): retry DUE calls that a per-batch limit held
-        back at dispatch. Only batch-limited rows can be held, so we target those; each
-        ``dispatch_scheduled_call`` re-applies the atomic per-batch check, so this can't
-        overshoot a batch's limit. Dispatches INLINE (never re-defers from inside the worker).
-        Bounded per tick. Returns the number dispatched."""
+        """Safety net (per-minute worker task): re-drive calls that would otherwise stall. Covers
+        two cases, both dispatched INLINE (never re-deferred from inside the worker), bounded per
+        tick. Each ``dispatch_scheduled_call`` re-applies the atomic per-batch + capacity check, so
+        this can't overshoot. Returns the number dispatched.
+
+        (a) DUE rows a prior claim HELD at dispatch — by a per-batch limit, or (WebSocket) by no
+            outbound voice pod being free. Both leave the row 'scheduled' after its Procrastinate
+            job already fired, so nothing else re-dials them.
+        (b) CRASHED rows stranded in 'processing' with no ``provider_call_sid`` — a dispatch claimed
+            the row then died mid hand-off before persisting a SID. Nothing else re-drives a
+            'processing' row (the drain and reconcile otherwise only touch 'scheduled'), so without
+            this they'd hold their batch slot forever, relying solely on a well-timed Procrastinate
+            redelivery. We recover them here once older than ``_PROCESSING_RECLAIM_GRACE`` — the same
+            age gate dispatch's recovery clause applies, so a hand-off still in flight is never grabbed."""
         now = datetime.now(timezone.utc)
         rows = (
             self.db.query(ScheduledCall)
             .filter(
-                ScheduledCall.status == "scheduled",
-                ScheduledCall.scheduled_at <= now,
-                ScheduledCall.batch_id.isnot(None),
+                or_(
+                    # (a) Held-at-dispatch: batch-limited rows OR WS rows (pod-capacity-held without
+                    # a batch limit).
+                    and_(
+                        ScheduledCall.status == "scheduled",
+                        ScheduledCall.scheduled_at <= now,
+                        or_(
+                            ScheduledCall.batch_id.isnot(None),
+                            ScheduledCall.provider == "websocket",
+                        ),
+                    ),
+                    # (b) Crashed-'processing' recovery, age-gated so a live hand-off isn't grabbed.
+                    and_(
+                        ScheduledCall.status == "processing",
+                        ScheduledCall.provider_call_sid.is_(None),
+                        ScheduledCall.updated_at < now - _PROCESSING_RECLAIM_GRACE,
+                    ),
+                )
             )
             .order_by(ScheduledCall.scheduled_at.asc())
             .limit(_DRAIN_MAX)

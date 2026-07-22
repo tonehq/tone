@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -32,6 +32,9 @@ class CreateOutboundCallRequest(BaseModel):
     directory_id: Optional[UUID] = None
     # How many of this batch's calls run at once (UI selector). None/omitted → the env default.
     max_concurrency: Optional[int] = None
+    # Trigger engine: "twilio" places a real PSTN call; "websocket" bridges the call over a
+    # WebSocket to a remote /ws/test (agent-to-agent, no telephony). Defaults to twilio.
+    provider: Literal["twilio", "websocket"] = "twilio"
 
     def resolved_numbers(self) -> List[str]:
         nums = list(self.to_numbers or [])
@@ -84,6 +87,7 @@ def create_outbound_call(
     Immediate calls surface in Call History as a log; scheduled calls appear in
     the Scheduled Calls list."""
     service = _get_service(claims, db)
+    service.assert_ws_trigger_allowed(claims.email, body.provider)
     return service.create_outbound_call(
         agent_id=body.agent_id,
         from_number=body.from_number,
@@ -92,6 +96,7 @@ def create_outbound_call(
         created_by_user_id=service.user_id,
         directory_id=body.directory_id,
         max_concurrency=body.max_concurrency,
+        provider=body.provider,
     )
 
 
@@ -104,6 +109,7 @@ def create_outbound_call_from_file(
     schema_id: Optional[UUID] = Form(None),
     schedule_column: Optional[str] = Form(None),
     max_concurrency: Optional[int] = Form(None),
+    provider: str = Form("twilio"),
     file: UploadFile = File(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
@@ -128,6 +134,7 @@ def create_outbound_call_from_file(
     from core.services.contact_ingestion.validation import build_contact_validator
     from core.services.contacts.contact_schema_service import ContactSchemaService
 
+    _get_service(claims, db).assert_ws_trigger_allowed(claims.email, provider)
     raw = file.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
@@ -190,6 +197,7 @@ def create_outbound_call_from_file(
         scheduled_at=scheduled_at,
         created_by_user_id=service.user_id,
         max_concurrency=max_concurrency,
+        provider=provider,
     )
 
 
@@ -198,9 +206,11 @@ def get_outbound_concurrency_max(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """``{max}`` — the env ceiling (``MAX_CONCURRENT_OUTBOUND_CALLS``) the UI caps the per-batch
-    'Concurrent calls' selector to and defaults it to. ``null`` = unset (no upper bound)."""
-    return _get_service(claims, db).get_concurrency_max()
+    """Capabilities for the New Outbound Call modal: ``max`` — the env ceiling
+    (``MAX_CONCURRENT_OUTBOUND_CALLS``) the per-batch 'Concurrent calls' selector is capped to and
+    defaults to (``null`` = unset); ``ws_trigger_allowed`` — whether THIS user may use the
+    WebSocket trigger (env allowlist), so the UI shows the 'Trigger via' selector accordingly."""
+    return _get_service(claims, db).get_concurrency_max(caller_email=claims.email)
 
 
 @router.post("/scheduled/list")

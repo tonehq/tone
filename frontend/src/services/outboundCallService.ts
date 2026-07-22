@@ -32,6 +32,8 @@ export const createOutboundCallFromFile = async (
 export interface OutboundConcurrencyMax {
   /** Env ceiling the per-batch selector is capped to and defaults to; null = no upper bound. */
   max: number | null;
+  /** Whether this user may use the WebSocket trigger (env allowlist) — gates the "Trigger via" field. */
+  ws_trigger_allowed?: boolean;
 }
 
 export const getOutboundConcurrencyMax = async (): Promise<OutboundConcurrencyMax> => {

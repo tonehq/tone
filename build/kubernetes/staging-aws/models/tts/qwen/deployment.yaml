@@ -40,6 +40,7 @@ spec:
             - --trust-remote-code
             - --gpu-memory-utilization
             - "0.35"
+            - --enable-log-requests
             - --host
             - 0.0.0.0
             - --port
@@ -88,19 +89,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 2Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: staging-tts-qwen-service
-  namespace: staging
-  labels:
-    app: staging-tts-qwen
-spec:
-  selector:
-    app: staging-tts-qwen
-  ports:
-    - port: 80
-      targetPort: 8000
-      protocol: TCP
-  type: ClusterIP

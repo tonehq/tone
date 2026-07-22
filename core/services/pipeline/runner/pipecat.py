@@ -411,7 +411,17 @@ class PipecatPipelineRunner(PipelineRunner):
                             error=str(e),
                         )
 
+        # Idempotency guard: a single call must start the session ONCE. Some transports fire more
+        # than one connect event (the outbound WebSocket client transport raises on_connected from
+        # BOTH its input and output halves), which would otherwise greet twice and start recording
+        # twice.
+        session_started = {"done": False}
+
         async def _start_session():
+            if session_started["done"]:
+                logger.debug("Client connected again — session already started, ignoring.")
+                return
+            session_started["done"] = True
             if audio_buffer:
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
@@ -480,6 +490,21 @@ class PipecatPipelineRunner(PipelineRunner):
             @transport.event_handler("on_participant_disconnected")
             async def on_participant_disconnected(transport, participant_id):
                 await _end_session(participant_id)
+
+        # Outbound WebSocket bridge (WebSocketCallEngine → remote /ws/test): the dial-out
+        # client transport fires on_connected/on_disconnected (NOT on_client_connected), so
+        # the greeting/first_message would never fire and the agent would sit silent until the
+        # remote's own fallback speaks. Wire the client-transport events to the same session
+        # start/end so the OUTBOUND agent greets on connect, like a real placed call.
+        if type(transport).__name__ == "WebsocketClientTransport":
+
+            @transport.event_handler("on_connected")
+            async def on_ws_client_connected(transport, websocket):
+                await _start_session()
+
+            @transport.event_handler("on_disconnected")
+            async def on_ws_client_disconnected(transport, websocket):
+                await _end_session(None)
 
         logger.info("[TIMING] runner setup complete, total: {:.3f}s — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))

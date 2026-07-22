@@ -19,7 +19,11 @@ import { listAgents } from '@/services/agentsService';
 import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
 import { getOrganizationSettings } from '@/services/organizationService';
 import { getOutboundConcurrencyMax } from '@/services/outboundCallService';
-import type { CreateOutboundCallPayload, CreateOutboundCallResponse } from '@/types/outboundCall';
+import type {
+  CreateOutboundCallPayload,
+  CreateOutboundCallResponse,
+  OutboundTriggerProvider,
+} from '@/types/outboundCall';
 import { getBrowserTimeZone, getTimeZoneAbbreviation } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -40,7 +44,15 @@ interface OutboundCallForm {
   to_numbers_text: string;
   schedule: boolean;
   scheduled_at: string;
+  provider: OutboundTriggerProvider;
 }
+
+// How the call is triggered. Twilio places a real PSTN call; WebSocket bridges the
+// call over a WebSocket to a remote /ws/test (agent-to-agent, no telephony).
+const TRIGGER_PROVIDER_OPTIONS: { value: OutboundTriggerProvider; label: string }[] = [
+  { value: 'twilio', label: 'Twilio (phone call)' },
+  { value: 'websocket', label: 'WebSocket (test bridge)' },
+];
 
 interface NewOutboundCallModalProps {
   open: boolean;
@@ -97,6 +109,7 @@ export default function NewOutboundCallModal({
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
+      provider: 'twilio',
     },
   });
 
@@ -142,6 +155,9 @@ export default function NewOutboundCallModal({
   // is the user's choice, sent with the request (empty → the backend applies the env default).
   const [concurrencyMax, setConcurrencyMax] = useState<number | null>(null);
   const [concurrencyValue, setConcurrencyValue] = useState<number | null>(null);
+  // Whether this user may use the WebSocket trigger (backend env allowlist). Default false so the
+  // "Trigger via" selector stays hidden until the capabilities call confirms access.
+  const [wsTriggerAllowed, setWsTriggerAllowed] = useState<boolean>(false);
 
   const { data: schemaDetail } = useSchema(schemaId || null);
 
@@ -169,6 +185,7 @@ export default function NewOutboundCallModal({
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
+      provider: 'twilio',
     });
     setInvalidNumbers([]);
     setScheduledTz('');
@@ -245,9 +262,12 @@ export default function NewOutboundCallModal({
         if (!active) return;
         setConcurrencyMax(c.max);
         setConcurrencyValue(c.max); // default the batch to the env max (user can lower it)
+        setWsTriggerAllowed(!!c.ws_trigger_allowed);
       })
       .catch(() => {
-        if (active) setConcurrencyMax(null);
+        if (!active) return;
+        setConcurrencyMax(null);
+        setWsTriggerAllowed(false);
       });
     return () => {
       active = false;
@@ -292,6 +312,7 @@ export default function NewOutboundCallModal({
           if (schemaId) fd.append('schema_id', schemaId);
           if (scheduleColumn.trim()) fd.append('schedule_column', scheduleColumn.trim());
           if (maxConcurrency) fd.append('max_concurrency', String(maxConcurrency));
+          fd.append('provider', values.provider);
           fd.append('file', csvFile);
           res = await createCallFromFile(fd);
         } else {
@@ -302,6 +323,7 @@ export default function NewOutboundCallModal({
             scheduled_at: scheduledAt,
             directory_id: pickedDirectoryId || undefined,
             max_concurrency: maxConcurrency ?? undefined,
+            provider: values.provider,
           };
           res = await createCall(payload);
         }
@@ -313,7 +335,8 @@ export default function NewOutboundCallModal({
           );
         }
         onClose();
-        if (res?.mode === 'immediate') {
+        // parallel_websocket (immediate WS test-bridge fan-out) dials right away, same as immediate.
+        if (res?.mode === 'immediate' || res?.mode === 'parallel_websocket') {
           showToast.success('Calling now', 'The call will appear in Call History.');
           router.push('/call-history');
         } else {
@@ -417,6 +440,16 @@ export default function NewOutboundCallModal({
           loading={optionsLoading}
           options={fromSelectOptions}
         />
+        {/* Trigger selector shown only to allowlisted users (WS is an internal test tool);
+            everyone else stays on the default Twilio provider with no selector. */}
+        {wsTriggerAllowed && (
+          <SelectInput
+            name="provider"
+            control={control}
+            label="Trigger via"
+            options={TRIGGER_PROVIDER_OPTIONS}
+          />
+        )}
 
         {/* Per-batch concurrency — capped to the env max when one is configured. */}
         <TextInput

@@ -1,12 +1,13 @@
 import sys
 import os
+from uuid import uuid4
 
 from core.logging import setup_logging
 setup_logging()
 
 from loguru import logger
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from pipecat.runner.types import WebSocketRunnerArguments
@@ -33,7 +34,7 @@ from core.api.v1 import webrtc
 if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
-        agents, agent_readiness, mcp_servers, services, tools, dashboard,
+        agents, agent_readiness, benchmarks, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
@@ -137,6 +138,7 @@ if ee_enabled:
         api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
         api_v1.include_router(ee_agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
+        api_v1.include_router(benchmarks.router, prefix="/agent", tags=["benchmarks"])
         api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
@@ -174,6 +176,7 @@ else:
         api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
         api_v1.include_router(agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
+        api_v1.include_router(benchmarks.router, prefix="/agent", tags=["benchmarks"])
         api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(services.router, prefix="/services", tags=["services"])
@@ -315,6 +318,134 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         except Exception:
             logger.debug("[inbound] /ws close failed")
         logger.info("[inbound] /ws connection closed")
+
+
+@app.websocket("/ws/test")
+async def ws_test_endpoint(websocket: WebSocket) -> None:
+    """Telephony-free WebSocket test endpoint — raw PCM in/out, no Twilio.
+
+    Lets a client (``test-cases/pipeline/ws_test_client.py``) drive an agent's pipeline
+    directly for testing: connect with ``?agent_id=<uuid>`` or ``?phone_number=<E.164>``,
+    stream raw 16-bit PCM, and receive the bot's raw-PCM audio back. It rides the same
+    ``bot()`` → ``TelephonyTransport`` path as a real call via the ``"test"`` provider
+    (``core/services/transport/test_provider.py``), so the pipeline is identical.
+
+    Gated behind ``ENABLE_WS_TEST_ENDPOINT`` (off in prod): it runs a real, paid
+    LLM/STT/TTS pipeline and carries no auth, so it must not be reachable in production.
+    """
+    if not settings.ENABLE_WS_TEST_ENDPOINT:
+        logger.warning("[ws-test] /ws/test rejected — ENABLE_WS_TEST_ENDPOINT is off")
+        await websocket.close(code=1008)
+        return
+
+    agent_id = (websocket.query_params.get("agent_id") or "").strip()
+    phone_number = (websocket.query_params.get("phone_number") or "").strip()
+    if not agent_id and not phone_number:
+        logger.warning("[ws-test] /ws/test rejected — pass agent_id or phone_number")
+        await websocket.close(code=1008)
+        return
+    try:
+        sample_rate = int(websocket.query_params.get("sample_rate") or 16000)
+    except (TypeError, ValueError):
+        sample_rate = 16000
+
+    await websocket.accept()
+    logger.info(
+        "[ws-test] /ws/test accepted agent_id={} phone_number={} sample_rate={} from={}",
+        agent_id, phone_number, sample_rate, getattr(websocket.client, "host", "?"),
+    )
+
+    # Pre-seed call_data + transport_type so TelephonyTransport.build skips the Twilio
+    # frame parser (there is no <start> frame on a raw-PCM stream) and resolves the
+    # "test" provider directly. agent_id rides in call_data["body"] (promoted by build)
+    # and is also set top-level so get_agent_for_call resolves it without the promotion.
+    call_data = {
+        "from": "",
+        "to": phone_number,
+        "body": {"agent_id": agent_id} if agent_id else {},
+        "stream_id": uuid4().hex,
+        "call_id": uuid4().hex,
+        "sample_rate": sample_rate,
+    }
+    body = {"transport_type": "test", "call_data": call_data}
+    if agent_id:
+        body["agent_id"] = agent_id
+    runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
+
+    try:
+        active_calls_inc()
+    except Exception:
+        logger.debug("[ws-test] active_calls_inc failed (metric only)")
+    try:
+        await bot(runner_args)
+    except Exception:
+        logger.exception("[ws-test] /ws/test bot crashed")
+    finally:
+        try:
+            active_calls_dec()
+        except Exception:
+            logger.debug("[ws-test] active_calls_dec failed (metric only)")
+        try:
+            await websocket.close()
+        except Exception:
+            logger.debug("[ws-test] /ws/test close failed")
+        logger.info("[ws-test] /ws/test connection closed")
+
+
+@app.post("/internal/ws-bridge/start")
+async def ws_bridge_start(request: Request):
+    """Intra-cluster hand-off target: run a WebSocket bridge ON THIS (outbound voice) pod.
+
+    The originator (API/orchestrator pod) picks this pod via ``PodPicker.for_outbound`` and POSTs
+    here over the outbound StatefulSet's headless service — so the media pipeline runs here, not on
+    the originating pod. Returns 429 when the pod is already at ``MAX_CONCURRENT_CALLS`` so the
+    originator queues the row. Cluster-only: not exposed via any ingress; an optional shared
+    ``WS_BRIDGE_INTERNAL_TOKEN`` gates it when configured (same trust model as /ws otherwise)."""
+    from fastapi.responses import JSONResponse
+
+    from core.services.call_engines.ws_bridge_runner import AtCapacity, start_local_bridge
+
+    # Only voice pods run bridges. If this ever lands on an API/originator pod (WORKER_MODE unset),
+    # refuse — running the media here is exactly the OOM this feature exists to prevent.
+    if _WORKER_MODE != "voice":
+        logger.warning("[ws-bridge] refused — not a voice pod (WORKER_MODE={!r})", _WORKER_MODE)
+        return JSONResponse({"detail": "not a voice pod"}, status_code=404)
+
+    token = settings.WS_BRIDGE_INTERNAL_TOKEN
+    if token and request.headers.get("x-ws-bridge-token") != token:
+        logger.warning("[ws-bridge] rejected — bad/missing x-ws-bridge-token")
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        logger.debug("[ws-bridge] rejected — body is not JSON")
+        return JSONResponse({"detail": "invalid JSON body"}, status_code=400)
+
+    agent_id = (body.get("agent_id") or "").strip()
+    if not agent_id:
+        return JSONResponse({"detail": "agent_id is required"}, status_code=400)
+
+    try:
+        call_id = start_local_bridge(
+            agent_id=agent_id,
+            to_number=body.get("to_number") or "",
+            from_number=body.get("from_number") or "",
+            scheduled_call_id=body.get("scheduled_call_id") or None,
+        )
+    except AtCapacity:
+        # Expected under load — the originator turns this into a queued (held) scheduled row.
+        logger.info("[ws-bridge] at capacity, refusing bridge (originator will queue)")
+        return JSONResponse({"detail": "at capacity"}, status_code=429)
+    except ValueError as exc:
+        # Misconfiguration (e.g. WS_CALL_TARGET_URL unset) — a client/config error, not 500.
+        logger.warning("[ws-bridge] bad request: {}", exc)
+        return JSONResponse({"detail": str(exc)}, status_code=400)
+    except Exception:
+        logger.exception("[ws-bridge] failed to start bridge")
+        return JSONResponse({"detail": "bridge start failed"}, status_code=500)
+
+    return {"call_id": call_id, "status": "dialing"}
 
 
 if __name__ == "__main__":

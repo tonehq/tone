@@ -87,9 +87,32 @@ class Settings:
         )
 
         self.POD_PINNING_ENABLED: bool = get_secret("POD_PINNING_ENABLED", "false").lower() == "true"
+        # Telephony-free WebSocket test endpoint (/ws/test). Runs a real, paid
+        # LLM/STT/TTS pipeline and takes no auth, so it is OFF by default and should
+        # stay off in production — enable only in dev/staging for agent testing.
+        self.ENABLE_WS_TEST_ENDPOINT: bool = get_secret("ENABLE_WS_TEST_ENDPOINT", "false").lower() == "true"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
+        # Dedicated OUTBOUND voice-pod pool (WebSocket "test bridge" trigger runs its media here,
+        # NOT on the API/orchestrator pod — see WebSocketCallEngine). The originator picks a pod
+        # from this StatefulSet (via PodPicker over this prefix) and hands the bridge off over the
+        # StatefulSet's headless service (intra-cluster, no ingress) at ``{pod}.{headless}.{ns}.svc``.
+        self.OUTBOUND_CALL_WORKER_PREFIX: str = get_secret(
+            "OUTBOUND_CALL_WORKER_PREFIX", "staging-tone-outbound-call-worker"
+        )
+        self.OUTBOUND_CALL_HEADLESS_SERVICE: str = get_secret(
+            "OUTBOUND_CALL_HEADLESS_SERVICE", "staging-tone-outbound-call-headless"
+        )
+        self.OUTBOUND_CALL_WORKER_PORT: int = int(get_secret("OUTBOUND_CALL_WORKER_PORT", "8080"))
+        # Per voice-pod concurrent-call ceiling, enforced at the pod's ws-bridge-start route
+        # (429 when full → the originator queues the overflow). 0/<=0 = unlimited. Set on the
+        # call-worker manifests; previously an unread env var, now honoured in code.
+        self.MAX_CONCURRENT_CALLS: int = int(get_secret("MAX_CONCURRENT_CALLS", "2"))
+        # Optional shared secret for the intra-cluster ws-bridge-start hand-off. Empty = no check
+        # (same trust model as /ws — the route is not exposed via any ingress). When set, the
+        # originator sends it and the pod requires it.
+        self.WS_BRIDGE_INTERNAL_TOKEN: str = get_secret("WS_BRIDGE_INTERNAL_TOKEN", "")
 
         # Public base URL (scheme + host, no /api/v1) that Twilio can reach for
         # outbound-call TwiML + status callbacks. Root-mounted telephony routes hang
@@ -97,7 +120,21 @@ class Settings:
         # scheduled dials run in the worker with no request context to derive it from.
         # Locally: an ngrok URL. Prod: the public API host.
         self.BASE_CALL_URL: str = get_secret("BASE_CALL_URL", "").rstrip("/")
-        
+
+        # WebSocket call trigger (provider="websocket"): the outbound call is bridged over a
+        # WebSocket client to a REMOTE deployment's /ws/test endpoint (agent-to-agent, no PSTN),
+        # instead of Twilio placing a phone call. WS_CALL_TARGET_URL is that remote's base
+        # (scheme + host, e.g. wss://staging-test.trytone.ai) — required; empty disables the WS
+        # trigger. The remote agent is normally resolved by the dialed to_number on that side
+        # (like a real call); WS_CALL_TARGET_AGENT_ID is an OPTIONAL fallback used only when a
+        # call carries no number to route on.
+        self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL", "").rstrip("/")
+        self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID", "")
+        # NB: the allowlist of users permitted to use the WebSocket ("test bridge") trigger is a
+        # GLOBAL DB table (``ws_trigger_allowed_users``, read-only from the app, managed directly in
+        # the DB) — see OutboundCallService.is_ws_trigger_allowed — not an env var, so it can change
+        # without a redeploy.
+
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
