@@ -57,9 +57,10 @@ class BenchmarkResult:
     model: Optional[str]
     iterations: int
     concurrency: int
+    measure: str
     succeeded: int
     failed: int
-    ttfb_ms: Latency = field(default_factory=Latency)
+    latency_ms: Latency = field(default_factory=Latency)
     started_at: Optional[str] = None
     duration_s: Optional[float] = None
     throughput_rps: Optional[float] = None
@@ -96,6 +97,7 @@ class BaseBenchmark(ABC):
         warmup_iterations: int = 1,
         concurrency: int = 1,
         timeout_s: Optional[float] = None,
+        measure: str = "ttfb",
     ):
         self.spec = spec
         self.iterations = max(1, iterations)
@@ -103,6 +105,7 @@ class BaseBenchmark(ABC):
         self.concurrency = max(1, min(concurrency, self.iterations))
         if timeout_s is not None:
             self.timeout_s = timeout_s
+        self.measure = measure if measure in ("ttfb", "total") else "ttfb"
         self.provider = spec.get("provider_name") or "unknown"
         self.model = spec.get("model_name")
 
@@ -117,6 +120,12 @@ class BaseBenchmark(ABC):
     @abstractmethod
     def is_target(self, frame: Any) -> bool:
         ...
+
+    def is_complete(self, frame: Any) -> bool:
+        return self.is_target(frame)
+
+    def _predicate(self):
+        return self.is_complete if self.measure == "total" else self.is_target
 
     def pipeline_params(self) -> PipelineParams:
         return PipelineParams(
@@ -153,7 +162,7 @@ class BaseBenchmark(ABC):
             ok, frame, err = await probe_in_pipeline(
                 service,
                 frames,
-                self.is_target,
+                self._predicate(),
                 params=self.pipeline_params(),
                 timeout_s=self.timeout_s,
                 provider=self.provider,
@@ -212,13 +221,25 @@ class BaseBenchmark(ABC):
 
         passed = [s for s in samples if s.ok]
         errors = sorted({s.error for s in samples if s.error})
+        latency = Latency.of([s.ttfb_ms for s in passed if s.ttfb_ms is not None])
+        throughput = round(len(passed) / duration_s, 3) if duration_s > 0 else None
         logger.info(
-            "[benchmark] {} {} done ok={}/{} in {:.2f}s",
+            "[benchmark] {} {} [{}] done ok={}/{} in {:.2f}s "
+            "latency_ms avg={} p50={} p90={} p95={} min={} max={} rps={} errors={}",
             self.service_type,
             self.provider,
+            self.measure,
             len(passed),
             self.iterations,
             duration_s,
+            latency.avg,
+            latency.p50,
+            latency.p90,
+            latency.p95,
+            latency.min,
+            latency.max,
+            throughput,
+            errors[:2],
         )
 
         return BenchmarkResult(
@@ -227,12 +248,13 @@ class BaseBenchmark(ABC):
             model=self.model,
             iterations=self.iterations,
             concurrency=self.concurrency,
+            measure=self.measure,
             succeeded=len(passed),
             failed=self.iterations - len(passed),
-            ttfb_ms=Latency.of([s.ttfb_ms for s in passed if s.ttfb_ms is not None]),
+            latency_ms=latency,
             started_at=started_at.isoformat(),
             duration_s=round(duration_s, 3),
-            throughput_rps=round(len(passed) / duration_s, 3) if duration_s > 0 else None,
+            throughput_rps=throughput,
             errors=errors,
             samples=samples,
         )

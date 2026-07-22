@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 
 from benchmarks.base import BaseBenchmark
 from core.services.pipeline import service_factory
-from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame, TTSStoppedFrame
 
 DEFAULT_SENTENCE = "Thanks for calling. I can help you book an appointment today."
 
@@ -27,6 +27,9 @@ class TTSBenchmark(BaseBenchmark):
 
     def is_target(self, frame: Any) -> bool:
         return isinstance(frame, TTSAudioRawFrame) and bool(getattr(frame, "audio", b""))
+
+    def is_complete(self, frame: Any) -> bool:
+        return isinstance(frame, TTSStoppedFrame)
 
     def sample_detail(self, frame: Any) -> Dict[str, Any]:
         audio = getattr(frame, "audio", b"") or b""
