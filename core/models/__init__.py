@@ -65,3 +65,6 @@ from core.models.webhook import Webhook
 
 # Audit
 from core.models.audit_log import AuditLog
+
+# Feature access (global allowlists)
+from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
