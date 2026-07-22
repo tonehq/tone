@@ -87,24 +87,3 @@ spec:
           emptyDir:
             medium: Memory
             sizeLimit: 2Gi
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: staging-stt-nemotron-service
-  namespace: staging
-  labels:
-    app: staging-stt-nemotron
-spec:
-  selector:
-    app: staging-stt-nemotron
-  ports:
-    - name: http
-      port: 9000
-      targetPort: 9000
-      protocol: TCP
-    - name: grpc
-      port: 50051
-      targetPort: 50051
-      protocol: TCP
-  type: ClusterIP
