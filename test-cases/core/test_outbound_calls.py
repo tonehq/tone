@@ -62,6 +62,48 @@ class TestCreateValidation:
             svc.create_outbound_call(agent_id=uuid4(), from_number="+15551110000", to_numbers=["+15552220000"])
         assert exc.value.status_code == 400
 
+    def test_unknown_provider_400(self):
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        with pytest.raises(HTTPException) as exc:
+            svc.create_outbound_call(
+                agent_id=uuid4(), from_number="+15551110000",
+                to_numbers=["+15552220000"], provider="carrier-pigeon",
+            )
+        assert exc.value.status_code == 400
+
+    def test_websocket_provider_unconfigured_400(self, monkeypatch):
+        # Fails fast at create time (before agent/creds checks) when the WS target is unset.
+        monkeypatch.setattr("core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "")
+        monkeypatch.setattr("core.services.outbound_call_service.settings.WS_CALL_TARGET_AGENT_ID", "")
+        svc = OutboundCallService(make_db(), org_id=uuid4())
+        with pytest.raises(HTTPException) as exc:
+            svc.create_outbound_call(
+                agent_id=uuid4(), from_number="+15551110000",
+                to_numbers=["+15552220000"], provider="websocket",
+            )
+        assert exc.value.status_code == 400
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_websocket_needs_no_twilio_config(self, mock_engine, monkeypatch):
+        # The websocket bridge places no PSTN call, so it must NOT require a Twilio
+        # from-number / channel / credentials — only the agent. The DB has no PhoneNumber or
+        # Channel and get_twilio_credentials is never consulted (that branch is skipped for WS),
+        # yet the call still places its bridge. Regression for the telephony-free trigger.
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        eng = mock_engine.return_value
+        eng.initiate_call.return_value = SimpleNamespace(call_id="WS1", provider="websocket")
+        svc = OutboundCallService(make_db({Agent: _agent()}), org_id=uuid4())
+
+        res = svc.create_outbound_call(
+            agent_id=uuid4(), from_number=None,
+            to_numbers=["+15552220000"], provider="websocket",
+        )
+
+        assert res["mode"] == "parallel_websocket" and res["placed"] == 1
+        assert mock_engine.call_args.args[0] == "websocket"
+
 
 @patch("core.services.outbound_call_service.OutboundCallService._prewarm_pipeline", lambda *a, **k: None)
 @patch("core.services.outbound_call_service.get_twilio_credentials",
@@ -140,6 +182,94 @@ class TestCreateSuccess:
         assert enq.call_count == 1
         assert len(enq.call_args.args[0]) == 2
         mock_engine.return_value.initiate_call.assert_not_called()  # bulk goes to the queue
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_websocket_immediate_routes_to_parallel_bridge(self, mock_engine, _creds, monkeypatch):
+        """provider='websocket' (immediate) routes to the parallel-bridge path via the WS engine."""
+        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        eng = mock_engine.return_value
+        eng.initiate_call.return_value = SimpleNamespace(call_id="WS1", provider="websocket")
+        svc = OutboundCallService(self._db(), org_id=uuid4())
+
+        res = svc.create_outbound_call(
+            agent_id=uuid4(), from_number="+15551110000",
+            to_numbers=["+15552220000"], provider="websocket",
+        )
+
+        assert res["mode"] == "parallel_websocket" and res["placed"] == 1
+        assert mock_engine.call_args.args[0] == "websocket"
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_websocket_max_concurrency_places_parallel_calls(self, mock_engine, _creds, monkeypatch):
+        """provider=websocket + max_concurrency=N fires N parallel bridge calls (one target)."""
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
+        eng = mock_engine.return_value
+        eng.initiate_call.side_effect = lambda **k: SimpleNamespace(call_id="WSx", provider="websocket")
+        svc = OutboundCallService(self._db(), org_id=uuid4())
+
+        res = svc.create_outbound_call(
+            agent_id=uuid4(), from_number="+15551110000",
+            to_numbers=["+15552220000"], provider="websocket", max_concurrency=5,
+        )
+
+        assert res["mode"] == "parallel_websocket"
+        assert res["requested"] == 5 and res["placed"] == 5
+        assert eng.initiate_call.call_count == 5
+        assert mock_engine.call_args.args[0] == "websocket"
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_websocket_no_concurrency_one_call_per_target(self, mock_engine, _creds, monkeypatch):
+        """Without max_concurrency, WS places one bridge per destination (no dedupe surprise)."""
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
+        eng = mock_engine.return_value
+        eng.initiate_call.side_effect = lambda **k: SimpleNamespace(call_id="WSx", provider="websocket")
+        svc = OutboundCallService(self._db(), org_id=uuid4())
+
+        res = svc.create_outbound_call(
+            agent_id=uuid4(), from_number="+15551110000",
+            to_numbers=["+15552220000", "+15552220001"], provider="websocket",
+        )
+
+        assert res["placed"] == 2 and eng.initiate_call.call_count == 2
+
+    @patch("core.services.contacts.contact_service.ContactService")
+    @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_bulk_stamps_provider_on_scheduled_rows(
+        self, mock_engine, mock_dir, mock_contacts, _creds, monkeypatch
+    ):
+        """Every SCHEDULED row created carries the selected provider (not the DB default).
+
+        A scheduled_at is set so the WS provider routes through the schedule path (immediate
+        WS goes to the parallel-bridge path instead, which creates no rows)."""
+        from datetime import datetime, timedelta, timezone
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
+        db, contacts = self._db_with_contacts(["+15552220001", "+15552220002"])
+        self._patch_contact_services(mock_dir, mock_contacts, contacts)
+        svc = OutboundCallService(db, org_id=uuid4())
+
+        res = svc.create_outbound_call(
+            agent_id=uuid4(), from_number="+15551110000",
+            to_numbers=["+15552220001", "+15552220002"], provider="websocket",
+            scheduled_at=datetime.now(timezone.utc) + timedelta(hours=1),
+        )
+
+        assert res["count"] == 2
+        rows = db.add_all.call_args.args[0]
+        assert all(r.provider == "websocket" for r in rows)
 
     @patch("core.services.contacts.contact_service.ContactService")
     @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")

@@ -87,6 +87,10 @@ class Settings:
         )
 
         self.POD_PINNING_ENABLED: bool = get_secret("POD_PINNING_ENABLED", "false").lower() == "true"
+        # Telephony-free WebSocket test endpoint (/ws/test). Runs a real, paid
+        # LLM/STT/TTS pipeline and takes no auth, so it is OFF by default and should
+        # stay off in production — enable only in dev/staging for agent testing.
+        self.ENABLE_WS_TEST_ENDPOINT: bool = get_secret("ENABLE_WS_TEST_ENDPOINT", "false").lower() == "true"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
@@ -97,7 +101,17 @@ class Settings:
         # scheduled dials run in the worker with no request context to derive it from.
         # Locally: an ngrok URL. Prod: the public API host.
         self.BASE_CALL_URL: str = get_secret("BASE_CALL_URL", "").rstrip("/")
-        
+
+        # WebSocket call trigger (provider="websocket"): the outbound call is bridged over a
+        # WebSocket client to a REMOTE deployment's /ws/test endpoint (agent-to-agent, no PSTN),
+        # instead of Twilio placing a phone call. WS_CALL_TARGET_URL is that remote's base
+        # (scheme + host, e.g. wss://staging-test.trytone.ai) — required; empty disables the WS
+        # trigger. The remote agent is normally resolved by the dialed to_number on that side
+        # (like a real call); WS_CALL_TARGET_AGENT_ID is an OPTIONAL fallback used only when a
+        # call carries no number to route on.
+        self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL", "").rstrip("/")
+        self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID", "")
+
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
