@@ -19,7 +19,11 @@ import { listAgents } from '@/services/agentsService';
 import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
 import { getOrganizationSettings } from '@/services/organizationService';
 import { getOutboundConcurrencyMax } from '@/services/outboundCallService';
-import type { CreateOutboundCallPayload, CreateOutboundCallResponse } from '@/types/outboundCall';
+import type {
+  CreateOutboundCallPayload,
+  CreateOutboundCallResponse,
+  OutboundTriggerProvider,
+} from '@/types/outboundCall';
 import { getBrowserTimeZone, getTimeZoneAbbreviation } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -40,7 +44,15 @@ interface OutboundCallForm {
   to_numbers_text: string;
   schedule: boolean;
   scheduled_at: string;
+  provider: OutboundTriggerProvider;
 }
+
+// How the call is triggered. Twilio places a real PSTN call; WebSocket bridges the
+// call over a WebSocket to a remote /ws/test (agent-to-agent, no telephony).
+const TRIGGER_PROVIDER_OPTIONS: { value: OutboundTriggerProvider; label: string }[] = [
+  { value: 'twilio', label: 'Twilio (phone call)' },
+  { value: 'websocket', label: 'WebSocket (test bridge)' },
+];
 
 interface NewOutboundCallModalProps {
   open: boolean;
@@ -97,6 +109,7 @@ export default function NewOutboundCallModal({
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
+      provider: 'twilio',
     },
   });
 
@@ -169,6 +182,7 @@ export default function NewOutboundCallModal({
       to_numbers_text: '',
       schedule: false,
       scheduled_at: '',
+      provider: 'twilio',
     });
     setInvalidNumbers([]);
     setScheduledTz('');
@@ -292,6 +306,7 @@ export default function NewOutboundCallModal({
           if (schemaId) fd.append('schema_id', schemaId);
           if (scheduleColumn.trim()) fd.append('schedule_column', scheduleColumn.trim());
           if (maxConcurrency) fd.append('max_concurrency', String(maxConcurrency));
+          fd.append('provider', values.provider);
           fd.append('file', csvFile);
           res = await createCallFromFile(fd);
         } else {
@@ -302,6 +317,7 @@ export default function NewOutboundCallModal({
             scheduled_at: scheduledAt,
             directory_id: pickedDirectoryId || undefined,
             max_concurrency: maxConcurrency ?? undefined,
+            provider: values.provider,
           };
           res = await createCall(payload);
         }
@@ -416,6 +432,40 @@ export default function NewOutboundCallModal({
           placeholder="Auto — use configured number(s)"
           loading={optionsLoading}
           options={fromSelectOptions}
+        />
+        <SelectInput
+          name="provider"
+          control={control}
+          label="Trigger via"
+          options={TRIGGER_PROVIDER_OPTIONS}
+        />
+
+        {/* Per-batch concurrency — capped to the env max when one is configured. */}
+        <TextInput
+          label="Concurrent calls"
+          type="number"
+          min={1}
+          max={concurrencyMax ?? undefined}
+          value={concurrencyValue ?? ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') {
+              setConcurrencyValue(null);
+              return;
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n)) {
+              setConcurrencyValue(null);
+              return;
+            }
+            const bounded = concurrencyMax !== null ? Math.min(concurrencyMax, n) : n;
+            setConcurrencyValue(Math.max(1, bounded));
+          }}
+          helperText={
+            concurrencyMax !== null
+              ? `How many of this batch's calls dial at once (max ${concurrencyMax}). The next fires as one finishes.`
+              : "How many of this batch's calls dial at once. Leave empty for no limit. The next fires as one finishes."
+          }
         />
 
         {/* Per-batch concurrency — capped to the env max when one is configured. */}

@@ -31,13 +31,20 @@ def upgrade() -> None:
     # and the change was applied via direct DDL). IF NOT EXISTS makes re-application a safe no-op.
     op.execute("ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS batch_id UUID")
     op.execute("ALTER TABLE scheduled_calls ADD COLUMN IF NOT EXISTS max_concurrency INTEGER")
-    op.execute(
-        "CREATE INDEX IF NOT EXISTS ix_scheduled_calls_batch_status "
-        "ON scheduled_calls (batch_id, status)"
-    )
+    # The index is composite over (batch_id, status): batch_id is new/all-NULL, but `status` is a
+    # pre-existing populated column, so the build must scan every existing row. A plain CREATE
+    # INDEX would hold a write-blocking SHARE lock for that whole scan — on a large scheduled_calls
+    # table that stalls dispatch. Build it CONCURRENTLY (non-blocking) instead; IF NOT EXISTS keeps
+    # it idempotent (a failed concurrent build leaves an INVALID index that IF NOT EXISTS skips).
+    with op.get_context().autocommit_block():
+        op.execute(
+            "CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_scheduled_calls_batch_status "
+            "ON scheduled_calls (batch_id, status)"
+        )
 
 
 def downgrade() -> None:
-    op.execute("DROP INDEX IF EXISTS ix_scheduled_calls_batch_status")
+    with op.get_context().autocommit_block():
+        op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_scheduled_calls_batch_status")
     op.execute("ALTER TABLE scheduled_calls DROP COLUMN IF EXISTS max_concurrency")
     op.execute("ALTER TABLE scheduled_calls DROP COLUMN IF EXISTS batch_id")

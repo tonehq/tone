@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import threading
 from uuid import UUID
 
 from loguru import logger
@@ -14,6 +15,26 @@ def _conninfo() -> str:
 
 
 app = App(connector=PsycopgConnector(conninfo=_conninfo(), min_size=1, max_size=6))
+
+# The module-level ``app`` is a shared singleton. Opening it (``app.open()`` /
+# ``app.open_async()``) opens AND closes the connector, so two threads doing it concurrently can
+# close it mid-defer in the other ("App was not open"). This surfaces on the post-call path when
+# several WebSocket-bridge calls (each a daemon thread) complete at once — each fires both the
+# sync post-call defers AND, via the completion refill, ``enqueue_outbound_calls_batch``.
+# EVERY threaded open→defer→close of the shared app is serialized through this one lock (the sync
+# ``with app.open()`` helpers below, and the ``asyncio.run`` entry points that open_async off a
+# worker thread) so at most one open/close cycle touches the connector at a time. Defers are
+# quick, so the added contention is negligible. Async-context callers (the ``async def`` enqueue
+# variants that await on the single main event loop) don't take this lock — a threading.Lock in
+# async code would block the loop, and same-loop opens don't race across threads.
+_APP_OPEN_LOCK = threading.Lock()
+
+
+def _defer_sync(task, **kwargs) -> int:
+    """Thread-safe ``with app.open(): task.defer(**kwargs)`` (see ``_APP_OPEN_LOCK``)."""
+    with _APP_OPEN_LOCK:
+        with app.open():
+            return task.defer(**kwargs)
 
 
 @app.task(name="ingest_upload", queue="ingestion")
@@ -186,7 +207,11 @@ def enqueue_outbound_calls_batch(items):
                     results.append((None, str(exc)))
         return results
 
-    return asyncio.run(_defer_all())
+    # Serialize with every other threaded open/close of the shared app (see _APP_OPEN_LOCK).
+    # Held across the whole batch's open_async→defer→close; callers are all sync (request
+    # threadpool / completion-refill worker thread), never the async event loop.
+    with _APP_OPEN_LOCK:
+        return asyncio.run(_defer_all())
 
 
 def cancel_outbound_job(job_id: int) -> bool:
@@ -199,7 +224,10 @@ def cancel_outbound_job(job_id: int) -> bool:
             return await app.job_manager.cancel_job_by_id_async(job_id)
 
     try:
-        return asyncio.run(_cancel())
+        # Serialize with every other threaded open/close of the shared app (see _APP_OPEN_LOCK);
+        # sync callers only (scheduled-call cancel / directory delete).
+        with _APP_OPEN_LOCK:
+            return asyncio.run(_cancel())
     except Exception:  # noqa: BLE001
         logger.exception("[outbound] cancel_outbound_job failed job_id={}", job_id)
         return False
@@ -213,8 +241,7 @@ async def enqueue_call_overlap_detection(call_id) -> int:
 def enqueue_call_overlap_detection_sync(call_id) -> int:
     """Sync counterpart for callers inside a sync service method
     (e.g. ``CallLogService.complete_call``)."""
-    with app.open():
-        return detect_call_overlaps_task.defer(call_id=str(call_id))
+    return _defer_sync(detect_call_overlaps_task, call_id=str(call_id))
 
 
 async def enqueue_consolidate_call_transcript(call_id) -> int:
@@ -225,8 +252,7 @@ async def enqueue_consolidate_call_transcript(call_id) -> int:
 def enqueue_consolidate_call_transcript_sync(call_id) -> int:
     """Sync counterpart for post-call actions running inside
     ``CallLogService.complete_call`` (a sync service method)."""
-    with app.open():
-        return consolidate_call_transcript_task.defer(call_id=str(call_id))
+    return _defer_sync(consolidate_call_transcript_task, call_id=str(call_id))
 
 
 async def enqueue_compute_call_metrics_aggregates(call_id) -> int:
@@ -238,8 +264,7 @@ def enqueue_compute_call_metrics_aggregates_sync(call_id) -> int:
     """Sync counterpart mirroring ``enqueue_consolidate_call_transcript_sync`` —
     called from ``PostCallHandler`` which runs inside the sync completion
     path."""
-    with app.open():
-        return compute_call_metrics_aggregates_task.defer(call_id=str(call_id))
+    return _defer_sync(compute_call_metrics_aggregates_task, call_id=str(call_id))
 
 
 async def enqueue_loki_log_sync(call_id, *, delay_seconds: int = 0) -> int:
@@ -253,7 +278,8 @@ def enqueue_loki_log_sync_sync(call_id, *, delay_seconds: int = 0) -> int:
     """Sync counterpart for the ``sync_loki_logs`` post-call action (runs inside
     the sync completion path). ``delay_seconds`` defers the job so Loki has time
     to ingest the call's teardown lines before we read them back."""
-    with app.open():
-        return sync_loki_logs_task.configure(
-            schedule_in={"seconds": delay_seconds}
-        ).defer(call_id=str(call_id))
+    with _APP_OPEN_LOCK:
+        with app.open():
+            return sync_loki_logs_task.configure(
+                schedule_in={"seconds": delay_seconds}
+            ).defer(call_id=str(call_id))
