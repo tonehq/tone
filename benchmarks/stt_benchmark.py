@@ -45,6 +45,12 @@ class STTBenchmark(BaseBenchmark):
             is not None
         )
 
+    def is_complete(self, frame: Any) -> bool:
+        return (
+            isinstance(frame, TranscriptionFrame)
+            and _extract_transcript_text(frame, (TranscriptionFrame,)) is not None
+        )
+
     def sample_detail(self, frame: Any) -> Dict[str, Any]:
         text = (getattr(frame, "text", "") or "").strip()
         return {"transcript": text[:120]} if text else {}
