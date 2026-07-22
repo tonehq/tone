@@ -94,6 +94,25 @@ class Settings:
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
+        # Dedicated OUTBOUND voice-pod pool (WebSocket "test bridge" trigger runs its media here,
+        # NOT on the API/orchestrator pod — see WebSocketCallEngine). The originator picks a pod
+        # from this StatefulSet (via PodPicker over this prefix) and hands the bridge off over the
+        # StatefulSet's headless service (intra-cluster, no ingress) at ``{pod}.{headless}.{ns}.svc``.
+        self.OUTBOUND_CALL_WORKER_PREFIX: str = get_secret(
+            "OUTBOUND_CALL_WORKER_PREFIX", "staging-tone-outbound-call-worker"
+        )
+        self.OUTBOUND_CALL_HEADLESS_SERVICE: str = get_secret(
+            "OUTBOUND_CALL_HEADLESS_SERVICE", "staging-tone-outbound-call-headless"
+        )
+        self.OUTBOUND_CALL_WORKER_PORT: int = int(get_secret("OUTBOUND_CALL_WORKER_PORT", "8080"))
+        # Per voice-pod concurrent-call ceiling, enforced at the pod's ws-bridge-start route
+        # (429 when full → the originator queues the overflow). 0/<=0 = unlimited. Set on the
+        # call-worker manifests; previously an unread env var, now honoured in code.
+        self.MAX_CONCURRENT_CALLS: int = int(get_secret("MAX_CONCURRENT_CALLS", "2"))
+        # Optional shared secret for the intra-cluster ws-bridge-start hand-off. Empty = no check
+        # (same trust model as /ws — the route is not exposed via any ingress). When set, the
+        # originator sends it and the pod requires it.
+        self.WS_BRIDGE_INTERNAL_TOKEN: str = get_secret("WS_BRIDGE_INTERNAL_TOKEN", "")
 
         # Public base URL (scheme + host, no /api/v1) that Twilio can reach for
         # outbound-call TwiML + status callbacks. Root-mounted telephony routes hang

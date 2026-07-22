@@ -12,12 +12,20 @@ _POD_ALIVE_SECONDS = 180
 
 
 class PodPicker(BaseService):
-    def __init__(self, db, host: Optional[str] = None):
+    def __init__(self, db, host: Optional[str] = None, prefix: Optional[str] = None):
         super().__init__(db)
         self.host = host or settings.CALL_SERVER_HOST
+        # Which voice-pod pool to pick from. Default = the inbound call-worker pool (Twilio media
+        # pinning, unchanged). Pass the outbound prefix to pick a WS-bridge hand-off target.
+        self.prefix = prefix or settings.CALL_WORKER_PREFIX
+
+    @classmethod
+    def for_outbound(cls, db):
+        """PodPicker over the dedicated outbound voice-pod pool (WS-bridge hand-off)."""
+        return cls(db, prefix=settings.OUTBOUND_CALL_WORKER_PREFIX)
 
     def _candidate_pods(self):
-        prefix = settings.CALL_WORKER_PREFIX
+        prefix = self.prefix
         cutoff = datetime.now(timezone.utc) - timedelta(seconds=_POD_ALIVE_SECONDS)
         return (
             self.db.query(Pod)
@@ -72,3 +80,17 @@ class PodPicker(BaseService):
 
     def get_pod(self) -> Optional[str]:
         return self.url_for(self.pick())
+
+    def internal_base_for(self, pod: Optional[Pod]) -> Optional[str]:
+        """Intra-cluster HTTP base for a specific outbound voice pod, via the StatefulSet's
+        headless service (stable per-pod DNS) — e.g.
+        ``http://staging-tone-outbound-call-worker-0.staging-tone-outbound-call-headless.staging.svc:8080``.
+        Used by the originator to hand a WS bridge off to the picked pod (no ingress involved)."""
+        if pod is None or not pod.name:
+            return None
+        svc = settings.OUTBOUND_CALL_HEADLESS_SERVICE
+        ns = settings.POD_SYNC_NAMESPACE
+        port = settings.OUTBOUND_CALL_WORKER_PORT
+        if not svc or not ns:
+            return None
+        return f"http://{pod.name}.{svc}.{ns}.svc:{port}"
