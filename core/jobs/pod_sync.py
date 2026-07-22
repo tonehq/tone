@@ -52,7 +52,18 @@ def sync_pods_and_nodes() -> None:
 
     namespace = settings.POD_SYNC_NAMESPACE
     env = settings.ENVIRONMENT
-    prefix = settings.CALL_WORKER_PREFIX
+    # Both voice-pod pools are registered so PodPicker can select from either: the inbound
+    # call-worker pool (Twilio media pinning) and the dedicated outbound pool (WS-bridge hand-off).
+    prefixes = [settings.CALL_WORKER_PREFIX, settings.OUTBOUND_CALL_WORKER_PREFIX]
+
+    def _matching_prefix(name: str):
+        # Longest match first so "…-outbound-call-worker-" wins over "…-call-worker-" if one is a
+        # substring of the other. Returns the pool prefix this pod belongs to, or None.
+        for pfx in sorted(prefixes, key=len, reverse=True):
+            if name.startswith(f"{pfx}-"):
+                return pfx
+        return None
+
     now = datetime.now(timezone.utc)
 
     pods = [p for p in core.list_namespaced_pod(namespace).items if p.status.phase == "Running"]
@@ -61,7 +72,7 @@ def sync_pods_and_nodes() -> None:
     call_pod_ips = {
         p.metadata.name: p.status.pod_ip
         for p in pods
-        if p.metadata.name.startswith(f"{prefix}-") and p.status.pod_ip
+        if _matching_prefix(p.metadata.name) and p.status.pod_ip
     }
 
     pods_per_node: Dict[str, int] = {}
@@ -113,7 +124,7 @@ def sync_pods_and_nodes() -> None:
         for pod in pods:
             name = pod.metadata.name
             node_id = node_ids.get(pod.spec.node_name) if pod.spec.node_name else None
-            ordinal = parse_ordinal(name, prefix)
+            ordinal = parse_ordinal(name, _matching_prefix(name))
             db.execute(
                 pg_insert(Pod)
                 .values(

@@ -7,7 +7,7 @@ setup_logging()
 
 from loguru import logger
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 
 from pipecat.runner.types import WebSocketRunnerArguments
@@ -390,6 +390,62 @@ async def ws_test_endpoint(websocket: WebSocket) -> None:
         except Exception:
             logger.debug("[ws-test] /ws/test close failed")
         logger.info("[ws-test] /ws/test connection closed")
+
+
+@app.post("/internal/ws-bridge/start")
+async def ws_bridge_start(request: Request):
+    """Intra-cluster hand-off target: run a WebSocket bridge ON THIS (outbound voice) pod.
+
+    The originator (API/orchestrator pod) picks this pod via ``PodPicker.for_outbound`` and POSTs
+    here over the outbound StatefulSet's headless service — so the media pipeline runs here, not on
+    the originating pod. Returns 429 when the pod is already at ``MAX_CONCURRENT_CALLS`` so the
+    originator queues the row. Cluster-only: not exposed via any ingress; an optional shared
+    ``WS_BRIDGE_INTERNAL_TOKEN`` gates it when configured (same trust model as /ws otherwise)."""
+    from fastapi.responses import JSONResponse
+
+    from core.services.call_engines.ws_bridge_runner import AtCapacity, start_local_bridge
+
+    # Only voice pods run bridges. If this ever lands on an API/originator pod (WORKER_MODE unset),
+    # refuse — running the media here is exactly the OOM this feature exists to prevent.
+    if _WORKER_MODE != "voice":
+        logger.warning("[ws-bridge] refused — not a voice pod (WORKER_MODE={!r})", _WORKER_MODE)
+        return JSONResponse({"detail": "not a voice pod"}, status_code=404)
+
+    token = settings.WS_BRIDGE_INTERNAL_TOKEN
+    if token and request.headers.get("x-ws-bridge-token") != token:
+        logger.warning("[ws-bridge] rejected — bad/missing x-ws-bridge-token")
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        logger.debug("[ws-bridge] rejected — body is not JSON")
+        return JSONResponse({"detail": "invalid JSON body"}, status_code=400)
+
+    agent_id = (body.get("agent_id") or "").strip()
+    if not agent_id:
+        return JSONResponse({"detail": "agent_id is required"}, status_code=400)
+
+    try:
+        call_id = start_local_bridge(
+            agent_id=agent_id,
+            to_number=body.get("to_number") or "",
+            from_number=body.get("from_number") or "",
+            scheduled_call_id=body.get("scheduled_call_id") or None,
+        )
+    except AtCapacity:
+        # Expected under load — the originator turns this into a queued (held) scheduled row.
+        logger.info("[ws-bridge] at capacity, refusing bridge (originator will queue)")
+        return JSONResponse({"detail": "at capacity"}, status_code=429)
+    except ValueError as exc:
+        # Misconfiguration (e.g. WS_CALL_TARGET_URL unset) — a client/config error, not 500.
+        logger.warning("[ws-bridge] bad request: {}", exc)
+        return JSONResponse({"detail": str(exc)}, status_code=400)
+    except Exception:
+        logger.exception("[ws-bridge] failed to start bridge")
+        return JSONResponse({"detail": "bridge start failed"}, status_code=500)
+
+    return {"call_id": call_id, "status": "dialing"}
 
 
 if __name__ == "__main__":

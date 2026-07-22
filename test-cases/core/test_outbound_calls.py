@@ -84,17 +84,16 @@ class TestCreateValidation:
             )
         assert exc.value.status_code == 400
 
-    @patch("core.services.outbound_call_service.get_call_engine")
-    def test_websocket_needs_no_twilio_config(self, mock_engine, monkeypatch):
-        # The websocket bridge places no PSTN call, so it must NOT require a Twilio
-        # from-number / channel / credentials — only the agent. The DB has no PhoneNumber or
-        # Channel and get_twilio_credentials is never consulted (that branch is skipped for WS),
-        # yet the call still places its bridge. Regression for the telephony-free trigger.
+    def test_websocket_needs_no_twilio_config(self, monkeypatch):
+        # The websocket bridge places no PSTN call, so it must NOT require a Twilio from-number /
+        # channel / credentials — only the agent + the WS target. The DB has no PhoneNumber or
+        # Channel, yet the call still queues its bridge row(s) for hand-off to the outbound voice
+        # pods. Regression for the telephony-free trigger.
         monkeypatch.setattr(
             "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
         )
-        eng = mock_engine.return_value
-        eng.initiate_call.return_value = SimpleNamespace(call_id="WS1", provider="websocket")
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
         svc = OutboundCallService(make_db({Agent: _agent()}), org_id=uuid4())
 
         res = svc.create_outbound_call(
@@ -102,8 +101,8 @@ class TestCreateValidation:
             to_numbers=["+15552220000"], provider="websocket",
         )
 
-        assert res["mode"] == "parallel_websocket" and res["placed"] == 1
-        assert mock_engine.call_args.args[0] == "websocket"
+        assert res["mode"] == "parallel_websocket" and res["status"] == "queued"
+        assert res["queued"] == 1
 
 
 @patch("core.services.outbound_call_service.OutboundCallService._prewarm_pipeline", lambda *a, **k: None)
@@ -184,63 +183,68 @@ class TestCreateSuccess:
         assert len(enq.call_args.args[0]) == 2
         mock_engine.return_value.initiate_call.assert_not_called()  # bulk goes to the queue
 
-    @patch("core.services.outbound_call_service.get_call_engine")
-    def test_websocket_immediate_routes_to_parallel_bridge(self, mock_engine, _creds, monkeypatch):
-        """provider='websocket' (immediate) routes to the parallel-bridge path via the WS engine."""
-        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
+    def test_websocket_immediate_queues_rows_for_pod_handoff(self, _creds, monkeypatch):
+        """provider='websocket' (immediate) no longer runs bridges in-process — it QUEUES
+        scheduled_calls rows (due now) so dispatch hands each off to an outbound voice pod."""
         monkeypatch.setattr(
             "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
         )
-        eng = mock_engine.return_value
-        eng.initiate_call.return_value = SimpleNamespace(call_id="WS1", provider="websocket")
-        svc = OutboundCallService(self._db(), org_id=uuid4())
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
+        db = self._db()
+        svc = OutboundCallService(db, org_id=uuid4())
 
         res = svc.create_outbound_call(
             agent_id=uuid4(), from_number="+15551110000",
             to_numbers=["+15552220000"], provider="websocket",
         )
 
-        assert res["mode"] == "parallel_websocket" and res["placed"] == 1
-        assert mock_engine.call_args.args[0] == "websocket"
+        assert res["mode"] == "parallel_websocket" and res["status"] == "queued"
+        assert res["queued"] == 1 and res["placed"] == 0
+        rows = db.add_all.call_args.args[0]
+        assert len(rows) == 1
+        assert rows[0].provider == "websocket" and rows[0].batch_id is not None
 
-    @patch("core.services.outbound_call_service.get_call_engine")
-    def test_websocket_max_concurrency_places_parallel_calls(self, mock_engine, _creds, monkeypatch):
-        """provider=websocket + max_concurrency=N fires N parallel bridge calls (one target)."""
+    def test_websocket_max_concurrency_queues_n_rows(self, _creds, monkeypatch):
+        """provider=websocket + max_concurrency=N queues N rows in one batch (one target, cycled).
+        Real concurrency is throttled per-pod at dispatch, not by firing N threads here."""
         monkeypatch.setattr(
             "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
         )
-        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
-        eng = mock_engine.return_value
-        eng.initiate_call.side_effect = lambda **k: SimpleNamespace(call_id="WSx", provider="websocket")
-        svc = OutboundCallService(self._db(), org_id=uuid4())
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
+        db = self._db()
+        svc = OutboundCallService(db, org_id=uuid4())
 
         res = svc.create_outbound_call(
             agent_id=uuid4(), from_number="+15551110000",
             to_numbers=["+15552220000"], provider="websocket", max_concurrency=5,
         )
 
-        assert res["mode"] == "parallel_websocket"
-        assert res["requested"] == 5 and res["placed"] == 5
-        assert eng.initiate_call.call_count == 5
-        assert mock_engine.call_args.args[0] == "websocket"
+        assert res["requested"] == 5 and res["queued"] == 5
+        rows = db.add_all.call_args.args[0]
+        assert len(rows) == 5
+        assert all(r.max_concurrency == 5 for r in rows)
+        assert len({r.batch_id for r in rows}) == 1  # one shared batch
 
-    @patch("core.services.outbound_call_service.get_call_engine")
-    def test_websocket_no_concurrency_one_call_per_target(self, mock_engine, _creds, monkeypatch):
-        """Without max_concurrency, WS places one bridge per destination (no dedupe surprise)."""
+    def test_websocket_no_concurrency_one_row_per_target(self, _creds, monkeypatch):
+        """Without max_concurrency, WS queues one row per destination (no dedupe surprise)."""
         monkeypatch.setattr(
             "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
         )
-        monkeypatch.setattr("core.services.outbound_call_service.settings.BASE_CALL_URL", "https://api.x")
-        eng = mock_engine.return_value
-        eng.initiate_call.side_effect = lambda **k: SimpleNamespace(call_id="WSx", provider="websocket")
-        svc = OutboundCallService(self._db(), org_id=uuid4())
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
+        db = self._db()
+        svc = OutboundCallService(db, org_id=uuid4())
 
         res = svc.create_outbound_call(
             agent_id=uuid4(), from_number="+15551110000",
             to_numbers=["+15552220000", "+15552220001"], provider="websocket",
         )
 
-        assert res["placed"] == 2 and eng.initiate_call.call_count == 2
+        assert res["queued"] == 2
+        rows = db.add_all.call_args.args[0]
+        assert {r.to_number for r in rows} == {"+15552220000", "+15552220001"}
 
     @patch("core.services.contacts.contact_service.ContactService")
     @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
@@ -499,6 +503,26 @@ class TestDispatchConcurrencyAdmission:
 
         assert res.status == "failed"  # terminal status preserved, not clobbered to 'dispatched'
         prewarm.assert_not_called()  # no point warming a call that already ended
+
+    @patch("core.services.outbound_call_service.get_call_engine")
+    def test_ws_no_capacity_holds_row_scheduled(self, mock_engine):
+        # When no outbound voice pod is free, the WS engine raises NoOutboundCapacity. Dispatch must
+        # HOLD the claimed row (revert 'processing' -> 'scheduled') so the drain retries the hand-off
+        # — NOT mark it 'failed'. Backpressure regression for the load-test queue path.
+        from core.services.call_engines.websocket_engine import NoOutboundCapacity
+        mock_engine.return_value.initiate_call.side_effect = NoOutboundCapacity("no pod free")
+        sc = _sc(batch_id=uuid4(), max_concurrency=2, provider="websocket")
+        db = _dispatch_db(sc, claimed=1, batch_active=0)
+        svc = OutboundCallService(db, org_id=uuid4())
+
+        with patch.object(svc, "_prewarm_pipeline") as prewarm:
+            res = svc.dispatch_scheduled_call(sc.id)
+
+        assert res.status == "scheduled"  # held, retryable — not failed
+        prewarm.assert_not_called()
+        # The hold is a compare-and-set that reverts the claim to 'scheduled'.
+        held = db.query(ScheduledCall).update.call_args_list[-1].args[0]
+        assert held[ScheduledCall.status] == "scheduled"
 
 
 class TestDrainOutboundCapacity:
