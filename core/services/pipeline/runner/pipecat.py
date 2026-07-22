@@ -411,7 +411,17 @@ class PipecatPipelineRunner(PipelineRunner):
                             error=str(e),
                         )
 
+        # Idempotency guard: a single call must start the session ONCE. Some transports fire more
+        # than one connect event (the outbound WebSocket client transport raises on_connected from
+        # BOTH its input and output halves), which would otherwise greet twice and start recording
+        # twice.
+        session_started = {"done": False}
+
         async def _start_session():
+            if session_started["done"]:
+                logger.debug("Client connected again — session already started, ignoring.")
+                return
+            session_started["done"] = True
             if audio_buffer:
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
