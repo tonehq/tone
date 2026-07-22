@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import List, Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -32,6 +32,9 @@ class CreateOutboundCallRequest(BaseModel):
     directory_id: Optional[UUID] = None
     # How many of this batch's calls run at once (UI selector). None/omitted → the env default.
     max_concurrency: Optional[int] = None
+    # Trigger engine: "twilio" places a real PSTN call; "websocket" bridges the call over a
+    # WebSocket to a remote /ws/test (agent-to-agent, no telephony). Defaults to twilio.
+    provider: Literal["twilio", "websocket"] = "twilio"
 
     def resolved_numbers(self) -> List[str]:
         nums = list(self.to_numbers or [])
@@ -92,6 +95,7 @@ def create_outbound_call(
         created_by_user_id=service.user_id,
         directory_id=body.directory_id,
         max_concurrency=body.max_concurrency,
+        provider=body.provider,
     )
 
 
@@ -104,6 +108,7 @@ def create_outbound_call_from_file(
     schema_id: Optional[UUID] = Form(None),
     schedule_column: Optional[str] = Form(None),
     max_concurrency: Optional[int] = Form(None),
+    provider: str = Form("twilio"),
     file: UploadFile = File(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
@@ -190,6 +195,7 @@ def create_outbound_call_from_file(
         scheduled_at=scheduled_at,
         created_by_user_id=service.user_id,
         max_concurrency=max_concurrency,
+        provider=provider,
     )
 
 
