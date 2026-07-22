@@ -1,0 +1,115 @@
+name: Staging AWS Model Services Deploy
+
+on:
+  push:
+    branches: ["staging-aws"]
+    paths:
+      - "build/kubernetes/staging-aws/models/**"
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Model to deploy"
+        required: true
+        default: "all"
+        type: choice
+        options:
+          - all
+          - nemotron
+          - qwen
+          - cosyvoice
+          - mistral
+
+env:
+  AWS_REGION: us-east-1
+  EKS_CLUSTER: tone-staging
+  NAMESPACE: staging
+
+jobs:
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      nemotron: ${{ steps.f.outputs.nemotron }}
+      qwen: ${{ steps.f.outputs.qwen }}
+      cosyvoice: ${{ steps.f.outputs.cosyvoice }}
+      mistral: ${{ steps.f.outputs.mistral }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: f
+        run: |
+          BEFORE="${{ github.event.before }}"
+          if [ -z "$BEFORE" ] || [ "$BEFORE" = "0000000000000000000000000000000000000000" ] || ! git cat-file -e "$BEFORE" 2>/dev/null; then
+            BEFORE=$(git rev-parse "${{ github.sha }}~1")
+          fi
+          CHANGED=$(git diff --name-only "$BEFORE" "${{ github.sha }}")
+          echo "changed files:"; echo "$CHANGED"
+          BASE="build/kubernetes/staging-aws/models"
+          for entry in stt/nemotron:nemotron tts/qwen:qwen tts/cosyvoice:cosyvoice llm/mistral:mistral; do
+            dir="${entry%%:*}"; name="${entry##*:}"
+            if echo "$CHANGED" | grep -qE "^$BASE/$dir/"; then
+              echo "$name=true" >> "$GITHUB_OUTPUT"; else echo "$name=false" >> "$GITHUB_OUTPUT"; fi
+          done
+
+  deploy:
+    needs: detect
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - model: nemotron
+            changed: ${{ needs.detect.outputs.nemotron }}
+            deployment: staging-stt-nemotron-deployment
+            manifest_dir: build/kubernetes/staging-aws/models/stt/nemotron
+          - model: qwen
+            changed: ${{ needs.detect.outputs.qwen }}
+            deployment: staging-tts-qwen-deployment
+            manifest_dir: build/kubernetes/staging-aws/models/tts/qwen
+          - model: cosyvoice
+            changed: ${{ needs.detect.outputs.cosyvoice }}
+            deployment: staging-tts-cosyvoice-deployment
+            manifest_dir: build/kubernetes/staging-aws/models/tts/cosyvoice
+          - model: mistral
+            changed: ${{ needs.detect.outputs.mistral }}
+            deployment: staging-llm-mistral-deployment
+            manifest_dir: build/kubernetes/staging-aws/models/llm/mistral
+    steps:
+      - name: Should deploy
+        id: gate
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            if [ "${{ github.event.inputs.model }}" = "all" ] || [ "${{ github.event.inputs.model }}" = "${{ matrix.model }}" ]; then
+              echo "run=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "run=false" >> "$GITHUB_OUTPUT"
+            fi
+          elif [ "${{ matrix.changed }}" = "true" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "run=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/checkout@v4
+        if: steps.gate.outputs.run == 'true'
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        if: steps.gate.outputs.run == 'true'
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Update kubeconfig
+        if: steps.gate.outputs.run == 'true'
+        run: aws eks update-kubeconfig --name ${{ env.EKS_CLUSTER }} --region ${{ env.AWS_REGION }}
+
+      - name: Apply manifests
+        if: steps.gate.outputs.run == 'true'
+        run: kubectl -n "$NAMESPACE" apply -f "${{ matrix.manifest_dir }}/"
+
+      - name: Restart and wait for rollout
+        if: steps.gate.outputs.run == 'true'
+        run: |
+          kubectl -n "$NAMESPACE" rollout restart deploy/"${{ matrix.deployment }}"
+          kubectl -n "$NAMESPACE" rollout status deploy/"${{ matrix.deployment }}" --timeout=2700s
