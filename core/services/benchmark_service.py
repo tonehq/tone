@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
@@ -68,6 +69,7 @@ class BenchmarkService(BaseService):
         warmup_iterations: int = 1,
         concurrency: int = 1,
         timeout_s: Optional[float] = None,
+        measure: str = "ttfb",
         prompt: Optional[str] = None,
         sentence: Optional[str] = None,
     ) -> Dict[str, Any]:
@@ -102,6 +104,7 @@ class BenchmarkService(BaseService):
             "iterations": iterations,
             "warmup_iterations": warmup_iterations,
             "concurrency": concurrency,
+            "measure": measure,
         }
         if timeout_s is not None:
             options["timeout_s"] = timeout_s
@@ -117,6 +120,25 @@ class BenchmarkService(BaseService):
         results = await run_triplet(
             specs, service_types=selected, overrides=overrides, **options
         )
+        logger.info(
+            "[benchmark] agent={} complete {}",
+            agent_id,
+            json.dumps(
+                {
+                    k: (
+                        {"error": v["error"]}
+                        if "error" in v
+                        else {
+                            "provider": v["provider"],
+                            "ok": f"{v['succeeded']}/{v['iterations']}",
+                            "latency_ms": v["latency_ms"],
+                            "rps": v["throughput_rps"],
+                        }
+                    )
+                    for k, v in results.items()
+                }
+            ),
+        )
 
         return {
             "agent_id": str(agent.id),
@@ -126,6 +148,7 @@ class BenchmarkService(BaseService):
                 "iterations": iterations,
                 "warmup_iterations": warmup_iterations,
                 "concurrency": concurrency,
+                "measure": measure,
             },
             "results": results,
         }
