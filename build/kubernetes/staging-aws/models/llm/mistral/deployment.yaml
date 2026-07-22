@@ -46,6 +46,7 @@ spec:
             - --tool-call-parser
             - mistral
             - --enable-log-requests
+            - --enable-prefix-caching
             - --host
             - 0.0.0.0
             - --port
