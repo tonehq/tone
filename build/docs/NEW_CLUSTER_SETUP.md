@@ -109,6 +109,10 @@ ordinal's pod name never changes. Cold start is ~15–20s per pod (readiness pro
 has `initialDelaySeconds: 10`); a fresh node/image pull or cluster autoscale adds
 more.
 
+To scale on load instead of by hand — and to have nodes appear when pods no longer
+fit — see [`autoscaling-runbook.md`](./autoscaling-runbook.md) (KEDA for pods,
+Cluster Autoscaler for nodes).
+
 ---
 
 ## 4. Pod URL pinning (built on the StatefulSet)
