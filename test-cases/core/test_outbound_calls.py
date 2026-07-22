@@ -15,7 +15,6 @@ from core.models.channel import Channel
 from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
-from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.call_log_service import CallLogService
 from core.services.outbound_call_service import OutboundCallService
 
@@ -245,6 +244,32 @@ class TestCreateSuccess:
         assert res["queued"] == 2
         rows = db.add_all.call_args.args[0]
         assert {r.to_number for r in rows} == {"+15552220000", "+15552220001"}
+
+    def test_websocket_immediate_dispatches_inline_when_pod_available(self, _creds, monkeypatch):
+        """Immediate WS dispatches the hand-off INLINE on create (not only via the orchestrator
+        poll), so a pod-available call triggers right away instead of sitting in 'scheduled'."""
+        monkeypatch.setattr(
+            "core.services.outbound_call_service.settings.WS_CALL_TARGET_URL", "wss://remote.example"
+        )
+        enq = MagicMock(side_effect=lambda items: [(7, None) for _ in items])
+        monkeypatch.setattr("core.services.ingestion_queue.enqueue_outbound_calls_batch", enq)
+        db = self._db()
+        svc = OutboundCallService(db, org_id=uuid4())
+
+        # Simulate the row dispatching successfully (a pod accepted the hand-off).
+        dispatched = SimpleNamespace(
+            status="dispatched", to_number="+15552220000", provider_call_sid="WS1"
+        )
+        with patch.object(svc, "dispatch_scheduled_call", return_value=dispatched) as disp:
+            res = svc.create_outbound_call(
+                agent_id=uuid4(), from_number="+15551110000",
+                to_numbers=["+15552220000"], provider="websocket",
+            )
+
+        assert res["mode"] == "parallel_websocket" and res["status"] == "dialing"
+        assert res["placed"] == 1 and res["queued"] == 0
+        assert res["calls"][0]["provider_call_id"] == "WS1"
+        disp.assert_called_once()  # dispatched inline, on create
 
     @patch("core.services.contacts.contact_service.ContactService")
     @patch("core.services.contacts.contact_directory_service.ContactDirectoryService")
@@ -619,52 +644,34 @@ class TestCompletionRefill:
 
 
 class TestWsTriggerAllowlist:
-    """The WebSocket trigger is an internal test tool gated by the GLOBAL
-    ``ws_trigger_allowed_users`` DB table (read-only; managed directly in the DB). See
-    OutboundCallService.is_ws_trigger_allowed / assert_ws_trigger_allowed and the capabilities
-    payload. ``make_db`` returns the seeded row for a WsTriggerAllowedUser query (filters are
-    not evaluated by the mock), so a seeded row = 'a matching allowlist row exists'."""
+    """The WebSocket trigger is an internal test tool gated by the ``super_admin`` role (assigned via
+    SQL only). See OutboundCallService.is_ws_trigger_allowed / assert_ws_trigger_allowed and the
+    capabilities payload. The gate is a pure role check — no DB access needed."""
 
-    def _db(self, allowed_row=False):
-        seeded = SimpleNamespace(id=uuid4()) if allowed_row else None
-        return make_db({WsTriggerAllowedUser: seeded})
+    def _svc(self):
+        return OutboundCallService(make_db(), org_id=uuid4())
 
-    def test_no_row_denies_and_403(self):
-        svc = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
-        assert svc.is_ws_trigger_allowed("dev@x.com") is False
-        with pytest.raises(HTTPException) as exc:
-            svc.assert_ws_trigger_allowed("dev@x.com", "websocket")
-        assert exc.value.status_code == 403
+    def test_super_admin_allows(self):
+        svc = self._svc()
+        assert svc.is_ws_trigger_allowed("super_admin") is True
+        svc.assert_ws_trigger_allowed("super_admin", "websocket")  # no raise
+        # case- / whitespace-insensitive
+        assert svc.is_ws_trigger_allowed("  Super_Admin ") is True
 
-    def test_matching_row_allows(self):
-        svc = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
-        assert svc.is_ws_trigger_allowed("dev@x.com") is True
-        svc.assert_ws_trigger_allowed("dev@x.com", "websocket")  # no raise
-
-    def test_blank_email_is_denied(self):
-        svc = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
-        assert svc.is_ws_trigger_allowed("") is False
-        assert svc.is_ws_trigger_allowed(None) is False
+    def test_non_super_admin_role_denies_and_403(self):
+        svc = self._svc()
+        for role in ("admin", "owner", "developer", "observer", "", None):
+            assert svc.is_ws_trigger_allowed(role) is False
+            with pytest.raises(HTTPException) as exc:
+                svc.assert_ws_trigger_allowed(role, "websocket")
+            assert exc.value.status_code == 403
 
     def test_twilio_provider_is_never_gated(self):
-        svc = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
-        svc.assert_ws_trigger_allowed("anyone@x.com", "twilio")  # no raise
-
-    def test_missing_table_fails_closed(self):
-        # If the allowlist table doesn't exist yet (migration not applied), the check must deny
-        # + roll back rather than 500 the capabilities/create call.
-        from sqlalchemy.exc import SQLAlchemyError
-        db = MagicMock()
-        q = MagicMock()
-        q.filter.return_value = q
-        q.first.side_effect = SQLAlchemyError("relation ws_trigger_allowed_users does not exist")
-        db.query.return_value = q
-        svc = OutboundCallService(db, org_id=uuid4())
-        assert svc.is_ws_trigger_allowed("dev@x.com") is False
-        db.rollback.assert_called_once()
+        svc = self._svc()
+        svc.assert_ws_trigger_allowed("developer", "twilio")  # no raise
+        svc.assert_ws_trigger_allowed(None, "twilio")  # no raise
 
     def test_capabilities_payload_reports_ws_flag(self):
-        allowed = OutboundCallService(self._db(allowed_row=True), org_id=uuid4())
-        denied = OutboundCallService(self._db(allowed_row=False), org_id=uuid4())
-        assert allowed.get_concurrency_max(caller_email="dev@x.com")["ws_trigger_allowed"] is True
-        assert denied.get_concurrency_max(caller_email="dev@x.com")["ws_trigger_allowed"] is False
+        svc = self._svc()
+        assert svc.get_concurrency_max(caller_role="super_admin")["ws_trigger_allowed"] is True
+        assert svc.get_concurrency_max(caller_role="developer")["ws_trigger_allowed"] is False

@@ -20,7 +20,6 @@ from typing import Any, Dict, List, Optional
 from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy import and_, func, or_
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from core.models.agent import Agent
@@ -28,7 +27,6 @@ from core.models.channel import Channel
 from core.models.contact import Contact
 from core.models.phone_number import PhoneNumber
 from core.models.scheduled_call import ScheduledCall
-from core.models.ws_trigger_allowed_user import WsTriggerAllowedUser
 from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
 from core.services.call_engines.websocket_engine import NoOutboundCapacity
@@ -37,6 +35,10 @@ from core.services.transport.telephony_credentials import get_twilio_credentials
 from shared.config import settings
 
 _E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
+
+# Role permitted to use the WebSocket ("test bridge") outbound trigger. Assigned via SQL only
+# (``UPDATE members SET role='super_admin' WHERE ...``) — there is no UI/API to grant it.
+SUPER_ADMIN_ROLE = "super_admin"
 
 # scheduled_calls lifecycle ranks — status only moves strictly forward.
 # scheduled < processing < dispatched < in_progress < terminal.
@@ -574,11 +576,13 @@ class OutboundCallService(BaseService):
         default one per destination, cycling ``valid`` so 1 target + N → N calls to it).
 
         The media must run on the dedicated outbound voice pods, never in THIS originating process
-        (that OOMs under load). So instead of spawning bridge threads here, this queues N
-        ``scheduled_calls`` rows due NOW, sharing a ``batch_id``: the normal dispatch path hands
-        each off to an outbound pod (``WebSocketCallEngine.initiate_call``), the per-pod
-        ``MAX_CONCURRENT_CALLS`` throttles real concurrency, and overflow that a pod refuses (429)
-        is held + retried by the drain/refill as pods free. Fires near-instantly (jobs are due now)."""
+        (that OOMs under load). So this creates N ``scheduled_calls`` rows due NOW (sharing a
+        ``batch_id``) and dispatches the hand-off **INLINE** right here — each dispatch atomically
+        claims its row, picks an outbound pod (``PodPicker.for_outbound``), and HTTP-POSTs the bridge
+        to it (no media on this pod, just a POST). Dispatching inline (instead of only waiting on the
+        orchestrator's Procrastinate poll) means an immediate test call triggers on create rather
+        than sitting in 'scheduled'. Rows a pod refuses (429) / with no pod free stay 'scheduled' and
+        the enqueued Procrastinate jobs + the drain retry the hand-off as pods free."""
         try:
             count = int(max_concurrency) if max_concurrency else 0
         except (TypeError, ValueError):
@@ -615,21 +619,40 @@ class OutboundCallService(BaseService):
             for i in range(count)
         ]
         self._persist_and_enqueue_rows(rows)
+
+        # Trigger the hand-off INLINE now — don't wait on the orchestrator's poll. Each
+        # dispatch_scheduled_call claims the row (age-gated so the queued job can't double-dial it),
+        # picks an outbound voice pod, and hands off. A row with no free pod stays 'scheduled' and is
+        # retried by its Procrastinate job + the drain. Bounded loop (count <= _MAX_PARALLEL_WS).
+        placed_calls: List[Dict[str, Any]] = []
+        held = 0
+        for sc in rows:
+            try:
+                result = self.dispatch_scheduled_call(sc.id)
+                if result is not None and result.status == "dispatched":
+                    placed_calls.append(
+                        {"to_number": result.to_number, "provider_call_id": result.provider_call_sid}
+                    )
+                else:
+                    held += 1
+            except Exception:  # noqa: BLE001
+                held += 1
+                logger.exception("[outbound][ws] inline dispatch failed id={}", sc.id)
         logger.info(
-            "[outbound][ws] queued {} parallel bridge(s) for hand-off to outbound pods agent={} batch={}",
-            len(rows), agent.id, batch_id,
+            "[outbound][ws] immediate fan-out agent={} batch={}: {} placed, {} held (of {})",
+            agent.id, batch_id, len(placed_calls), held, len(rows),
         )
         return {
             "mode": "parallel_websocket",
-            "status": "queued",
+            "status": "dialing" if placed_calls else "queued",
             "provider": "websocket",
             "agent_id": str(agent.id),
             "from_number": from_number,
             "requested": count,
-            "queued": len(rows),
-            "placed": 0,
+            "placed": len(placed_calls),
+            "queued": held,
             "batch_id": str(batch_id),
-            "calls": [],
+            "calls": placed_calls,
             "invalid": invalid,
         }
 
@@ -970,52 +993,35 @@ class OutboundCallService(BaseService):
 
     # ------------------------------------------------------ concurrency limiter
 
-    def is_ws_trigger_allowed(self, email: Optional[str]) -> bool:
-        """True when ``email`` is on the GLOBAL ``ws_trigger_allowed_users`` allowlist (managed
-        directly in the DB, case-insensitive). The WebSocket ("test bridge") trigger is an
-        internal test tool, so an empty table means nobody is allowed. Single source of truth for
-        the gate — used by both the UI-capabilities payload and the create-time enforcement."""
-        if not email or not email.strip():
-            return False
-        # Global lookup (the table has no organization_id), so query the raw session rather than
-        # the org-scoped self.query.
-        try:
-            row = (
-                self.db.query(WsTriggerAllowedUser)
-                .filter(func.lower(WsTriggerAllowedUser.email) == email.strip().lower())
-                .first()
-            )
-            return row is not None
-        except SQLAlchemyError:
-            # The allowlist table may not exist yet on an environment where the migration hasn't
-            # run. Fail CLOSED (deny the WS trigger) rather than 500 the capabilities/create call,
-            # and roll back so the aborted transaction doesn't break the rest of the request.
-            self.db.rollback()
-            logger.exception(
-                "[outbound] ws_trigger allowlist check failed — denying (is the migration applied?)"
-            )
-            return False
+    def is_ws_trigger_allowed(self, role: Optional[str]) -> bool:
+        """True when ``role`` is the ``super_admin`` role — the only role permitted to use the
+        WebSocket ("test bridge") outbound trigger (an internal test tool). Case- and
+        whitespace-insensitive; empty/None → denied. Single source of truth for the gate — used by
+        both the UI-capabilities payload and the create-time enforcement. The role is assigned via
+        SQL only (``UPDATE members SET role='super_admin' WHERE ...``)."""
+        return (role or "").strip().lower() == SUPER_ADMIN_ROLE
 
-    def assert_ws_trigger_allowed(self, email: Optional[str], provider: Optional[str]) -> None:
-        """Reject provider='websocket' for a caller not on the allowlist (403). No-op for twilio /
-        non-websocket requests. Enforced server-side because the UI gate (hiding the selector) is
-        advisory only."""
-        if (provider or "").strip().lower() == "websocket" and not self.is_ws_trigger_allowed(email):
+    def assert_ws_trigger_allowed(self, role: Optional[str], provider: Optional[str]) -> None:
+        """Reject provider='websocket' for a caller whose role isn't ``super_admin`` (403). No-op for
+        twilio / non-websocket requests. Enforced server-side because the UI gate (hiding the
+        selector) is advisory only."""
+        if (provider or "").strip().lower() == "websocket" and not self.is_ws_trigger_allowed(role):
             raise HTTPException(
                 status_code=403,
                 detail="You are not permitted to use the WebSocket trigger.",
             )
 
-    def get_concurrency_max(self, caller_email: Optional[str] = None) -> Dict[str, Any]:
+    def get_concurrency_max(self, caller_role: Optional[str] = None) -> Dict[str, Any]:
         """UI capabilities payload for the New Outbound Call modal:
         - ``max``: the env ceiling the concurrency selector is capped to and defaults to
           (``None`` = unset, so the field has no upper bound); the actual limit is chosen per
           batch at schedule time.
-        - ``ws_trigger_allowed``: whether ``caller_email`` may use the WebSocket trigger (global
-          DB allowlist), so the UI can show the "Trigger via" selector for allowed users only."""
+        - ``ws_trigger_allowed``: whether ``caller_role`` may use the WebSocket trigger (i.e. it is
+          the ``super_admin`` role), so the UI can show the "Trigger via" selector for allowed users
+          only."""
         return {
             "max": get_env_outbound_ceiling(),
-            "ws_trigger_allowed": self.is_ws_trigger_allowed(caller_email),
+            "ws_trigger_allowed": self.is_ws_trigger_allowed(caller_role),
         }
 
     def drain_outbound_capacity(self) -> int:
