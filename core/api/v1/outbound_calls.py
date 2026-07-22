@@ -87,7 +87,7 @@ def create_outbound_call(
     Immediate calls surface in Call History as a log; scheduled calls appear in
     the Scheduled Calls list."""
     service = _get_service(claims, db)
-    service.assert_ws_trigger_allowed(claims.email, body.provider)
+    service.assert_ws_trigger_allowed(claims.role, body.provider)
     return service.create_outbound_call(
         agent_id=body.agent_id,
         from_number=body.from_number,
@@ -134,7 +134,7 @@ def create_outbound_call_from_file(
     from core.services.contact_ingestion.validation import build_contact_validator
     from core.services.contacts.contact_schema_service import ContactSchemaService
 
-    _get_service(claims, db).assert_ws_trigger_allowed(claims.email, provider)
+    _get_service(claims, db).assert_ws_trigger_allowed(claims.role, provider)
     raw = file.file.read()
     if not raw:
         raise HTTPException(status_code=400, detail="The uploaded file is empty.")
@@ -209,8 +209,9 @@ def get_outbound_concurrency_max(
     """Capabilities for the New Outbound Call modal: ``max`` — the env ceiling
     (``MAX_CONCURRENT_OUTBOUND_CALLS``) the per-batch 'Concurrent calls' selector is capped to and
     defaults to (``null`` = unset); ``ws_trigger_allowed`` — whether THIS user may use the
-    WebSocket trigger (env allowlist), so the UI shows the 'Trigger via' selector accordingly."""
-    return _get_service(claims, db).get_concurrency_max(caller_email=claims.email)
+    WebSocket trigger (i.e. has the ``super_admin`` role), so the UI shows the 'Trigger via'
+    selector accordingly."""
+    return _get_service(claims, db).get_concurrency_max(caller_role=claims.role)
 
 
 @router.post("/scheduled/list")
