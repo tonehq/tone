@@ -176,6 +176,14 @@ def _refill_batch_job(batch_id) -> None:
 # Longer than the enqueue round-trip so we never race a batch that's mid-creation.
 _ORPHAN_GRACE = timedelta(minutes=2)
 
+# A row stuck in 'processing' with no provider_call_sid is only re-claimed (crash recovery) once
+# it has sat that way longer than this. Guards against a DOUBLE-DIAL: while a dispatch is mid
+# hand-off (for WebSocket, an HTTP POST to another pod — a wide window), the row is
+# 'processing'+sid=NULL; without this age gate a concurrent dispatcher (the Procrastinate job AND
+# the periodic drain) would re-claim it and start a SECOND bridge. Must exceed the hand-off /
+# provider-call round-trip (WS hand-off httpx timeout is 10s).
+_PROCESSING_RECLAIM_GRACE = timedelta(seconds=90)
+
 
 
 
@@ -806,6 +814,7 @@ class OutboundCallService(BaseService):
         batch_id = sc.batch_id
         batch_limit = sc.max_concurrency
         limited = batch_id is not None and isinstance(batch_limit, int) and batch_limit > 0
+        now = datetime.now(timezone.utc)
         scheduled_cond = ScheduledCall.status == "scheduled"
         if limited:
             batch_active = (
@@ -817,6 +826,10 @@ class OutboundCallService(BaseService):
                 .scalar_subquery()
             )
             scheduled_cond = and_(scheduled_cond, batch_active < batch_limit)
+        # ``updated_at`` is stamped on the claim below so the recovery clause can tell a FRESH
+        # in-flight claim (do not re-grab — its hand-off is still running) from a genuinely
+        # crashed one (safe to recover). A Core ``.update()`` does not fire the ORM ``onupdate``,
+        # so we set it explicitly.
         claimed = (
             self.db.query(ScheduledCall)
             .filter(
@@ -826,10 +839,14 @@ class OutboundCallService(BaseService):
                     and_(
                         ScheduledCall.status == "processing",
                         ScheduledCall.provider_call_sid.is_(None),
+                        ScheduledCall.updated_at < now - _PROCESSING_RECLAIM_GRACE,
                     ),
                 ),
             )
-            .update({ScheduledCall.status: "processing"}, synchronize_session=False)
+            .update(
+                {ScheduledCall.status: "processing", ScheduledCall.updated_at: now},
+                synchronize_session=False,
+            )
         )
         self.db.commit()
         sc = self.db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
@@ -1002,23 +1019,42 @@ class OutboundCallService(BaseService):
         }
 
     def drain_outbound_capacity(self) -> int:
-        """Safety net (per-minute worker task): retry DUE calls that were HELD at dispatch — either
-        by a per-batch limit, or (WebSocket) by no outbound voice pod being free. Both leave the row
-        'scheduled' after its Procrastinate job already fired, so nothing else re-dials them. Each
-        ``dispatch_scheduled_call`` re-applies the atomic per-batch + capacity check, so this can't
-        overshoot. Dispatches INLINE (never re-defers from inside the worker). Bounded per tick.
-        Returns the number dispatched."""
+        """Safety net (per-minute worker task): re-drive calls that would otherwise stall. Covers
+        two cases, both dispatched INLINE (never re-deferred from inside the worker), bounded per
+        tick. Each ``dispatch_scheduled_call`` re-applies the atomic per-batch + capacity check, so
+        this can't overshoot. Returns the number dispatched.
+
+        (a) DUE rows a prior claim HELD at dispatch — by a per-batch limit, or (WebSocket) by no
+            outbound voice pod being free. Both leave the row 'scheduled' after its Procrastinate
+            job already fired, so nothing else re-dials them.
+        (b) CRASHED rows stranded in 'processing' with no ``provider_call_sid`` — a dispatch claimed
+            the row then died mid hand-off before persisting a SID. Nothing else re-drives a
+            'processing' row (the drain and reconcile otherwise only touch 'scheduled'), so without
+            this they'd hold their batch slot forever, relying solely on a well-timed Procrastinate
+            redelivery. We recover them here once older than ``_PROCESSING_RECLAIM_GRACE`` — the same
+            age gate dispatch's recovery clause applies, so a hand-off still in flight is never grabbed."""
         now = datetime.now(timezone.utc)
         rows = (
             self.db.query(ScheduledCall)
             .filter(
-                ScheduledCall.status == "scheduled",
-                ScheduledCall.scheduled_at <= now,
-                # Batch-limited rows OR WS rows (which can be pod-capacity-held without a batch limit).
                 or_(
-                    ScheduledCall.batch_id.isnot(None),
-                    ScheduledCall.provider == "websocket",
-                ),
+                    # (a) Held-at-dispatch: batch-limited rows OR WS rows (pod-capacity-held without
+                    # a batch limit).
+                    and_(
+                        ScheduledCall.status == "scheduled",
+                        ScheduledCall.scheduled_at <= now,
+                        or_(
+                            ScheduledCall.batch_id.isnot(None),
+                            ScheduledCall.provider == "websocket",
+                        ),
+                    ),
+                    # (b) Crashed-'processing' recovery, age-gated so a live hand-off isn't grabbed.
+                    and_(
+                        ScheduledCall.status == "processing",
+                        ScheduledCall.provider_call_sid.is_(None),
+                        ScheduledCall.updated_at < now - _PROCESSING_RECLAIM_GRACE,
+                    ),
+                )
             )
             .order_by(ScheduledCall.scheduled_at.asc())
             .limit(_DRAIN_MAX)
