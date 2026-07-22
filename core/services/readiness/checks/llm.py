@@ -12,8 +12,7 @@ from core.services.readiness.base import (
     CheckContext,
     DeepCheck,
     TransientProviderError,
-    with_retry,
-    with_timeout,
+    with_timeout_and_retry,
 )
 from core.services.readiness.checks._common import (
     ApiKeyDecryptsCheck,
@@ -104,16 +103,20 @@ class LLMProviderReachableCheck(DeepCheck):
             )
         return "Provider or key not resolved (see shallow checks)."
 
-    @with_retry()
     # Pipeline harness (PipelineTask start + provider HTTP/WS handshake) +
     # first-token streaming. Cold reasoning models (o1/o3, claude-*-thinking,
     # gemini-*-thinking) and cold self-hosted / cross-region endpoints
     # (Ollama, Bedrock, custom Azure deployments) can take 10-18s to emit the
-    # first token; 25s keeps headroom without false-flagging a healthy
-    # provider. Must stay strictly greater than the probe's internal 20s
-    # timeout (see probes.probe_llm) so the harness has room to tear down
-    # cleanly on timeout.
-    @with_timeout(25.0)
+    # first token. 40s (was 25s) gives real headroom for pre-work under load
+    # (spec resolution, decryption, cache miss) BEFORE the probe's internal
+    # 20s wait fires; without that headroom a busy event loop consumed the
+    # outer window and healthy providers were false-flagged as BLOCKER.
+    # `with_timeout_and_retry` (attempts=2) gives each attempt its own fresh
+    # 40s budget and retries specifically on `asyncio.TimeoutError` so a
+    # single transient hiccup doesn't fail a working provider. Auth/quota
+    # 4xx errors surface as `ProbeResult(ok=False)` and are returned
+    # immediately — no retry, no delay.
+    @with_timeout_and_retry(40.0, attempts=2)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_llm
 

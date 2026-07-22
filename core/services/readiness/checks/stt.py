@@ -13,8 +13,7 @@ from typing import ClassVar
 from core.services.readiness.base import (
     CheckContext,
     DeepCheck,
-    with_retry,
-    with_timeout,
+    with_timeout_and_retry,
 )
 from core.services.readiness.checks._common import (
     ApiKeyDecryptsCheck,
@@ -95,16 +94,21 @@ class STTProviderReachableCheck(DeepCheck):
             return _S2S_SKIP_REASON
         return "Provider or key not resolved (see shallow checks)."
 
-    @with_retry()
     # Pipeline harness adds ~2–4s for PipelineTask lifecycle (StartFrame,
     # WS handshake, TaskManager setup) on top of the real-audio probe.
     # Cold WS-STTs (Deepgram / AssemblyAI / Sarvam / Soniox in fresh
     # regions) can take 15-22s to complete first-handshake + final
-    # transcript; 30s keeps headroom without false-flagging a healthy
-    # provider. Must stay strictly greater than the probe's internal 25s
-    # timeout (see probes.probe_stt) so the harness has room to tear down
-    # cleanly on timeout.
-    @with_timeout(30.0)
+    # transcript. 45s (was 30s) gives real headroom for pre-work under
+    # load (spec resolution, decryption, cache miss) BEFORE the probe's
+    # internal 25s wait fires; without that headroom a busy event loop
+    # consumed the outer window and healthy providers were false-flagged
+    # as BLOCKER. `with_timeout_and_retry` (attempts=2) gives each attempt
+    # its own fresh 45s budget and retries specifically on
+    # `asyncio.TimeoutError` so a single transient WS handshake or cold
+    # region doesn't fail a working provider. Auth/quota 4xx errors
+    # surface as `ProbeResult(ok=False)` and are returned immediately —
+    # no retry, no delay.
+    @with_timeout_and_retry(45.0, attempts=2)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_stt
 
