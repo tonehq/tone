@@ -13,8 +13,7 @@ from core.services.readiness.base import (
     CheckContext,
     DeepCheck,
     ShallowCheck,
-    with_retry,
-    with_timeout,
+    with_timeout_and_retry,
 )
 from core.services.readiness.checks._common import (
     ApiKeyDecryptsCheck,
@@ -164,15 +163,20 @@ class TTSProviderReachableCheck(DeepCheck):
             return _S2S_SKIP_REASON
         return "Provider or key not resolved (see shallow checks)."
 
-    @with_retry()
     # Pipeline harness (PipelineTask start + WS handshake) + sentence
     # synthesis + first-audio consumption. Slower WS TTSs (ElevenLabs,
     # LMNT, Cartesia streaming, Play.ht) can take 10-15s cold on heavy
-    # voices or distant regions; 22s keeps us honest without false-
-    # flagging a healthy provider. Must stay strictly greater than the
-    # probe's internal 18s timeout (see probes.probe_tts) so the harness
-    # has room to tear down cleanly on timeout.
-    @with_timeout(22.0)
+    # voices or distant regions. 35s (was 22s) gives real headroom for
+    # pre-work under load (spec resolution, decryption, cache miss)
+    # BEFORE the probe's internal 18s wait fires; without that headroom
+    # a busy event loop consumed the outer window and healthy providers
+    # were false-flagged as BLOCKER. `with_timeout_and_retry` (attempts=2)
+    # gives each attempt its own fresh 35s budget and retries specifically
+    # on `asyncio.TimeoutError` so a single transient WS handshake or
+    # cold voice-model load doesn't fail a working provider. Auth/quota
+    # 4xx errors surface as `ProbeResult(ok=False)` and are returned
+    # immediately — no retry, no delay.
+    @with_timeout_and_retry(35.0, attempts=2)
     async def run(self, ctx: CheckContext) -> CheckResult:
         from core.services.readiness.probes import probe_tts
 

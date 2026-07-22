@@ -42,6 +42,7 @@ async def probe_in_pipeline(
     timeout_s: float,
     provider: str,
     warmup_s: float = 0.3,
+    end_frame_after_s: Optional[float] = None,
 ) -> Tuple[bool, Optional[object], Optional[str]]:
     """Run ``service`` inside a minimal pipecat pipeline, feed ``input_frames``,
     and wait for a downstream frame satisfying ``is_target``.
@@ -156,14 +157,56 @@ async def probe_in_pipeline(
         #      latency on a fast handshake.
         #   2) No explicit signal (most services). Sleep the full ``warmup_s``
         #      as a best-effort budget.
-        ready = getattr(service, "_connection_ready", None)
-        if isinstance(ready, asyncio.Event):
+        ready_event = getattr(service, "_connection_ready", None)
+        if isinstance(ready_event, asyncio.Event):
+            # Deepgram STT — explicit asyncio.Event signal.
             with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(ready.wait(), timeout=warmup_s)
+                await asyncio.wait_for(ready_event.wait(), timeout=warmup_s)
         else:
-            await asyncio.sleep(warmup_s)
+            # Two-stage services (Gladia STT: HTTP session + WS handshake)
+            # need longer than the fixed warmup — but polling their boolean
+            # readiness (``_connection_active`` bool, or ``_websocket.state
+            # is OPEN``) lets us exit early if they're fast. Give the poll
+            # up to ``2 * warmup_s`` before giving up; the extra window
+            # only elapses if the service is genuinely slow to connect.
+            deadline = asyncio.get_event_loop().time() + max(warmup_s * 2, warmup_s + 3.0)
+            poll_interval = 0.1
+            while asyncio.get_event_loop().time() < deadline:
+                active = getattr(service, "_connection_active", None)
+                ws = getattr(service, "_websocket", None)
+                ws_open = False
+                if ws is not None:
+                    state = getattr(ws, "state", None)
+                    # websockets.State.OPEN.name == "OPEN"
+                    ws_open = getattr(state, "name", "") == "OPEN"
+                if active is True or ws_open:
+                    break
+                await asyncio.sleep(poll_interval)
+            else:
+                # No readiness signal detected — fall back to fixed sleep
+                # to preserve the original best-effort behaviour for services
+                # that don't expose any inspectable state (HTTP-batch, etc.).
+                pass
+            # Small final buffer for any tail-end setup even after the flag
+            # flips (e.g. session_url stored but WS still handshaking).
+            await asyncio.sleep(0.2)
         for f in input_frames:
             await task.queue_frame(f)
+        # Delayed EndFrame — some services (Gladia STT) only send their
+        # server-side flush signal from ``stop(EndFrame)`` rather than from
+        # ``VADUserStoppedSpeakingFrame``; without an EndFrame the probe
+        # times out. Well-behaved services (Deepgram, Speechmatics,
+        # ElevenLabs Realtime, Cartesia, ElevenLabs TTS, MiniMax, …) finalize
+        # on the VAD frame and emit their transcript/audio within a few
+        # hundred ms — the main wait loop captures the target and teardown
+        # cancels ``feeder_task`` before this sleep expires, so the EndFrame
+        # is NEVER queued for them. Only providers that genuinely need
+        # EndFrame to trigger flush see it, and only after enough time has
+        # passed for their earlier response window to close.
+        if end_frame_after_s is not None:
+            from pipecat.frames.frames import EndFrame
+            await asyncio.sleep(end_frame_after_s)
+            await task.queue_frame(EndFrame())
 
     runner_task = asyncio.create_task(runner.run(task), name=f"probe-runner-{provider}")
     feeder_task = asyncio.create_task(_feed_after_start(), name=f"probe-feed-{provider}")

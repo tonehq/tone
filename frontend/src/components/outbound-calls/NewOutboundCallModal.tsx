@@ -468,6 +468,34 @@ export default function NewOutboundCallModal({
           }
         />
 
+        {/* Per-batch concurrency — capped to the env max when one is configured. */}
+        <TextInput
+          label="Concurrent calls"
+          type="number"
+          min={1}
+          max={concurrencyMax ?? undefined}
+          value={concurrencyValue ?? ''}
+          onChange={(e) => {
+            const raw = e.target.value;
+            if (raw === '') {
+              setConcurrencyValue(null);
+              return;
+            }
+            const n = parseInt(raw, 10);
+            if (Number.isNaN(n)) {
+              setConcurrencyValue(null);
+              return;
+            }
+            const bounded = concurrencyMax !== null ? Math.min(concurrencyMax, n) : n;
+            setConcurrencyValue(Math.max(1, bounded));
+          }}
+          helperText={
+            concurrencyMax !== null
+              ? `How many of this batch's calls dial at once (max ${concurrencyMax}). The next fires as one finishes.`
+              : "How many of this batch's calls dial at once. Leave empty for no limit. The next fires as one finishes."
+          }
+        />
+
         {/* Mapping schema — drives the downloadable sample template (always visible). */}
         <div className="flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
