@@ -751,6 +751,47 @@ def build_tts(spec: dict) -> Optional[Any]:
             logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
             return ResembleAITTSService(api_key=api_key, **voice_kwargs, **_url_kwargs(metadata, "url"))
 
+        if provider_name == "gradium-ai":
+            from pipecat.services.gradium.tts import GradiumTTSService
+            gradium_kwargs = {}
+            if tts_voice_id is not None:
+                gradium_kwargs["voice_id"] = tts_voice_id
+            base_url = model_meta.get("base_url") or metadata.get("base_url")
+            if base_url:
+                gradium_kwargs["url"] = base_url
+            logger.debug("[TTS {}] gradium_kwargs: {}", provider_name, gradium_kwargs)
+            return GradiumTTSService(api_key=api_key, model=model, **gradium_kwargs)
+
+        if provider_name == "smallest-ai":
+            from pipecat.services.smallest.tts import SmallestTTSService
+            smallest_kwargs = {}
+            base_url = model_meta.get("base_url") or metadata.get("base_url")
+            if base_url:
+                smallest_kwargs["base_url"] = base_url
+            if metadata.get("sample_rate") is not None:
+                smallest_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[TTS {}] smallest_kwargs: {}", provider_name, smallest_kwargs)
+            return SmallestTTSService(
+                api_key=api_key,
+                params=build_input_params(SmallestTTSService, metadata),
+                **smallest_kwargs,
+            )
+
+        if provider_name == "grok-tts":
+            from pipecat.services.xai.tts import XAITTSService
+            xai_kwargs = {}
+            base_url = model_meta.get("base_url") or metadata.get("base_url")
+            if base_url:
+                xai_kwargs["base_url"] = base_url
+            if metadata.get("sample_rate") is not None:
+                xai_kwargs["sample_rate"] = metadata["sample_rate"]
+            logger.debug("[TTS {}] xai_kwargs: {}", provider_name, xai_kwargs)
+            return XAITTSService(
+                api_key=api_key,
+                params=build_input_params(XAITTSService, metadata),
+                **xai_kwargs,
+            )
+
         if provider_name == "chatterbox":
             # Self-hosted Resemble AI Chatterbox — same /ws/tts protocol + 24kHz as Qwen,
             # so we reuse QwenWebSocketTTSService pointed at the chatterbox service.
