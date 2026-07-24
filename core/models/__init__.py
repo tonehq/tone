@@ -12,7 +12,9 @@ from core.models.phone_number import PhoneNumber
 # Uploads & Knowledge Base
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
+from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
+from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
 
 # Agent Core
 from core.models.agent import Agent

@@ -4,7 +4,8 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from collections import deque
-from typing import List
+from dataclasses import dataclass
+from typing import ClassVar, List, Optional
 
 import openai
 from loguru import logger
@@ -57,8 +58,31 @@ def _get_limiter(tokens_per_minute: int) -> _TokenRateLimiter:
         return limiter
 
 
+@dataclass(frozen=True)
+class EmbeddingMetadata:
+    """Identity of the model that produced an embedding — stamped into every
+    stored record so retrieval can verify the query embedder matches."""
+
+    provider: str
+    model: str
+    dimensions: int
+    version: Optional[str] = None
+
+
 class Embedder(ABC):
+    provider: ClassVar[str] = ""
     dimensions: int = 0
+    model: str = ""
+    version: Optional[str] = None
+
+    @property
+    def metadata(self) -> EmbeddingMetadata:
+        return EmbeddingMetadata(
+            provider=self.provider,
+            model=self.model,
+            dimensions=self.dimensions,
+            version=self.version,
+        )
 
     @abstractmethod
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
@@ -69,16 +93,20 @@ class Embedder(ABC):
 
 
 class OpenAIEmbedder(Embedder):
+    provider: ClassVar[str] = "openai"
     MODEL = "text-embedding-3-small"
     dimensions = 1536
 
     def __init__(self, api_key: str, model: str = None, batch_size: int = 100,
-                 max_retries: int = 6, tokens_per_minute: int = 900_000):
+                 max_retries: int = 6, tokens_per_minute: int = 900_000,
+                 dimensions: Optional[int] = None):
         self.api_key = api_key
         self.model = model or self.MODEL
         self.batch_size = batch_size
         self.max_retries = max_retries
         self._limiter = _get_limiter(tokens_per_minute)
+        if dimensions is not None:
+            self.dimensions = dimensions
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
         client = openai.OpenAI(api_key=self.api_key, max_retries=self.max_retries)
