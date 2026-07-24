@@ -135,6 +135,24 @@ class IngestionRunService:
         logger.info(
             "[ingestion] complete run {} (chunks={})", run.id, chunk_count
         )
+
+        # Auto-run the RAG eval against this recipe. Enqueue-only — the queue
+        # worker does the real work; a queue outage or an eval failure must
+        # never fail the ingestion (log + swallow).
+        if settings.EVAL_AUTO_RUN_ENABLED:
+            try:
+                from core.services.ingestion_queue import (
+                    enqueue_eval_for_ingestion_run_sync,
+                )
+
+                enqueue_eval_for_ingestion_run_sync(run.id)
+                logger.info("[eval] enqueued auto-run for ingestion_run={}", run.id)
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "[eval] failed to enqueue auto-run for ingestion_run={} "
+                    "(swallowed — ingestion unaffected)",
+                    run.id,
+                )
         return run
 
     @staticmethod

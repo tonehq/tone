@@ -273,6 +273,17 @@ class Settings:
         # without a key configured.
         self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY", "")
 
+        # ── RAG evaluation harness ──────────────────────────────────────────
+        # Auto-runs after every successful ingestion (IngestionRunService.complete_run
+        # enqueues eval_ingestion_run when EVAL_AUTO_RUN_ENABLED is true). All
+        # eval knobs live here — no other file bakes them in.
+        self.EVAL_AUTO_RUN_ENABLED: bool = get_secret("EVAL_AUTO_RUN_ENABLED", "true").lower() == "true"
+        self.EVAL_GENERATION_MODEL: str = get_secret("EVAL_GENERATION_MODEL", "gpt-4o")
+        self.EVAL_ANSWER_MODEL: str = get_secret("EVAL_ANSWER_MODEL", "gpt-4o")
+        self.EVAL_JUDGE_MODEL: str = get_secret("EVAL_JUDGE_MODEL", "gpt-4o")
+        self.EVAL_TOP_K: int = int(get_secret("EVAL_TOP_K", "8"))
+        self.EVAL_MAX_CONTEXT_CHARS: int = int(get_secret("EVAL_MAX_CONTEXT_CHARS", "60000"))
+
     def loki_read_configured(self) -> bool:
         """True only when we have enough to read a call's logs back from Loki.
 

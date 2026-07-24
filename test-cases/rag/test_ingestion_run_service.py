@@ -10,11 +10,25 @@ The service surface we exercise:
 - fail_run does NOT flip is_active.
 """
 
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from core.services.ingestion_run_service import IngestionRunService
+
+
+@pytest.fixture(autouse=True)
+def _stub_eval_enqueue():
+    """Every ``complete_run`` call fires ``enqueue_eval_for_ingestion_run_sync``
+    when ``EVAL_AUTO_RUN_ENABLED`` is true. Without this stub, a test run with
+    infisical env active would defer a real Procrastinate job with the mock's
+    stringified ``id`` (e.g. ``ingestion_run_id='new'``) to whatever DB the env
+    points at. Patch the enqueue for every test in this module so they stay
+    fully hermetic."""
+    with patch(
+        "core.services.ingestion_queue.enqueue_eval_for_ingestion_run_sync"
+    ) as enq:
+        yield enq
 
 
 def test_resolve_run_config_uses_defaults_when_no_override():

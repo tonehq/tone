@@ -15,6 +15,8 @@ from core.models.upload import Upload
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
+from core.models.eval import Eval
+from core.models.eval_result import EvalResult
 
 # Agent Core
 from core.models.agent import Agent
