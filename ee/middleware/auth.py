@@ -8,6 +8,7 @@ from core.middleware.auth import (
     _enforce_active_session,
     get_bearer_or_cookie_token,
     jwt_manager,
+    try_resolve_api_key,
 )
 from core.context import set_tenant_context
 
@@ -33,6 +34,10 @@ def get_ee_jwt_claims(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
+    api_key_claims = try_resolve_api_key(token, db)
+    if api_key_claims is not None:
+        return api_key_claims
+
     claims = jwt_manager.decode_token(token)
     if claims.org_id:
         set_tenant_context(org_id=claims.org_id, user_id=claims.user_id, role=claims.role)
@@ -47,6 +52,9 @@ def get_optional_ee_jwt_claims(
     token = get_bearer_or_cookie_token(request)
     if not token:
         return None
+    api_key_claims = try_resolve_api_key(token, db)
+    if api_key_claims is not None:
+        return api_key_claims
     claims = jwt_manager.decode_token(token)
     _enforce_active_session(claims, db)
     return claims
@@ -64,8 +72,14 @@ def get_ee_current_user(
     # member of that org — otherwise a forged header would expose another
     # tenant's data (IDOR). Membership lookup also yields the correct per-org
     # role so downstream role guards evaluate against the switched org.
+    #
+    # API-key-authenticated requests are immutably scoped to the key's org —
+    # never honor a tenant_id switch for them (a header must never let a key
+    # reach across into another org, even if the key's creator is a member).
+    is_api_key_auth = (claims.email or "").startswith("api-key:")
     if (
-        tenant_id
+        not is_api_key_auth
+        and tenant_id
         and _validate_uuid(tenant_id)
         and str(tenant_id) != str(claims.org_id or "")
     ):
