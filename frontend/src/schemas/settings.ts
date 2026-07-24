@@ -17,9 +17,3 @@ export const addChannelSchema = z.object({
 });
 
 export type AddChannelFormData = z.infer<typeof addChannelSchema>;
-
-export const publicKeySchema = z.object({
-  keyName: z.string().min(1, 'Key name is required'),
-});
-
-export type PublicKeyFormData = z.infer<typeof publicKeySchema>;

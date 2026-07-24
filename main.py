@@ -39,6 +39,7 @@ if _LOAD_FULL_API:
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
         contact_syncs, agent_contacts,
+        generated_api_keys,
     )
 from core.middleware.request_context import RequestContextMiddleware
 from core.api.telephony_routes import router as telephony_router
@@ -126,6 +127,7 @@ if ee_enabled:
         from ee.api.v1 import dashboard as ee_dashboard
         from ee.api.v1 import call_logs as ee_call_logs
         from ee.api.v1 import call_metrics as ee_call_metrics
+        from ee.api.v1 import generated_api_keys as ee_generated_api_keys
 
         api_v1.include_router(ee_auth.router, prefix="/auth", tags=["auth"])
         api_v1.include_router(sessions.router, prefix="/sessions", tags=["sessions"])
@@ -160,6 +162,11 @@ if ee_enabled:
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
+        api_v1.include_router(
+            ee_generated_api_keys.router,
+            prefix="/generated-api-keys",
+            tags=["generated-api-keys"],
+        )
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("EE edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")
@@ -198,6 +205,11 @@ else:
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
+        api_v1.include_router(
+            generated_api_keys.router,
+            prefix="/generated-api-keys",
+            tags=["generated-api-keys"],
+        )
     # webrtc is always mounted — needed on call pods for WebRTC signaling.
     api_v1.include_router(webrtc.router, prefix="/webrtc", tags=["webrtc"])
     print("Core edition: auth-schema routes loaded (other routers temporarily disabled pending v2 schema migration)")

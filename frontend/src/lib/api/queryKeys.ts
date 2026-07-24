@@ -55,3 +55,10 @@ export const contactKeys = {
       ['agent-contacts', agentId, 'list', params ?? {}] as const,
   },
 } as const;
+
+/** Query keys for the customer-facing generated API Keys (Settings → API Keys). */
+export const apiKeyKeys = {
+  all: () => ['generated-api-keys'] as const,
+  lists: () => ['generated-api-keys', 'list'] as const,
+  list: (params?: ListParams) => ['generated-api-keys', 'list', params ?? {}] as const,
+} as const;
