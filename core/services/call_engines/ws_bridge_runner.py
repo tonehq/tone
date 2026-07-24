@@ -103,7 +103,14 @@ def start_local_bridge(
     stop = threading.Event()
     thread = threading.Thread(
         target=_bridge_thread,
-        args=(call_id, remote_uri, str(agent_id), scheduled_call_id),
+        args=(
+            call_id,
+            remote_uri,
+            str(agent_id),
+            scheduled_call_id,
+            (to_number or "").strip(),
+            (from_number or "").strip(),
+        ),
         name=f"ws-call-{call_id[:8]}",
         daemon=True,
     )
@@ -119,13 +126,24 @@ def start_local_bridge(
     return call_id
 
 
-def _bridge_thread(call_id, remote_uri, agent_id, scheduled_call_id) -> None:
+def _bridge_thread(
+    call_id, remote_uri, agent_id, scheduled_call_id, to_number="", from_number=""
+) -> None:
     """Thread entry: run the async bridge to completion, then mark the row terminal."""
     import asyncio
 
     terminal = "completed"
     try:
-        asyncio.run(_run_bridge(call_id, remote_uri, agent_id))
+        asyncio.run(
+            _run_bridge(
+                call_id,
+                remote_uri,
+                agent_id,
+                scheduled_call_id=scheduled_call_id,
+                to_number=to_number,
+                from_number=from_number,
+            )
+        )
     except Exception:
         terminal = "failed"
         logger.exception("[outbound][ws] bridge failed call_id={}", call_id)
@@ -140,7 +158,9 @@ def _bridge_thread(call_id, remote_uri, agent_id, scheduled_call_id) -> None:
         logger.info("[outbound][ws] bridge finished call_id={} status={}", call_id, terminal)
 
 
-async def _run_bridge(call_id, remote_uri, agent_id) -> None:
+async def _run_bridge(
+    call_id, remote_uri, agent_id, scheduled_call_id=None, to_number="", from_number=""
+) -> None:
     """Open the outbound WS client to the remote ``/ws/test`` and run our outbound agent
     bridged to it. Blocks until the media session ends.
 
@@ -158,11 +178,21 @@ async def _run_bridge(call_id, remote_uri, agent_id) -> None:
         if sess is not None:
             sess["status"] = "in_progress"
 
+    # Thread the call's identity onto the runner body so the call log records FROM / TO /
+    # CALL SID (else Call History shows "-" for bridge calls). The bridge has no real Twilio
+    # sid, so its own ``call_id`` is the stream identifier (``provider_call_id`` reads it via
+    # the WS ``stream_id`` fallback). ``scheduled_call_id`` links the log back to the row.
     runner_args = RunnerArguments(
         body={
             "agent_id": agent_id,
             "direction": "outbound",
             "transport_type": "websocket",
+            "scheduled_call_id": scheduled_call_id,
+            "call_data": {
+                "from": from_number or "",
+                "to": to_number or "",
+                "stream_id": call_id,
+            },
         }
     )
     logger.info("[outbound][ws] bridge connecting call_id={} remote={}", call_id, remote_uri)
