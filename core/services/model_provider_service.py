@@ -116,18 +116,23 @@ class ModelProviderService(BaseService):
     # ─── shared lookup helpers ──────────────────────────────────────────────
 
     def _provider_kinds_map(
-        self, provider_ids: Iterable[UUID]
+        self, provider_ids: Iterable[UUID], *, include_inactive: bool = False
     ) -> dict[str, list[str]]:
-        """Single batched query → dict[provider_id_str, list[kind]]. Avoids N+1."""
+        """Single batched query → dict[provider_id_str, list[kind]]. Avoids N+1.
+
+        ``include_inactive=True`` returns kinds regardless of ``Model.is_active``
+        — used by the agent-form provider dropdowns so the LLM/STT/TTS filter
+        is the only gate on visibility.
+        """
         ids = list(provider_ids)
         if not ids:
             return {}
-        rows = (
-            self.db.query(Model.provider_id, Model.kind)
-            .filter(Model.provider_id.in_(ids), Model.is_active.is_(True))
-            .distinct()
-            .all()
+        q = self.db.query(Model.provider_id, Model.kind).filter(
+            Model.provider_id.in_(ids)
         )
+        if not include_inactive:
+            q = q.filter(Model.is_active.is_(True))
+        rows = q.distinct().all()
         out: dict[str, list[str]] = {}
         for provider_id, kind in rows:
             out.setdefault(str(provider_id), []).append(kind)
@@ -440,24 +445,17 @@ class ModelProviderService(BaseService):
         else:
             connected_rows = q.offset((page - 1) * page_size).limit(page_size).all()
 
-        # Providers the org has NO ApiKey against — only queried when
-        # ``include_unconnected`` is true AND no filter narrows the result to
-        # a specific service_type or key status (those filters don't apply to
-        # "not yet connected" cards, so we'd risk showing them under a filter
-        # they can't satisfy).
+        # Providers the org has NO ApiKey against. Included whenever
+        # ``include_unconnected`` is true — no gating on service_type / status
+        # / ModelProvider.is_active, so the Model Providers page always shows
+        # the full catalog. Name search + type filter still apply.
         unconnected_providers: list[ModelProvider] = []
-        can_include_unconnected = (
-            include_unconnected
-            and (not service_type or service_type == "all")
-            and status_filter not in ("active", "inactive")
-        )
-        if can_include_unconnected:
+        if include_unconnected:
             connected_ids_subq = self.db.query(distinct(ApiKey.provider_id)).filter(
                 ApiKey.organization_id == self.org_id,
                 ApiKey.service_type.isnot(None),
             )
             uq = self.db.query(ModelProvider).filter(
-                ModelProvider.is_active.is_(True),
                 ~ModelProvider.id.in_(connected_ids_subq),
             )
             if search:
@@ -466,8 +464,6 @@ class ModelProviderService(BaseService):
                     (ModelProvider.display_name.ilike(like))
                     | (ModelProvider.slug.ilike(like))
                 )
-            # Only the "name" facet applies here — a service_type facet
-            # would exclude unconnected rows by definition.
             if generic_filters:
                 name_only = [
                     f for f in generic_filters if f.get("field") == "name"
@@ -477,6 +473,18 @@ class ModelProviderService(BaseService):
             unconnected_providers = uq.order_by(
                 ModelProvider.display_name.asc()
             ).all()
+            # Service-type filter — unconnected providers have no ApiKey to
+            # match on, so filter by what the provider actually offers
+            # (kinds derived from the ``models`` table).
+            if service_type and service_type != "all":
+                kinds_map = self._provider_kinds_map(
+                    [p.id for p in unconnected_providers]
+                )
+                unconnected_providers = [
+                    p
+                    for p in unconnected_providers
+                    if service_type in kinds_map.get(str(p.id), [])
+                ]
 
         # Combine and paginate when we're serving the unified list. Otherwise
         # the SQL LIMIT above already gave us the right page.
@@ -811,24 +819,30 @@ class ModelProviderService(BaseService):
     def list_providers_catalog(self, service_type: str | None = None) -> list[dict]:
         service_type = _validate_service_type(service_type, required=False)
 
-        q = self.db.query(ModelProvider)
-
-        providers = q.order_by(ModelProvider.display_name.asc()).all()
-        kinds_map = self._provider_kinds_map([p.id for p in providers])
-        # In the agent-creation flow the caller asks for one service type at a
-        # time (LLM / STT / TTS). Only return providers that actually offer a
-        # model of that kind — otherwise every provider shows up in every
-        # dropdown.
+        providers = (
+            self.db.query(ModelProvider)
+            .order_by(ModelProvider.display_name.asc())
+            .all()
+        )
+        kinds_map = self._provider_kinds_map(
+            [p.id for p in providers], include_inactive=True
+        )
+        # Agent-form dropdowns: a provider with NO models shows in every
+        # dropdown (LLM/STT/TTS); a provider WITH models only shows in the
+        # dropdowns whose kind it declares in the ``models`` table.
         if service_type:
-            providers = [p for p in providers if service_type in kinds_map.get(str(p.id), [])]
+            providers = [
+                p
+                for p in providers
+                if not kinds_map.get(str(p.id))
+                or service_type in kinds_map.get(str(p.id), [])
+            ]
         return [
             {
                 "id": str(p.id),
                 "slug": p.slug,
                 "display_name": p.display_name,
                 "description": p.description,
-                # When scoped to a single kind, returning only that kind avoids
-                # leaking provider capabilities the caller didn't ask about.
                 "kinds": [service_type] if service_type else kinds_map.get(str(p.id), []),
                 "meta_data_schema": p.meta_data_schema,
             }
@@ -1092,6 +1106,11 @@ class ModelProviderService(BaseService):
         ``language`` is a display name (e.g. "English").  For each provider the
         response includes the first matching provider-specific code so the
         frontend can persist it in ``voice_settings.language_code``.
+
+        Providers that have NO ``models`` rows at all are also returned (with a
+        ``null`` ``language_code``) so a newly seeded provider is visible in
+        the TTS dropdown before any models are attached — mirrors the
+        LLM/STT rule in ``list_providers_catalog``.
         """
         rows = (
             self.db.query(
@@ -1111,6 +1130,20 @@ class ModelProviderService(BaseService):
             .order_by(ModelProvider.display_name.asc())
             .all()
         )
+
+        providers_with_models_subq = self.db.query(distinct(Model.provider_id))
+        no_model_providers = (
+            self.db.query(ModelProvider)
+            .filter(~ModelProvider.id.in_(providers_with_models_subq))
+            .order_by(ModelProvider.display_name.asc())
+            .all()
+        )
+
+        combined: list[tuple[ModelProvider, str | None]] = [
+            (p, code) for p, code in rows
+        ] + [(p, None) for p in no_model_providers]
+        combined.sort(key=lambda pair: pair[0].display_name.lower())
+
         return [
             {
                 "id": str(p.id),
@@ -1124,7 +1157,7 @@ class ModelProviderService(BaseService):
                     else None
                 ),
             }
-            for p, code in rows
+            for p, code in combined
         ]
 
     def list_tts_voices(self, provider_id: str, language: str, model_id: str = None) -> List[dict]:
