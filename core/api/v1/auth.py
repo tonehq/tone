@@ -4,6 +4,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request, Res
 from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
+from core.context import get_current_org_id
 from core.database.session import get_db
 from core.services.auth_service import OnboardingIndustry, OnboardingUseCase
 from core.middleware.auth import (
@@ -204,7 +205,9 @@ def get_me(claims: JWTClaims = Depends(get_jwt_claims), db: Session = Depends(ge
     svc = AuthService(db)
     return {
         "user": svc.get_user_me(claims.user_id),
-        "organization": svc.get_organization_me(claims.user_id),
+        "organization": svc.get_organization_me(
+            claims.user_id, org_id=get_current_org_id()
+        ),
     }
 
 

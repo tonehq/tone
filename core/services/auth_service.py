@@ -108,10 +108,30 @@ class AuthService(BaseService):
             .first()
         )
 
-    def _membership_for(self, user_id: Union[str, uuid.UUID]) -> Optional[Member]:
+    def _membership_for(
+        self,
+        user_id: Union[str, uuid.UUID],
+        org_id: Optional[Union[str, uuid.UUID]] = None,
+    ) -> Optional[Member]:
         uid = _user_uuid(user_id)
         if not uid:
             return None
+        # When an active org/tenant is supplied (e.g. the switched workspace from
+        # the JWT), prefer THAT membership so /organization/me + /auth/me reflect
+        # the currently-active org rather than the user's default one. This is the
+        # fix for the switcher/dashboard showing the default org's data a few
+        # seconds after load. Falls back to default resolution if the user is not
+        # a member of the supplied org.
+        if org_id:
+            oid = _user_uuid(org_id)
+            if oid:
+                member = (
+                    self.db.query(Member)
+                    .filter(Member.user_id == uid, Member.organization_id == oid)
+                    .first()
+                )
+                if member:
+                    return member
         # Prefer the default membership; fall back to any membership.
         member = (
             self.db.query(Member)
@@ -1146,8 +1166,12 @@ class AuthService(BaseService):
         self.db.refresh(user)
         return user.to_dict()
 
-    def get_organization_me(self, user_id: Union[str, uuid.UUID]) -> Optional[Dict[str, Any]]:
-        member = self._membership_for(user_id)
+    def get_organization_me(
+        self,
+        user_id: Union[str, uuid.UUID],
+        org_id: Optional[Union[str, uuid.UUID]] = None,
+    ) -> Optional[Dict[str, Any]]:
+        member = self._membership_for(user_id, org_id)
         if not member:
             return None
         org = (

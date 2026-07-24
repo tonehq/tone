@@ -155,10 +155,27 @@ export const useAuthStore = create<AuthState>((set) => ({
   },
   setUser: (user) => set({ user }),
   setOrganization: (org) => {
-    if (typeof window !== 'undefined' && org?.id) {
-      localStorage.setItem(TENANT_ID, org.id);
-    }
-    set({ organization: org, activeOrgId: org?.id ?? null });
+    set((s) => {
+      // active_org_id (the tenant) is owned EXCLUSIVELY by explicit login /
+      // workspace-switch / logout / hydrate. Refreshing the current org's
+      // *record* (name, onboarding flags, …) from a background
+      // GET /organization/me must NEVER repoint the tenant — otherwise the
+      // dashboard silently switches orgs a few seconds after first paint.
+      if (!s.activeOrgId) {
+        // First run / onboarding: no tenant chosen yet — adopt this org.
+        if (typeof window !== 'undefined' && org?.id) {
+          localStorage.setItem(TENANT_ID, org.id);
+        }
+        return { organization: org, activeOrgId: org?.id ?? null };
+      }
+      // A tenant is already active: only refresh the record for that SAME org,
+      // and never rewrite active_org_id. Ignore a mismatched record so a stale
+      // or wrong response can't flip the UI to another workspace.
+      if (org && String(org.id) === String(s.activeOrgId)) {
+        return { organization: org };
+      }
+      return {};
+    });
   },
   setActiveOrgId: (orgId) => {
     if (typeof window !== 'undefined') {
@@ -170,7 +187,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       organization: orgId
         ? {
             id: orgId,
-            name: s.organizations.find((o) => o.id === orgId)?.name ?? s.organization?.name ?? '',
+            name:
+              s.organizations.find((o) => String(o.id) === String(orgId))?.name ??
+              s.organization?.name ??
+              '',
           }
         : null,
     }));

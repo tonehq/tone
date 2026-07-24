@@ -46,7 +46,9 @@ def get_organization_me(
     claims: JWTClaims = Depends(get_jwt_claims),
     db: Session = Depends(get_db),
 ):
-    return AuthService(db).get_organization_me(claims.user_id)
+    return AuthService(db).get_organization_me(
+        claims.user_id, org_id=get_current_org_id()
+    )
 
 
 @router.post("/invite_user_to_organization")
