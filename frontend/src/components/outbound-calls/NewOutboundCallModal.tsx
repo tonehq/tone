@@ -336,17 +336,22 @@ export default function NewOutboundCallModal({
         }
         onClose();
         // parallel_websocket (immediate WS test-bridge fan-out) dials right away, same as immediate.
-        if (res?.mode === 'immediate' || res?.mode === 'parallel_websocket') {
+        const isImmediate = res?.mode === 'immediate' || res?.mode === 'parallel_websocket';
+        if (isImmediate) {
           showToast.success('Calling now', 'The call will appear in Call History.');
-          router.push('/call-history');
         } else {
           showToast.success(
             res?.mode === 'bulk' ? `${res.count} calls queued` : 'Call scheduled',
             'Track them on the agent’s Schedule tab.',
           );
-          // The Schedule view always passes onScheduled to refresh in place; there is no
-          // global scheduled-calls route to navigate to anymore.
-          onScheduled?.();
+        }
+        // Honor the caller's contract: when onScheduled is provided (the agent Schedule tab),
+        // refresh in place and STAY on the page — for every mode, immediate included. Only when
+        // it's omitted (standalone use) do we navigate to Call History.
+        if (onScheduled) {
+          onScheduled();
+        } else {
+          router.push('/call-history');
         }
       } catch (err) {
         // Keep the modal open so the user can correct + retry (error-recovery).
