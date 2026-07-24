@@ -12,6 +12,10 @@ Layout:
 
     twilio / telnyx / plivo / exotel -> TelephonyProvider per telephony engine
     daily / smallwebrtc              -> CallTransport per WebRTC engine
+    ws_bridge                        -> build_ws_bridge_transport (the OUTBOUND-client mirror
+                                        of TelephonyTransport; dialed by remote URI, not selected
+                                        from RunnerArguments, so it is exported as a builder here
+                                        rather than registered in the RunnerArguments-keyed registry)
 
 To add a new engine: implement the class and register it below — no changes in bot.py.
 """
@@ -36,6 +40,8 @@ from core.services.transport.smallwebrtc import SmallWebRTCCallTransport
 from core.services.transport.telnyx import TelnyxTransport
 from core.services.transport.test_provider import TestTransport
 from core.services.transport.twilio import TwilioTransport
+from core.services.transport.ws_bridge import (BRIDGE_SAMPLE_RATE,
+                                              build_ws_bridge_transport)
 
 # Telephony providers — all ride the shared TelephonyTransport dispatcher.
 register_telephony_provider(TwilioTransport())
@@ -56,6 +62,8 @@ __all__ = [
     "TelephonyProvider",
     "TelephonyTransport",
     "build_transport",
+    "build_ws_bridge_transport",
+    "BRIDGE_SAMPLE_RATE",
     "get_transport",
     "get_telephony_provider",
     "register_transport",

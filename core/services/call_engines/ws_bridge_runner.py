@@ -25,11 +25,15 @@ from shared.config import settings
 _SESSIONS: Dict[str, Dict[str, Any]] = {}
 _SESSIONS_LOCK = threading.Lock()
 
-# The one PCM rate for the whole bridge. We DECLARE it in the /ws/test URL so the remote tags
-# inbound audio at exactly this rate — the two sides can never disagree (a mismatch is what makes
-# ASR return empty transcripts while VAD still fires). 24 kHz = Cartesia's native TTS rate on both
-# ends, so there is also no resampling anywhere on the TTS→wire→STT path.
-_BRIDGE_SAMPLE_RATE = 24000
+# The one PCM rate for the whole bridge — single-sourced from the transport builder (which
+# assembles the client transport at the same rate). We DECLARE it in the /ws/test URL so the
+# remote tags inbound audio at exactly this rate; the two sides can never disagree (a mismatch
+# is what makes ASR return empty transcripts while VAD still fires). 24 kHz = Cartesia's native
+# TTS rate on both ends, so there is also no resampling on the TTS→wire→STT path.
+from core.services.transport import (BRIDGE_SAMPLE_RATE,
+                                    build_ws_bridge_transport)
+
+_BRIDGE_SAMPLE_RATE = BRIDGE_SAMPLE_RATE
 
 
 class AtCapacity(RuntimeError):
@@ -42,10 +46,18 @@ def active_count() -> int:
         return len(_SESSIONS)
 
 
-def _remote_uri(to_number: str, agent_id: str) -> str:
+def _remote_uri(
+    to_number: str,
+    agent_id: str,
+    ws_run_id: Optional[str] = None,
+    ws_scenario_id: Optional[str] = None,
+) -> str:
     """Build the remote ``/ws/test`` URI. Routing mirrors a real call: the remote resolves ITS
     agent by the dialed number (``?phone_number=…``); ``WS_CALL_TARGET_AGENT_ID`` is only a
-    fallback when there is no number. Raises if the WS target host is unset."""
+    fallback when there is no number. Raises if the WS target host is unset.
+
+    When ``ws_run_id`` + ``ws_scenario_id`` are supplied (test-case fan-out), they ride the URL so
+    the remote runs THAT scenario's persona and records the result into its TestRun mapping."""
     target_url = (settings.WS_CALL_TARGET_URL or "").rstrip("/")
     if not target_url:
         raise ValueError(
@@ -64,7 +76,10 @@ def _remote_uri(to_number: str, agent_id: str) -> str:
             "remote) or set WS_CALL_TARGET_AGENT_ID as a fallback."
         )
     # Declare our PCM rate so the remote tags inbound audio identically (no rate disagreement).
-    return f"{target_url}/ws/test?{remote_query}&sample_rate={_BRIDGE_SAMPLE_RATE}"
+    uri = f"{target_url}/ws/test?{remote_query}&sample_rate={_BRIDGE_SAMPLE_RATE}"
+    if ws_run_id and ws_scenario_id:
+        uri += f"&run_id={quote(str(ws_run_id))}&scenario_id={quote(str(ws_scenario_id))}"
+    return uri
 
 
 def start_local_bridge(
@@ -72,13 +87,17 @@ def start_local_bridge(
     to_number: str,
     from_number: str = "",
     scheduled_call_id: Optional[str] = None,
+    ws_run_id: Optional[str] = None,
+    ws_scenario_id: Optional[str] = None,
 ) -> str:
     """Start the WS bridge in a detached daemon thread ON THIS POD and return its call_id.
 
     Enforces the per-pod ``MAX_CONCURRENT_CALLS`` ceiling atomically under the sessions lock:
     if the pod is already at the limit, raises ``AtCapacity`` and starts nothing — the caller
-    (the ``/internal/ws-bridge/start`` route) turns that into a 429 so the originator queues."""
-    remote_uri = _remote_uri(to_number, agent_id)  # validate BEFORE claiming a slot
+    (the ``/internal/ws-bridge/start`` route) turns that into a 429 so the originator queues.
+
+    ``ws_run_id``/``ws_scenario_id`` (test-case fan-out) ride the remote ``/ws/test`` URL."""
+    remote_uri = _remote_uri(to_number, agent_id, ws_run_id, ws_scenario_id)  # validate BEFORE claiming a slot
     call_id = uuid.uuid4().hex
     cap = settings.MAX_CONCURRENT_CALLS
     stop = threading.Event()
@@ -123,26 +142,16 @@ def _bridge_thread(call_id, remote_uri, agent_id, scheduled_call_id) -> None:
 
 async def _run_bridge(call_id, remote_uri, agent_id) -> None:
     """Open the outbound WS client to the remote ``/ws/test`` and run our outbound agent
-    bridged to it. Blocks until the media session ends."""
+    bridged to it. Blocks until the media session ends.
+
+    The client transport is assembled by the shared transport-module builder
+    (``core.services.transport.ws_bridge``), the mirror of the inbound
+    ``TelephonyTransport`` — same pipeline, opposite socket direction."""
     from pipecat.runner.types import RunnerArguments
-    from pipecat.transports.websocket.client import (WebsocketClientParams,
-                                                     WebsocketClientTransport)
 
     from core.bot import run_bot
-    from core.serializers.raw_pcm import RawPCMSerializer
 
-    # Raw-PCM bridge at 24 kHz BOTH ways — must match the remote /ws/test rate (Cartesia native),
-    # so there is ZERO resampling on the TTS→wire→STT path (a 24→16 kHz resample keeps enough
-    # energy for VAD but degrades audio enough that Deepgram transcribes NOTHING).
-    params = WebsocketClientParams(
-        audio_in_enabled=True,
-        audio_out_enabled=True,
-        audio_in_sample_rate=_BRIDGE_SAMPLE_RATE,
-        audio_out_sample_rate=_BRIDGE_SAMPLE_RATE,
-        add_wav_header=False,
-        serializer=RawPCMSerializer(sample_rate=_BRIDGE_SAMPLE_RATE, num_channels=1),
-    )
-    transport = WebsocketClientTransport(uri=remote_uri, params=params)
+    transport = build_ws_bridge_transport(remote_uri, _BRIDGE_SAMPLE_RATE)
 
     with _SESSIONS_LOCK:
         sess = _SESSIONS.get(call_id)
@@ -189,7 +198,8 @@ def _finalize_scheduled_call(scheduled_call_id, terminal_status: str) -> None:
                 )
             batch_id = sc.batch_id
             has_limit = sc.batch_id is not None and bool(sc.max_concurrency)
-        # Free the batch slot so the next held row dials (safety-net drain also covers this).
+        # Free the batch slot so the next held row dials — enqueue a refill job that the Procrastinate
+        # worker consumes (a worker must be running; the periodic drain is the safety net).
         if has_limit:
             _get_refill_executor().submit(_refill_batch_job, batch_id)
     except Exception:
