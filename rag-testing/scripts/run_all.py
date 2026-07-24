@@ -1,48 +1,50 @@
-"""One-command RAG evaluation pipeline.
+"""One-command RAG evaluation orchestrator.
 
-For every active KnowledgeBase in the DB, this script:
+For every active KnowledgeBase in the DB:
+  1. Register in `rag-testing/documents/<slug>/` (writes metadata.json)
+  2. Download the source file from R2
+  3. Validate ingestion (chunks + embeddings + dim + non-zero)
+  4. Generate the Q&A dataset (persists into `evals`)
+  5. Run the eval (persists into `eval_results`)
 
-  1. Registers it in `rag-testing/documents/<slug>/` (writes metadata.json)
-  2. Downloads its source file from R2 (unless already present)
-  3. Validates ingestion (chunks + embeddings + dim + non-zero) — skips this doc if invalid
-  4. Generates the LLM Q&A dataset (`questions.json`)
-  5. Runs the eval (retrieval + grounded answer + LLM judge) and writes a
-     timestamped result file under `documents/<slug>/results/`
-
-Idempotency: a doc is considered "fully processed" when its folder has both
-`questions.json` AND at least one `results/run-*.json`. Those are skipped
-entirely unless `--rerun` is passed.
+Idempotency (DB-backed): a doc is "fully processed" when it has a ready
+``evals`` row AND at least one ``eval_results`` row for its active ingestion
+run. Fully-processed docs are skipped unless ``--rerun`` is passed.
 
 Usage:
-    python rag-testing/scripts/run_all.py                     # process every new KB, run eval
-    python rag-testing/scripts/run_all.py --kb-id <uuid>      # limit to a single KB (knowledge_bases.id)
-    python rag-testing/scripts/run_all.py --upload-id <uuid>  # limit to a single upload (uploads.id)
-    python rag-testing/scripts/run_all.py --doc <slug>        # limit to one doc by folder slug
-    python rag-testing/scripts/run_all.py --no-download       # skip R2 download (expect source already placed)
-    python rag-testing/scripts/run_all.py --skip-eval         # bootstrap + generate Q&A only, no eval
-    python rag-testing/scripts/run_all.py --rerun             # force reprocess even if fully done
+    python rag-testing/scripts/run_all.py
+    python rag-testing/scripts/run_all.py --doc <slug>
+    python rag-testing/scripts/run_all.py --kb-id <uuid>
+    python rag-testing/scripts/run_all.py --upload-id <uuid>
+    python rag-testing/scripts/run_all.py --skip-eval        # bootstrap + Q&A only
+    python rag-testing/scripts/run_all.py --rerun            # force reprocess
     python rag-testing/scripts/run_all.py --top-k 8 --answer-model gpt-4o --judge-model gpt-4o
 """
 from __future__ import annotations
 
 import argparse
 import sys
-from pathlib import Path
 
 from bootstrap_from_db import _discover, _download_source, _slugify, _write_metadata
-from common import DOCS_DIR, db_session, write_questions
-from generate_questions import generate as generate_questions
-from run_eval import _run_one_doc
+from common import DOCS_DIR, db_session
 from validate_ingestion import _print_result, _validate_one
 
 
-def _has_questions(folder: Path) -> bool:
-    return (folder / "questions.json").exists()
+def _has_ready_eval(db, upload_id, org_id) -> bool:
+    from core.services.evals.eval_service import EvalService
+
+    eval_row = EvalService().get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
+    return eval_row is not None and eval_row.status == "ready"
 
 
-def _has_results(folder: Path) -> bool:
-    results = folder / "results"
-    return results.exists() and any(results.glob("run-*.json"))
+def _has_results_for_active_run(db, upload_id) -> bool:
+    from core.services.evals.eval_service import EvalService
+    from core.services.ingestion_run_service import IngestionRunService
+
+    run = IngestionRunService.get_active_run(db, upload_id)
+    if run is None:
+        return False
+    return EvalService().latest_result_for_ingestion_run(db, run.id) is not None
 
 
 def _process_one(
@@ -52,25 +54,29 @@ def _process_one(
     overwrite_metadata: bool,
     skip_eval: bool,
     rerun: bool,
-    top_k: int,
-    answer_model: str,
-    judge_model: str,
-    gen_model: str,
-    max_chars: int,
+    top_k,
+    answer_model,
+    judge_model,
+    gen_model,
+    max_chars,
 ) -> str:
-    """Returns a short status string for the summary table."""
+    from core.services.evals.eval_service import EvalService
+    from core.services.ingestion_run_service import IngestionRunService
+
     slug = _slugify(entry["kb_name"] or "kb", entry["upload_id"])
     folder = DOCS_DIR / slug
+    upload_id, org_id = entry["upload_id"], entry["org_id"]
 
-    fully_done = _has_questions(folder) and _has_results(folder)
-    if fully_done and not rerun:
-        print(f"\n=== {slug} — SKIP (already fully processed) ===")
-        return "skipped"
+    if not rerun:
+        with db_session() as db:
+            done = _has_ready_eval(db, upload_id, org_id) and _has_results_for_active_run(db, upload_id)
+        if done:
+            print(f"\n=== {slug} — SKIP (already fully processed) ===")
+            return "skipped"
 
     print(f"\n=== {slug} ===")
-    print(f"  kb_name={entry['kb_name']!r}  upload_id={entry['upload_id']}")
+    print(f"  kb_name={entry['kb_name']!r}  upload_id={upload_id}")
 
-    # 1. metadata + source
     _, folder, action = _write_metadata(entry, overwrite=overwrite_metadata or rerun)
     print(f"  [1/4] bootstrap: {action}")
     if download_source:
@@ -78,46 +84,63 @@ def _process_one(
         print(f"        R2: {dl}")
         if dl.startswith("R2 download failed") or dl == "no file_path in DB":
             return "download_failed"
-    else:
-        if not any(folder.glob("source.*")):
-            print("  [!] no source file in folder and --no-download set — cannot generate Q&A")
-            return "no_source"
+    elif not any(folder.glob("source.*")):
+        print("  [!] no source file in folder and --no-download set — cannot generate Q&A")
+        return "no_source"
 
-    # 2. ingestion check
     with db_session() as db:
-        validation = _validate_one(db, entry["upload_id"])
+        validation = _validate_one(db, upload_id)
     print("  [2/4] ingestion validation:")
     _print_result(validation)
     if not validation.passed:
         return "ingestion_invalid"
 
-    # 3. question generation (skip if already present unless --rerun)
-    if _has_questions(folder) and not rerun:
-        print("  [3/4] questions.json already present — reusing")
-    else:
-        try:
-            payload = generate_questions(slug, model=gen_model, max_chars=max_chars)
-            write_questions(slug, payload)
-            print(f"  [3/4] generated {len(payload['questions'])} question(s)")
-        except Exception as e:
-            print(f"  [3/4] question generation FAILED: {type(e).__name__}: {e}")
-            return "qgen_failed"
+    svc = EvalService()
+    try:
+        with db_session() as db:
+            existing = svc.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
+            if existing is not None and existing.status == "ready" and not rerun:
+                print(f"  [3/4] eval {existing.id} already present ({existing.question_count} questions)")
+                eval_row = existing
+            else:
+                eval_row = svc.generate_eval(
+                    db, upload_id=upload_id, org_id=org_id,
+                    model=gen_model, max_chars=max_chars,
+                )
+                print(f"  [3/4] generated {eval_row.question_count} question(s)")
+    except Exception as e:  # noqa: BLE001
+        print(f"  [3/4] question generation FAILED: {type(e).__name__}: {e}")
+        return "qgen_failed"
 
-    # 4. run the eval
     if skip_eval:
         print("  [4/4] eval skipped (--skip-eval)")
         return "eval_skipped"
+
     try:
-        _run_one_doc(
-            doc_slug=slug,
-            top_k=top_k,
-            answer_model=answer_model,
-            judge_model=judge_model,
-        )
-        return "eval_ran"
-    except Exception as e:
+        with db_session() as db:
+            run = IngestionRunService.get_active_run(db, upload_id)
+            if run is None:
+                print("  [4/4] eval SKIPPED — no active ingestion run")
+                return "eval_failed"
+            result = svc.run_eval(
+                db, eval_id=eval_row.id, ingestion_run_id=run.id,
+                triggered_by="cli",
+                top_k=top_k, answer_model=answer_model, judge_model=judge_model,
+            )
+    except Exception as e:  # noqa: BLE001
         print(f"  [4/4] eval FAILED: {type(e).__name__}: {e}")
         return "eval_failed"
+
+    if result.status != "completed":
+        print(f"  [4/4] eval FAILED: {result.error}")
+        return "eval_failed"
+
+    s = result.summary or {}
+    print(
+        f"  [4/4] eval ran run_number={result.run_number} "
+        f"pass_rate={s.get('pass_rate', 0):.2%} hit_rate={s.get('retrieval_hit_rate', 0):.2%}"
+    )
+    return "eval_ran"
 
 
 def main() -> int:
@@ -128,36 +151,15 @@ def main() -> int:
     scope.add_argument("--doc", help="Limit to a single doc by folder slug")
     scope.add_argument("--kb-id", help="Limit to a single KB by knowledge_bases.id (UUID)")
     scope.add_argument("--upload-id", help="Limit to a single KB by uploads.id (UUID)")
-    ap.add_argument(
-        "--no-download",
-        action="store_true",
-        help="Do not pull source files from R2; expect them already placed",
-    )
-    ap.add_argument(
-        "--overwrite-metadata",
-        action="store_true",
-        help="Overwrite existing metadata.json (default: leave existing)",
-    )
-    ap.add_argument(
-        "--skip-eval",
-        action="store_true",
-        help="Only bootstrap + generate Q&A; do not run the eval",
-    )
-    ap.add_argument(
-        "--rerun",
-        action="store_true",
-        help="Reprocess even docs that are already fully processed",
-    )
-    ap.add_argument("--top-k", type=int, default=8, help="Chunks to retrieve per question")
-    ap.add_argument("--answer-model", default="gpt-4o", help="Model for grounded answer generation")
-    ap.add_argument("--judge-model", default="gpt-4o", help="Model for LLM-as-judge")
-    ap.add_argument("--gen-model", default="gpt-4o", help="Model for question generation")
-    ap.add_argument(
-        "--max-chars",
-        type=int,
-        default=60_000,
-        help="Truncate document text to this many chars before Q&A generation",
-    )
+    ap.add_argument("--no-download", action="store_true", help="Do not pull source files from R2")
+    ap.add_argument("--overwrite-metadata", action="store_true", help="Overwrite existing metadata.json")
+    ap.add_argument("--skip-eval", action="store_true", help="Only bootstrap + generate Q&A; do not run the eval")
+    ap.add_argument("--rerun", action="store_true", help="Reprocess even docs that are already fully processed")
+    ap.add_argument("--top-k", type=int, default=None, help="Override EVAL_TOP_K")
+    ap.add_argument("--answer-model", default=None, help="Override EVAL_ANSWER_MODEL")
+    ap.add_argument("--judge-model", default=None, help="Override EVAL_JUDGE_MODEL")
+    ap.add_argument("--gen-model", default=None, help="Override EVAL_GENERATION_MODEL")
+    ap.add_argument("--max-chars", type=int, default=None, help="Override EVAL_MAX_CONTEXT_CHARS")
     args = ap.parse_args()
 
     with db_session() as db:
@@ -168,11 +170,7 @@ def main() -> int:
         return 2
 
     if args.doc:
-        matching = [
-            e
-            for e in entries
-            if _slugify(e["kb_name"] or "kb", e["upload_id"]) == args.doc
-        ]
+        matching = [e for e in entries if _slugify(e["kb_name"] or "kb", e["upload_id"]) == args.doc]
         filter_desc = f"slug={args.doc!r}"
     elif args.kb_id:
         matching = [e for e in entries if e["kb_id"] == args.kb_id]
@@ -181,8 +179,7 @@ def main() -> int:
         matching = [e for e in entries if e["upload_id"] == args.upload_id]
         filter_desc = f"upload_id={args.upload_id!r}"
     else:
-        matching = entries
-        filter_desc = None
+        matching, filter_desc = entries, None
 
     if filter_desc:
         if not matching:
@@ -192,7 +189,7 @@ def main() -> int:
 
     print(f"[run_all] {len(entries)} KB(s) discovered in DB")
 
-    tally: dict[str, int] = {}
+    tally: dict = {}
     for entry in entries:
         status = _process_one(
             entry,
@@ -212,15 +209,8 @@ def main() -> int:
     for status, n in sorted(tally.items()):
         print(f"  {status:20s} {n}")
 
-    failure_states = {
-        "download_failed",
-        "no_source",
-        "ingestion_invalid",
-        "qgen_failed",
-        "eval_failed",
-    }
-    had_failures = any(tally.get(s, 0) > 0 for s in failure_states)
-    return 1 if had_failures else 0
+    failure_states = {"download_failed", "no_source", "ingestion_invalid", "qgen_failed", "eval_failed"}
+    return 1 if any(tally.get(s, 0) > 0 for s in failure_states) else 0
 
 
 if __name__ == "__main__":

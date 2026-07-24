@@ -35,7 +35,7 @@ spec:
             - "--app=core.services.ingestion_queue.app"
             - worker
             - "--name=$(POD_NAME)"
-            - "--queues=ingestion"
+            - "--queues=ingestion,eval"
             - "--concurrency=1"
             - "--no-listen-notify"
             - "--fetch-job-polling-interval=5"
