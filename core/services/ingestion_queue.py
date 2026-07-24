@@ -38,11 +38,31 @@ def _defer_sync(task, **kwargs) -> int:
 
 
 @app.task(name="ingest_upload", queue="ingestion")
-def ingest_upload(upload_id: str, org_id: str, delete_existing: bool = False) -> None:
+def ingest_upload(
+    upload_id: str,
+    org_id: str,
+    delete_existing: bool = False,
+    run_config: dict | None = None,
+) -> None:
+    """Run one ingestion pipeline for an uploaded document.
+
+    ``run_config`` is an optional dict of pipeline overrides (parser / tokeniser /
+    embedding_provider / embedding_model / embedding_dimensions / vector_store /
+    vector_store_ref, plus any per-component *_config sub-dict). Anything left
+    unset falls back to the org / system defaults resolved by
+    ``IngestionRunService.resolve_run_config``. Must be JSON-serialisable —
+    Procrastinate stores task kwargs as JSON.
+    """
     from core.services.document_processing_service import DocumentProcessingService
 
-    logger.info("[ingestion] processing upload {} (reprocess={})", upload_id, delete_existing)
-    DocumentProcessingService().process_upload(UUID(upload_id), UUID(org_id), delete_existing=delete_existing)
+    logger.info(
+        "[ingestion] processing upload {} (reprocess={}, custom_config={})",
+        upload_id, delete_existing, bool(run_config),
+    )
+    DocumentProcessingService().process_upload(
+        UUID(upload_id), UUID(org_id),
+        delete_existing=delete_existing, run_config=run_config,
+    )
 
 
 @app.task(name="run_contact_sync", queue="contact_import")
@@ -113,19 +133,27 @@ def sync_loki_logs_task(call_id: str) -> None:
     sync_call_logs(call_id=call_id)
 
 
-async def _defer_ingestion(upload_id, org_id, delete_existing: bool) -> int:
+async def _defer_ingestion(
+    upload_id,
+    org_id,
+    delete_existing: bool,
+    run_config: dict | None = None,
+) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(
-            upload_id=str(upload_id), org_id=str(org_id), delete_existing=delete_existing
+            upload_id=str(upload_id),
+            org_id=str(org_id),
+            delete_existing=delete_existing,
+            run_config=run_config,
         )
 
 
-async def enqueue_upload(upload_id, org_id) -> int:
-    return await _defer_ingestion(upload_id, org_id, False)
+async def enqueue_upload(upload_id, org_id, run_config: dict | None = None) -> int:
+    return await _defer_ingestion(upload_id, org_id, False, run_config=run_config)
 
 
-async def enqueue_reprocess(upload_id, org_id) -> int:
-    return await _defer_ingestion(upload_id, org_id, True)
+async def enqueue_reprocess(upload_id, org_id, run_config: dict | None = None) -> int:
+    return await _defer_ingestion(upload_id, org_id, True, run_config=run_config)
 
 
 @app.task(name="execute_outbound_call", queue="outbound_calls")

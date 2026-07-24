@@ -33,8 +33,14 @@ from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.audit_service import AuditService
+from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.services.document_processing_service import DocumentProcessingService
 from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
+from core.services.ingestion_run_service import IngestionRunService
+from core.services.rag.embedder_factory import EMBEDDERS
+from core.services.rag.factory import VECTOR_STORES
+from core.services.rag.parser_factory import PARSERS
+from core.services.rag.tokeniser_factory import TOKENISERS
 from core.services.r2_storage_service import R2StorageService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
@@ -513,5 +519,168 @@ def build_knowledge_base_router(
         column_map = _kb_column_map()
         allowed = {k: column_map[k] for k in ("status", "file_name")}
         return distinct_values(_kb_base_query(db, org_id), allowed, column_name)
+
+    # ── RAG pipeline runs (parser / tokeniser / embedder / vector store) ────
+    # Endpoints for A/B-ing the ingestion pipeline: one upload can carry many
+    # ``ingestion_pipeline_runs`` (different model, tokeniser, store); at most
+    # one is active per upload and drives live retrieval. Everything else
+    # stays queryable via the RAG store's ``ingestion_run_id`` filter so
+    # evals compare runs side-by-side without swapping the live pipeline.
+
+    @router.get("/pipeline-options")
+    def get_pipeline_options(claims=Depends(auth_dependency)):
+        """Advertise every registered parser / tokeniser / embedder / vector store
+        so callers know what values are legal in a ``run_config`` body."""
+        _ = claims  # authn only; no per-org filtering — registries are global.
+        defaults = {
+            "parser": settings.DEFAULT_PARSER,
+            "tokeniser": settings.DEFAULT_TOKENISER,
+            "embedding_provider": settings.DEFAULT_EMBEDDING_PROVIDER,
+            "embedding_model": settings.DEFAULT_EMBEDDING_MODEL,
+            "embedding_dimensions": settings.DEFAULT_EMBEDDING_DIMENSIONS,
+            "vector_store": settings.DEFAULT_VECTOR_STORE,
+        }
+        return {
+            "parsers": sorted(PARSERS.keys()),
+            "tokenisers": sorted(TOKENISERS.keys()),
+            "embedders": sorted(EMBEDDERS.keys()),
+            "vector_stores": sorted(VECTOR_STORES.keys()),
+            "defaults": defaults,
+        }
+
+    def _resolve_upload(db: Session, org_id: UUID, upload_id: str) -> Upload:
+        try:
+            uid = UUID(upload_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
+        upload = (
+            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
+        )
+        if not upload:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
+        return upload
+
+    @router.get("/{upload_id}/runs")
+    def list_pipeline_runs(
+        upload_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        runs = IngestionRunService.list_runs(db, upload.id)
+        return {"items": [r.to_dict() for r in runs]}
+
+    @router.post("/{upload_id}/runs", status_code=status.HTTP_202_ACCEPTED)
+    async def create_pipeline_run(
+        upload_id: str,
+        body: dict = Body(default={}),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Kick off a NEW ingestion run for an existing upload with a custom
+        pipeline configuration (parser / tokeniser / embedder / vector store).
+        Previous runs are preserved so evals can compare them.
+
+        Body may contain any subset of:
+        ``parser`` (str), ``parser_config`` (dict),
+        ``tokeniser`` (str), ``tokeniser_config`` (dict),
+        ``embedding_provider`` (str), ``embedding_model`` (str),
+        ``embedding_dimensions`` (int), ``embedding_version`` (str),
+        ``vector_store`` (str), ``vector_store_ref`` (dict).
+        Anything omitted falls back to system defaults resolved by
+        ``IngestionRunService.resolve_run_config``.
+        """
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        if not upload.file_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload has no stored file to reprocess",
+            )
+
+        allowed = {
+            "parser", "parser_config",
+            "tokeniser", "tokeniser_config",
+            "embedding_provider", "embedding_model",
+            "embedding_dimensions", "embedding_version",
+            "vector_store", "vector_store_ref",
+        }
+        run_config = {k: v for k, v in (body or {}).items() if k in allowed}
+
+        # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser / provider / store)
+        # so the queued job doesn't error mid-ingest.
+        if "parser" in run_config and run_config["parser"] not in PARSERS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown parser {run_config['parser']!r}. Available: {sorted(PARSERS)}",
+            )
+        if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown tokeniser {run_config['tokeniser']!r}. Available: {sorted(TOKENISERS)}",
+            )
+        if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown embedding provider {run_config['embedding_provider']!r}. "
+                f"Available: {sorted(EMBEDDERS)}",
+            )
+        if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unknown vector store {run_config['vector_store']!r}. "
+                f"Available: {sorted(VECTOR_STORES)}",
+            )
+
+        job_id = await enqueue_upload(upload.id, org_id, run_config=run_config or None)
+        logger.info(
+            "[ingestion] enqueued custom run for upload {} (job={}, overrides={})",
+            upload.id, job_id, sorted(run_config.keys()),
+        )
+        return {
+            "upload_id": str(upload.id),
+            "job_id": job_id,
+            "run_config": run_config,
+            "status": "queued",
+        }
+
+    @router.post("/{upload_id}/runs/{run_id}/activate", status_code=status.HTTP_200_OK)
+    def activate_pipeline_run(
+        upload_id: str,
+        run_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Flip ``is_active`` to this run so live retrieval (the ``read_document``
+        tool) switches to its embedder + store. The previously-active run stays
+        in the DB and remains queryable for evals via its ``ingestion_run_id``."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            rid = UUID(run_id)
+        except ValueError:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id")
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == rid,
+                IngestionPipelineRun.upload_id == upload.id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .first()
+        )
+        if run is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Run not found for this upload",
+            )
+        if run.status != "ready":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot activate a run with status={run.status!r}; only 'ready' is allowed",
+            )
+        activated = IngestionRunService.activate_run(db, run.id)
+        return activated.to_dict()
 
     return router

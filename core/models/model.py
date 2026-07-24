@@ -14,7 +14,7 @@ class Model(TimestampModel):
     )
 
     provider_id = Column(UUID(as_uuid=True), ForeignKey("model_providers.id", ondelete="CASCADE"), nullable=False)
-    kind = Column(String(10), nullable=False)  # llm | stt | tts
+    kind = Column(String(10), nullable=False)  # llm | stt | tts | embedding
     name = Column(String(120), nullable=False)
     display_name = Column(String(100), nullable=True)
     description = Column(String(500), nullable=True)
