@@ -1,5 +1,6 @@
 from sqlalchemy import BigInteger, Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
 
@@ -22,7 +23,20 @@ class KnowledgeBase(OrgScopedModel):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)
 
+    runs = relationship(
+        "IngestionPipelineRun",
+        back_populates="knowledge_base",
+        cascade="all, delete-orphan",
+    )
+
+    def active_run(self):
+        for run in self.runs or []:
+            if run.is_active:
+                return run
+        return None
+
     def to_dict(self) -> dict:
+        active = self.active_run()
         return {
             "id": str(self.id),
             "name": self.name,
@@ -32,6 +46,15 @@ class KnowledgeBase(OrgScopedModel):
             "doc_type": self.doc_type,
             "ingestion_stats": self.ingestion_stats or {},
             "meta_data": self.meta_data or {},
+            "active_run": {
+                "id": str(active.id),
+                "parser": active.parser,
+                "tokeniser": active.tokeniser,
+                "embedding_provider": active.embedding_provider,
+                "embedding_model": active.embedding_model,
+                "embedding_dimensions": active.embedding_dimensions,
+                "vector_store": active.vector_store,
+            } if active else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
