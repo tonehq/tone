@@ -4,12 +4,13 @@ How it works (step by step):
 1. When building the pipeline, we check if the agent has any KB uploads.
 2. If yes, we create a tool called "read_document" with a description listing the file names.
 3. We register a handler so when the LLM calls read_document(query="..."), we:
-   a. Convert the query into an embedding (list of numbers representing meaning)
-   b. Search knowledge_base_chunks using pgvector to find the closest matching chunks
-   c. Return the chunk texts back to the LLM so it can answer the user
+   a. Look up the active ingestion run for each upload (cached at pipeline build).
+   b. Group uploads by (vector_store, embedding_provider, embedding_model, dims) so one embedder + one store call covers each group.
+   c. For each group: decrypt the provider's API key, embed the query with the SAME model that produced the stored vectors, query the store, and merge results across groups.
 4. The LLM then speaks the answer based on the retrieved content.
 """
 
+from collections import defaultdict
 from typing import Any, List, Optional
 
 from loguru import logger
@@ -57,30 +58,29 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     return ToolsSchema(standard_tools=[function_schema])
 
 
-def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids: List, top_k: int = DEFAULT_TOP_K, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None):
+def create_document_handler(
+    agent_id: int,
+    org_id: Any,
+    upload_runs: List[dict],
+    top_k: int = DEFAULT_TOP_K,
+    tool_call_entries: Optional[list] = None,
+    tool_request_ts: Optional[dict] = None,
+    current_turn: Optional[dict] = None,
+):
     """Create the handler function for read_document tool calls.
 
     Args:
         agent_id: The agent's ID (to scope chunk search)
         org_id: The organization ID
-        api_key: Decrypted OpenAI API key for embedding the query
-        upload_ids: Pre-fetched list of ready upload IDs for this agent
+        upload_runs: One dict per ready upload describing its active ingestion run — see
+            ``get_kb_document_names``. The handler groups by (vector_store, provider, model,
+            dims) so we build one embedder / store per group.
         top_k: Number of top matching chunks to return
         tool_call_entries: Shared list to append tool call logs to (optional)
-
-    Returns:
-        An async handler function compatible with Pipecat's register_function
     """
 
     async def handle_read_document(params: FunctionCallParams) -> None:
-        """Called when the LLM invokes read_document(query="...").
-
-        Steps:
-        1. Get the query from params.arguments
-        2. Embed the query using OpenAI (same model used at upload time)
-        3. Search knowledge_base_chunks with pgvector similarity (<=> operator)
-        4. Return the top matching chunk texts to the LLM via result_callback
-        """
+        """Called when the LLM invokes read_document(query="...")."""
         import time as _time
 
         query = params.arguments.get("query", "")
@@ -97,29 +97,103 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
         }
 
         try:
-            from core.services.rag.embedders import OpenAIEmbedder
-            from core.services.rag.vector_stores.pgvector_store import PgVectorStore
+            from core.database.session import get_db_context
+            from core.services.rag.embedder_factory import get_embedder
+            from core.services.rag.factory import get_vector_store
+            from core.services.rag.provider_keys import ProviderKeyService
 
-            query_embedding = OpenAIEmbedder(api_key).embed_query(query)
-            results = PgVectorStore().query(
-                query_embedding, top_k=top_k, filters={"agent_id": str(agent_id)}
-            )
+            # Group by the retrieval "space" — same embedder + store settings serve as one call.
+            groups: dict[tuple, list[dict]] = defaultdict(list)
+            for u in upload_runs or []:
+                key = (
+                    u["vector_store"],
+                    u["embedding_provider"],
+                    u["embedding_model"],
+                    u["embedding_dimensions"],
+                    tuple(sorted((u.get("vector_store_ref") or {}).items())),
+                )
+                groups[key].append(u)
 
-            if not results:
+            if not groups:
+                await params.result_callback("No relevant content found in the documents.")
                 tool_call_entry["result"] = "No relevant content found"
                 tool_call_entry["chunks_returned"] = 0
                 tool_call_entry["status_code"] = 200
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
                 finalize_and_record(tool_call_entry, timer, tool_call_entries)
-                await params.result_callback("No relevant content found in the documents.")
                 return
 
-            chunks_text = "\n\n---\n\n".join(r.text for r in results)
+            merged: list = []
+            failures = 0
+            for key, uploads_in_group in groups.items():
+                vector_store, provider, model, dims, ref_tuple = key
+                vector_store_ref = dict(ref_tuple) if ref_tuple else {}
+                run_ids = [u["ingestion_run_id"] for u in uploads_in_group]
+
+                try:
+                    with get_db_context() as db:
+                        api_key = ProviderKeyService.get_key(db, org_id, provider)
+                    if not api_key:
+                        logger.warning(
+                            "read_document: no {!r} API key for org {}, skipping group",
+                            provider, org_id,
+                        )
+                        failures += 1
+                        continue
+                    embedder = get_embedder(
+                        provider, model=model, api_key=api_key, dimensions=dims
+                    )
+                    store = get_vector_store(vector_store, **vector_store_ref)
+                    query_embedding = embedder.embed_query(query)
+                    # Per-agent published-config filter still applies inside store.query;
+                    # we additionally pin the exact ingestion_run_ids from this group so
+                    # a stale row from another run can't leak in.
+                    for run_id in run_ids:
+                        results = store.query(
+                            query_embedding,
+                            top_k=top_k,
+                            filters={
+                                "agent_id": str(agent_id),
+                                "ingestion_run_id": run_id,
+                                "embedding_provider": provider,
+                                "embedding_model": model,
+                                "embedding_dimensions": dims,
+                            },
+                        )
+                        merged.extend(results)
+                except Exception:
+                    logger.exception(
+                        "read_document: group ({}, {}, {}, {}D) failed", vector_store, provider, model, dims
+                    )
+                    failures += 1
+
+            if not merged:
+                if failures and failures == len(groups):
+                    await params.result_callback(
+                        "Document search is currently unavailable. Please try again."
+                    )
+                    tool_call_entry["result"] = "search unavailable"
+                    tool_call_entry["chunks_returned"] = 0
+                    tool_call_entry["status_code"] = 503
+                    tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+                    finalize_and_record(tool_call_entry, timer, tool_call_entries)
+                    return
+                await params.result_callback("No relevant content found in the documents.")
+                tool_call_entry["result"] = "No relevant content found"
+                tool_call_entry["chunks_returned"] = 0
+                tool_call_entry["status_code"] = 200
+                tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
+                finalize_and_record(tool_call_entry, timer, tool_call_entries)
+                return
+
+            merged.sort(key=lambda r: r.score)
+            top = merged[:top_k]
+            chunks_text = "\n\n---\n\n".join(r.text for r in top)
             result = f"Here is the relevant content from the documents:\n\n{chunks_text}"
-            logger.info("read_document returning {} chunks for query='{}'", len(results), query)
+            logger.info("read_document returning {} chunks for query='{}'", len(top), query)
 
             tool_call_entry["result"] = "success"
-            tool_call_entry["chunks_returned"] = len(results)
+            tool_call_entry["chunks_returned"] = len(top)
             tool_call_entry["status_code"] = 200
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
@@ -127,7 +201,7 @@ def create_document_handler(agent_id: int, org_id: Any, api_key: str, upload_ids
             await params.result_callback(result)
 
         except Exception as e:
-            logger.error("read_document failed: {}", e)
+            logger.exception("read_document failed")
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["status_code"] = 500
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
@@ -163,27 +237,16 @@ def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
 
 
 def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
-    """Fetch and decrypt the OpenAI API key from DB for embedding."""
+    """Fetch and decrypt the OpenAI API key from DB for embedding.
+
+    Thin wrapper on ``ProviderKeyService.get_key`` so legacy callers keep the
+    old signature while new code flows through the general provider lookup.
+    """
     from core.database.session import get_db_context
-    from core.models.api_key import ApiKey
-    from core.models.model_provider import ModelProvider
-    from core.utils.encryption import decrypt
+    from core.services.rag.provider_keys import ProviderKeyService
 
     with get_db_context() as db:
-        row = (
-            db.query(ApiKey)
-            .join(ModelProvider, ModelProvider.id == ApiKey.provider_id)
-            .filter(
-                ModelProvider.provider_id == "openai",
-                ApiKey.is_active.is_(True),
-                ApiKey.organization_id == org_id,
-            )
-            .first()
-        )
-        if row and row.encrypted_key:
-            return decrypt(row.encrypted_key)
-
-    return None
+        return ProviderKeyService.get_key(db, org_id, "openai")
 
 
 def get_kb_refs(agent_id: int) -> List[dict]:
@@ -215,12 +278,17 @@ def get_kb_refs(agent_id: int) -> List[dict]:
 
 
 def get_kb_document_names(agent_id: int) -> Optional[dict]:
-    """The agent's ready KB documents (the only DB query for KB), as a cacheable dict
-    `{"document_names": [...], "upload_ids": [...]}` or None when the agent has no KB.
-    Stored in the agent pipeline cache; `build_document_tool` consumes it with no DB query."""
+    """The agent's ready KB documents + each upload's active ingestion run.
+
+    Cached per-agent so ``build_document_tool`` + the retrieval handler run
+    with NO per-call KB DB query. One join to ``ingestion_pipeline_runs`` (the
+    active row per upload) means callers know which embedder / store to
+    instantiate at retrieval without a second DB hit.
+    """
     from core.database.session import get_db_context
     from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
+    from core.models.ingestion_pipeline_run import IngestionPipelineRun
     from core.models.knowledge_base import KnowledgeBase
 
     from core.utils.agent_scope import published_config_subquery
@@ -228,10 +296,24 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
     published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
-        upload_rows = (
-            db.query(Upload.file_name, Upload.id)
+        rows = (
+            db.query(
+                Upload.file_name,
+                Upload.id.label("upload_id"),
+                IngestionPipelineRun.id.label("run_id"),
+                IngestionPipelineRun.embedding_provider,
+                IngestionPipelineRun.embedding_model,
+                IngestionPipelineRun.embedding_dimensions,
+                IngestionPipelineRun.vector_store,
+                IngestionPipelineRun.vector_store_ref,
+            )
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
+            .outerjoin(
+                IngestionPipelineRun,
+                (IngestionPipelineRun.upload_id == Upload.id)
+                & (IngestionPipelineRun.is_active.is_(True)),
+            )
             .filter(
                 AgentKnowledgeBase.agent_id == agent_id,
                 AgentKnowledgeBase.agent_config_id == published_config_sq,
@@ -239,11 +321,29 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
             )
             .all()
         )
-    doc_names = [row[0] for row in upload_rows if row[0]]
-    upload_ids = [str(row[1]) for row in upload_rows]
+    doc_names = [row.file_name for row in rows if row.file_name]
+    upload_ids = [str(row.upload_id) for row in rows]
+    upload_runs = [
+        {
+            "upload_id": str(row.upload_id),
+            "file_name": row.file_name,
+            "ingestion_run_id": str(row.run_id) if row.run_id else None,
+            "embedding_provider": row.embedding_provider,
+            "embedding_model": row.embedding_model,
+            "embedding_dimensions": row.embedding_dimensions,
+            "vector_store": row.vector_store,
+            "vector_store_ref": row.vector_store_ref,
+        }
+        for row in rows
+        if row.run_id is not None
+    ]
     if not doc_names:
         return None
-    return {"document_names": doc_names, "upload_ids": upload_ids}
+    return {
+        "document_names": doc_names,
+        "upload_ids": upload_ids,
+        "upload_runs": upload_runs,
+    }
 
 
 def build_document_tool(
@@ -253,24 +353,24 @@ def build_document_tool(
 ) -> Optional[ToolsSchema]:
     """Build + register the read_document tool from the cached `kb` dict (no KB DB query).
 
-    The pgvector search still runs live at call time inside the handler. Returns the
-    ToolsSchema (for LLMContext) or None if the agent has no KB documents.
+    The actual vector search still runs live at call time inside the handler.
+    Returns the ToolsSchema (for LLMContext) or None if the agent has no KB documents.
     """
     if not kb or not kb.get("document_names"):
         logger.info("Agent {} has no KB documents, skipping tool registration", agent_id)
         return None
 
     doc_names = kb["document_names"]
-    upload_ids = kb.get("upload_ids") or []
-
-    api_key = get_openai_api_key_for_agent(org_id)
-    if not api_key:
-        logger.warning("No OpenAI API key found for org {}, skipping document tool", org_id)
+    upload_runs = kb.get("upload_runs") or []
+    if not upload_runs:
+        logger.warning(
+            "Agent {} has KB documents but no active ingestion runs; skipping tool", agent_id
+        )
         return None
 
     tools_schema = get_document_tool_schema(doc_names)
     handler = create_document_handler(
-        agent_id, org_id, api_key, upload_ids,
+        agent_id, org_id, upload_runs,
         tool_call_entries=tool_call_entries,
         tool_request_ts=tool_request_ts,
         current_turn=current_turn,
