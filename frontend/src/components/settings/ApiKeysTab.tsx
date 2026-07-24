@@ -1,8 +1,10 @@
 'use client';
 
+import { useAtom, useSetAtom } from 'jotai';
 import { Key, MoreVertical, Plus, ShieldOff, Trash2 } from 'lucide-react';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { authAtom, getCurrentUserAtom } from '@/atoms/AuthAtom';
 import { CustomButton, CustomModal } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
 import { Badge } from '@/components/ui/badge';
@@ -12,6 +14,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   useApiKeysList,
   useCreateApiKey,
@@ -26,6 +29,11 @@ import { showToast } from '@/utils/toast';
 
 import CreateApiKeyModal from './CreateApiKeyModal';
 import RevealApiKeyModal from './RevealApiKeyModal';
+
+// Mirror of the backend guard require_admin_or_owner. Non-admin/owner members
+// can still LIST keys (require_org_member) but can't create/revoke/delete.
+const CAN_MANAGE_ROLES = new Set(['admin', 'owner']);
+const NO_PERMISSION_TOOLTIP = 'Only Admins or Owners can manage API keys.';
 
 const STATUS_BADGE: Record<ApiKeyStatus, { label: string; className: string }> = {
   active: {
@@ -50,6 +58,15 @@ export default function ApiKeysTab() {
   const [revealState, setRevealState] = useState<{ key: string; name: string } | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<ApiKeyRow | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<ApiKeyRow | null>(null);
+
+  // Populate authAtom from LOGIN_DATA if it hasn't been seeded yet — matches
+  // the pattern in components/shared/userMenu.tsx.
+  const [authState] = useAtom(authAtom);
+  const getCurrentUser = useSetAtom(getCurrentUserAtom);
+  useEffect(() => {
+    if (!authState.user && !authState.isLoading) getCurrentUser();
+  }, [authState.user, authState.isLoading, getCurrentUser]);
+  const canManage = CAN_MANAGE_ROLES.has(authState.user?.role ?? '');
 
   const listParams = { page_no: page, page_size: pageSize, search: search || undefined };
   const query = useApiKeysList(listParams);
@@ -179,12 +196,21 @@ export default function ApiKeysTab() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               {row.status === 'active' && (
-                <DropdownMenuItem onClick={() => setConfirmRevoke(row)}>
+                <DropdownMenuItem
+                  disabled={!canManage}
+                  onClick={() => setConfirmRevoke(row)}
+                  title={canManage ? undefined : NO_PERMISSION_TOOLTIP}
+                >
                   <ShieldOff className="size-4" />
                   Revoke
                 </DropdownMenuItem>
               )}
-              <DropdownMenuItem variant="destructive" onClick={() => setConfirmDelete(row)}>
+              <DropdownMenuItem
+                variant="destructive"
+                disabled={!canManage}
+                onClick={() => setConfirmDelete(row)}
+                title={canManage ? undefined : NO_PERMISSION_TOOLTIP}
+              >
                 <Trash2 className="size-4" />
                 Delete
               </DropdownMenuItem>
@@ -199,9 +225,28 @@ export default function ApiKeysTab() {
   return (
     <div>
       <div className="mb-4 flex justify-end">
-        <CustomButton type="primary" icon={<Plus size={18} />} onClick={() => setCreateOpen(true)}>
-          Add API Key
-        </CustomButton>
+        {canManage ? (
+          <CustomButton
+            type="primary"
+            icon={<Plus size={18} />}
+            onClick={() => setCreateOpen(true)}
+          >
+            Add API Key
+          </CustomButton>
+        ) : (
+          // Disabled buttons don't fire pointer events, so the tooltip needs
+          // a wrapper span to catch hover — matches Radix's recommended pattern.
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-block">
+                <CustomButton type="primary" icon={<Plus size={18} />} disabled>
+                  Add API Key
+                </CustomButton>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>{NO_PERMISSION_TOOLTIP}</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       <CustomTable
