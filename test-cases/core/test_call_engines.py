@@ -154,8 +154,47 @@ class TestWebSocketEngine:
         assert posted["json"]["scheduled_call_id"] == "sc-1"
 
     def test_initiate_no_pod_raises_no_capacity(self, monkeypatch):
+        import core.services.call_engines.websocket_engine as we
         from core.services.call_engines.websocket_engine import NoOutboundCapacity
         _patch_outbound_picker(monkeypatch, None, None)  # no live pod
+        monkeypatch.setattr(we.settings, "WS_BRIDGE_ALLOW_INLINE", False)  # default: no inline fallback
+        with pytest.raises(NoOutboundCapacity):
+            get_call_engine("websocket").initiate_call("+1", "+1", agent_id="ag-1", callback_base_url="")
+
+    def test_initiate_no_pod_runs_inline_when_allowed(self, monkeypatch):
+        # WS_BRIDGE_ALLOW_INLINE=true + no pod → run the bridge IN-PROCESS instead of holding.
+        import core.services.call_engines.websocket_engine as we
+        import core.services.call_engines.ws_bridge_runner as r
+        _patch_outbound_picker(monkeypatch, None, None)  # no live pod
+        monkeypatch.setattr(we.settings, "WS_BRIDGE_ALLOW_INLINE", True)
+        called = {}
+
+        def fake_start_local_bridge(agent_id, to_number, from_number="", scheduled_call_id=None,
+                                    ws_run_id=None, ws_scenario_id=None):
+            called.update(agent_id=agent_id, to_number=to_number, scheduled_call_id=scheduled_call_id)
+            return "INLINE-CALL"
+
+        monkeypatch.setattr(r, "start_local_bridge", fake_start_local_bridge)
+        info = get_call_engine("websocket").initiate_call(
+            "+19894742667", "+1", agent_id="ag-1", callback_base_url="", scheduled_call_id="sc-9",
+        )
+        assert info.provider == "websocket" and info.status == "dialing"
+        assert info.call_id == "INLINE-CALL"
+        assert called["agent_id"] == "ag-1" and called["to_number"] == "+19894742667"
+        assert called["scheduled_call_id"] == "sc-9"
+
+    def test_initiate_inline_at_capacity_raises_no_capacity(self, monkeypatch):
+        # Inline bridge already at MAX_CONCURRENT_CALLS → AtCapacity → NoOutboundCapacity (row holds).
+        import core.services.call_engines.websocket_engine as we
+        import core.services.call_engines.ws_bridge_runner as r
+        from core.services.call_engines.websocket_engine import NoOutboundCapacity
+        _patch_outbound_picker(monkeypatch, None, None)
+        monkeypatch.setattr(we.settings, "WS_BRIDGE_ALLOW_INLINE", True)
+
+        def fake_at_capacity(*a, **k):
+            raise r.AtCapacity("full")
+
+        monkeypatch.setattr(r, "start_local_bridge", fake_at_capacity)
         with pytest.raises(NoOutboundCapacity):
             get_call_engine("websocket").initiate_call("+1", "+1", agent_id="ag-1", callback_base_url="")
 
@@ -250,3 +289,94 @@ class TestWsBridgeRunner:
                 r.start_local_bridge(agent_id="ag-1", to_number="+1")
         finally:
             r._SESSIONS.clear()
+
+
+class TestWsBridgeTransportBuilder:
+    """The outbound-client transport is assembled by the shared transport module (B1),
+    the mirror of the inbound TelephonyTransport — same pipeline, opposite socket source."""
+
+    def test_builds_ws_client_with_raw_pcm(self):
+        from core.serializers.raw_pcm import RawPCMSerializer
+        from core.services.transport.ws_bridge import (BRIDGE_SAMPLE_RATE,
+                                                      build_ws_bridge_transport)
+
+        t = build_ws_bridge_transport("wss://remote/ws/test?phone_number=1&sample_rate=24000")
+        assert type(t).__name__ == "WebsocketClientTransport"
+        params = t._params
+        assert isinstance(params.serializer, RawPCMSerializer)
+        assert params.add_wav_header is False
+        assert params.audio_in_sample_rate == BRIDGE_SAMPLE_RATE
+        assert params.audio_out_sample_rate == BRIDGE_SAMPLE_RATE
+
+    def test_runner_single_sources_rate_and_builder(self):
+        # ws_bridge_runner no longer builds the transport inline — it delegates to the
+        # shared builder and single-sources the rate from the transport module.
+        import core.services.call_engines.ws_bridge_runner as r
+        from core.services.transport.ws_bridge import BRIDGE_SAMPLE_RATE
+
+        assert r._BRIDGE_SAMPLE_RATE == BRIDGE_SAMPLE_RATE
+        assert r.build_ws_bridge_transport is not None
+
+
+class TestSessionEventWiring:
+    """_wire_session_events (B2) maps each transport family's connect/disconnect onto ONE
+    session start/end — no transport-class string-typing; the outbound WS client's
+    on_connected drives the same greeting as an inbound on_client_connected."""
+
+    class _EH:
+        def __init__(self):
+            self.handlers = []
+
+    def _fake_transport(self, events):
+        from types import SimpleNamespace
+        reg: dict = {}
+        eh = {e: self._EH() for e in events}
+
+        def event_handler(name):
+            def deco(fn):
+                eh.setdefault(name, self._EH()).handlers.append(fn)
+                reg.setdefault(name, []).append(fn)
+                return fn
+            return deco
+
+        return SimpleNamespace(_event_handlers=eh, event_handler=event_handler, registered=reg)
+
+    # expected_participant: telephony/LiveKit carry a real participant id; the WS bridge fires
+    # the websocket object, which is dropped to None (preserving the prior on_disconnected behavior).
+    @pytest.mark.parametrize("events,connect,disconnect,expected_participant", [
+        (["on_client_connected", "on_client_disconnected"],
+         "on_client_connected", "on_client_disconnected", "participant-x"),
+        (["on_first_participant_joined", "on_participant_disconnected"],
+         "on_first_participant_joined", "on_participant_disconnected", "participant-x"),
+        (["on_connected", "on_disconnected"], "on_connected", "on_disconnected", None),
+    ])
+    def test_wires_correct_pair_and_fires(self, events, connect, disconnect, expected_participant):
+        import asyncio
+
+        from core.services.pipeline.runner.pipecat import _wire_session_events
+
+        started, ended = [], []
+
+        async def on_start():
+            started.append(1)
+
+        async def on_end(p):
+            ended.append(p)
+
+        t = self._fake_transport(events)
+        _wire_session_events(t, on_start, on_end)
+        assert set(t.registered) == {connect, disconnect}
+        asyncio.run(t.registered[connect][0](t))
+        asyncio.run(t.registered[disconnect][0](t, "participant-x"))
+        assert started == [1]
+        assert ended == [expected_participant]
+
+    def test_unknown_transport_warns_no_crash(self):
+        from core.services.pipeline.runner.pipecat import _wire_session_events
+
+        async def noop(*a):
+            pass
+
+        t = self._fake_transport(["on_nonsense"])
+        _wire_session_events(t, noop, noop)  # must not raise
+        assert t.registered == {}

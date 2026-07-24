@@ -130,6 +130,15 @@ class Settings:
         # call carries no number to route on.
         self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL", "").rstrip("/")
         self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID", "")
+        # Single-process / local-dev escape hatch. The WS bridge is normally handed off to a
+        # dedicated outbound-call-worker pod (keeps media OFF the API/orchestrator pod). When no such
+        # pod is registered — e.g. a local `uvicorn main:app` with no WORKER_MODE=voice sibling —
+        # PodPicker.for_outbound finds nothing and the row would hold forever. With this flag ON the
+        # originator runs the bridge IN-PROCESS instead. OFF by default so staging/prod keep the pod
+        # hand-off; set true only for local/single-node runs.
+        self.WS_BRIDGE_ALLOW_INLINE: bool = (
+            get_secret("WS_BRIDGE_ALLOW_INLINE", "false").lower() == "true"
+        )
         # NB: access to the WebSocket ("test bridge") trigger is limited to users whose
         # ``members.role == 'super_admin'`` — see OutboundCallService.is_ws_trigger_allowed. The
         # role is assigned via SQL only (no UI/API), so the allowlist changes without a redeploy.

@@ -1003,7 +1003,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               {/* Body — the routed section */}
               <main className="min-h-0 flex-1 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
                 {loading ? (
-                  <AppLoader className="h-full" />
+                  <AppLoader className="min-h-0 h-full" />
                 ) : (
                   <div
                     className={cn(

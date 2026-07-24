@@ -583,22 +583,52 @@ class OutboundCallService(BaseService):
         orchestrator's Procrastinate poll) means an immediate test call triggers on create rather
         than sitting in 'scheduled'. Rows a pod refuses (429) / with no pod free stay 'scheduled' and
         the enqueued Procrastinate jobs + the drain retry the hand-off as pods free."""
-        try:
-            count = int(max_concurrency) if max_concurrency else 0
-        except (TypeError, ValueError):
-            count = 0
-        # No explicit count → one bridge per destination; else exactly `count` bridges.
-        count = count if count > 0 else len(valid)
-        if count > self._MAX_PARALLEL_WS:
-            logger.warning(
-                "[outbound][ws] requested {} parallel bridges; capping to {}",
-                count, self._MAX_PARALLEL_WS,
-            )
-            count = self._MAX_PARALLEL_WS
+        from core.services.call_engines.ws_test_client import prepare_bridge_run
 
-        # One batch id groups the fan-out; max_concurrency = count makes dispatch admit all N (the
-        # per-pod cap is the real throttle) AND enables the completion-refill fast path so a held
-        # row dials the instant a pod frees. batch_id also lets drain_outbound_capacity retry holds.
+        # Resolve each destination to its remote test scenarios (test-case fan-out). A number assigned
+        # to a remote agent with scenarios → one bridge PER scenario, each tracked as a TestRun case
+        # (metadata carries run_id + scenario_id); a number with no scenarios / an unreachable remote
+        # → a single untracked bridge. If NO destination resolves, fall back to the load-test fan-out
+        # (N = max_concurrency, cycling `valid`) so existing behavior is preserved.
+        specs: List[tuple] = []  # (to_number, metadata_dict)
+        tracked = False
+        for num in valid:
+            prep = prepare_bridge_run(num)
+            if prep and prep.get("scenarios"):
+                tracked = True
+                run_id = prep["run_id"]
+                for sc in prep["scenarios"]:
+                    specs.append(
+                        (num, {"ws_run_id": run_id, "ws_scenario_id": sc["scenario_id"]})
+                    )
+            else:
+                specs.append((num, {}))
+
+        if not tracked:
+            try:
+                count = int(max_concurrency) if max_concurrency else 0
+            except (TypeError, ValueError):
+                count = 0
+            count = count if count > 0 else len(valid)
+            specs = [(valid[i % len(valid)], {}) for i in range(count)]
+
+        if len(specs) > self._MAX_PARALLEL_WS:
+            logger.warning(
+                "[outbound][ws] {} bridges requested; capping to {}",
+                len(specs), self._MAX_PARALLEL_WS,
+            )
+            specs = specs[: self._MAX_PARALLEL_WS]
+        count = len(specs)
+
+        # Per-batch concurrency (the row's ``max_concurrency``):
+        # - TRACKED test-case run → honor the user's requested value (dial K cases at a time; the rest
+        #   stay 'scheduled' and refill as each finishes). This is what the modal's "Concurrent calls"
+        #   selector controls for a per-case fan-out.
+        # - UNTRACKED load-test → admit all N (max_concurrency = count) and let the per-pod
+        #   MAX_CONCURRENT_CALLS be the throttle (existing behavior).
+        # A batch_id + a non-null limit also enable the completion-refill fast path so a held row dials
+        # the instant a slot frees, and let drain_outbound_capacity retry holds.
+        batch_limit = resolve_batch_concurrency(max_concurrency) if tracked else count
         batch_id = uuid.uuid4()
         now = datetime.now(timezone.utc)
         rows: List[ScheduledCall] = [
@@ -607,16 +637,16 @@ class OutboundCallService(BaseService):
                 organization_id=self.org_id,
                 channel_id=None,
                 from_number=from_number,
-                to_number=valid[i % len(valid)],
+                to_number=to_num,
                 scheduled_at=now,
                 status="scheduled",
                 provider="websocket",
                 created_by_user_id=None,
                 batch_id=batch_id,
-                max_concurrency=count,
-                metadata_={},
+                max_concurrency=batch_limit,
+                metadata_=meta,
             )
-            for i in range(count)
+            for (to_num, meta) in specs
         ]
         self._persist_and_enqueue_rows(rows)
 
@@ -891,6 +921,15 @@ class OutboundCallService(BaseService):
         # an outbound voice pod), so it must NOT require the Twilio BASE_CALL_URL gate.
         base = "" if sc.provider == "websocket" else self._public_base()
         engine = get_call_engine(sc.provider, org_id=sc.organization_id)
+        # Test-case fan-out: a websocket row carries its remote run_id/scenario_id in metadata so the
+        # bridge runs THAT scenario and the remote records it. Only the websocket engine accepts
+        # these; Twilio's signature is untouched.
+        _meta = getattr(sc, "metadata_", None) or {}
+        _ws_extra = (
+            {"ws_run_id": _meta.get("ws_run_id"), "ws_scenario_id": _meta.get("ws_scenario_id")}
+            if sc.provider == "websocket"
+            else {}
+        )
         try:
             info = engine.initiate_call(
                 to_number=sc.to_number,
@@ -898,6 +937,7 @@ class OutboundCallService(BaseService):
                 agent_id=str(sc.agent_id),
                 callback_base_url=base,
                 scheduled_call_id=str(sc.id),
+                **_ws_extra,
             )
         except NoOutboundCapacity as exc:
             # No outbound voice pod free right now — HOLD the row (revert the claim to 'scheduled')

@@ -50,8 +50,13 @@ class WebSocketCallEngine(CallEngine):
         agent_id: str,
         callback_base_url: str,
         scheduled_call_id: Optional[str] = None,
+        ws_run_id: Optional[str] = None,
+        ws_scenario_id: Optional[str] = None,
     ) -> CallInfo:
         """Pick an outbound voice pod and hand the bridge off to it; return immediately.
+
+        ``ws_run_id``/``ws_scenario_id`` (test-case fan-out) ride the hand-off so the remote runs THAT
+        scenario's persona and records the result into its TestRun mapping.
 
         Raises ``NoOutboundCapacity`` when no pod is live or the picked pod is full (429), so the
         caller queues. Raises other exceptions on a genuine hand-off failure (marked ``failed``)."""
@@ -64,6 +69,12 @@ class WebSocketCallEngine(CallEngine):
             pod = picker.pick()
             base = picker.internal_base_for(pod)
         if pod is None or not base:
+            # No dedicated outbound-call-worker pod. In a single-process / local deployment there is
+            # no such pool, so (opt-in) run the bridge IN-PROCESS instead of holding the row forever.
+            if settings.WS_BRIDGE_ALLOW_INLINE:
+                return self._initiate_inline(
+                    to_number, from_number, agent_id, scheduled_call_id, ws_run_id, ws_scenario_id
+                )
             raise NoOutboundCapacity(
                 "no live outbound voice pod to run the WS bridge (is the outbound-call-worker "
                 "pool up and registered via pod_sync?)"
@@ -74,6 +85,8 @@ class WebSocketCallEngine(CallEngine):
             "to_number": (to_number or "").strip(),
             "from_number": (from_number or "").strip(),
             "scheduled_call_id": str(scheduled_call_id) if scheduled_call_id else None,
+            "ws_run_id": str(ws_run_id) if ws_run_id else None,
+            "ws_scenario_id": str(ws_scenario_id) if ws_scenario_id else None,
         }
         headers = {}
         if settings.WS_BRIDGE_INTERNAL_TOKEN:
@@ -107,6 +120,47 @@ class WebSocketCallEngine(CallEngine):
         call_id = (resp.json() or {}).get("call_id")
         if not call_id:
             raise RuntimeError("ws-bridge-start returned no call_id")
+
+        return CallInfo(
+            call_id=call_id,
+            session_id=str(scheduled_call_id or agent_id),
+            status="dialing",
+            provider="websocket",
+        )
+
+    def _initiate_inline(
+        self,
+        to_number: str,
+        from_number: str,
+        agent_id: str,
+        scheduled_call_id: Optional[str],
+        ws_run_id: Optional[str] = None,
+        ws_scenario_id: Optional[str] = None,
+    ) -> CallInfo:
+        """Run the WS bridge IN-PROCESS (local/single-process fallback, gated by
+        ``WS_BRIDGE_ALLOW_INLINE``). Reuses the exact same pod-local runner the hand-off target
+        uses, so the per-process ``MAX_CONCURRENT_CALLS`` cap and the ``scheduled_calls`` terminal
+        lifecycle behave identically — a full cap raises ``AtCapacity`` → ``NoOutboundCapacity`` so
+        the row holds and the drain retries, matching the pod's 429 path."""
+        from core.services.call_engines.ws_bridge_runner import (AtCapacity,
+                                                                start_local_bridge)
+
+        logger.info(
+            "[outbound][ws] no outbound pod — running bridge INLINE (WS_BRIDGE_ALLOW_INLINE) "
+            "agent={} to={} scheduled_call_id={} ws_scenario_id={}",
+            agent_id, (to_number or "").strip(), scheduled_call_id, ws_scenario_id,
+        )
+        try:
+            call_id = start_local_bridge(
+                agent_id=str(agent_id),
+                to_number=(to_number or "").strip(),
+                from_number=(from_number or "").strip(),
+                scheduled_call_id=str(scheduled_call_id) if scheduled_call_id else None,
+                ws_run_id=str(ws_run_id) if ws_run_id else None,
+                ws_scenario_id=str(ws_scenario_id) if ws_scenario_id else None,
+            )
+        except AtCapacity as exc:
+            raise NoOutboundCapacity(f"inline bridge at capacity: {exc}") from exc
 
         return CallInfo(
             call_id=call_id,
