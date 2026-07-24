@@ -254,6 +254,25 @@ class Settings:
         # pin an explicit ceiling. Kept as a knob for future tuning.
         self.OUTBOUND_BG_WORKERS: int = int(get_secret("OUTBOUND_BG_WORKERS", "0"))
 
+        # ── RAG ingestion defaults ──────────────────────────────────────────
+        # Baseline parser / tokeniser / embedder / vector-store used when a
+        # caller doesn't supply an override. Every value maps to a registry
+        # entry (see core/services/rag/parser_factory.py, tokeniser_factory.py,
+        # embedder_factory.py, factory.py). Consumed only by
+        # IngestionRunService.resolve_run_config — no other file bakes these in.
+        self.DEFAULT_PARSER: str = get_secret("DEFAULT_PARSER", "docling")
+        self.DEFAULT_TOKENISER: str = get_secret("DEFAULT_TOKENISER", "docling_hybrid")
+        self.DEFAULT_EMBEDDING_PROVIDER: str = get_secret("DEFAULT_EMBEDDING_PROVIDER", "openai")
+        self.DEFAULT_EMBEDDING_MODEL: str = get_secret("DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small")
+        self.DEFAULT_EMBEDDING_DIMENSIONS: int = int(get_secret("DEFAULT_EMBEDDING_DIMENSIONS", "1536"))
+        self.DEFAULT_VECTOR_STORE: str = get_secret("DEFAULT_VECTOR_STORE", "pgvector")
+
+        # Pinecone vector store — API key for the "pinecone" backend in the RAG
+        # store factory. Empty in envs that only use pgvector; the store itself
+        # raises EmbeddingProviderUnavailableError if a run requests pinecone
+        # without a key configured.
+        self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY", "")
+
     def loki_read_configured(self) -> bool:
         """True only when we have enough to read a call's logs back from Loki.
 
