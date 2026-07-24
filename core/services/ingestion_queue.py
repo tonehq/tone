@@ -156,6 +156,102 @@ async def enqueue_reprocess(upload_id, org_id, run_config: dict | None = None) -
     return await _defer_ingestion(upload_id, org_id, True, run_config=run_config)
 
 
+@app.task(name="eval_ingestion_run", queue="eval")
+def eval_ingestion_run(ingestion_run_id: str) -> None:
+    """Auto-run the RAG eval for a completed ingestion pipeline run.
+
+    Runs on the dedicated ``eval`` queue (not ``ingestion``) so:
+    (1) an older worker deployment that doesn't yet know this task can't grab
+    the job and fail it as ``TaskNotFound`` before an updated worker sees it,
+    and (2) slow LLM-heavy eval work (5-10 min per doc) doesn't compete with
+    ingestion slots. Workers must include ``eval`` in ``--queues`` to consume.
+
+    Idempotency: ``EvalService.get_or_generate_eval`` upserts by ``upload_id``
+    (unique) so a redelivered job reuses the existing question set instead of
+    regenerating. ``run_eval`` always inserts a fresh ``eval_results`` row —
+    duplicate delivery becomes a duplicate result row rather than a partial
+    update, which is what we want for audit.
+
+    Failures are logged with a full traceback but NEVER re-raised: an eval
+    outage must not fail the ingestion pipeline."""
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.models.ingestion_pipeline_run import IngestionPipelineRun
+    from core.services.evals.eval_service import EvalService
+
+    try:
+        with get_db_context() as db:
+            run = (
+                db.query(IngestionPipelineRun)
+                .filter(IngestionPipelineRun.id == _UUID(ingestion_run_id))
+                .first()
+            )
+            if run is None:
+                logger.warning(
+                    "[eval] auto-run skipped: ingestion_run {} not found",
+                    ingestion_run_id,
+                )
+                return
+            svc = EvalService()
+            eval_row = svc.get_or_generate_eval(
+                db, upload_id=run.upload_id, org_id=run.organization_id
+            )
+            svc.run_eval(
+                db,
+                eval_id=eval_row.id,
+                ingestion_run_id=run.id,
+                triggered_by="auto",
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[eval] auto-run failed for ingestion_run={} (swallowed — ingestion is unaffected)",
+            ingestion_run_id,
+        )
+
+
+async def enqueue_eval_for_ingestion_run(ingestion_run_id) -> int:
+    async with app.open_async():
+        return await eval_ingestion_run.defer_async(
+            ingestion_run_id=str(ingestion_run_id)
+        )
+
+
+def enqueue_eval_for_ingestion_run_sync(ingestion_run_id) -> int:
+    """Sync counterpart for callers inside a sync service method
+    (``IngestionRunService.complete_run`` runs inside the ingestion worker,
+    which is a sync ``def`` task executed in the worker's threadpool thread).
+
+    Why an ephemeral app: the module-level ``app`` uses an async
+    ``PsycopgConnector`` whose psycopg pool is bound to the worker's main
+    event loop. Opening the SAME connector from a fresh ``asyncio.run`` loop
+    inside a threadpool thread creates cross-loop futures — closing the pool
+    on our loop raises ``ValueError: future belongs to a different loop`` and
+    leaves the worker's pool in a closed state (the whole worker then errors
+    on ``pool 'pool-1' is already closed``). Instead, spin up a one-shot
+    ``SyncPsycopgConnector``-backed app just for the defer, then close it.
+    Fully isolated — cannot touch the shared async pool."""
+    from procrastinate import App as _App
+    from procrastinate import SyncPsycopgConnector
+
+    # ``kwargs`` on ``SyncPsycopgConnector`` are forwarded to psycopg's sync
+    # ``ConnectionPool``. Cap it small — this pool exists only long enough to
+    # defer one job, so we don't want to hold more than a single connection.
+    ephemeral = _App(
+        connector=SyncPsycopgConnector(
+            conninfo=_conninfo(), min_size=1, max_size=1
+        )
+    )
+    with ephemeral.open():
+        # Defer by task name — the task doesn't need to be registered on this
+        # ephemeral app; the worker (running with the shared ``app``) resolves
+        # the name against its own registry when it picks the job up.
+        return ephemeral.configure_task(
+            name="eval_ingestion_run",
+            queue="eval",
+        ).defer(ingestion_run_id=str(ingestion_run_id))
+
+
 @app.task(name="execute_outbound_call", queue="outbound_calls")
 def execute_outbound_call(scheduled_call_id: str, org_id: str) -> None:
     """Dispatch a scheduled outbound call when its ``schedule_at`` fires.
