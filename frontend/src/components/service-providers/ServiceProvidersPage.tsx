@@ -162,13 +162,16 @@ export default function ServiceProvidersPage() {
 
   // Passed to ApiKeyCreateDrawer's "+ Create new provider" inline flow. The
   // drawer creates the ModelProvider via this callback, then uses the returned
-  // id to create the ApiKey in the same submit gesture.
+  // id to create the ApiKey in the same submit gesture. Refresh here so the
+  // "provider only" path (no API key) still updates the grid — that branch
+  // short-circuits inside the drawer and never calls ``onSubmit``.
   const handleInlineCreateProvider = useCallback(
     async (payload: ModelProviderUpsertPayload): Promise<ModelProvider> => {
       const created = await upsertModelProvider({ values: payload });
+      fl.refresh();
       return created;
     },
-    [upsertModelProvider],
+    [upsertModelProvider, fl],
   );
 
   const isInitialLoading = fl.listLoading && fl.rows.length === 0;
