@@ -432,6 +432,8 @@ async def ws_bridge_start(request: Request):
             to_number=body.get("to_number") or "",
             from_number=body.get("from_number") or "",
             scheduled_call_id=body.get("scheduled_call_id") or None,
+            ws_run_id=body.get("ws_run_id") or None,
+            ws_scenario_id=body.get("ws_scenario_id") or None,
         )
     except AtCapacity:
         # Expected under load — the originator turns this into a queued (held) scheduled row.

@@ -24,6 +24,48 @@ from core.services.pipeline.call_end_events import (
 from core.services.pipeline.runner.base import PipelineRunner
 from core.services.pipeline.tool_call_timing import merge_and_synthesize
 
+# Different transport families announce connect/disconnect under different event names.
+# We map each (connect, disconnect) pair onto the SAME session start/end, so the runner has
+# one provider-agnostic lifecycle hookup — only the transport's data-receive layer differs,
+# never the runner. The third element says whether the disconnect event's payload is a real
+# participant identifier worth logging (telephony/LiveKit) or an opaque object we drop to None
+# (the WS bridge fires the websocket, not a participant). Ordered most-common first.
+_SESSION_EVENT_PAIRS = (
+    ("on_client_connected", "on_client_disconnected", True),              # telephony (FastAPIWebsocket), Daily, SmallWebRTC
+    ("on_first_participant_joined", "on_participant_disconnected", True),  # LiveKit
+    ("on_connected", "on_disconnected", False),                          # outbound WS bridge (WebsocketClientTransport)
+)
+
+
+def _wire_session_events(transport, on_start, on_end) -> None:
+    """Wire a transport's connect/disconnect events to ``on_start``/``on_end``.
+
+    Registers only the ONE event pair the transport actually fires (checked against the
+    transport's registered handlers), replacing per-transport ``type(...).__name__`` checks.
+    This is what lets the OUTBOUND ws-client agent greet on connect exactly like an inbound
+    placed call — ``WebsocketClientTransport`` fires ``on_connected`` (not
+    ``on_client_connected``), and this maps it to the same ``_start_session``.
+    """
+    supported = getattr(transport, "_event_handlers", {}) or {}
+    for connect_event, disconnect_event, carries_participant in _SESSION_EVENT_PAIRS:
+        if connect_event not in supported:
+            continue
+
+        @transport.event_handler(connect_event)
+        async def _on_connect(_transport, *_args, _cb=on_start):
+            await _cb()
+
+        if disconnect_event in supported:
+
+            @transport.event_handler(disconnect_event)
+            async def _on_disconnect(_transport, *args, _cb=on_end, _carries=carries_participant):
+                await _cb(args[0] if (_carries and args) else None)
+        return
+
+    logger.warning(
+        "[runner] no known session connect event on transport {}", type(transport).__name__
+    )
+
 
 class PipecatPipelineRunner(PipelineRunner):
     """Run a Pipecat pipeline built by `PipecatPipelineBuilder`."""
@@ -468,43 +510,16 @@ class PipecatPipelineRunner(PipelineRunner):
                 )
                 logger.exception("task.cancel() failed during client disconnect")
 
-        @transport.event_handler("on_client_connected")
-        async def on_client_connected(transport, client):
-            await _start_session()
-
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
             logger.debug("Client ready event received")
             await rtvi.set_bot_ready()
 
-        @transport.event_handler("on_client_disconnected")
-        async def on_client_disconnected(transport, participant):
-            await _end_session(participant)
-
-        if type(transport).__name__ == "LiveKitTransport":
-
-            @transport.event_handler("on_first_participant_joined")
-            async def on_first_participant_joined(transport, participant_id):
-                await _start_session()
-
-            @transport.event_handler("on_participant_disconnected")
-            async def on_participant_disconnected(transport, participant_id):
-                await _end_session(participant_id)
-
-        # Outbound WebSocket bridge (WebSocketCallEngine → remote /ws/test): the dial-out
-        # client transport fires on_connected/on_disconnected (NOT on_client_connected), so
-        # the greeting/first_message would never fire and the agent would sit silent until the
-        # remote's own fallback speaks. Wire the client-transport events to the same session
-        # start/end so the OUTBOUND agent greets on connect, like a real placed call.
-        if type(transport).__name__ == "WebsocketClientTransport":
-
-            @transport.event_handler("on_connected")
-            async def on_ws_client_connected(transport, websocket):
-                await _start_session()
-
-            @transport.event_handler("on_disconnected")
-            async def on_ws_client_disconnected(transport, websocket):
-                await _end_session(None)
+        # Map whichever connect/disconnect pair this transport fires onto the same session
+        # start/end (telephony on_client_*, LiveKit participant events, or the outbound WS
+        # bridge's on_connected/on_disconnected) — one provider-agnostic hookup, no
+        # transport-class string-typing. See _wire_session_events.
+        _wire_session_events(transport, _start_session, _end_session)
 
         logger.info("[TIMING] runner setup complete, total: {:.3f}s — starting runner.run()", _time.monotonic() - _t_comp_start)
         runner = PipecatRunner(handle_sigint=getattr(runner_args, "handle_sigint", False))
