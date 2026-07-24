@@ -5,6 +5,7 @@ Covers the two pure seams that carry a remote TestRun scenario through the bridg
 - ``ws_bridge_runner._remote_uri`` appending run_id + scenario_id.
 """
 
+import asyncio
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 from uuid import uuid4
@@ -107,3 +108,40 @@ class TestTrackedFanout:
         assert len(rows) == 3  # untracked: N = requested count
         assert all(not row.metadata_ for row in rows)  # no scenario metadata
         assert {row.max_concurrency for row in rows} == {3}  # admit-all (count)
+
+
+class TestBridgeBodyCarriesCallIdentity:
+    """The bridge threads FROM / TO / CALL SID (+ scheduled_call_id) onto the runner body so the
+    call log — and therefore Call History — no longer shows "-" for these columns."""
+
+    def test_run_bridge_body_has_from_to_stream_and_scheduled(self, monkeypatch):
+        import core.bot as bot_mod
+
+        captured = {}
+
+        async def _fake_run_bot(transport, runner_args):
+            captured["body"] = runner_args.body
+
+        monkeypatch.setattr(r, "build_ws_bridge_transport", lambda uri, rate: object())
+        monkeypatch.setattr(bot_mod, "run_bot", _fake_run_bot)
+
+        asyncio.run(
+            r._run_bridge(
+                "call-abc",
+                "ws://remote/ws/test?phone_number=%2B13186201704",
+                "ag-1",
+                scheduled_call_id="sc-9",
+                to_number="+13186201704",
+                from_number="+1000",
+            )
+        )
+
+        body = captured["body"]
+        assert body["direction"] == "outbound"
+        assert body["transport_type"] == "websocket"
+        assert body["scheduled_call_id"] == "sc-9"
+        call_data = body["call_data"]
+        assert call_data["from"] == "+1000"
+        assert call_data["to"] == "+13186201704"
+        # No real Twilio sid → the bridge's own call_id is the stream id (→ provider_call_id → CALL SID).
+        assert call_data["stream_id"] == "call-abc"
