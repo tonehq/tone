@@ -1,4 +1,13 @@
-import { Building2, Cable, LayoutGrid, Plug, ScrollText, UserCircle, Users } from 'lucide-react';
+import {
+  Building2,
+  Cable,
+  KeyRound,
+  LayoutGrid,
+  Plug,
+  ScrollText,
+  UserCircle,
+  Users,
+} from 'lucide-react';
 
 // Single source of truth for the settings destinations. Both the settings rail
 // (settings/layout.tsx) and the overview landing page (SettingsOverview.tsx)
@@ -72,6 +81,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         href: '/settings/integrations',
         icon: Cable,
         description: 'Connect external apps and manage API credentials.',
+      },
+      {
+        label: 'API Keys',
+        href: '/settings/api-keys',
+        icon: KeyRound,
+        description: 'Create and manage API keys for programmatic access.',
       },
     ],
   },

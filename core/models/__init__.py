@@ -37,6 +37,7 @@ from core.models.member import Member
 from core.models.app_integration import AppIntegration
 from core.models.oauth_connection import OAuthConnection
 from core.models.api_key import ApiKey
+from core.models.generated_api_key import GeneratedApiKey
 
 # Bound Resources
 from core.models.mcp_server import McpServer
