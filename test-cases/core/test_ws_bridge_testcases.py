@@ -93,6 +93,35 @@ class TestTrackedFanout:
         ]
         assert {row.metadata_["ws_run_id"] for row in rows} == {"RUN-1"}
 
+    def test_tracked_fanout_not_capped_at_max_parallel(self, monkeypatch):
+        # Regression: a tracked run with MORE scenarios than _MAX_PARALLEL_WS must create one row
+        # PER scenario (throttled by batch_limit at dispatch), not truncate — else the dropped cases'
+        # remote TestRun mappings stay 'pending' forever. Only the untracked load-test path is capped.
+        svc = ocs.OutboundCallService(MagicMock(), org_id=uuid4())
+        agent = SimpleNamespace(id=uuid4())
+        n = svc._MAX_PARALLEL_WS + 5
+        monkeypatch.setattr(
+            _ws_client_mod,
+            "prepare_bridge_run",
+            lambda num: {
+                "run_id": "RUN-1",
+                "scenarios": [{"scenario_id": f"S{i}"} for i in range(n)],
+            },
+        )
+        monkeypatch.setattr(ocs, "get_env_outbound_ceiling", lambda: None)
+        import core.services.outbound_capacity as cap
+        monkeypatch.setattr(cap, "get_env_outbound_ceiling", lambda: None)
+        captured = {}
+        monkeypatch.setattr(svc, "_persist_and_enqueue_rows", lambda rows: captured.update(rows=rows))
+        monkeypatch.setattr(svc, "dispatch_scheduled_call", lambda _id: None)
+
+        svc._dial_parallel_ws(agent, "+1000", ["+13186201704"], max_concurrency=2, invalid=[])
+
+        rows = captured["rows"]
+        assert len(rows) == n  # one row per scenario — NOT truncated to _MAX_PARALLEL_WS
+        assert len({row.metadata_["ws_scenario_id"] for row in rows}) == n  # every case present
+        assert {row.max_concurrency for row in rows} == {2}  # in-flight throttled per-batch
+
     def test_untracked_fanout_falls_back_to_count(self, monkeypatch):
         # Number with no remote scenarios → untracked load-test fan-out: N = requested, no metadata.
         svc = ocs.OutboundCallService(MagicMock(), org_id=uuid4())

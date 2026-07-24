@@ -612,7 +612,12 @@ class OutboundCallService(BaseService):
             count = count if count > 0 else len(valid)
             specs = [(valid[i % len(valid)], {}) for i in range(count)]
 
-        if len(specs) > self._MAX_PARALLEL_WS:
+        # The cap bounds SIMULTANEOUS bridges for an UNTRACKED load-test (every row dials at once,
+        # throttled only by the per-pod MAX_CONCURRENT_CALLS). A TRACKED test-case run is throttled
+        # per-batch at DISPATCH (``batch_limit`` below), so we must NOT truncate its scenario rows —
+        # dropping cases here would leave their remote TestRun mappings stuck 'pending' forever. Every
+        # scenario gets a row; only ``batch_limit`` cases are in flight at a time, the rest queue.
+        if not tracked and len(specs) > self._MAX_PARALLEL_WS:
             logger.warning(
                 "[outbound][ws] {} bridges requested; capping to {}",
                 len(specs), self._MAX_PARALLEL_WS,
@@ -653,7 +658,8 @@ class OutboundCallService(BaseService):
         # Trigger the hand-off INLINE now — don't wait on the orchestrator's poll. Each
         # dispatch_scheduled_call claims the row (age-gated so the queued job can't double-dial it),
         # picks an outbound voice pod, and hands off. A row with no free pod stays 'scheduled' and is
-        # retried by its Procrastinate job + the drain. Bounded loop (count <= _MAX_PARALLEL_WS).
+        # retried by its Procrastinate job + the drain. Loop is bounded by the row count (untracked:
+        # <= _MAX_PARALLEL_WS; tracked: one row per scenario, each held past batch_limit as a no-op).
         placed_calls: List[Dict[str, Any]] = []
         held = 0
         for sc in rows:
