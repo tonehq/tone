@@ -1,0 +1,464 @@
+{
+  "info": {
+    "_postman_id": "tone-generated-api-keys-2026-07-24",
+    "name": "Generated API Keys API",
+    "description": "Auto-generated from `core/api/v1/generated_api_keys.py` (mirrored by `ee/api/v1/generated_api_keys.py` — same paths, EE swaps the auth guards).\n\n**Prefix**: `/api/v1/generated-api-keys`\n\n**What this controller owns**\nCustomer-facing programmatic-access API keys. Distinct from `api_keys` (Model Providers) — those are provider credentials for LLM/STT/TTS services. A row here represents one Bearer token a customer sends in `Authorization: Bearer tone_sk_...` to hit the Tone API on behalf of their org.\n\n**Security model**\n- Full key format: `tone_sk_<32-char base62>`. Returned **exactly once** on create (in the `key` field of the response). After that the plaintext is unrecoverable — only `key_prefix` (~12 chars) is retained for display.\n- Server stores only SHA-256(`full_key`). A DB dump does NOT leak usable keys.\n- Every API-key-authenticated request runs at **admin** authority within the key's org (mirrors OpenAI / Retell / Stripe).\n- EE guard also blocks the `tenant_id` header switch for API-key callers so a key can never reach across into another org.\n\n**Auth matrix**\n| Endpoint | Core | EE |\n|---|---|---|\n| `create_api_key`  | `require_admin_or_owner` | `require_ee_admin_or_owner` |\n| `list`            | `require_org_member`     | `require_ee_org_member`     |\n| `get_api_key`     | `require_org_member`     | `require_ee_org_member`     |\n| `revoke_api_key`  | `require_admin_or_owner` | `require_ee_admin_or_owner` |\n| `delete_api_key`  | `require_admin_or_owner` | `require_ee_admin_or_owner` |",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{access_token}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://localhost:8000",
+      "type": "string"
+    },
+    {
+      "key": "access_token",
+      "value": "",
+      "type": "string",
+      "description": "JWT access token from /auth/login (or the httpOnly cookie set by the browser)."
+    },
+    {
+      "key": "api_key",
+      "value": "",
+      "type": "string",
+      "description": "Full API key returned once from POST /create_api_key. Copy it here to run the 'Use the API Key' example."
+    },
+    {
+      "key": "api_key_id",
+      "value": "550e8400-e29b-41d4-a716-446655440aaa",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "POST /generated-api-keys/create_api_key (admin/owner) — never expires",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"Production\",\n  \"expires_at\": null\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+        },
+        "description": "Mint a new API key that never expires. The response's `key` field is the ONLY time the plaintext is available — copy it into the `api_key` collection variable to run the 'Use the API Key' example below."
+      },
+      "response": [
+        {
+          "name": "201 Created — one-time key payload",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Production\",\n  \"expires_at\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n  \"name\": \"Production\",\n  \"key_prefix\": \"tone_sk_a1B\",\n  \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"active\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": null,\n  \"last_used_at\": null,\n  \"revoked_at\": null,\n  \"created_at\": \"2026-07-24T12:34:56.000000+00:00\",\n  \"key\": \"tone_sk_a1B2c3D4e5F6g7H8i9J0kLmNoPqRsTuVwXyZaBcDeFg\"\n}"
+        },
+        {
+          "name": "409 Conflict — duplicate active name",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Production\",\n  \"expires_at\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Conflict",
+          "code": 409,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"An active API key with this name already exists.\"\n}"
+        },
+        {
+          "name": "422 Unprocessable — empty name",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"name\": \"\",\n  \"expires_at\": null\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": [\n    {\n      \"type\": \"string_too_short\",\n      \"loc\": [\"body\", \"name\"],\n      \"msg\": \"String should have at least 1 character\",\n      \"input\": \"\"\n    }\n  ]\n}"
+        },
+        {
+          "name": "403 Forbidden — regular member",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Production\",\n  \"expires_at\": null\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Forbidden",
+          "code": 403,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Admin or Owner role required\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "POST /generated-api-keys/create_api_key (admin/owner) — 30-day expiry",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"name\": \"CI job\",\n  \"expires_at\": \"2026-08-23T00:00:00Z\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+        },
+        "description": "Mint a key that expires 30 days from now."
+      },
+      "response": [
+        {
+          "name": "201 Created — with expiry",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CI job\",\n  \"expires_at\": \"2026-08-23T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\",\n  \"name\": \"CI job\",\n  \"key_prefix\": \"tone_sk_x7Y\",\n  \"masked\": \"tone_sk_x7Y\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"active\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": \"2026-08-23T00:00:00+00:00\",\n  \"last_used_at\": null,\n  \"revoked_at\": null,\n  \"created_at\": \"2026-07-24T12:34:56.000000+00:00\",\n  \"key\": \"tone_sk_x7Y2c3D4e5F6g7H8i9J0kLmNoPqRsTuVwXyZaBcDeFg\"\n}"
+        },
+        {
+          "name": "422 Unprocessable — past expiry",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"CI job\",\n  \"expires_at\": \"2020-01-01T00:00:00Z\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/create_api_key",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "create_api_key"]
+            }
+          },
+          "status": "Unprocessable Entity",
+          "code": 422,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Expiry must be in the future.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "POST /generated-api-keys/list (org member)",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"search\": null,\n  \"sort_by\": \"created_at\",\n  \"sort_order\": \"desc\"\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "list"]
+        },
+        "description": "List keys for the current org. Search matches `name` and `key_prefix`. Sortable columns: `name`, `created_at`, `last_used_at`, `expires_at`."
+      },
+      "response": [
+        {
+          "name": "200 OK — paginated list",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"sort_by\": \"created_at\",\n  \"sort_order\": \"desc\"\n}"
+            },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"name\": \"Production\",\n      \"key_prefix\": \"tone_sk_a1B\",\n      \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": null,\n      \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:34:56+00:00\"\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\",\n      \"name\": \"CI job\",\n      \"key_prefix\": \"tone_sk_x7Y\",\n      \"masked\": \"tone_sk_x7Y\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": \"2026-08-23T00:00:00+00:00\",\n      \"last_used_at\": null,\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:30:00+00:00\"\n    }\n  ],\n  \"total\": 2,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+        },
+        {
+          "name": "200 OK — empty",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [],\n  \"total\": 0,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+        },
+        {
+          "name": "200 OK — filtered by search",
+          "originalRequest": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"search\": \"prod\"\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"name\": \"Production\",\n      \"key_prefix\": \"tone_sk_a1B\",\n      \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": null,\n      \"last_used_at\": null,\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:34:56+00:00\"\n    }\n  ],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+        }
+      ]
+    },
+    {
+      "name": "GET /generated-api-keys/get_api_key?api_key_id (org member)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/get_api_key?api_key_id={{api_key_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "get_api_key"],
+          "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+        },
+        "description": "Fetch a single key by id. Response never contains the plaintext key — only the masked value."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/get_api_key?api_key_id={{api_key_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "get_api_key"],
+              "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n  \"name\": \"Production\",\n  \"key_prefix\": \"tone_sk_a1B\",\n  \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"active\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": null,\n  \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n  \"revoked_at\": null,\n  \"created_at\": \"2026-07-24T12:34:56+00:00\"\n}"
+        },
+        {
+          "name": "404 Not Found",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/get_api_key?api_key_id=00000000-0000-0000-0000-000000000000",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "get_api_key"],
+              "query": [{ "key": "api_key_id", "value": "00000000-0000-0000-0000-000000000000" }]
+            }
+          },
+          "status": "Not Found",
+          "code": 404,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"API key not found.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "POST /generated-api-keys/revoke_api_key?api_key_id (admin/owner)",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/revoke_api_key?api_key_id={{api_key_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "revoke_api_key"],
+          "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+        },
+        "description": "Soft-revoke — key stops authenticating immediately but stays visible in the list as `status: revoked`. Idempotent (re-revoking is a no-op)."
+      },
+      "response": [
+        {
+          "name": "200 OK — revoked",
+          "originalRequest": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/revoke_api_key?api_key_id={{api_key_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "revoke_api_key"],
+              "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n  \"name\": \"Production\",\n  \"key_prefix\": \"tone_sk_a1B\",\n  \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"revoked\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": null,\n  \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n  \"revoked_at\": \"2026-07-24T14:00:00+00:00\",\n  \"created_at\": \"2026-07-24T12:34:56+00:00\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "DELETE /generated-api-keys/delete_api_key?api_key_id (admin/owner)",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/delete_api_key?api_key_id={{api_key_id}}",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "delete_api_key"],
+          "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+        },
+        "description": "Hard-delete the row (removes it from the unique-hash index)."
+      },
+      "response": [
+        {
+          "name": "200 OK",
+          "originalRequest": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/delete_api_key?api_key_id={{api_key_id}}",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "delete_api_key"],
+              "query": [{ "key": "api_key_id", "value": "{{api_key_id}}" }]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"message\": \"API key deleted.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Use the API Key — POST /generated-api-keys/list (Bearer tone_sk_...)",
+      "request": {
+        "auth": {
+          "type": "bearer",
+          "bearer": [{ "key": "token", "value": "{{api_key}}", "type": "string" }]
+        },
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20\n}",
+          "options": { "raw": { "language": "json" } }
+        },
+        "url": {
+          "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+          "host": ["{{base_url}}"],
+          "path": ["api", "v1", "generated-api-keys", "list"]
+        },
+        "description": "Demonstrates that a minted key authenticates against protected endpoints just like a JWT. Override the collection auth with the `api_key` variable so this single request sends `Authorization: Bearer tone_sk_...` instead of the JWT. Point this at any protected route (e.g., `/api/v1/agent/list`); the auth middleware will resolve the key, set the org context, and forward as if the org admin made the call."
+      },
+      "response": [
+        {
+          "name": "200 OK — key authenticated",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{api_key}}" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "list"]
+            }
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"name\": \"Production\",\n      \"key_prefix\": \"tone_sk_a1B\",\n      \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": null,\n      \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:34:56+00:00\"\n    }\n  ],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
+        },
+        {
+          "name": "401 Unauthorized — revoked or expired key",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer tone_sk_revoked_or_expired_key" }
+            ],
+            "body": { "mode": "raw", "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20\n}" },
+            "url": {
+              "raw": "{{base_url}}/api/v1/generated-api-keys/list",
+              "host": ["{{base_url}}"],
+              "path": ["api", "v1", "generated-api-keys", "list"]
+            }
+          },
+          "status": "Unauthorized",
+          "code": 401,
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "body": "{\n  \"detail\": \"Invalid or expired API key.\"\n}"
+        }
+      ]
+    }
+  ]
+}

@@ -266,6 +266,54 @@ class JWTManager:
 jwt_manager = JWTManager()
 
 
+def try_resolve_api_key(token: str, db) -> Optional[JWTClaims]:
+    """If ``token`` looks like a Tone-minted API key, resolve it and return synthesized
+    ``JWTClaims`` for the request; otherwise return ``None`` so the caller falls
+    through to JWT decode.
+
+    API keys inherit **admin** authority within their org — they are the org's
+    programmatic identity, so ``require_admin_or_owner`` guards accept them.
+    Tenant context is set here so downstream services/queries are scoped to the
+    key's org exactly like a JWT-authenticated request. Session-tracking
+    (``_enforce_active_session``) is intentionally skipped for API keys — a key
+    has no session row; its lifecycle is revoke/expire on the key itself.
+
+    Best-effort ``last_used_at`` is bumped after a successful resolve; failures
+    there are swallowed so a bookkeeping error never fails a real request.
+    """
+    from core.services.generated_api_key_service import (  # local import — avoids circular
+        KEY_PREFIX,
+        GeneratedApiKeyService,
+    )
+
+    if not token or not token.startswith(KEY_PREFIX):
+        return None
+    svc = GeneratedApiKeyService(db)
+    api_key = svc.resolve_bearer_key(token)
+    if api_key is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired API key.",
+        )
+    now = int(time.time())
+    claims = JWTClaims(
+        user_id=str(api_key.created_by_user_id),
+        org_id=str(api_key.organization_id),
+        # Admin authority is the deliberate design — see docstring.
+        role="admin",
+        email=f"api-key:{api_key.id}",
+        iat=now,
+        # Synthetic; not persisted. Long enough to survive any single request.
+        exp=now + 3600,
+        type="access",
+    )
+    set_tenant_context(
+        org_id=claims.org_id, user_id=claims.user_id, role=claims.role
+    )
+    svc.touch_last_used(api_key.id)
+    return claims
+
+
 def _enforce_active_session(claims: JWTClaims, db) -> None:
     """Reject the request if the JWT's session has been revoked.
 
@@ -299,6 +347,12 @@ def get_jwt_claims(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
         )
+    # API-key branch runs first — cheap prefix check + point lookup, no wasted
+    # JWT decode. Returns synthesized claims or raises 401 for a bad key.
+    api_key_claims = try_resolve_api_key(token, db)
+    if api_key_claims is not None:
+        return api_key_claims
+
     claims = jwt_manager.decode_token(token)
     if is_ee_enabled() and claims.org_id:
         org_id = claims.org_id
@@ -316,6 +370,9 @@ def get_optional_jwt_claims(
     token = get_bearer_or_cookie_token(request)
     if not token:
         return None
+    api_key_claims = try_resolve_api_key(token, db)
+    if api_key_claims is not None:
+        return api_key_claims
     claims = jwt_manager.decode_token(token)
     _enforce_active_session(claims, db)
     return claims
