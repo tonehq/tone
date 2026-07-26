@@ -86,7 +86,9 @@ docker build -f core/Dockerfile -t tone .
 
 ### Pipecat Integration
 
-The `pipecat/` directory is a custom fork (`tonehq/pipecat`) of the Pipecat AI framework. It provides the actual voice pipeline runtime with 55+ provider integrations across LLM, STT, and TTS categories.
+The `src/pipecat-ai/` submodule is a custom fork (`tonehq/pipecat`) of the Pipecat AI framework. It provides the actual voice pipeline runtime with 55+ provider integrations across LLM, STT, and TTS categories. Fetch it with `git submodule update --init`.
+
+Note that the submodule is the fork's *source*, checked out for reference. What the application actually imports is the built `tone-pipecat` package from `requirements.txt`, which is published to a private Cloudsmith index and needs `PIP_EXTRA_INDEX_URL` to install.
 
 ### Data Seeding
 

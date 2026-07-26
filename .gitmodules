@@ -1,3 +1,3 @@
-[submodule "pipecat"]
-	path = pipecat
+[submodule "src/pipecat-ai"]
+	path = src/pipecat-ai
 	url = https://github.com/tonehq/pipecat.git
