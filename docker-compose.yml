@@ -1,0 +1,62 @@
+# Local development backing services for Tone.
+#
+#     docker compose up -d
+#
+# Brings up the two stateful dependencies the app expects on localhost, with
+# credentials matching the defaults in .env.example:
+#
+#     DATABASE_URL=postgresql://tone:tone@localhost:5432/tone
+#     REDIS_URL=redis://localhost:6379/0
+#
+# Then, in your virtualenv:
+#
+#     alembic upgrade head
+#     PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app schema --apply
+#     python dev/seed.py
+#     uvicorn main:app --reload --host 0.0.0.0 --port 8000
+#
+# There is deliberately no `api` service here. The application image cannot be
+# built without credentials for the private Cloudsmith index that hosts
+# `tone-pipecat` (see PIP_EXTRA_INDEX_URL in .env.example), so a compose file
+# that claimed to build it would just fail for anyone without an entitlement
+# token. These two services are the part that does work unauthenticated.
+
+name: tone
+
+services:
+  postgres:
+    # pgvector, not plain postgres: the initial migration runs
+    # `CREATE EXTENSION IF NOT EXISTS vector`, and the knowledge-base embedding
+    # columns use the `vector` / `halfvec` types.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: tone
+      POSTGRES_PASSWORD: tone
+      POSTGRES_DB: tone
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U tone -d tone"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
