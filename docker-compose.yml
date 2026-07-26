@@ -33,21 +33,40 @@ services:
       POSTGRES_USER: tone
       POSTGRES_PASSWORD: tone
       POSTGRES_DB: tone
+    # The image defaults to max_connections=100, which the app exhausts on its
+    # own: core/database/base.py builds an engine with pool_size=50 and
+    # max_overflow=70, so a single process can ask for 120 connections, and the
+    # call/ingestion workers open pools of their own on top of that.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
     ports:
-      - "5432:5432"
+      # Loopback only — the credentials here are tone/tone.
+      - "127.0.0.1:5432:5432"
+    # Docker gives a container 64MB of /dev/shm. Parallel query workers and
+    # large sorts spill into it and fail with "could not resize shared memory
+    # segment ... No space left on device".
+    shm_size: 256mb
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U tone -d tone"]
+      # -h 127.0.0.1 matters: during first-run initdb the entrypoint starts a
+      # temporary server that listens on the unix socket only. A socket probe
+      # reports healthy several seconds before anything can connect on 5432,
+      # then flaps back to unhealthy while the real server starts.
+      test: ["CMD-SHELL", "pg_isready -U tone -d tone -h 127.0.0.1"]
       interval: 5s
       timeout: 5s
       retries: 10
+      start_period: 30s
     restart: unless-stopped
 
   redis:
     image: redis:7-alpine
     ports:
-      - "6379:6379"
+      # Loopback only — this Redis takes no password.
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     healthcheck:
