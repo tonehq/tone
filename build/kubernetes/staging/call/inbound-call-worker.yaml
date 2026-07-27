@@ -29,7 +29,7 @@ spec:
     spec:
       nodeSelector:
         kubernetes.io/os: linux
-      terminationGracePeriodSeconds: 20
+      terminationGracePeriodSeconds: 2100
       containers:
         - name: staging-tone-call-worker
           image: developer390/tone:${IMAGE_TAG}
@@ -113,8 +113,23 @@ spec:
             preStop:
               exec:
                 command:
-                  - /bin/sh
+                  - python
                   - -c
-                  - "curl -sf http://localhost:8080/drain || true && sleep 280"
+                  - |
+                    import urllib.request, json, time
+                    def call(path, method="GET"):
+                        req = urllib.request.Request("http://localhost:8080" + path, method=method)
+                        return json.load(urllib.request.urlopen(req, timeout=5))
+                    try:
+                        call("/drain", "POST")
+                    except Exception:
+                        pass
+                    for _ in range(360):
+                        try:
+                            if call("/status").get("active_calls", 0) == 0:
+                                break
+                        except Exception:
+                            pass
+                        time.sleep(5)
       imagePullSecrets:
         - name: dockerhub-auth

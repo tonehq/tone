@@ -9,6 +9,7 @@ from loguru import logger
 
 from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from pipecat.runner.types import WebSocketRunnerArguments
 
@@ -47,6 +48,9 @@ from core.api.monitoring_routes import (
     router as monitoring_router,
     active_calls_inc,
     active_calls_dec,
+    active_calls_count,
+    set_draining,
+    is_draining,
 )
 import core.models
 
@@ -267,8 +271,27 @@ async def warm_worker_pool_startup():
 
 
 @app.on_event("shutdown")
+async def drain_active_calls_shutdown():
+    if _WORKER_MODE != "voice":
+        return
+    import asyncio
+    set_draining(True)
+    deadline = float(os.environ.get("CALL_DRAIN_TIMEOUT_SECONDS", "1800"))
+    waited = 0.0
+    step = 5.0
+    while active_calls_count() > 0 and waited < deadline:
+        logger.info("[shutdown] draining: {} active call(s), waited {:.0f}s", active_calls_count(), waited)
+        await asyncio.sleep(step)
+        waited += step
+    remaining = active_calls_count()
+    if remaining:
+        logger.warning("[shutdown] drain deadline hit with {} call(s) still active", remaining)
+    else:
+        logger.info("[shutdown] all calls drained after {:.0f}s", waited)
+
+
+@app.on_event("shutdown")
 async def warm_worker_pool_shutdown():
-    """Shut down any idle warm workers on server exit."""
     try:
         from core.services.warm_worker_pool import WarmWorkerPool
         pool = WarmWorkerPool.get_instance()
@@ -293,6 +316,8 @@ def health():
 
 @app.get("/ready")
 def ready():
+    if is_draining():
+        return JSONResponse({"ready": False, "draining": True}, status_code=503)
     return {"ready": True}
 
 
