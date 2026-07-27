@@ -284,6 +284,19 @@ def reconcile_outbound_calls(timestamp: int) -> None:
         OutboundCallService(db).reconcile_orphaned_scheduled_calls()
 
 
+@app.periodic(cron="*/5 * * * *")
+@app.task(name="reap_orphaned_calls", queue="pod_sync")
+def reap_orphaned_calls_task(timestamp: int) -> None:
+    """Close calls left with ended_at NULL because their pod was SIGKILLed mid-call
+    (spot reclaim, OOM, node loss, or a deploy that outran the drain). Without this they
+    show 'in process' forever. Idempotent; only touches rows older than the max call length."""
+    from core.database.session import get_db_context
+    from core.services.call_log_service import CallLogService
+
+    with get_db_context() as db:
+        CallLogService(db).reap_orphaned_calls()
+
+
 @app.periodic(cron="* * * * *")
 @app.task(name="drain_outbound_calls", queue="outbound_calls")
 def drain_outbound_calls(timestamp: int) -> None:

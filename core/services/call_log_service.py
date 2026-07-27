@@ -280,3 +280,35 @@ class CallLogService(BaseService):
         if call:
             self.db.delete(call)
             self.db.commit()
+
+    def reap_orphaned_calls(self, older_than_seconds: int = 2400) -> int:
+        from datetime import timedelta
+        from sqlalchemy import or_
+
+        now = datetime.now(timezone.utc)
+        cutoff = now - timedelta(seconds=older_than_seconds)
+        orphans = (
+            self.db.query(Call)
+            .filter(
+                Call.ended_at.is_(None),
+                or_(
+                    Call.started_at < cutoff,
+                    Call.started_at.is_(None),
+                ),
+            )
+            .all()
+        )
+        if not orphans:
+            return 0
+        for call in orphans:
+            anchor = call.started_at or call.created_at or now
+            call.ended_at = anchor
+            metadata = call.metadata_ or {}
+            metadata["ended_reason"] = "reaped_orphan"
+            metadata["ended_reason_detail"] = (
+                f"pod terminated mid-call; reaped after {older_than_seconds}s with no clean end"
+            )
+            call.metadata_ = metadata
+        self.db.commit()
+        logger.warning("[reaper] closed {} orphaned call(s) with no clean end", len(orphans))
+        return len(orphans)

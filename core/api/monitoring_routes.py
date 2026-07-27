@@ -10,6 +10,7 @@ router = APIRouter()
 
 _active_calls_lock = Lock()
 _active_calls = 0
+_draining = False
 
 
 def active_calls_inc() -> None:
@@ -23,6 +24,20 @@ def active_calls_dec() -> None:
     with _active_calls_lock:
         if _active_calls > 0:
             _active_calls -= 1
+
+
+def active_calls_count() -> int:
+    with _active_calls_lock:
+        return _active_calls
+
+
+def set_draining(value: bool = True) -> None:
+    global _draining
+    _draining = value
+
+
+def is_draining() -> bool:
+    return _draining
 
 
 def _pod_labels() -> str:
@@ -50,6 +65,13 @@ def status():
         "cpu_used_cores": cpu_used_cores,
         "cpu_limit_cores": cpu_limit_cores,
     }
+
+
+@router.post("/drain")
+@router.get("/drain")
+def drain():
+    set_draining(True)
+    return {"draining": True, "active_calls": active_calls_count()}
 
 
 @router.get("/metrics")
