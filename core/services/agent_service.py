@@ -2274,7 +2274,11 @@ class AgentService(BaseService):
             .all()
         ):
             self.db.add(
-                AgentKnowledgeBase(**base, knowledge_base_id=row.knowledge_base_id)
+                AgentKnowledgeBase(
+                    **base,
+                    knowledge_base_id=row.knowledge_base_id,
+                    active_ingestion_pipeline_run_id=row.active_ingestion_pipeline_run_id,
+                )
             )
 
     def _validate_override_connections(
@@ -2810,9 +2814,17 @@ class AgentService(BaseService):
             for mid, mname, default_oauth, link_oauth in mcp_rows
         ]
 
-        # Documents (knowledge base uploads)
+        # Documents (knowledge base uploads). Include the KB id and the
+        # agent-scoped per-KB run pin so the FE can render "which run this
+        # agent uses" per attached document.
         kb_rows = (
-            self.db.query(Upload)
+            self.db.query(
+                Upload,
+                KnowledgeBase.id.label("knowledge_base_id"),
+                AgentKnowledgeBase.active_ingestion_pipeline_run_id.label(
+                    "active_ingestion_pipeline_run_id"
+                ),
+            )
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
             .filter(
@@ -2823,8 +2835,18 @@ class AgentService(BaseService):
             .all()
         )
         result["documents"] = [
-            {"id": str(u.id), "file_path": u.file_path, "file_name": u.file_name}
-            for u in kb_rows
+            {
+                "id": str(row.Upload.id),
+                "file_path": row.Upload.file_path,
+                "file_name": row.Upload.file_name,
+                "knowledge_base_id": str(row.knowledge_base_id),
+                "active_ingestion_pipeline_run_id": (
+                    str(row.active_ingestion_pipeline_run_id)
+                    if row.active_ingestion_pipeline_run_id
+                    else None
+                ),
+            }
+            for row in kb_rows
         ]
 
         # Phone numbers
