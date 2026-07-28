@@ -1,11 +1,14 @@
 import { z } from 'zod';
 
+import { PERSONAL_EMAIL_ERROR, isBusinessEmail } from '@/lib/emailDomain';
+
 export const inviteMemberSchema = z.object({
   name: z.string().min(1, 'Please enter a name'),
   email: z
     .string()
     .min(1, 'Please enter an email address')
-    .email('Please enter a valid email address'),
+    .email('Please enter a valid email address')
+    .refine(isBusinessEmail, PERSONAL_EMAIL_ERROR),
 });
 
 export type InviteMemberFormData = z.infer<typeof inviteMemberSchema>;

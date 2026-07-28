@@ -75,3 +75,27 @@ Verify that:
 - The implementation is clean, reusable, maintainable, and production-ready.
 
 If there is a better architectural approach than the requested implementation, explain it before implementing.
+
+
+---
+
+## Backend Validation & Enforcement
+
+Never rely on frontend validation or UI restrictions to enforce business rules.
+
+Any request may originate from:
+
+- Frontend applications
+- CLI tools
+- cURL/Postman
+- External APIs
+- Background jobs
+- Scheduled/Cron jobs
+- Event consumers
+- Future integrations
+
+All business rules, permissions, validations, and security checks must be enforced in the backend, regardless of the client making the request.
+
+Frontend validation should only improve the user experience and provide early feedback—it must never be treated as the source of truth.
+
+If a rule is important enough to exist, it must be enforced in the backend.
