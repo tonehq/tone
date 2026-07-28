@@ -62,6 +62,7 @@ deepgram-sdk==7.3.1
 Deprecated==1.2.18
 deprecation==2.1.0
 dill==0.4.1
+disposable-email-domains==0.0.128
 distlib==0.3.6
 distro==1.9.0
 dnspython==2.6.1
