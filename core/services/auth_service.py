@@ -36,6 +36,7 @@ from core.services.base import BaseService
 from core.services.session_service import SessionService
 from core.utils.auth_helpers import coerce_uuid, hash_token, utcnow
 from core.utils.device import DeviceContext
+from core.utils.email_domain import assert_business_email
 from core.utils.security import hash_password, verify_password
 
 logger = logging.getLogger(__name__)
@@ -404,6 +405,7 @@ class AuthService(BaseService):
         organization_name: Optional[str] = None,
         device: Optional[DeviceContext] = None,
     ) -> Dict[str, Any]:
+        assert_business_email(email)
         if self._get_user_by_email(email):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -891,6 +893,7 @@ class AuthService(BaseService):
         organization_id: Optional[Union[str, uuid.UUID]] = None,
         name: Optional[str] = None,
     ) -> Dict[str, Any]:
+        assert_business_email(email)
         inviter_uuid = _user_uuid(invited_by)
         if not inviter_uuid:
             raise HTTPException(

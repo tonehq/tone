@@ -1,5 +1,7 @@
 import { z } from 'zod';
 
+import { PERSONAL_EMAIL_ERROR, isBusinessEmail } from '@/lib/emailDomain';
+
 export const loginSchema = z.object({
   email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
   password: z.string().min(6, 'Password must be at least 6 characters'),
@@ -10,7 +12,11 @@ export type LoginFormData = z.infer<typeof loginSchema>;
 export const signupSchema = z.object({
   first_name: z.string().min(1, 'First name is required'),
   last_name: z.string().min(1, 'Last name is required'),
-  email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email')
+    .refine(isBusinessEmail, PERSONAL_EMAIL_ERROR),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
@@ -20,9 +26,12 @@ export type SignupFormData = z.infer<typeof signupSchema>;
 // a non-empty email it must be a valid one. Blank rows are dropped by the
 // wizard before submit rather than errored on.
 const onboardingInviteEntrySchema = z.object({
-  email: z.string().refine((v) => v.length === 0 || z.string().email().safeParse(v).success, {
-    message: 'Please enter a valid email',
-  }),
+  email: z
+    .string()
+    .refine((v) => v.length === 0 || z.string().email().safeParse(v).success, {
+      message: 'Please enter a valid email',
+    })
+    .refine(isBusinessEmail, PERSONAL_EMAIL_ERROR),
   role: z.string().min(1, 'Role is required'),
 });
 
@@ -48,7 +57,11 @@ export const onboardOrgSchema = z.object({
 export type OnboardOrgFormData = z.infer<typeof onboardOrgSchema>;
 
 export const inviteMemberSchema = z.object({
-  email: z.string().min(1, 'Email is required').email('Please enter a valid email'),
+  email: z
+    .string()
+    .min(1, 'Email is required')
+    .email('Please enter a valid email')
+    .refine(isBusinessEmail, PERSONAL_EMAIL_ERROR),
   role: z.string().min(1, 'Role is required'),
 });
 
