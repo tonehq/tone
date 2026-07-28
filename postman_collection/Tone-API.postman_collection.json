@@ -9037,6 +9037,771 @@
           ]
         },
         {
+          "name": "GET /knowledge-base/pipeline-options",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/pipeline-options",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "pipeline-options"
+              ]
+            },
+            "description": "List every registered parser / tokeniser / embedder / vector store so callers know what values are legal in a run_config body. Also returns the system defaults."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "parsers": [
+                  "docling",
+                  "pypdf2",
+                  "python-docx"
+                ],
+                "tokenisers": [
+                  "cl100k_base",
+                  "o200k_base"
+                ],
+                "embedders": [
+                  "openai",
+                  "cohere",
+                  "bedrock"
+                ],
+                "vector_stores": [
+                  "pgvector"
+                ],
+                "defaults": {
+                  "parser": "docling",
+                  "tokeniser": "cl100k_base",
+                  "embedding_provider": "openai",
+                  "embedding_model": "text-embedding-3-small",
+                  "embedding_dimensions": 1536,
+                  "vector_store": "pgvector"
+                }
+              }
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid token"
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /knowledge-base/{upload_id}/runs",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "{{upload_id}}",
+                "runs"
+              ]
+            },
+            "description": "List all ingestion pipeline runs for one upload (newest first). Each run captures the parser / tokeniser / embedder / vector store combination used and whether it is currently active for live retrieval."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "items": [
+                  {
+                    "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                    "upload_id": "8a3f1c12-2b9e-4a51-9b3a-5fe2dc4d7a01",
+                    "knowledge_base_id": "c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f",
+                    "organization_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "run_config": {
+                      "parser": "docling",
+                      "tokeniser": "cl100k_base",
+                      "embedding_provider": "openai",
+                      "embedding_model": "text-embedding-3-small",
+                      "embedding_dimensions": 1536,
+                      "vector_store": "pgvector"
+                    },
+                    "status": "ready",
+                    "is_active": true,
+                    "chunks_count": 42,
+                    "error": null,
+                    "created_at": "2026-06-17T10:14:32.118500+00:00",
+                    "updated_at": "2026-06-17T10:20:11.552300+00:00"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "400 Invalid upload_id",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid upload_id"
+              }
+            },
+            {
+              "name": "404 Upload not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Upload not found"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /knowledge-base/{upload_id}/runs/list",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs/list",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "{{upload_id}}",
+                "runs",
+                "list"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"search\": null,\n  \"sort_by\": null,\n  \"sort_order\": \"desc\",\n  \"status_filter\": null,\n  \"is_active_only\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Paginated + searchable list of ingestion pipeline runs for one upload. Canonical POST /list body shape. Optional status_filter narrows by run status (queued, running, ready, error). is_active_only=true returns only the live run."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "data": [
+                  {
+                    "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                    "upload_id": "8a3f1c12-2b9e-4a51-9b3a-5fe2dc4d7a01",
+                    "knowledge_base_id": "c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f",
+                    "organization_id": "550e8400-e29b-41d4-a716-446655440000",
+                    "run_config": {
+                      "parser": "docling",
+                      "tokeniser": "cl100k_base",
+                      "embedding_provider": "openai",
+                      "embedding_model": "text-embedding-3-small",
+                      "embedding_dimensions": 1536,
+                      "vector_store": "pgvector"
+                    },
+                    "status": "ready",
+                    "is_active": true,
+                    "chunks_count": 42,
+                    "error": null,
+                    "created_at": "2026-06-17T10:14:32.118500+00:00",
+                    "updated_at": "2026-06-17T10:20:11.552300+00:00"
+                  }
+                ],
+                "total": 3,
+                "page_no": 1,
+                "page_size": 20
+              }
+            },
+            {
+              "name": "200 OK (active only)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs/list",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "knowledge-base",
+                    "{{upload_id}}",
+                    "runs",
+                    "list"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"page_no\": 1,\n  \"page_size\": 20,\n  \"is_active_only\": true\n}"
+                }
+              },
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "data": [
+                  {
+                    "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                    "status": "ready",
+                    "is_active": true
+                  }
+                ],
+                "total": 1,
+                "page_no": 1,
+                "page_size": 20
+              }
+            },
+            {
+              "name": "400 Invalid upload_id",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid upload_id"
+              }
+            },
+            {
+              "name": "404 Upload not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Upload not found"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /knowledge-base/{upload_id}/runs",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "{{upload_id}}",
+                "runs"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"parser\": \"docling\",\n  \"tokeniser\": \"cl100k_base\",\n  \"embedding_provider\": \"openai\",\n  \"embedding_model\": \"text-embedding-3-small\",\n  \"embedding_dimensions\": 1536,\n  \"vector_store\": \"pgvector\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Kick off a NEW ingestion pipeline run for an existing upload with a custom pipeline configuration. Previous runs are preserved so evals can compare them side-by-side. Any field omitted in the body falls back to system defaults (see /pipeline-options)."
+          },
+          "response": [
+            {
+              "name": "202 Accepted (queued)",
+              "code": 202,
+              "status": "Accepted",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "upload_id": "8a3f1c12-2b9e-4a51-9b3a-5fe2dc4d7a01",
+                "ingestion_run_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                "job_id": 12345,
+                "run_config": {
+                  "parser": "docling",
+                  "tokeniser": "cl100k_base",
+                  "embedding_provider": "openai",
+                  "embedding_model": "text-embedding-3-small",
+                  "embedding_dimensions": 1536,
+                  "vector_store": "pgvector"
+                },
+                "status": "queued"
+              }
+            },
+            {
+              "name": "202 Accepted (defaults — empty body)",
+              "originalRequest": {
+                "method": "POST",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "knowledge-base",
+                    "{{upload_id}}",
+                    "runs"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{}"
+                }
+              },
+              "code": 202,
+              "status": "Accepted",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "upload_id": "8a3f1c12-2b9e-4a51-9b3a-5fe2dc4d7a01",
+                "ingestion_run_id": "b2c3d4e5-f6a7-8b9c-0d1e-2f3a4b5c6d7e",
+                "job_id": 12346,
+                "run_config": {},
+                "status": "queued"
+              }
+            },
+            {
+              "name": "400 Upload has no stored file to reprocess",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Upload has no stored file to reprocess"
+              }
+            },
+            {
+              "name": "400 Unknown parser",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Unknown parser 'foo'. Available: ['docling', 'pypdf2', 'python-docx']"
+              }
+            },
+            {
+              "name": "400 Unknown tokeniser",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Unknown tokeniser 'foo'. Available: ['cl100k_base', 'o200k_base']"
+              }
+            },
+            {
+              "name": "400 Unknown embedding provider",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Unknown embedding provider 'foo'. Available: ['bedrock', 'cohere', 'openai']"
+              }
+            },
+            {
+              "name": "400 Unknown vector store",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Unknown vector store 'foo'. Available: ['pgvector']"
+              }
+            },
+            {
+              "name": "400 Invalid upload_id",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid upload_id"
+              }
+            },
+            {
+              "name": "404 Upload not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Upload not found"
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /knowledge-base/{upload_id}/runs/{run_id}/activate",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/{{upload_id}}/runs/{{run_id}}/activate",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "{{upload_id}}",
+                "runs",
+                "{{run_id}}",
+                "activate"
+              ]
+            },
+            "description": "Flip is_active to this run so live retrieval (the read_document tool) switches to its embedder + store. The previously-active run stays in the DB and remains queryable for evals via its ingestion_run_id. Only runs with status='ready' may be activated."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                "upload_id": "8a3f1c12-2b9e-4a51-9b3a-5fe2dc4d7a01",
+                "knowledge_base_id": "c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f",
+                "organization_id": "550e8400-e29b-41d4-a716-446655440000",
+                "run_config": {
+                  "parser": "docling",
+                  "tokeniser": "cl100k_base",
+                  "embedding_provider": "openai",
+                  "embedding_model": "text-embedding-3-small",
+                  "embedding_dimensions": 1536,
+                  "vector_store": "pgvector"
+                },
+                "status": "ready",
+                "is_active": true,
+                "chunks_count": 42,
+                "error": null,
+                "created_at": "2026-06-17T10:14:32.118500+00:00",
+                "updated_at": "2026-06-17T11:05:44.917200+00:00"
+              }
+            },
+            {
+              "name": "400 Invalid run_id",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid run_id"
+              }
+            },
+            {
+              "name": "400 Cannot activate — run not ready",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Cannot activate a run with status='pending'; only 'ready' is allowed"
+              }
+            },
+            {
+              "name": "404 Run not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Run not found for this upload"
+              }
+            },
+            {
+              "name": "404 Upload not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Upload not found"
+              }
+            }
+          ]
+        },
+        {
+          "name": "PUT /knowledge-base/agents/{agent_id}/knowledge-bases/{kb_id}/active-run",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/knowledge-base/agents/{{agent_id}}/knowledge-bases/{{kb_id}}/active-run",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "knowledge-base",
+                "agents",
+                "{{agent_id}}",
+                "knowledge-bases",
+                "{{kb_id}}",
+                "active-run"
+              ]
+            },
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"active_ingestion_pipeline_run_id\": \"a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Pin (or clear) the ingestion pipeline run used by a specific agent for one knowledge base. Sending null clears the per-agent pin so the agent falls back to the KB-level default. The run must belong to the same KB and have status='ready'."
+          },
+          "response": [
+            {
+              "name": "200 OK — pin set",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "id": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+                "agent_id": "e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b",
+                "knowledge_base_id": "c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f",
+                "active_ingestion_pipeline_run_id": "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d",
+                "created_at": "2026-06-17T10:14:32.118500+00:00",
+                "updated_at": "2026-06-17T11:22:07.334100+00:00"
+              }
+            },
+            {
+              "name": "200 OK — pin cleared",
+              "originalRequest": {
+                "method": "PUT",
+                "header": [
+                  {
+                    "key": "Content-Type",
+                    "value": "application/json"
+                  }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/v1/knowledge-base/agents/{{agent_id}}/knowledge-bases/{{kb_id}}/active-run",
+                  "host": [
+                    "{{base_url}}"
+                  ],
+                  "path": [
+                    "api",
+                    "v1",
+                    "knowledge-base",
+                    "agents",
+                    "{{agent_id}}",
+                    "knowledge-bases",
+                    "{{kb_id}}",
+                    "active-run"
+                  ]
+                },
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"active_ingestion_pipeline_run_id\": null\n}"
+                }
+              },
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "id": "d1e2f3a4-b5c6-7d8e-9f0a-1b2c3d4e5f6a",
+                "agent_id": "e2f3a4b5-c6d7-8e9f-0a1b-2c3d4e5f6a7b",
+                "knowledge_base_id": "c1d2e3f4-a5b6-7c8d-9e0f-1a2b3c4d5e6f",
+                "active_ingestion_pipeline_run_id": null,
+                "created_at": "2026-06-17T10:14:32.118500+00:00",
+                "updated_at": "2026-06-17T11:24:41.902700+00:00"
+              }
+            },
+            {
+              "name": "400 Invalid agent_id or kb_id",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid agent_id or kb_id"
+              }
+            },
+            {
+              "name": "404 AgentKnowledgeBase not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "AgentKnowledgeBase not found for this agent + knowledge base"
+              }
+            }
+          ]
+        },
+        {
           "name": "POST /knowledge-base/facets",
           "request": {
             "method": "POST",

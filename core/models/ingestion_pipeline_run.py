@@ -1,4 +1,5 @@
 from sqlalchemy import (
+    BigInteger,
     Boolean,
     Column,
     DateTime,
@@ -65,9 +66,23 @@ class IngestionPipelineRun(OrgScopedModel):
     completed_at = Column(DateTime(timezone=True), nullable=True)
     error = Column(Text, nullable=True)
     chunk_count = Column(Integer, nullable=True)
+    # The Procrastinate job that will (or did) execute this run. The FK to
+    # ``procrastinate_jobs.id`` (ON DELETE SET NULL — Procrastinate may prune
+    # completed jobs; the run row must survive that pruning) is declared only
+    # at the DB level via the Alembic migration, NOT here. ``procrastinate_jobs``
+    # is managed by Procrastinate's own schema tool and has no SQLAlchemy
+    # model, so declaring ``ForeignKey(...)`` on the column would make the ORM
+    # look up an unknown table during flush's table-sort pass and raise
+    # ``NoReferencedTableError``. Mirrors the prior ``KnowledgeBase.procrastinate_job_id``
+    # setup for the same reason.
+    procrastinate_job_id = Column(BigInteger, nullable=True, index=True)
 
     upload = relationship("Upload")
-    knowledge_base = relationship("KnowledgeBase", back_populates="runs")
+    knowledge_base = relationship(
+        "KnowledgeBase",
+        back_populates="runs",
+        foreign_keys=[knowledge_base_id],
+    )
     chunks = relationship(
         "KnowledgeBaseChunk",
         back_populates="run",
@@ -96,6 +111,7 @@ class IngestionPipelineRun(OrgScopedModel):
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
             "error": self.error,
             "chunk_count": self.chunk_count,
+            "procrastinate_job_id": self.procrastinate_job_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
