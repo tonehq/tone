@@ -1,10 +1,8 @@
 'use client';
 
-import { useAtom, useSetAtom } from 'jotai';
 import { Key, MoreVertical, Plus, ShieldOff, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import { authAtom, getCurrentUserAtom } from '@/atoms/AuthAtom';
 import { CustomButton, CustomModal } from '@/components/shared';
 import CustomTable from '@/components/shared/CustomTable';
 import { Badge } from '@/components/ui/badge';
@@ -21,6 +19,7 @@ import {
   useDeleteApiKey,
   useRevokeApiKey,
 } from '@/lib/api/apiKeys';
+import { useAuthStore } from '@/stores/auth';
 import type { CustomTableColumn } from '@/types/components';
 import type { ApiKeyRow, ApiKeyStatus, CreateApiKeyPayload } from '@/types/settings/apiKey';
 import { formatDate, formatRelative } from '@/utils/date';
@@ -59,14 +58,11 @@ export default function ApiKeysTab() {
   const [confirmDelete, setConfirmDelete] = useState<ApiKeyRow | null>(null);
   const [confirmRevoke, setConfirmRevoke] = useState<ApiKeyRow | null>(null);
 
-  // Populate authAtom from LOGIN_DATA if it hasn't been seeded yet — matches
-  // the pattern in components/shared/userMenu.tsx.
-  const [authState] = useAtom(authAtom);
-  const getCurrentUser = useSetAtom(getCurrentUserAtom);
-  useEffect(() => {
-    if (!authState.user && !authState.isLoading) getCurrentUser();
-  }, [authState.user, authState.isLoading, getCurrentUser]);
-  const canManage = CAN_MANAGE_ROLES.has(authState.user?.role ?? '');
+  // Read role from the auth store (kept in sync with org-switch + /auth/me
+  // hydration) so the check reflects the CURRENT active workspace, not a stale
+  // snapshot of localStorage taken at first mount.
+  const role = useAuthStore((s) => s.user?.role ?? '');
+  const canManage = CAN_MANAGE_ROLES.has(role);
 
   const listParams = { page_no: page, page_size: pageSize, search: search || undefined };
   const query = useApiKeysList(listParams);
@@ -219,7 +215,7 @@ export default function ApiKeysTab() {
         ),
       },
     ],
-    [],
+    [canManage],
   );
 
   return (
