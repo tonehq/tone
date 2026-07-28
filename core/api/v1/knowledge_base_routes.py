@@ -8,7 +8,7 @@ full router is built here and parameterized with those two concerns, so there
 is a single source of truth for the route logic.
 """
 
-from typing import Any, Callable
+from typing import Any, Callable, List, Optional
 from uuid import UUID, uuid4
 
 from fastapi import (
@@ -23,7 +23,30 @@ from fastapi import (
     status,
 )
 from loguru import logger
+from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+
+
+class ListPipelineRunsRequest(BaseModel):
+    """Pagination + search + filter body for ``POST /{upload_id}/runs/list``."""
+
+    page_no: int = Field(default=1, ge=1)
+    page_size: int = Field(default=20, ge=1, le=200)
+    search: Optional[str] = None
+    sort_by: Optional[str] = None
+    sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
+    status_filter: Optional[List[str]] = None
+    is_active_only: bool = False
+
+
+class SetAgentKbActiveRunRequest(BaseModel):
+    """Body for ``PUT /agents/{agent_id}/knowledge-bases/{kb_id}/active-run``.
+
+    ``active_ingestion_pipeline_run_id = None`` clears the per-agent pin so the
+    agent falls back to the KB default.
+    """
+
+    active_ingestion_pipeline_run_id: Optional[UUID] = None
 
 from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
@@ -84,6 +107,67 @@ def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> di
     payload = upload.to_dict()
     payload["url"] = _signed_url(upload.file_path, r2)
     return payload
+
+
+def _kb_for_upload(db: Session, org_id: UUID, upload_id: UUID) -> KnowledgeBase:
+    """Resolve the KnowledgeBase row backing an upload for enqueue flows. There
+    is exactly one per upload — a missing KB means the earlier create failed
+    and reprocess/replace is invalid, so surface a 500 rather than silently
+    dropping the enqueue."""
+    kb = (
+        db.query(KnowledgeBase)
+        .filter(
+            KnowledgeBase.upload_id == upload_id,
+            KnowledgeBase.organization_id == org_id,
+        )
+        .first()
+    )
+    if kb is None:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Knowledge base row missing for upload",
+        )
+    return kb
+
+
+async def _start_ingestion_run(
+    db: Session,
+    *,
+    upload: Upload,
+    kb: KnowledgeBase,
+    org_id: UUID,
+    request_config: dict | None,
+    delete_existing: bool,
+) -> tuple[IngestionPipelineRun, int]:
+    """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
+    stamp the returned job id on the run. Shared by every KB write path
+    (upload / replace / reprocess / custom /runs) so the "create-run → enqueue
+    → stamp" trio lives in exactly one place.
+
+    On defer failure the pending run is marked ``failed`` (not orphaned) and
+    the exception is re-raised for the caller to translate to an HTTP error.
+    """
+    cfg = IngestionRunService.resolve_run_config(
+        db, org_id, kb.id, request_config
+    )
+    run = IngestionRunService.begin_pending_run(
+        db,
+        upload_id=upload.id,
+        knowledge_base_id=kb.id,
+        org_id=org_id,
+        config=cfg,
+    )
+    enqueue = enqueue_reprocess if delete_existing else enqueue_upload
+    try:
+        job_id = await enqueue(upload.id, org_id, run.id)
+    except Exception as exc:  # noqa: BLE001
+        logger.exception(
+            "[ingestion] enqueue failed for upload {} run {}", upload.id, run.id
+        )
+        IngestionRunService.fail_run(db, run.id, error=f"enqueue failed: {exc}")
+        raise
+    IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
+    return run, job_id
 
 
 def build_knowledge_base_router(
@@ -309,9 +393,14 @@ def build_knowledge_base_router(
                 logger.debug("Best-effort R2 cleanup failed for {}: {}", object_key, exc)
             raise
 
-        job_id = await enqueue_upload(upload.id, org_id)
-        knowledge_base.procrastinate_job_id = job_id
-        db.commit()
+        await _start_ingestion_run(
+            db,
+            upload=upload,
+            kb=knowledge_base,
+            org_id=org_id,
+            request_config=None,
+            delete_existing=False,
+        )
 
         return _upload_to_payload(upload)
 
@@ -406,11 +495,15 @@ def build_knowledge_base_router(
             except Exception as exc:
                 logger.debug("Best-effort delete of old R2 blob {} failed: {}", old_path, exc)
 
-        job_id = await enqueue_reprocess(upload.id, org_id)
-        db.query(KnowledgeBase).filter(
-            KnowledgeBase.upload_id == upload.id, KnowledgeBase.organization_id == org_id
-        ).update({KnowledgeBase.procrastinate_job_id: job_id}, synchronize_session=False)
-        db.commit()
+        kb = _kb_for_upload(db, org_id, upload.id)
+        await _start_ingestion_run(
+            db,
+            upload=upload,
+            kb=kb,
+            org_id=org_id,
+            request_config=None,
+            delete_existing=True,
+        )
 
         return _upload_to_payload(upload)
 
@@ -455,11 +548,15 @@ def build_knowledge_base_router(
         db.commit()
         db.refresh(upload)
 
-        job_id = await enqueue_reprocess(upload.id, org_id)
-        db.query(KnowledgeBase).filter(
-            KnowledgeBase.upload_id == upload.id, KnowledgeBase.organization_id == org_id
-        ).update({KnowledgeBase.procrastinate_job_id: job_id}, synchronize_session=False)
-        db.commit()
+        kb = _kb_for_upload(db, org_id, upload.id)
+        await _start_ingestion_run(
+            db,
+            upload=upload,
+            kb=kb,
+            org_id=org_id,
+            request_config=None,
+            delete_existing=True,
+        )
 
         return _upload_to_payload(upload)
 
@@ -571,6 +668,37 @@ def build_knowledge_base_router(
         runs = IngestionRunService.list_runs(db, upload.id)
         return {"items": [r.to_dict() for r in runs]}
 
+    @router.post("/{upload_id}/runs/list")
+    def list_pipeline_runs_paginated(
+        upload_id: str,
+        body: ListPipelineRunsRequest = Body(default_factory=ListPipelineRunsRequest),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Paginated + searchable list of pipeline runs for one upload —
+        canonical ``POST /list`` shape (search, sort_by, sort_order,
+        page_no, page_size, status_filter, is_active_only)."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        rows, total = IngestionRunService.list_runs_paginated(
+            db,
+            org_id=org_id,
+            upload_id=upload.id,
+            search=body.search,
+            sort_by=body.sort_by,
+            sort_order=body.sort_order,
+            page_no=body.page_no,
+            page_size=body.page_size,
+            status_filter=body.status_filter,
+            is_active_only=body.is_active_only,
+        )
+        return {
+            "data": [r.to_dict() for r in rows],
+            "total": total,
+            "page_no": body.page_no,
+            "page_size": body.page_size,
+        }
+
     @router.post("/{upload_id}/runs", status_code=status.HTTP_202_ACCEPTED)
     async def create_pipeline_run(
         upload_id: str,
@@ -633,13 +761,22 @@ def build_knowledge_base_router(
                 f"Available: {sorted(VECTOR_STORES)}",
             )
 
-        job_id = await enqueue_upload(upload.id, org_id, run_config=run_config or None)
+        kb = _kb_for_upload(db, org_id, upload.id)
+        run, job_id = await _start_ingestion_run(
+            db,
+            upload=upload,
+            kb=kb,
+            org_id=org_id,
+            request_config=run_config or None,
+            delete_existing=False,
+        )
         logger.info(
-            "[ingestion] enqueued custom run for upload {} (job={}, overrides={})",
-            upload.id, job_id, sorted(run_config.keys()),
+            "[ingestion] enqueued custom run for upload {} (run={}, job={}, overrides={})",
+            upload.id, run.id, job_id, sorted(run_config.keys()),
         )
         return {
             "upload_id": str(upload.id),
+            "ingestion_run_id": str(run.id),
             "job_id": job_id,
             "run_config": run_config,
             "status": "queued",
@@ -682,5 +819,39 @@ def build_knowledge_base_router(
             )
         activated = IngestionRunService.activate_run(db, run.id)
         return activated.to_dict()
+
+    @router.put(
+        "/agents/{agent_id}/knowledge-bases/{kb_id}/active-run",
+        status_code=status.HTTP_200_OK,
+    )
+    def set_agent_kb_active_run(
+        agent_id: str,
+        kb_id: str,
+        body: SetAgentKbActiveRunRequest = Body(...),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Set (or clear when the body's run id is null) the per-agent pin for
+        one AgentKnowledgeBase row. Falls back to the KB-level default when
+        cleared. Validation (row exists, run in same KB, run is ready) lives
+        in ``IngestionRunService.set_agent_kb_active_run`` — the router is a
+        pure transport."""
+        org_id = resolve_org_id(claims)
+        try:
+            aid = UUID(agent_id)
+            kid = UUID(kb_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid agent_id or kb_id",
+            )
+        akb = IngestionRunService.set_agent_kb_active_run(
+            db,
+            org_id=org_id,
+            agent_id=aid,
+            knowledge_base_id=kid,
+            run_id=body.active_ingestion_pipeline_run_id,
+        )
+        return akb.to_dict()
 
     return router

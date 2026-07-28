@@ -3,10 +3,11 @@
 We stub the SQLAlchemy session so the tests run without a live Postgres.
 The service surface we exercise:
 - resolve_run_config merges defaults with overrides.
-- begin_run inserts with is_active=False so a failed re-ingest doesn't yank
-  the previous active run.
+- begin_pending_run inserts with is_active=False so a failed re-ingest doesn't
+  yank the previous active run.
 - complete_run flips the previous active run to inactive BEFORE flipping the
-  new one to active (partial unique index requires one at a time).
+  new one to active (partial unique index requires one at a time), then
+  points the parent KB at the new run.
 - fail_run does NOT flip is_active.
 """
 
@@ -108,7 +109,7 @@ def test_fail_run_does_not_change_is_active():
     db = MagicMock()
     run = MagicMock()
     run.id = "new"
-    run.is_active = False  # begin_run always writes False
+    run.is_active = False  # begin_pending_run always writes False
     db.query.return_value.filter.return_value.first.return_value = run
 
     IngestionRunService.fail_run(db, "new", error="boom")

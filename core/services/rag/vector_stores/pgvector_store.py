@@ -99,10 +99,25 @@ class PgVectorStore(VectorStore):
         agent_id = filters.get("agent_id")
         upload_id = filters.get("upload_id")
         ingestion_run_id = filters.get("ingestion_run_id")
+        org_id = filters.get("organization_id")
         provider = filters.get("embedding_provider")
         model = filters.get("embedding_model")
 
         with self._db() as db:
+            # Resolve which run to serve when the caller didn't pin one. The
+            # resolver enforces the (agent-KB override → KB default → legacy
+            # is_active fallback) chain — same rule in one place, so evals and
+            # future retrievers can't diverge.
+            if ingestion_run_id is None and upload_id is not None and org_id is not None:
+                from core.services.ingestion_run_service import IngestionRunService
+
+                ingestion_run_id = IngestionRunService.resolve_active_run_id(
+                    db,
+                    org_id=org_id,
+                    upload_id=upload_id,
+                    agent_id=agent_id,
+                )
+
             q = (
                 db.query(
                     KnowledgeBaseChunk.chunk_text,
@@ -129,7 +144,8 @@ class PgVectorStore(VectorStore):
             if ingestion_run_id is not None:
                 q = q.filter(KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id)
             else:
-                # Without an explicit run pin, only serve the active run per upload.
+                # Resolver returned None (nothing ready) or upstream didn't
+                # pass org/upload — legacy safety net keeps behavior consistent.
                 q = q.filter(IngestionPipelineRun.is_active.is_(True))
 
             if agent_id is not None:

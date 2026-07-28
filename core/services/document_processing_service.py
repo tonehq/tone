@@ -61,8 +61,8 @@ class DocumentProcessingService:
         upload_id: UUID,
         org_id: UUID,
         file_bytes: bytes,
+        ingestion_run_id: UUID,
         delete_existing: bool = False,
-        run_config: Optional[dict] = None,
     ):
         run: Optional[IngestionPipelineRun] = None
         try:
@@ -73,30 +73,13 @@ class DocumentProcessingService:
                     return
                 file_type = upload.file_type
                 upload.status = "processing"
-                kb = (
-                    db.query(KnowledgeBase)
-                    .filter(KnowledgeBase.upload_id == upload_id)
-                    .first()
-                )
-                if kb is None:
-                    logger.error(
-                        "No KnowledgeBase found for upload {}, cannot open ingestion run",
-                        upload_id,
-                    )
-                    return
-                kb_id = kb.id
                 db.commit()
 
-                cfg = IngestionRunService.resolve_run_config(
-                    db, org_id, kb_id, run_config
-                )
-                run = IngestionRunService.begin_run(
-                    db,
-                    upload_id=upload_id,
-                    knowledge_base_id=kb_id,
-                    org_id=org_id,
-                    config=cfg,
-                )
+                # The pending run row was created by the router before the
+                # Procrastinate defer — just flip it to running here. Pipeline
+                # params (parser/tokeniser/embedder/store) live on that row, so
+                # no resolve_run_config is needed on the worker side.
+                run = IngestionRunService.mark_running(db, ingestion_run_id)
 
                 if delete_existing:
                     # Wipe the previous ready run's data so re-ingest starts clean.
@@ -222,8 +205,17 @@ class DocumentProcessingService:
             logger.exception("[ingestion] upload {} failed", upload_id)
             try:
                 with get_db_context() as db:
-                    if run is not None:
-                        IngestionRunService.fail_run(db, run.id, error=str(e))
+                    # Use the router-created pending run id as the fallback in
+                    # case mark_running itself raised — the row still exists
+                    # and needs to be flipped to failed.
+                    fail_id = run.id if run is not None else ingestion_run_id
+                    try:
+                        IngestionRunService.fail_run(db, fail_id, error=str(e))
+                    except ValueError:
+                        logger.warning(
+                            "[ingestion] pending run {} missing during failure handling",
+                            fail_id,
+                        )
                     upload = db.query(Upload).filter(Upload.id == upload_id).first()
                     if upload:
                         upload.status = "failed"
@@ -242,8 +234,8 @@ class DocumentProcessingService:
         self,
         upload_id: UUID,
         org_id: UUID,
+        ingestion_run_id: UUID,
         delete_existing: bool = False,
-        run_config: Optional[dict] = None,
     ):
         with get_db_context() as db:
             upload = db.query(Upload).filter(Upload.id == upload_id).first()
@@ -255,10 +247,6 @@ class DocumentProcessingService:
         file_bytes = R2StorageService().download_file(file_path)
         self.process_document(
             upload_id, org_id, file_bytes,
-            delete_existing=delete_existing, run_config=run_config,
+            ingestion_run_id=ingestion_run_id,
+            delete_existing=delete_existing,
         )
-
-    def reprocess_upload(
-        self, upload_id: UUID, org_id: UUID, run_config: Optional[dict] = None,
-    ):
-        self.process_upload(upload_id, org_id, delete_existing=True, run_config=run_config)

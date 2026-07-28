@@ -8,6 +8,7 @@ import {
   ExternalLink,
   FileText,
   HardDrive,
+  ListChecks,
   Pencil,
   Plus,
   RotateCcw,
@@ -15,6 +16,7 @@ import {
   User,
   X,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
@@ -415,6 +417,19 @@ export default function KnowledgeBasePage() {
                 />
               </CustomButton>
             )}
+            <Link
+              href={`/knowledge-base/${record.id}`}
+              aria-label="View ingestion runs"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <CustomButton
+                type="text"
+                size="icon-xs"
+                className="text-muted-foreground hover:bg-muted hover:text-foreground"
+              >
+                <ListChecks className="size-4" />
+              </CustomButton>
+            </Link>
             <CustomButton
               type="text"
               size="icon-xs"
@@ -594,6 +609,13 @@ export default function KnowledgeBasePage() {
                 >
                   View file
                 </CustomButton>
+              )}
+              {selectedDoc && (
+                <Link href={`/knowledge-base/${selectedDoc.id}`}>
+                  <CustomButton type="default" icon={<ListChecks className="size-4" />}>
+                    Ingestion runs
+                  </CustomButton>
+                </Link>
               )}
             </div>
           </div>
