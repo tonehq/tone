@@ -41,27 +41,23 @@ def _defer_sync(task, **kwargs) -> int:
 def ingest_upload(
     upload_id: str,
     org_id: str,
+    ingestion_run_id: str,
     delete_existing: bool = False,
-    run_config: dict | None = None,
 ) -> None:
-    """Run one ingestion pipeline for an uploaded document.
-
-    ``run_config`` is an optional dict of pipeline overrides (parser / tokeniser /
-    embedding_provider / embedding_model / embedding_dimensions / vector_store /
-    vector_store_ref, plus any per-component *_config sub-dict). Anything left
-    unset falls back to the org / system defaults resolved by
-    ``IngestionRunService.resolve_run_config``. Must be JSON-serialisable —
-    Procrastinate stores task kwargs as JSON.
-    """
+    """Run one ingestion pipeline for an uploaded document. The router creates
+    the pending ``ingestion_pipeline_runs`` row before defer and passes its id
+    here; the worker flips it to ``running`` and reads every pipeline param
+    (parser / tokeniser / embedder / store) off that row."""
     from core.services.document_processing_service import DocumentProcessingService
 
     logger.info(
-        "[ingestion] processing upload {} (reprocess={}, custom_config={})",
-        upload_id, delete_existing, bool(run_config),
+        "[ingestion] processing upload {} (run={}, reprocess={})",
+        upload_id, ingestion_run_id, delete_existing,
     )
     DocumentProcessingService().process_upload(
         UUID(upload_id), UUID(org_id),
-        delete_existing=delete_existing, run_config=run_config,
+        ingestion_run_id=UUID(ingestion_run_id),
+        delete_existing=delete_existing,
     )
 
 
@@ -137,23 +133,23 @@ async def _defer_ingestion(
     upload_id,
     org_id,
     delete_existing: bool,
-    run_config: dict | None = None,
+    ingestion_run_id,
 ) -> int:
     async with app.open_async():
         return await ingest_upload.defer_async(
             upload_id=str(upload_id),
             org_id=str(org_id),
+            ingestion_run_id=str(ingestion_run_id),
             delete_existing=delete_existing,
-            run_config=run_config,
         )
 
 
-async def enqueue_upload(upload_id, org_id, run_config: dict | None = None) -> int:
-    return await _defer_ingestion(upload_id, org_id, False, run_config=run_config)
+async def enqueue_upload(upload_id, org_id, ingestion_run_id) -> int:
+    return await _defer_ingestion(upload_id, org_id, False, ingestion_run_id)
 
 
-async def enqueue_reprocess(upload_id, org_id, run_config: dict | None = None) -> int:
-    return await _defer_ingestion(upload_id, org_id, True, run_config=run_config)
+async def enqueue_reprocess(upload_id, org_id, ingestion_run_id) -> int:
+    return await _defer_ingestion(upload_id, org_id, True, ingestion_run_id)
 
 
 @app.task(name="eval_ingestion_run", queue="eval")

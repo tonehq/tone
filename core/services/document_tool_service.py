@@ -278,42 +278,37 @@ def get_kb_refs(agent_id: int) -> List[dict]:
 
 
 def get_kb_document_names(agent_id: int) -> Optional[dict]:
-    """The agent's ready KB documents + each upload's active ingestion run.
+    """The agent's ready KB documents + each upload's currently-serving ingestion
+    run, resolved through the 3-tier rule (agent-KB pin → KB default → any
+    ``is_active`` fallback) via ``IngestionRunService.resolve_active_run_id`` —
+    the ONE place that decides which run retrieval reads.
 
-    Cached per-agent so ``build_document_tool`` + the retrieval handler run
-    with NO per-call KB DB query. One join to ``ingestion_pipeline_runs`` (the
-    active row per upload) means callers know which embedder / store to
-    instantiate at retrieval without a second DB hit.
+    Cached per-agent so the retrieval handler runs with NO per-call KB DB
+    query; the pipeline is rebuilt whenever a pin changes so the cache stays
+    fresh at call time.
     """
     from core.database.session import get_db_context
-    from core.models.upload import Upload
     from core.models.agent_knowledge_base import AgentKnowledgeBase
     from core.models.ingestion_pipeline_run import IngestionPipelineRun
     from core.models.knowledge_base import KnowledgeBase
-
+    from core.models.upload import Upload
+    from core.services.ingestion_run_service import IngestionRunService
     from core.utils.agent_scope import published_config_subquery
 
     published_config_sq = published_config_subquery(agent_id)
 
     with get_db_context() as db:
-        rows = (
+        # Step 1 — the agent's ready uploads on its published config. No join
+        # to ``ingestion_pipeline_runs`` here; the resolver picks the right
+        # run per upload in step 2 (agent-pin > KB default > is_active).
+        upload_rows = (
             db.query(
                 Upload.file_name,
                 Upload.id.label("upload_id"),
-                IngestionPipelineRun.id.label("run_id"),
-                IngestionPipelineRun.embedding_provider,
-                IngestionPipelineRun.embedding_model,
-                IngestionPipelineRun.embedding_dimensions,
-                IngestionPipelineRun.vector_store,
-                IngestionPipelineRun.vector_store_ref,
+                Upload.organization_id.label("org_id"),
             )
             .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
             .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .outerjoin(
-                IngestionPipelineRun,
-                (IngestionPipelineRun.upload_id == Upload.id)
-                & (IngestionPipelineRun.is_active.is_(True)),
-            )
             .filter(
                 AgentKnowledgeBase.agent_id == agent_id,
                 AgentKnowledgeBase.agent_config_id == published_config_sq,
@@ -321,22 +316,53 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
             )
             .all()
         )
-    doc_names = [row.file_name for row in rows if row.file_name]
-    upload_ids = [str(row.upload_id) for row in rows]
-    upload_runs = [
-        {
-            "upload_id": str(row.upload_id),
-            "file_name": row.file_name,
-            "ingestion_run_id": str(row.run_id) if row.run_id else None,
-            "embedding_provider": row.embedding_provider,
-            "embedding_model": row.embedding_model,
-            "embedding_dimensions": row.embedding_dimensions,
-            "vector_store": row.vector_store,
-            "vector_store_ref": row.vector_store_ref,
-        }
-        for row in rows
-        if row.run_id is not None
-    ]
+
+        # Step 2 — resolve per upload via the single source of truth.
+        resolved_by_upload: dict[str, Any] = {}
+        for row in upload_rows:
+            run_id = IngestionRunService.resolve_active_run_id(
+                db,
+                org_id=row.org_id,
+                upload_id=row.upload_id,
+                agent_id=agent_id,
+            )
+            if run_id is not None:
+                resolved_by_upload[str(row.upload_id)] = run_id
+
+        # Step 3 — bulk-fetch the resolved run rows for pipeline params.
+        run_by_id: dict[Any, IngestionPipelineRun] = {}
+        run_ids = list({rid for rid in resolved_by_upload.values()})
+        if run_ids:
+            for run in (
+                db.query(IngestionPipelineRun)
+                .filter(IngestionPipelineRun.id.in_(run_ids))
+                .all()
+            ):
+                run_by_id[run.id] = run
+
+    doc_names = [row.file_name for row in upload_rows if row.file_name]
+    upload_ids = [str(row.upload_id) for row in upload_rows]
+    upload_runs: list[dict] = []
+    for row in upload_rows:
+        rid = resolved_by_upload.get(str(row.upload_id))
+        if rid is None:
+            continue
+        run = run_by_id.get(rid)
+        if run is None:
+            continue
+        upload_runs.append(
+            {
+                "upload_id": str(row.upload_id),
+                "file_name": row.file_name,
+                "ingestion_run_id": str(run.id),
+                "embedding_provider": run.embedding_provider,
+                "embedding_model": run.embedding_model,
+                "embedding_dimensions": run.embedding_dimensions,
+                "vector_store": run.vector_store,
+                "vector_store_ref": run.vector_store_ref,
+            }
+        )
+
     if not doc_names:
         return None
     return {

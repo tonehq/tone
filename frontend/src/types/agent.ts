@@ -134,6 +134,11 @@ export interface AgentDocumentRef {
   id: string;
   file_path?: string | null;
   file_name?: string | null;
+  // Present on the agent-detail response so the form can pre-fill the per-KB
+  // active-run dropdown. `knowledge_base_id` is the internal KB row id used
+  // by the `PUT .../active-run` endpoint (distinct from the upload id `id`).
+  knowledge_base_id?: string | null;
+  active_ingestion_pipeline_run_id?: string | null;
 }
 
 export interface AgentPhoneNumberRef {
