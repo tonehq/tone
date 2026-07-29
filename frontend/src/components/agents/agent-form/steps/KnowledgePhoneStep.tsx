@@ -1,7 +1,7 @@
 'use client';
 
 import { AlertCircle, Check, FileText, Loader2, Upload } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
@@ -25,6 +25,14 @@ interface KnowledgePhoneStepProps {
    * created yet — upload is gated behind this because the KB endpoint
    * requires an agent_id to attach the new file. */
   agentId: string | null;
+}
+
+// State passed to each `ActiveRunPicker`. `mode` decides whether a change
+// hits the server immediately or is held locally until save creates the
+// AgentKnowledgeBase row.
+interface RunPickerBinding {
+  kbId: string | null; // null → AKB row doesn't exist yet (pending mode)
+  runId: string | null;
 }
 
 export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps) {
@@ -81,10 +89,11 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
     [uploadIds, setValue, refreshKb],
   );
 
-  // Per-KB active-run map keyed by upload_id. Seeded from AgentDetail so the
-  // dropdown shows whatever this agent is currently pinned to, then updated
-  // fire-on-change via `useSetAgentKbActiveRun` — no form-state coupling.
-  const initialPinByUploadId = useMemo(() => {
+  // ─── run-pin bindings & pending queue ───────────────────────────────────
+  // "Persisted" bindings come from AgentDetail — the KB is already attached
+  // to the agent's published config, so the AKB row exists and pins can be
+  // saved immediately.
+  const persistedBindings = useMemo(() => {
     const map = new Map<string, { kbId: string; runId: string | null }>();
     for (const d of detail?.documents ?? []) {
       if (d.knowledge_base_id) {
@@ -96,6 +105,84 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
     }
     return map;
   }, [detail]);
+
+  // Pending pins: user picked a run for a KB whose AKB row doesn't exist
+  // yet (they haven't saved the form since attaching). We hold the choice
+  // here and flush it as soon as the agent-detail catches up (post-save +
+  // publish) — see the effect below.
+  const [pendingPins, setPendingPins] = useState<Record<string, string | null>>({});
+  const setAgentPin = useSetAgentKbActiveRun();
+
+  // Refs so the flush effect can read the latest state without listing them
+  // in its deps (which would cause a loop when the effect calls setState).
+  const pendingRef = useRef(pendingPins);
+  const flushingRef = useRef(false);
+  useEffect(() => {
+    pendingRef.current = pendingPins;
+  }, [pendingPins]);
+
+  useEffect(() => {
+    if (!agentId) return;
+    if (flushingRef.current) return;
+    const pending = pendingRef.current;
+    if (Object.keys(pending).length === 0) return;
+
+    // For each pending upload, find the KB id — either the KB just appeared
+    // in AgentDetail (form was saved + published) or a runs-list refresh
+    // exposed a knowledge_base_id we couldn't see earlier. If neither, keep
+    // the pin queued.
+    const flushable: Array<{ uploadId: string; kbId: string; runId: string | null }> = [];
+    for (const [uploadId, runId] of Object.entries(pending)) {
+      const kbId = persistedBindings.get(uploadId)?.kbId;
+      if (kbId) flushable.push({ uploadId, kbId, runId });
+    }
+    if (flushable.length === 0) return;
+
+    flushingRef.current = true;
+    (async () => {
+      const remaining = { ...pending };
+      let successCount = 0;
+      for (const { uploadId, kbId, runId } of flushable) {
+        try {
+          await setAgentPin.mutateAsync({ agentId, kbId, runId });
+          delete remaining[uploadId];
+          successCount += 1;
+        } catch (err) {
+          handleApiError(err);
+        }
+      }
+      setPendingPins(remaining);
+      flushingRef.current = false;
+      if (successCount > 0) {
+        showToast.success(
+          successCount === 1
+            ? 'Pinned run saved for this agent'
+            : `${successCount} run pins saved for this agent`,
+        );
+      }
+    })();
+  }, [agentId, persistedBindings, setAgentPin]);
+
+  // Drop pending pins for uploads the user has unchecked so we don't fire
+  // a stale PUT after save.
+  useEffect(() => {
+    setPendingPins((prev) => {
+      const next: Record<string, string | null> = {};
+      let changed = false;
+      for (const [uploadId, runId] of Object.entries(prev)) {
+        if (uploadIds.includes(uploadId)) {
+          next[uploadId] = runId;
+        } else {
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [uploadIds]);
+
+  const handlePendingPinChange = useCallback((uploadId: string, runId: string | null) => {
+    setPendingPins((prev) => ({ ...prev, [uploadId]: runId }));
+  }, []);
 
   return (
     <div className="flex flex-col gap-4">
@@ -153,6 +240,19 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
               const selected = uploadIds.includes(doc.id);
               const isProcessing = doc.status === 'processing' || doc.status === 'pending';
               const isFailed = doc.status === 'failed';
+
+              // Persisted → the AKB row exists, changes save immediately.
+              // Pending → held locally until save creates the AKB row.
+              const persisted = persistedBindings.get(doc.id) ?? null;
+              const binding: RunPickerBinding | null = selected
+                ? persisted
+                  ? { kbId: persisted.kbId, runId: persisted.runId }
+                  : {
+                      kbId: null,
+                      runId: doc.id in pendingPins ? pendingPins[doc.id] : null,
+                    }
+                : null;
+
               return (
                 <div
                   key={doc.id}
@@ -202,16 +302,17 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
                     </span>
                   </CustomButton>
 
-                  {/* Per-KB active-run picker. Only rendered for attached KBs
-                      the agent is already persisted on — a brand-new attach
-                      only becomes pinnable after the first save creates the
-                      AgentKnowledgeBase row. */}
-                  {selected && agentId && initialPinByUploadId.has(doc.id) && (
+                  {/* Per-KB active-run picker. Rendered as soon as the KB is
+                      selected; persisted bindings save immediately, brand-new
+                      attaches queue the pin and flush after the next save
+                      creates the AgentKnowledgeBase row. */}
+                  {binding && (
                     <ActiveRunPicker
                       uploadId={doc.id}
                       agentId={agentId}
-                      kbId={initialPinByUploadId.get(doc.id)!.kbId}
-                      initialRunId={initialPinByUploadId.get(doc.id)!.runId}
+                      kbId={binding.kbId}
+                      initialRunId={binding.runId}
+                      onPendingChange={handlePendingPinChange}
                     />
                   )}
                 </div>
@@ -231,21 +332,22 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
 }
 
 // ─── per-KB active-run picker ─────────────────────────────────────────────
-// Small inline widget rendered in its own component so ``useIngestionRuns``
-// can be called once per attached KB without breaking Rules of Hooks. Fires
-// the "set/clear pin" mutation on change. Fire-on-change (not form-batched)
-// keeps the concern local to this attachment and avoids plumbing new fields
-// through ``AgentFormState`` / ``formStateToUpsertPayload``.
+// Rendered per attached KB. When ``kbId`` is present, changes hit the server
+// immediately (persisted mode). When it's null, changes are held via
+// ``onPendingChange`` — the parent flushes them once the AgentKnowledgeBase
+// row exists (post-save + publish).
 function ActiveRunPicker({
   uploadId,
   agentId,
   kbId,
   initialRunId,
+  onPendingChange,
 }: {
   uploadId: string;
-  agentId: string;
-  kbId: string;
+  agentId: string | null;
+  kbId: string | null;
   initialRunId: string | null;
+  onPendingChange: (uploadId: string, runId: string | null) => void;
 }) {
   const [value, setValue] = useState<string>(initialRunId ?? KB_DEFAULT_VALUE);
   const setAgentPin = useSetAgentKbActiveRun();
@@ -278,12 +380,22 @@ function ActiveRunPicker({
     [runs],
   );
 
+  const pending = kbId == null || agentId == null;
+
   const handleChange = async (next: string) => {
     const previous = value;
     setValue(next); // optimistic
     const runId = next === KB_DEFAULT_VALUE ? null : next;
+
+    // Pending mode — no AKB row yet. Just record it; parent flushes after
+    // the next save creates the row.
+    if (pending) {
+      onPendingChange(uploadId, runId);
+      return;
+    }
+
     try {
-      await setAgentPin.mutateAsync({ agentId, kbId, runId });
+      await setAgentPin.mutateAsync({ agentId: agentId as string, kbId: kbId as string, runId });
       showToast.success(runId ? 'Run pinned for this agent' : 'Reverted to KB default');
     } catch (err) {
       setValue(previous); // roll back
@@ -295,7 +407,7 @@ function ActiveRunPicker({
     <div className="border-t border-border/40 pt-2">
       <SelectInput
         name={`kb-run-${uploadId}`}
-        label="Run"
+        label={pending ? 'Run (saves after you save the agent)' : 'Run'}
         options={options}
         value={value}
         onValueChange={handleChange}
