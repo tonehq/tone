@@ -279,6 +279,11 @@ export interface ConsolidatedTurn {
   tool_calls: ToolExecution[];
   /** End-to-end wall-clock latency for the turn, in milliseconds. */
   user_bot_latency_ms: number | null;
+  /** True iff this turn is the bot's opener (call greeting). Stamped by the
+   *  backend at emission time — see ConsolidatedTranscriptService and the
+   *  pipeline runner. Absent on legacy rows written before the flag existed;
+   *  those render as regular turns. */
+  is_greeting?: boolean;
 }
 
 export interface CallLogsState {

@@ -19,6 +19,10 @@ Per-turn output shape::
         "bot_speech": str | None,           # concatenated assistant transcript text for the turn
         "tool_calls": [dict, ...],          # ToolExecution.to_dict() payloads, ordered
         "user_bot_latency_ms": int | None,  # end_to_end from turn_metrics, converted to ms
+        "is_greeting": bool,                # true iff any assistant utterance in this turn was
+                                            # stamped as the call's opener (see pipecat runner);
+                                            # false for every real conversational turn and for
+                                            # legacy rows written before the flag existed
     }
 """
 from __future__ import annotations
@@ -107,6 +111,9 @@ class ConsolidatedTranscriptService(BaseService):
                     exec_.to_dict() for exec_ in tools_by_turn.get(turn_number, [])
                 ],
                 "user_bot_latency_ms": latency_by_turn.get(turn_number),
+                "is_greeting": self._is_greeting_turn(
+                    transcript_by_turn.get(turn_number, [])
+                ),
             }
             for turn_number in turn_numbers
         ]
@@ -198,6 +205,22 @@ class ConsolidatedTranscriptService(BaseService):
                 int(round(end_to_end * 1000)) if end_to_end is not None else None
             )
         return latencies
+
+    @staticmethod
+    def _is_greeting_turn(entries: List[dict]) -> bool:
+        """True iff any assistant entry in this turn was stamped as the greeting.
+
+        The flag is set at emission time by the pipeline runner (see
+        ``core/services/pipeline/runner/pipecat.py``) — the single place that
+        decides "this is the call's opener". Everything downstream just reads
+        the flag; nothing re-derives greeting from shape. Legacy rows written
+        before the flag existed evaluate to ``False`` here — old calls simply
+        render as regular turns until they're rewritten.
+        """
+        return any(
+            entry.get("role") == "assistant" and entry.get("is_greeting") is True
+            for entry in entries
+        )
 
     @staticmethod
     def _join_role(entries: List[dict], role: str) -> Optional[str]:

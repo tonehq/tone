@@ -14,6 +14,11 @@ interface ConsolidatedTurnProps {
    *  parent list to break up the chat visually without wrapping each turn in
    *  a card. Defaults to true; the first turn can suppress it. */
   showDivider?: boolean;
+  /** When true, render as the bot's opener: a "Greeting" label instead of
+   *  "Turn N" and only the assistant bubble (no user slot, no tool rows,
+   *  no latency chip — a greeting has none of those). Driven by the
+   *  backend-stamped ``turn.is_greeting`` flag; parent decides. */
+  isGreeting?: boolean;
 }
 
 /**
@@ -27,13 +32,26 @@ interface ConsolidatedTurnProps {
  * placeholder bubble — a bot-opened turn shouldn't leave a ghost "no user
  * speech" bubble hanging in the timeline.
  */
-const ConsolidatedTurnItem: React.FC<ConsolidatedTurnProps> = ({ turn, showDivider = true }) => {
+const ConsolidatedTurnItem: React.FC<ConsolidatedTurnProps> = ({
+  turn,
+  showDivider = true,
+  isGreeting = false,
+}) => {
   const tools = turn.tool_calls;
   const latencyTone = turnLatencyTone(turn.user_bot_latency_ms);
   const latencyText = formatTurnLatency(turn.user_bot_latency_ms);
   const hasUser = !!turn.user_speech && turn.user_speech.trim().length > 0;
   const hasBot = !!turn.bot_speech && turn.bot_speech.trim().length > 0;
   const hasLatency = turn.user_bot_latency_ms != null;
+
+  if (isGreeting) {
+    return (
+      <div className="flex flex-col gap-3">
+        <GreetingLabel />
+        {hasBot && <ChatBubble role="assistant" text={turn.bot_speech!} />}
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-3">
@@ -84,6 +102,21 @@ function TurnDivider({ turnNumber }: { turnNumber: number }) {
       <span className="h-px flex-1 bg-border/50" />
       <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
         Turn {turnNumber}
+      </span>
+      <span className="h-px flex-1 bg-border/50" />
+    </div>
+  );
+}
+
+/** Same visual as ``TurnDivider`` but labels the bot's opener as "Greeting"
+ *  instead of "Turn N", so the very first message reads as the agent's
+ *  opener rather than a broken turn missing its user half. */
+function GreetingLabel() {
+  return (
+    <div className="flex items-center justify-center gap-2 py-1">
+      <span className="h-px flex-1 bg-border/50" />
+      <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+        Greeting
       </span>
       <span className="h-px flex-1 bg-border/50" />
     </div>

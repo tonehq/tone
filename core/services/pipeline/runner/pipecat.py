@@ -133,6 +133,14 @@ class PipecatPipelineRunner(PipelineRunner):
         # that never actually executed — persists as a tool_executions row.
         tool_proposals: dict = {}
         current_turn: dict = {"number": 0}
+        # Flipped to True the moment either speaker's first utterance lands.
+        # Consulted by ``on_assistant_turn_stopped`` so ONLY the bot's opener
+        # (an assistant utterance that lands before any user utterance) is
+        # stamped with ``is_greeting=True`` on the transcript entry. Any later
+        # bot follow-up — replies, re-prompts, tool-call resumes — is not the
+        # greeting. Downstream (ConsolidatedTranscriptService) reads this
+        # flag; nothing else in the pipeline depends on it.
+        greeting_stamped: dict = {"done": False}
         tool_dedup: dict = {}
         call_log_updated = {"done": False}
         # First-wins stamp of why the call ended. The end_call tool handler
@@ -298,6 +306,9 @@ class PipecatPipelineRunner(PipelineRunner):
             async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
                 if not (message.content or "").strip():
                     return
+                # Any user utterance locks out the greeting flag: a subsequent
+                # bot reply is by definition not the call's opener.
+                greeting_stamped["done"] = True
                 transcript_entries.append({
                     "role": "user",
                     "text": message.content,
@@ -312,35 +323,49 @@ class PipecatPipelineRunner(PipelineRunner):
             async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
                 if not (message.content or "").strip():
                     return
+                # Greeting = the bot's opener, i.e. the first assistant utterance
+                # emitted before any user utterance. Later bot utterances are
+                # not greetings.
+                is_greeting = not greeting_stamped["done"]
+                greeting_stamped["done"] = True
                 transcript_entries.append({
                     "role": "assistant",
                     "text": message.content,
                     "timestamp": message.timestamp,
                     "turn_number": current_turn.get("number"),
+                    "is_greeting": is_greeting,
                 })
 
         # Turn tracking — the same events drive (a) the simple ``turns``
         # log persisted alongside legacy metrics and (b) the per-turn
         # latency aggregation inside ``MetricsCollectorProcessor``.
+        #
+        # Pipecat's ``TurnTrackingObserver`` starts counting at 1 when the bot
+        # begins its greeting. We shift by -1 so the greeting is stored as
+        # turn 0 and the first user↔bot exchange is turn 1. All downstream
+        # consumers — transcript entries, ``tool_executions.turn_number``,
+        # ``metrics_collector`` buffers, ``turn_entries`` — inherit the shift
+        # via the shared ``current_turn`` dict and these wrappers. Old rows
+        # in the DB keep their pipecat-original numbering (no migration).
         @turn_observer.event_handler("on_turn_started")
         async def on_turn_started(observer, turn_number):
-            logger.info("Turn {} started", turn_number)
-            # Keep ``current_turn`` in sync so tool handlers stamp the right
-            # turn on their entries (they hold the dict by reference).
-            current_turn["number"] = turn_number
-            metrics_collector.on_turn_started(turn_number)
+            shifted = turn_number - 1
+            logger.info("Turn {} started", shifted)
+            current_turn["number"] = shifted
+            metrics_collector.on_turn_started(shifted)
 
         @turn_observer.event_handler("on_turn_ended")
         async def on_turn_ended(observer, turn_number, duration, was_interrupted):
+            shifted = turn_number - 1
             status = "interrupted" if was_interrupted else "completed"
-            logger.info("Turn {} {} after {:.2f}s", turn_number, status, duration)
+            logger.info("Turn {} {} after {:.2f}s", shifted, status, duration)
             turn_entries.append({
-                "turn": turn_number,
+                "turn": shifted,
                 "duration": round(duration, 3),
                 "status": status,
             })
             metrics_collector.on_turn_ended(
-                turn_number, duration=duration, was_interrupted=was_interrupted
+                shifted, duration=duration, was_interrupted=was_interrupted
             )
 
         # Save audio + update DB inside this event handler.

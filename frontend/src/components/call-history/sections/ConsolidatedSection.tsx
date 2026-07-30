@@ -84,9 +84,21 @@ const ConsolidatedSection: React.FC<ConsolidatedSectionProps> = ({ callLog }) =>
     <div className="flex flex-col gap-4">
       <Header total={turns.length} />
       <div className="flex flex-col gap-3">
-        {turns.map((turn, i) => (
-          <ConsolidatedTurnItem key={turn.turn_number} turn={turn} showDivider={i > 0} />
-        ))}
+        {turns.map((turn, i) => {
+          // Greeting is decided by the backend (turn.is_greeting). Legacy
+          // rows without the flag render as regular turns.
+          const isGreeting = turn.is_greeting === true;
+          return (
+            <ConsolidatedTurnItem
+              key={turn.turn_number}
+              turn={turn}
+              // Suppress the "Turn N" divider on the very first item AND on
+              // the greeting (it renders its own "Greeting" label instead).
+              showDivider={i > 0 && !isGreeting}
+              isGreeting={isGreeting}
+            />
+          );
+        })}
       </div>
     </div>
   );

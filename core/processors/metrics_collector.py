@@ -71,6 +71,12 @@ class _TurnBuffer:
     started_at: Optional[float] = None
     user_stopped_at: Optional[float] = None
     bot_started_at: Optional[float] = None
+    # Pair-based ``end_to_end`` — stamped at bot-start time by
+    # ``_mark_bot_started`` when a user-stop is pending (``consume-on-use``).
+    # Populated once per turn and always non-negative by construction:
+    # bot-start ALWAYS happens after user-stop on the path that sets this.
+    # See ``_finalize_buffer`` for how it's read out.
+    end_to_end: Optional[float] = None
     ttfb: Dict[str, List[float]] = field(
         default_factory=lambda: {c: [] for c in _TTFB_CATEGORIES}
     )
@@ -140,9 +146,23 @@ def _finalize_buffer(
     llm = buffer.ttfb[CATEGORY_LLM]
     tts = buffer.ttfb[CATEGORY_TTS]
 
-    end_to_end: Optional[float] = None
-    if buffer.user_stopped_at is not None and buffer.bot_started_at is not None:
+    # Prefer the pair-based end_to_end stamped at bot-start time (see
+    # ``_mark_bot_started``) — non-negative by construction and correct even
+    # when the pair spans a turn boundary. Fall back to the legacy per-turn
+    # calculation only when the pair-based path never fired (e.g. bot spoke
+    # without a preceding user-stop — greeting / re-prompt / bot-follow-up).
+    end_to_end: Optional[float] = buffer.end_to_end
+    if (
+        end_to_end is None
+        and buffer.user_stopped_at is not None
+        and buffer.bot_started_at is not None
+    ):
         end_to_end = round(buffer.bot_started_at - buffer.user_stopped_at, 3)
+    # Defensive clamp: any residual negative from the legacy fallback (or a
+    # future path we don't foresee) surfaces as "unmeasurable" rather than a
+    # misleading negative number on the UI.
+    if end_to_end is not None and end_to_end < 0:
+        end_to_end = None
 
     llm_summary: Optional[dict] = None
     if buffer.llm_usage:
@@ -229,6 +249,18 @@ class MetricsCollectorProcessor(FrameProcessor):
         # first user-stop per turn opens the slot), popped when an STT TTFB
         # metric arrives. See ``_attribute_stt_ttfb`` for why this is needed.
         self._pending_stt: Deque[_PendingSTT] = deque()
+
+        # Pair-based ``end_to_end`` tracker — same algorithm as
+        # ``UserBotLatencyObserver``. A single "last user-stop" wall-clock is
+        # remembered globally (not per turn); on the NEXT bot-start we compute
+        # ``bot_started - last_user_stopped`` and stamp it on the current
+        # turn's buffer, then reset the tracker (consume-on-use). Because the
+        # bot-start ALWAYS happens after the user-stop on this path, the
+        # result is arithmetically impossible to be negative — and unlike the
+        # legacy per-turn ``bot_started_at - user_stopped_at`` calculation it
+        # correctly handles cross-turn pairs (user stops right at a turn
+        # boundary, bot responds in the next turn).
+        self._last_user_stopped_at: Optional[float] = None
 
     # ------------------------------------------------------------------
     # Turn-tracking hooks (called by the runner from TurnTrackingObserver)
@@ -331,6 +363,12 @@ class MetricsCollectorProcessor(FrameProcessor):
         # counted as bot latency. _mark_user_started() resets this to None
         # on a resume; subsequent stops overwrite freely.
         buffer.user_stopped_at = now
+        # Feed the pair-based tracker used by ``_mark_bot_started`` to
+        # compute end_to_end at bot-start time. This mirrors ``buffer.user_
+        # stopped_at`` but is a single global slot (not per turn), so a
+        # user-stop that lands at a turn boundary still pairs correctly with
+        # the bot-start of the next turn.
+        self._last_user_stopped_at = now
         # Reserve one pending slot per user-stop, not just the first of the
         # turn. STT services emit one TTFB per stop, so a 1:1 mapping keeps
         # ``_attribute_stt_ttfb`` correct under VAD flapping or multiple
@@ -347,6 +385,9 @@ class MetricsCollectorProcessor(FrameProcessor):
         if buffer.turn_number < 0:
             return
         buffer.user_stopped_at = None
+        # Also clear the pair tracker — the earlier stop was a false detect,
+        # so pairing it with the next bot-start would inflate latency.
+        self._last_user_stopped_at = None
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
@@ -356,7 +397,16 @@ class MetricsCollectorProcessor(FrameProcessor):
         # latency edge. Later BotStartedSpeaking frames in the same turn
         # (e.g. after a tool-call pause) don't change what the user felt.
         if buffer.bot_started_at is None:
-            buffer.bot_started_at = time.time()
+            now = time.time()
+            buffer.bot_started_at = now
+            # Pair-based end_to_end: if a user-stop is pending, this is the
+            # bot's reply to it — measure and stamp on the turn, then consume
+            # the tracker so a later bot-start (or the next turn) can't
+            # accidentally re-use the same user-stop. Non-negative by
+            # construction: ``now`` was captured after ``_last_user_stopped_at``.
+            if self._last_user_stopped_at is not None:
+                buffer.end_to_end = round(now - self._last_user_stopped_at, 3)
+                self._last_user_stopped_at = None
 
     def _attribute_stt_ttfb(self, value: float) -> bool:
         """Route a late-arriving STT TTFB back to the turn that produced it.
