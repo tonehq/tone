@@ -35,6 +35,10 @@ from core.models.eval_result import EvalResult
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
+from core.services.evals.csv_import import (
+    EvalCsvParseError,
+    parse_eval_questions_csv,
+)
 from core.services.evals.errors import (
     EvalGenerationError,
     EvalNotFoundError,
@@ -236,6 +240,242 @@ class EvalService:
             upload_id, summary.question_count, source_key,
         )
         return summary
+
+    def add_questions_manual(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        questions: List[dict],
+    ) -> EvalSetSummary:
+        """Append user-authored questions to the eval set for ``upload_id`` —
+        does NOT wipe existing rows (unlike ``import_eval`` / ``generate_eval``
+        which replace the whole set). Every appended row is stamped with
+        ``generated_by_model='manual'`` so the audit trail distinguishes
+        hand-authored rows from LLM-generated / benchmark-imported ones.
+
+        Backend-enforced validation (never trust the caller):
+        - ``questions`` must be non-empty.
+        - each question needs a non-empty ``question`` and ``expected_answer``.
+        - the KB for ``upload_id`` must exist.
+
+        Row identity: ``(upload_id, external_id)`` is unique. When the caller
+        supplies an ``id``/``external_id`` it's honoured (and rejected on
+        collision); otherwise a stable ``manual-<uuid>`` id is minted.
+        ``question_ord`` continues from the current max for the upload so
+        appended rows sort AFTER existing ones."""
+        if not questions:
+            raise EvalGenerationError(
+                "add_questions_manual requires a non-empty questions list"
+            )
+
+        cleaned: List[dict] = []
+        seen_external_ids: set[str] = set()
+        for idx, raw in enumerate(questions):
+            if not isinstance(raw, dict):
+                raise EvalGenerationError(
+                    f"question at index {idx} must be an object"
+                )
+            q_text = str(raw.get("question") or "").strip()
+            expected = str(raw.get("expected_answer") or "").strip()
+            if not q_text:
+                raise EvalGenerationError(
+                    f"question at index {idx} is missing 'question'"
+                )
+            if not expected:
+                raise EvalGenerationError(
+                    f"question at index {idx} is missing 'expected_answer'"
+                )
+            snippet_raw = raw.get("expected_source_snippet")
+            snippet = str(snippet_raw).strip() if snippet_raw else None
+            category_raw = raw.get("category")
+            category = str(category_raw).strip() if category_raw else None
+            external_id = str(raw.get("id") or raw.get("external_id") or "").strip()
+            if external_id and external_id in seen_external_ids:
+                raise EvalGenerationError(
+                    f"duplicate external_id {external_id!r} in payload"
+                )
+            if external_id:
+                seen_external_ids.add(external_id)
+            extras = {
+                k: v for k, v in raw.items()
+                if k not in _RESERVED_QUESTION_KEYS and k != "external_id"
+            } or None
+            cleaned.append(
+                {
+                    "question": q_text,
+                    "expected_answer": expected,
+                    "expected_source_snippet": snippet,
+                    "category": category,
+                    "external_id": external_id or None,
+                    "extras": extras,
+                }
+            )
+
+        kb = (
+            db.query(KnowledgeBase)
+            .filter(
+                KnowledgeBase.upload_id == upload_id,
+                KnowledgeBase.organization_id == org_id,
+            )
+            .first()
+        )
+        if kb is None:
+            raise EvalNotFoundError(
+                f"No KnowledgeBase found for upload {upload_id}"
+            )
+
+        ord_row = (
+            db.query(func.coalesce(func.max(Eval.question_ord), -1))
+            .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
+            .scalar()
+        )
+        next_ord = int(ord_row) + 1
+
+        existing_ids = {
+            row[0]
+            for row in db.query(Eval.external_id).filter(
+                Eval.upload_id == upload_id,
+                Eval.organization_id == org_id,
+            )
+        }
+        collisions = seen_external_ids & existing_ids
+        if collisions:
+            raise EvalGenerationError(
+                f"external_id already exists for upload: {sorted(collisions)}"
+            )
+
+        rows: List[dict] = []
+        for offset, q in enumerate(cleaned):
+            external_id = q["external_id"] or f"manual-{uuid.uuid4().hex[:12]}"
+            rows.append(
+                {
+                    "id": uuid.uuid4(),
+                    "organization_id": org_id,
+                    "knowledge_base_id": kb.id,
+                    "upload_id": upload_id,
+                    "external_id": external_id,
+                    "question_ord": next_ord + offset,
+                    "question": q["question"],
+                    "expected_answer": q["expected_answer"],
+                    "expected_source_snippet": q["expected_source_snippet"],
+                    "category": q["category"],
+                    "generated_by_model": "manual",
+                    "generation_prompt_hash": None,
+                    "extras": q["extras"],
+                }
+            )
+        db.bulk_insert_mappings(Eval, rows)
+        db.commit()
+        logger.info(
+            "[eval] appended manual question set upload={} added={} next_ord={}",
+            upload_id, len(rows), next_ord,
+        )
+
+        summary = self.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
+        if summary is None:
+            raise EvalGenerationError(
+                "add_questions_manual: post-insert summary missing"
+            )
+        return summary
+
+    def add_questions_from_csv(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        csv_bytes: bytes,
+    ) -> EvalSetSummary:
+        """Append CSV-authored questions to the eval set for ``upload_id``.
+        Thin adapter around :meth:`add_questions_manual` — the CSV is parsed
+        into the SAME question-dict shape, then handed to the manual path so
+        both entry points share identical validation (required fields,
+        external_id collisions, kb existence) and audit tag
+        (``generated_by_model='manual'``).
+
+        Raises ``EvalGenerationError`` when the CSV parses but no valid
+        questions can be extracted (empty ``question``/``expected_answer``,
+        collisions with existing rows, etc.) — mirrors the errors the manual
+        endpoint already surfaces to callers."""
+        try:
+            questions = parse_eval_questions_csv(csv_bytes)
+        except EvalCsvParseError as e:
+            raise EvalGenerationError(str(e)) from e
+        return self.add_questions_manual(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            questions=questions,
+        )
+
+    def update_question(
+        self,
+        db: Session,
+        *,
+        question_id: Any,
+        org_id: Any,
+        patch: dict,
+    ) -> Eval:
+        """Update whitelisted fields on one question row. Org-scoped so a
+        caller from another tenant gets ``EvalNotFoundError`` even with a
+        valid ``question_id``. Fields not present in ``patch`` are left
+        unchanged; explicit ``None`` clears optional fields
+        (``expected_source_snippet``, ``category``)."""
+        row = (
+            db.query(Eval)
+            .filter(Eval.id == question_id, Eval.organization_id == org_id)
+            .first()
+        )
+        if row is None:
+            raise EvalNotFoundError(f"Question {question_id} not found")
+
+        if "question" in patch:
+            q_text = str(patch.get("question") or "").strip()
+            if not q_text:
+                raise EvalGenerationError("'question' cannot be empty")
+            row.question = q_text
+        if "expected_answer" in patch:
+            expected = str(patch.get("expected_answer") or "").strip()
+            if not expected:
+                raise EvalGenerationError("'expected_answer' cannot be empty")
+            row.expected_answer = expected
+        if "expected_source_snippet" in patch:
+            v = patch.get("expected_source_snippet")
+            row.expected_source_snippet = (str(v).strip() or None) if v else None
+        if "category" in patch:
+            v = patch.get("category")
+            row.category = (str(v).strip() or None) if v else None
+
+        db.commit()
+        db.refresh(row)
+        logger.info(
+            "[eval] updated question id={} upload={} fields={}",
+            row.id, row.upload_id, sorted(patch.keys()),
+        )
+        return row
+
+    def delete_question(
+        self,
+        db: Session,
+        *,
+        question_id: Any,
+        org_id: Any,
+    ) -> None:
+        """Delete one question row (cascades to its ``eval_results`` rows).
+        Org-scoped."""
+        row = (
+            db.query(Eval)
+            .filter(Eval.id == question_id, Eval.organization_id == org_id)
+            .first()
+        )
+        if row is None:
+            raise EvalNotFoundError(f"Question {question_id} not found")
+        upload_id = row.upload_id
+        db.delete(row)
+        db.commit()
+        logger.info("[eval] deleted question id={} upload={}", question_id, upload_id)
 
     def get_eval_by_upload(
         self, db: Session, *, upload_id: Any, org_id: Any
@@ -1037,19 +1277,24 @@ def _run_grouped_query(
     - ``organization_id``: tenant-scope the query.
     - ``ingestion_run_ids``: narrow to batches that scored one (or several)
       ingestion runs — powers the per-ingestion "Evals" chip in the UI."""
+    # Every row of the same ``run_id`` shares the same batch-level metadata
+    # (upload/org/ingestion_run/run_number/triggered_by/top_k/models/timestamps)
+    # by construction — the service writes them uniformly in ``run_eval``. So
+    # they can go straight into GROUP BY instead of being aggregated. This also
+    # side-steps ``MAX(uuid)`` which not every Postgres install has.
     q = (
         db.query(
             EvalResult.run_id.label("run_id"),
-            func.max(Eval.upload_id).label("upload_id"),
-            func.max(EvalResult.organization_id).label("organization_id"),
-            func.max(EvalResult.ingestion_run_id).label("ingestion_run_id"),
-            func.max(EvalResult.run_number).label("run_number"),
-            func.max(EvalResult.triggered_by).label("triggered_by"),
-            func.max(EvalResult.top_k).label("top_k"),
-            func.max(EvalResult.answer_model).label("answer_model"),
-            func.max(EvalResult.judge_model).label("judge_model"),
-            func.max(EvalResult.started_at).label("started_at"),
-            func.max(EvalResult.completed_at).label("completed_at"),
+            Eval.upload_id.label("upload_id"),
+            EvalResult.organization_id.label("organization_id"),
+            EvalResult.ingestion_run_id.label("ingestion_run_id"),
+            EvalResult.run_number.label("run_number"),
+            EvalResult.triggered_by.label("triggered_by"),
+            EvalResult.top_k.label("top_k"),
+            EvalResult.answer_model.label("answer_model"),
+            EvalResult.judge_model.label("judge_model"),
+            EvalResult.started_at.label("started_at"),
+            EvalResult.completed_at.label("completed_at"),
             func.count(EvalResult.id).label("total"),
             func.sum(case((EvalResult.verdict == "PASS", 1), else_=0)).label("pass_count"),
             func.sum(case((EvalResult.verdict == "PARTIAL", 1), else_=0)).label("partial_count"),
@@ -1062,8 +1307,20 @@ def _run_grouped_query(
             func.coalesce(func.sum(EvalResult.latency_ms), 0).label("duration_ms"),
         )
         .join(Eval, Eval.id == EvalResult.eval_id)
-        .group_by(EvalResult.run_id)
-        .order_by(func.max(EvalResult.started_at).desc())
+        .group_by(
+            EvalResult.run_id,
+            Eval.upload_id,
+            EvalResult.organization_id,
+            EvalResult.ingestion_run_id,
+            EvalResult.run_number,
+            EvalResult.triggered_by,
+            EvalResult.top_k,
+            EvalResult.answer_model,
+            EvalResult.judge_model,
+            EvalResult.started_at,
+            EvalResult.completed_at,
+        )
+        .order_by(EvalResult.started_at.desc())
     )
     if upload_id is not None:
         q = q.filter(Eval.upload_id == upload_id)

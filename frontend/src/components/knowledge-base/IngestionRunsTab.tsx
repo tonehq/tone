@@ -1,10 +1,11 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock, Copy, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, ListChecks, Loader2, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
+import ManualEvalsModal from '@/components/knowledge-base/ManualEvalsModal';
 import { Badge } from '@/components/ui/badge';
 import { useEvalSummariesByIngestion } from '@/lib/api/evals';
 import { useActivateIngestionRun, useIngestionRuns } from '@/lib/api/ingestion-runs';
@@ -111,6 +112,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
   const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
+  const [manualEvalsOpen, setManualEvalsOpen] = useState(false);
 
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -350,11 +352,22 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
             live retrieval reads.
           </p>
         </div>
-        {total > 0 && (
-          <Badge variant="secondary" className="text-xs tabular-nums">
-            {total}
-          </Badge>
-        )}
+        <div className="flex items-center gap-2">
+          {total > 0 && (
+            <Badge variant="secondary" className="text-xs tabular-nums">
+              {total}
+            </Badge>
+          )}
+          <CustomButton
+            type="default"
+            size="sm"
+            onClick={() => setManualEvalsOpen(true)}
+            aria-label="Manage eval questions"
+          >
+            <ListChecks className="mr-1 size-4" />
+            Manage evals
+          </CustomButton>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
@@ -397,6 +410,12 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         onClose={() => setDrawerRun(null)}
         uploadId={uploadId}
         ingestionRun={drawerRun}
+      />
+
+      <ManualEvalsModal
+        open={manualEvalsOpen}
+        onClose={() => setManualEvalsOpen(false)}
+        uploadId={uploadId}
       />
     </div>
   );
