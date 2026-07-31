@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from typing import Optional
 
 import openai
@@ -45,6 +46,11 @@ class QuestionGeneratorService:
         template = self._loader.load(self._prompt_name)
         prompt = render_prompt(template, DOCUMENT_TEXT=clipped)
 
+        logger.info(
+            "[eval] question_gen calling model={} chars={} clipped={}",
+            model, len(document_text), len(clipped),
+        )
+        t_start = time.monotonic()
         try:
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
@@ -68,6 +74,10 @@ class QuestionGeneratorService:
 
         questions = parsed.get("questions", [])
         if not isinstance(questions, list) or not questions:
+            logger.error(
+                "[eval] question generation returned empty/invalid questions array model={} raw_prefix={!r}",
+                model, content[:200],
+            )
             raise EvalGenerationError(
                 "LLM did not return a non-empty `questions` array. "
                 f"Raw response starts with: {content[:200]!r}"
@@ -78,6 +88,10 @@ class QuestionGeneratorService:
             q.setdefault("notes", "")
             q.setdefault("expected_source_snippet", "")
 
+        logger.info(
+            "[eval] question_gen ok model={} questions={} elapsed_s={:.1f}",
+            model, len(questions), time.monotonic() - t_start,
+        )
         return {"generated_by_model": model, "questions": questions}
 
 

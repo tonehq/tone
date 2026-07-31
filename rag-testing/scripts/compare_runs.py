@@ -1,11 +1,11 @@
 """CLI wrapper — diff the latest two ``eval_results`` runs for a doc (or two
-specific results by id) and flag regressions.
+specific runs by ``run_id``) and flag regressions.
 
 Exit code: 0 if no regressions, 1 otherwise.
 
 Usage:
     python rag-testing/scripts/compare_runs.py --doc <slug>
-    python rag-testing/scripts/compare_runs.py --baseline <eval_result_id> --candidate <eval_result_id>
+    python rag-testing/scripts/compare_runs.py --baseline <run_id> --candidate <run_id>
     python rag-testing/scripts/compare_runs.py --doc <slug> --score-drop 0.10
 """
 from __future__ import annotations
@@ -59,9 +59,9 @@ def _print_diff(diff: dict) -> None:
 def main() -> int:
     ap = argparse.ArgumentParser(description="Diff two RAG eval runs and flag regressions.")
     g = ap.add_mutually_exclusive_group(required=True)
-    g.add_argument("--doc", help="Slug — auto-pick the latest two eval_results for this doc")
-    g.add_argument("--baseline", help="Baseline eval_results.id (paired with --candidate)")
-    ap.add_argument("--candidate", help="Candidate eval_results.id (paired with --baseline)")
+    g.add_argument("--doc", help="Slug — auto-pick the latest two eval runs for this doc")
+    g.add_argument("--baseline", help="Baseline run_id (paired with --candidate)")
+    ap.add_argument("--candidate", help="Candidate run_id (paired with --baseline)")
     ap.add_argument(
         "--score-drop", type=float, default=0.15,
         help="Absolute drop in a judge metric that counts as a regression",
@@ -77,13 +77,15 @@ def main() -> int:
             if not meta.org_id:
                 print(f"[compare] {args.doc} missing org_id in metadata.json", file=sys.stderr)
                 return 2
-            eval_row = svc.get_eval_by_upload(
+            eval_set = svc.get_eval_by_upload(
                 db, upload_id=meta.upload_id, org_id=meta.org_id
             )
-            if eval_row is None:
-                print(f"[compare] {args.doc} has no eval row", file=sys.stderr)
+            if eval_set is None:
+                print(f"[compare] {args.doc} has no eval questions", file=sys.stderr)
                 return 2
-            diff = svc.compare_latest_two(db, eval_row.id, score_drop=args.score_drop)
+            diff = svc.compare_latest_two(
+                db, upload_id=meta.upload_id, score_drop=args.score_drop
+            )
         else:
             if not args.candidate:
                 print("--baseline requires --candidate", file=sys.stderr)

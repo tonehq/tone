@@ -48,17 +48,51 @@ def ingest_upload(
     the pending ``ingestion_pipeline_runs`` row before defer and passes its id
     here; the worker flips it to ``running`` and reads every pipeline param
     (parser / tokeniser / embedder / store) off that row."""
-    from core.services.document_processing_service import DocumentProcessingService
-
+    # Very first line — proves the worker picked the job even if the DB call
+    # below (or any subsequent step) fails. Emitted BEFORE the trace_id is
+    # stamped, so this single line is the only one in this task that lacks the
+    # trace context — everything after ``ensure_trace_id`` is filterable by it.
     logger.info(
-        "[ingestion] processing upload {} (run={}, reprocess={})",
+        "[ingestion] worker picked job upload={} run={} reprocess={}",
         upload_id, ingestion_run_id, delete_existing,
     )
-    DocumentProcessingService().process_upload(
-        UUID(upload_id), UUID(org_id),
-        ingestion_run_id=UUID(ingestion_run_id),
-        delete_existing=delete_existing,
-    )
+
+    from core.database.session import get_db_context
+    from core.services.document_processing_service import DocumentProcessingService
+    from core.services.ingestion_run_service import IngestionRunService
+
+    run_uuid = UUID(ingestion_run_id)
+    try:
+        # Stamp the trace_id BEFORE the first downstream log so every log
+        # emitted from here on — including the pre-``mark_running`` steps
+        # (upload load, R2 download) and the failure path — carries the same
+        # filterable value. Idempotent on retries.
+        with get_db_context() as db:
+            IngestionRunService.ensure_trace_id(db, run_uuid)
+
+        logger.info(
+            "[ingestion] processing upload {} (run={}, reprocess={})",
+            upload_id, ingestion_run_id, delete_existing,
+        )
+        DocumentProcessingService().process_upload(
+            UUID(upload_id), UUID(org_id),
+            ingestion_run_id=run_uuid,
+            delete_existing=delete_existing,
+        )
+        logger.info(
+            "[ingestion] worker task done upload={} run={}",
+            upload_id, ingestion_run_id,
+        )
+    except Exception:
+        # ``process_document`` already logs + persists its own failure, but any
+        # exception escaping this task would otherwise land only in
+        # Procrastinate's generic failure log — this line guarantees the app
+        # log carries a traceback correlated by upload+run for tailing.
+        logger.exception(
+            "[ingestion] worker task crashed upload={} run={}",
+            upload_id, ingestion_run_id,
+        )
+        raise
 
 
 @app.task(name="run_contact_sync", queue="contact_import")
@@ -135,13 +169,29 @@ async def _defer_ingestion(
     delete_existing: bool,
     ingestion_run_id,
 ) -> int:
-    async with app.open_async():
-        return await ingest_upload.defer_async(
-            upload_id=str(upload_id),
-            org_id=str(org_id),
-            ingestion_run_id=str(ingestion_run_id),
-            delete_existing=delete_existing,
+    logger.info(
+        "[ingestion] deferring job upload={} run={} reprocess={}",
+        upload_id, ingestion_run_id, delete_existing,
+    )
+    try:
+        async with app.open_async():
+            job_id = await ingest_upload.defer_async(
+                upload_id=str(upload_id),
+                org_id=str(org_id),
+                ingestion_run_id=str(ingestion_run_id),
+                delete_existing=delete_existing,
+            )
+    except Exception:
+        logger.exception(
+            "[ingestion] defer_async failed upload={} run={} reprocess={}",
+            upload_id, ingestion_run_id, delete_existing,
         )
+        raise
+    logger.info(
+        "[ingestion] deferred job_id={} upload={} run={}",
+        job_id, upload_id, ingestion_run_id,
+    )
+    return job_id
 
 
 async def enqueue_upload(upload_id, org_id, ingestion_run_id) -> int:
@@ -162,11 +212,12 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
     and (2) slow LLM-heavy eval work (5-10 min per doc) doesn't compete with
     ingestion slots. Workers must include ``eval`` in ``--queues`` to consume.
 
-    Idempotency: ``EvalService.get_or_generate_eval`` upserts by ``upload_id``
-    (unique) so a redelivered job reuses the existing question set instead of
-    regenerating. ``run_eval`` always inserts a fresh ``eval_results`` row —
-    duplicate delivery becomes a duplicate result row rather than a partial
-    update, which is what we want for audit.
+    Idempotency: ``EvalService.get_or_generate_eval`` short-circuits when
+    questions already exist for the upload, so a redelivered job reuses the
+    existing set instead of regenerating. ``run_eval`` always inserts a fresh
+    batch of ``eval_results`` rows tagged with a new ``run_id`` — duplicate
+    delivery becomes a duplicate run rather than a partial update, which is
+    what we want for audit.
 
     Failures are logged with a full traceback but NEVER re-raised: an eval
     outage must not fail the ingestion pipeline."""
@@ -176,6 +227,9 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
     from core.models.ingestion_pipeline_run import IngestionPipelineRun
     from core.services.evals.eval_service import EvalService
 
+    logger.info(
+        "[eval] worker picked job ingestion_run={}", ingestion_run_id,
+    )
     try:
         with get_db_context() as db:
             run = (
@@ -190,15 +244,26 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
                 )
                 return
             svc = EvalService()
-            eval_row = svc.get_or_generate_eval(
+            logger.info(
+                "[eval] resolving question set ingestion_run={} upload={} org={}",
+                ingestion_run_id, run.upload_id, run.organization_id,
+            )
+            eval_set = svc.get_or_generate_eval(
                 db, upload_id=run.upload_id, org_id=run.organization_id
+            )
+            logger.info(
+                "[eval] running auto-eval ingestion_run={} upload={} questions={}",
+                ingestion_run_id, run.upload_id, eval_set.question_count,
             )
             svc.run_eval(
                 db,
-                eval_id=eval_row.id,
+                upload_id=run.upload_id,
                 ingestion_run_id=run.id,
                 triggered_by="auto",
             )
+        logger.info(
+            "[eval] worker task done ingestion_run={}", ingestion_run_id,
+        )
     except Exception:  # noqa: BLE001
         logger.exception(
             "[eval] auto-run failed for ingestion_run={} (swallowed — ingestion is unaffected)",

@@ -47,45 +47,75 @@ class PgVectorStore(VectorStore):
     def add(self, records: List[VectorRecord]) -> int:
         if not records:
             return 0
+        # ingestion_run_id is the useful correlator here — every record in one
+        # ``add`` call belongs to the same run, so peek the first record.
+        run_id = records[0].metadata.get("ingestion_run_id")
+        logger.debug(
+            "[pgvector] add start run={} records={}", run_id, len(records),
+        )
         with self._db() as db:
-            chunk_rows: List[KnowledgeBaseChunk] = []
-            for r in records:
-                dims = int(self._require(r.metadata, "embedding_dimensions"))
-                if dims != len(r.embedding):
-                    raise EmbeddingCompatibilityError(
-                        f"Embedding dimension mismatch: metadata says {dims} but vector is "
-                        f"{len(r.embedding)}-D"
+            try:
+                chunk_rows: List[KnowledgeBaseChunk] = []
+                for r in records:
+                    dims = int(self._require(r.metadata, "embedding_dimensions"))
+                    if dims != len(r.embedding):
+                        logger.error(
+                            "[pgvector] dimension mismatch run={} metadata_dims={} vector_dims={}",
+                            run_id, dims, len(r.embedding),
+                        )
+                        raise EmbeddingCompatibilityError(
+                            f"Embedding dimension mismatch: metadata says {dims} but vector is "
+                            f"{len(r.embedding)}-D"
+                        )
+                    chunk_rows.append(
+                        KnowledgeBaseChunk(
+                            organization_id=self._require(r.metadata, "organization_id"),
+                            upload_id=self._require(r.metadata, "upload_id"),
+                            ingestion_run_id=self._require(r.metadata, "ingestion_run_id"),
+                            chunk_index=int(self._require(r.metadata, "chunk_index")),
+                            chunk_text=r.text,
+                            chunk_metadata=r.metadata.get("chunk_metadata"),
+                        )
                     )
-                chunk_rows.append(
-                    KnowledgeBaseChunk(
-                        organization_id=self._require(r.metadata, "organization_id"),
-                        upload_id=self._require(r.metadata, "upload_id"),
-                        ingestion_run_id=self._require(r.metadata, "ingestion_run_id"),
-                        chunk_index=int(self._require(r.metadata, "chunk_index")),
-                        chunk_text=r.text,
-                        chunk_metadata=r.metadata.get("chunk_metadata"),
-                    )
-                )
-            db.add_all(chunk_rows)
-            db.flush()  # allocate chunk.id so embedding rows can reference them
+                db.add_all(chunk_rows)
+                db.flush()  # allocate chunk.id so embedding rows can reference them
 
-            embedding_rows: List[KnowledgeBaseChunkEmbedding] = []
-            for chunk, r in zip(chunk_rows, records):
-                dims = int(r.metadata["embedding_dimensions"])
-                column = KnowledgeBaseChunkEmbedding.column_for_dimension(dims)
-                embedding_rows.append(
-                    KnowledgeBaseChunkEmbedding(
-                        organization_id=chunk.organization_id,
-                        chunk_id=chunk.id,
-                        ingestion_run_id=chunk.ingestion_run_id,
-                        embedding_dimensions=dims,
-                        **{column.key: r.embedding},
+                embedding_rows: List[KnowledgeBaseChunkEmbedding] = []
+                for chunk, r in zip(chunk_rows, records):
+                    dims = int(r.metadata["embedding_dimensions"])
+                    column = KnowledgeBaseChunkEmbedding.column_for_dimension(dims)
+                    embedding_rows.append(
+                        KnowledgeBaseChunkEmbedding(
+                            organization_id=chunk.organization_id,
+                            chunk_id=chunk.id,
+                            ingestion_run_id=chunk.ingestion_run_id,
+                            embedding_dimensions=dims,
+                            **{column.key: r.embedding},
+                        )
                     )
+                db.add_all(embedding_rows)
+                db.flush()
+                if self._session is None:
+                    db.commit()
+            except Exception:
+                logger.exception(
+                    "[pgvector] add failed run={} records={}",
+                    run_id, len(records),
                 )
-            db.add_all(embedding_rows)
-            db.flush()
-            if self._session is None:
-                db.commit()
+                if self._session is None:
+                    # Only roll back sessions we own; caller-supplied sessions
+                    # manage their own transaction boundaries.
+                    try:
+                        db.rollback()
+                    except Exception:
+                        logger.exception(
+                            "[pgvector] rollback failed run={}", run_id,
+                        )
+                raise
+        logger.info(
+            "[pgvector] added run={} chunks={} embeddings={}",
+            run_id, len(chunk_rows), len(embedding_rows),
+        )
         return len(chunk_rows)
 
     def query(

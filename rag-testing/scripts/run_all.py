@@ -7,8 +7,8 @@ For every active KnowledgeBase in the DB:
   4. Generate the Q&A dataset (persists into `evals`)
   5. Run the eval (persists into `eval_results`)
 
-Idempotency (DB-backed): a doc is "fully processed" when it has a ready
-``evals`` row AND at least one ``eval_results`` row for its active ingestion
+Idempotency (DB-backed): a doc is "fully processed" when it has questions
+in ``evals`` AND at least one ``eval_results`` row for its active ingestion
 run. Fully-processed docs are skipped unless ``--rerun`` is passed.
 
 Usage:
@@ -33,8 +33,8 @@ from validate_ingestion import _print_result, _validate_one
 def _has_ready_eval(db, upload_id, org_id) -> bool:
     from core.services.evals.eval_service import EvalService
 
-    eval_row = EvalService().get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-    return eval_row is not None and eval_row.status == "ready"
+    eval_set = EvalService().get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
+    return eval_set is not None and eval_set.question_count > 0
 
 
 def _has_results_for_active_run(db, upload_id) -> bool:
@@ -99,15 +99,14 @@ def _process_one(
     try:
         with db_session() as db:
             existing = svc.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-            if existing is not None and existing.status == "ready" and not rerun:
-                print(f"  [3/4] eval {existing.id} already present ({existing.question_count} questions)")
-                eval_row = existing
+            if existing is not None and existing.question_count > 0 and not rerun:
+                print(f"  [3/4] eval already present ({existing.question_count} questions)")
             else:
-                eval_row = svc.generate_eval(
+                generated = svc.generate_eval(
                     db, upload_id=upload_id, org_id=org_id,
                     model=gen_model, max_chars=max_chars,
                 )
-                print(f"  [3/4] generated {eval_row.question_count} question(s)")
+                print(f"  [3/4] generated {generated.question_count} question(s)")
     except Exception as e:  # noqa: BLE001
         print(f"  [3/4] question generation FAILED: {type(e).__name__}: {e}")
         return "qgen_failed"
@@ -123,7 +122,7 @@ def _process_one(
                 print("  [4/4] eval SKIPPED — no active ingestion run")
                 return "eval_failed"
             result = svc.run_eval(
-                db, eval_id=eval_row.id, ingestion_run_id=run.id,
+                db, upload_id=upload_id, ingestion_run_id=run.id,
                 triggered_by="cli",
                 top_k=top_k, answer_model=answer_model, judge_model=judge_model,
             )
