@@ -54,8 +54,6 @@ from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
-from core.services.audit_actions import AgentAuditAction, AuditResourceType
-from core.services.audit_service import AuditService
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.services.document_processing_service import DocumentProcessingService
 from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
@@ -65,6 +63,7 @@ from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
 from core.services.r2_storage_service import R2StorageService
+from core.services.upload_service import UploadService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
 from shared.config import settings
@@ -332,74 +331,15 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
-        object_key = f"knowledge-base/{org_id}/{uuid4()}/{file_name}"
-        r2 = R2StorageService()
-        r2.upload_fileobj(file.file, object_key, content_type=content_type)
-
-        try:
-            upload = Upload(
-                organization_id=org_id,
-                container_name=settings.R2_BUCKET_NAME,
-                file_path=object_key,
-                file_name=file_name,
-                file_type=content_type,
-                size_bytes=size_bytes,
-                purpose="kb_document",
-                status="processing",
-                meta_data={},
-                created_by_user_id=user_id,
-                is_active=True,
-            )
-            db.add(upload)
-            db.flush()
-
-            knowledge_base = KnowledgeBase(
-                organization_id=org_id,
-                name=file_name,
-                status="processing",
-                upload_id=upload.id,
-                meta_data={},
-            )
-            db.add(knowledge_base)
-            db.flush()
-
-            if agent_uuid is not None and agent_config is not None:
-                db.add(
-                    AgentKnowledgeBase(
-                        organization_id=org_id,
-                        agent_id=agent_uuid,
-                        knowledge_base_id=knowledge_base.id,
-                        agent_config_id=agent_config.id,
-                    )
-                )
-                AuditService(db, user_id=user_id, org_id=org_id).log(
-                    AgentAuditAction.KB_ATTACHED,
-                    agent_id=agent_uuid,
-                    agent_config_id=agent_config.id,
-                    target_resource_type=AuditResourceType.KNOWLEDGE_BASE,
-                    target_resource_id=str(upload.id),
-                )
-
-            db.commit()
-            db.refresh(upload)
-        except Exception:
-            # DB write failed after the blob landed in R2 — clean up so we don't
-            # leak orphan objects. R2 delete is best-effort.
-            logger.exception("KB upload DB write failed; rolling back and cleaning up R2 blob")
-            db.rollback()
-            try:
-                r2.delete_file(object_key)
-            except Exception as exc:
-                logger.debug("Best-effort R2 cleanup failed for {}: {}", object_key, exc)
-            raise
-
-        await _start_ingestion_run(
-            db,
-            upload=upload,
-            kb=knowledge_base,
-            org_id=org_id,
-            request_config=None,
-            delete_existing=False,
+        upload, _kb, _run = await UploadService(
+            db, user_id=user_id, org_id=org_id
+        ).create_upload_from_file(
+            fileobj=file.file,
+            file_name=file_name,
+            content_type=content_type,
+            size_bytes=size_bytes,
+            agent_id=agent_uuid,
+            agent_config_id=agent_config.id if agent_config is not None else None,
         )
 
         return _upload_to_payload(upload)

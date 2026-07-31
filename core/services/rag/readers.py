@@ -48,6 +48,8 @@ class DoclingReader(DocumentReader):
         "application/vnd.ms-excel": ".xls",
         "text/html": ".html",
         "text/markdown": ".md",
+        "text/plain": ".md",
+        "text/csv": ".csv",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "image/tiff": ".tiff",

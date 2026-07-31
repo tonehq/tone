@@ -148,6 +148,76 @@ class EvalService:
         )
         return eval_row
 
+    def import_eval(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        questions: List[dict],
+        source_key: str,
+        name: Optional[str] = None,
+    ) -> Eval:
+        """Pre-seed an ``evals`` row from an already-authored Q&A set — no LLM
+        generation. Used by the benchmark CLI so a standard dataset (HotpotQA,
+        TAT-QA, ...) can flow through the same ingestion + auto-eval pipeline
+        customers use, but scored against gold Q&A instead of LLM-generated.
+        ``get_or_generate_eval`` short-circuits on ``status='ready'``, so if
+        this row exists before ingestion completes the auto-run reuses it and
+        never invokes the question generator.
+        ``source_key`` (e.g. ``benchmark:hotpotqa-mini``) is stamped on
+        ``generated_by_model`` as an audit trail — mirrors ``generate_eval``
+        but obvious enough at read time that this row is not LLM-authored.
+        Upsert-on-``upload_id`` mirrors ``generate_eval`` — a re-import
+        replaces the questions in-place. Returns the persisted ``Eval``."""
+        if not questions:
+            raise EvalGenerationError("import_eval requires a non-empty questions list")
+
+        kb = (
+            db.query(KnowledgeBase)
+            .filter(KnowledgeBase.upload_id == upload_id)
+            .first()
+        )
+        if kb is None:
+            raise EvalNotFoundError(
+                f"No KnowledgeBase found for upload {upload_id}"
+            )
+
+        payload = {"generated_by_model": source_key, "questions": list(questions)}
+        eval_name = name or _eval_name(kb.name, upload_id)
+
+        existing = db.query(Eval).filter(Eval.upload_id == upload_id).first()
+        if existing is None:
+            eval_row = Eval(
+                organization_id=org_id,
+                knowledge_base_id=kb.id,
+                upload_id=upload_id,
+                name=eval_name,
+                question_count=len(questions),
+                questions=payload,
+                generated_by_model=source_key,
+                generation_prompt_hash=None,
+                status="ready",
+                error=None,
+            )
+            db.add(eval_row)
+        else:
+            existing.name = eval_name
+            existing.question_count = len(questions)
+            existing.questions = payload
+            existing.generated_by_model = source_key
+            existing.generation_prompt_hash = None
+            existing.status = "ready"
+            existing.error = None
+            eval_row = existing
+        db.commit()
+        db.refresh(eval_row)
+        logger.info(
+            "[eval] imported gold question set eval={} upload={} questions={} source={}",
+            eval_row.id, upload_id, len(questions), source_key,
+        )
+        return eval_row
+
     def get_eval_by_upload(
         self, db: Session, *, upload_id: Any, org_id: Any
     ) -> Optional[Eval]:
@@ -232,21 +302,38 @@ class EvalService:
         db.add(result)
         db.commit()
         db.refresh(result)
+        result_id = result.id
 
         logger.info(
             "[eval] running eval={} run_number={} ingestion_run={} top_k={} triggered_by={}",
             eval_row.id, result.run_number, run.id, top_k, triggered_by,
         )
 
+        # Snapshot every attribute we still need AFTER the LLM loop while the
+        # ORM rows are attached, then close the caller's session so no pool
+        # connection is held across the long (10+ minute) LLM loop — Neon's
+        # idle_in_transaction_session_timeout would drop it and both the
+        # follow-up query AND the outer ``with`` block's implicit rollback
+        # would explode.
+        org_id_val = eval_row.organization_id
+        embedding_provider_val = run.embedding_provider
+        vector_store_val = run.vector_store
+        vector_store_ref_val = dict(run.vector_store_ref or {})
+        db.close()
+
         try:
-            api_key = ProviderKeyService.require_key(
-                db, eval_row.organization_id, run.embedding_provider
-            )
+            # Fresh short-lived session ONLY for the key lookups; released
+            # immediately so nothing is held during the LLM loop below.
+            from core.database.session import SessionLocal
+            with SessionLocal() as tmp:
+                api_key = ProviderKeyService.require_key(
+                    tmp, org_id_val, embedding_provider_val
+                )
+                openai_key = ProviderKeyService.require_key(
+                    tmp, org_id_val, "openai"
+                )
             embedder = build_embedder_from_run(run, api_key=api_key)
-            store = get_vector_store(run.vector_store, **(run.vector_store_ref or {}))
-            openai_key = ProviderKeyService.require_key(
-                db, eval_row.organization_id, "openai"
-            )
+            store = get_vector_store(vector_store_val, **vector_store_ref_val)
             answer_template = self._loader.load("answer_from_context.md")
 
             per_question = []
@@ -266,12 +353,11 @@ class EvalService:
                 )
 
             summary = _summarize(per_question)
-            result.per_question = per_question
-            result.summary = summary
-            result.status = "completed"
-            result.completed_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(result)
+            self._persist_completed_result(
+                result_id=result_id,
+                per_question=per_question,
+                summary=summary,
+            )
             logger.info(
                 "[eval] completed eval={} run_number={} pass={} fail={} pass_rate={:.2%} hit_rate={:.2%}",
                 eval_row.id, result.run_number,
@@ -445,11 +531,40 @@ class EvalService:
         }
 
     def _mark_failed(self, db: Session, result: EvalResult, error: str) -> None:
-        result.status = "failed"
-        result.error = error
-        result.completed_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(result)
+        # The passed-in ``db`` may be in a broken state after a long LLM run
+        # (SSL socket dropped by Neon, session left mid-transaction). Use a
+        # fresh session so this failure-path write can't itself be blocked by
+        # a PendingRollbackError on the same session.
+        result_id = result.id
+        try:
+            db.rollback()
+        except Exception:  # noqa: BLE001
+            pass
+        from core.database.session import SessionLocal
+        with SessionLocal() as fresh:
+            row = fresh.query(EvalResult).filter(EvalResult.id == result_id).first()
+            if row is None:
+                return
+            row.status = "failed"
+            row.error = error
+            row.completed_at = datetime.now(timezone.utc)
+            fresh.commit()
+
+    def _persist_completed_result(
+        self, *, result_id, per_question: list, summary: dict
+    ) -> None:
+        """Write the final ``completed`` result on a brand-new session so we
+        never inherit a broken pool connection from the LLM-loop session."""
+        from core.database.session import SessionLocal
+        with SessionLocal() as fresh:
+            row = fresh.query(EvalResult).filter(EvalResult.id == result_id).first()
+            if row is None:
+                return
+            row.per_question = per_question
+            row.summary = summary
+            row.status = "completed"
+            row.completed_at = datetime.now(timezone.utc)
+            fresh.commit()
 
 
 def _default_r2_service():

@@ -1,0 +1,3 @@
+{"id": "q1", "doc_filename": "sample.txt", "category": "location", "question": "Where is the emergency department located?", "expected_answer": "On the ground floor of the West Wing.", "expected_source_snippet": "on the ground floor of the West Wing"}
+{"id": "q2", "doc_filename": "sample.txt", "category": "schedule", "question": "What days and hours does the cardiology outpatient clinic operate?", "expected_answer": "Monday through Thursday, 9:00 AM to 5:00 PM.", "expected_source_snippet": "Monday through Thursday, 9:00 AM to 5:00 PM"}
+{"id": "q3", "doc_filename": "sample.txt", "category": "policy", "question": "How much does overflow parking cost?", "expected_answer": "$5 per day (flat rate) in the East lot.", "expected_source_snippet": "flat rate of $5 per day"}
