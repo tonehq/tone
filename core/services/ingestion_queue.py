@@ -202,9 +202,20 @@ async def enqueue_reprocess(upload_id, org_id, ingestion_run_id) -> int:
     return await _defer_ingestion(upload_id, org_id, True, ingestion_run_id)
 
 
+_EVAL_TRIGGERS = {"auto", "manual", "cli"}
+
+
 @app.task(name="eval_ingestion_run", queue="eval")
-def eval_ingestion_run(ingestion_run_id: str) -> None:
-    """Auto-run the RAG eval for a completed ingestion pipeline run.
+def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> None:
+    """Run the RAG eval for a completed ingestion pipeline run.
+
+    ``triggered_by`` is stamped on every ``eval_results`` row this task
+    produces so the audit trail distinguishes the auto-run that fires after
+    ingestion (``'auto'`` — the default, matches historic behavior) from a
+    user-initiated batch (``'manual'``) or a CLI run (``'cli'``). Kept as a
+    task argument (not derived from an env / setting) so multiple enqueue
+    sites can produce runs with different attribution against the SAME
+    Procrastinate task — no forked worker code needed.
 
     Runs on the dedicated ``eval`` queue (not ``ingestion``) so:
     (1) an older worker deployment that doesn't yet know this task can't grab
@@ -227,8 +238,19 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
     from core.models.ingestion_pipeline_run import IngestionPipelineRun
     from core.services.evals.eval_service import EvalService
 
+    # Defensive: workers get their kwargs off the wire, so validate here
+    # too — an older enqueue site sending a stale/misspelled value must
+    # not crash halfway through the eval loop with ``run_eval``'s ValueError.
+    if triggered_by not in _EVAL_TRIGGERS:
+        logger.warning(
+            "[eval] unknown triggered_by={!r} on ingestion_run={}; defaulting to 'auto'",
+            triggered_by, ingestion_run_id,
+        )
+        triggered_by = "auto"
+
     logger.info(
-        "[eval] worker picked job ingestion_run={}", ingestion_run_id,
+        "[eval] worker picked job ingestion_run={} triggered_by={}",
+        ingestion_run_id, triggered_by,
     )
     try:
         with get_db_context() as db:
@@ -239,7 +261,7 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
             )
             if run is None:
                 logger.warning(
-                    "[eval] auto-run skipped: ingestion_run {} not found",
+                    "[eval] run skipped: ingestion_run {} not found",
                     ingestion_run_id,
                 )
                 return
@@ -252,33 +274,38 @@ def eval_ingestion_run(ingestion_run_id: str) -> None:
                 db, upload_id=run.upload_id, org_id=run.organization_id
             )
             logger.info(
-                "[eval] running auto-eval ingestion_run={} upload={} questions={}",
-                ingestion_run_id, run.upload_id, eval_set.question_count,
+                "[eval] running eval ingestion_run={} upload={} questions={} triggered_by={}",
+                ingestion_run_id, run.upload_id, eval_set.question_count, triggered_by,
             )
             svc.run_eval(
                 db,
                 upload_id=run.upload_id,
                 ingestion_run_id=run.id,
-                triggered_by="auto",
+                triggered_by=triggered_by,
             )
         logger.info(
             "[eval] worker task done ingestion_run={}", ingestion_run_id,
         )
     except Exception:  # noqa: BLE001
         logger.exception(
-            "[eval] auto-run failed for ingestion_run={} (swallowed — ingestion is unaffected)",
-            ingestion_run_id,
+            "[eval] run failed for ingestion_run={} triggered_by={} (swallowed — ingestion is unaffected)",
+            ingestion_run_id, triggered_by,
         )
 
 
-async def enqueue_eval_for_ingestion_run(ingestion_run_id) -> int:
+async def enqueue_eval_for_ingestion_run(
+    ingestion_run_id, triggered_by: str = "auto",
+) -> int:
     async with app.open_async():
         return await eval_ingestion_run.defer_async(
-            ingestion_run_id=str(ingestion_run_id)
+            ingestion_run_id=str(ingestion_run_id),
+            triggered_by=triggered_by,
         )
 
 
-def enqueue_eval_for_ingestion_run_sync(ingestion_run_id) -> int:
+def enqueue_eval_for_ingestion_run_sync(
+    ingestion_run_id, triggered_by: str = "auto",
+) -> int:
     """Sync counterpart for callers inside a sync service method
     (``IngestionRunService.complete_run`` runs inside the ingestion worker,
     which is a sync ``def`` task executed in the worker's threadpool thread).
@@ -310,7 +337,7 @@ def enqueue_eval_for_ingestion_run_sync(ingestion_run_id) -> int:
         return ephemeral.configure_task(
             name="eval_ingestion_run",
             queue="eval",
-        ).defer(ingestion_run_id=str(ingestion_run_id))
+        ).defer(ingestion_run_id=str(ingestion_run_id), triggered_by=triggered_by)
 
 
 @app.task(name="execute_outbound_call", queue="outbound_calls")

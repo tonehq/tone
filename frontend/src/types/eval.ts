@@ -83,3 +83,69 @@ export interface EvalSummaryByIngestionResponse {
   // ingestion run.
   items: Record<string, EvalRunSummary>;
 }
+
+// One question row in the `evals` table. Mirrors the payload built by
+// `_eval_question_to_payload` in core/api/v1/knowledge_base_routes.py.
+export interface EvalQuestion {
+  id: string;
+  upload_id: string;
+  knowledge_base_id: string;
+  external_id: string;
+  question_ord: number;
+  question: string;
+  expected_answer: string;
+  expected_source_snippet: string | null;
+  category: string | null;
+  // 'manual' for user-authored rows; model name (e.g. 'gpt-4o') for
+  // LLM-generated; benchmark source-key (e.g. 'hotpotqa-mini') for imports.
+  generated_by_model: string | null;
+  generation_prompt_hash: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface EvalQuestionsResponse {
+  items: EvalQuestion[];
+}
+
+// Payload for POST /evals/manual — the user's typed Q&A. `external_id` is
+// optional (the backend mints `manual-<uuid>` when absent).
+export interface ManualQuestionInput {
+  question: string;
+  expected_answer: string;
+  expected_source_snippet?: string | null;
+  category?: string | null;
+  external_id?: string | null;
+}
+
+// Payload for PUT /evals/questions/{id} — all optional; explicit null on
+// the optional fields clears them.
+export interface UpdateQuestionPatch {
+  question?: string;
+  expected_answer?: string;
+  expected_source_snippet?: string | null;
+  category?: string | null;
+}
+
+export interface EvalSetSummary {
+  upload_id: string;
+  organization_id: string;
+  knowledge_base_id: string | null;
+  question_count: number;
+  generated_by_model: string | null;
+  generation_prompt_hash: string | null;
+}
+
+// Per-run overrides (top_k, answer_model, judge_model) are deliberately
+// omitted — the backend endpoint does not accept them today. Add them here
+// only when the shared Procrastinate task grows the corresponding params.
+export interface TriggerEvalRunPayload {
+  ingestion_run_id?: string | null;
+}
+
+export interface TriggerEvalRunResponse {
+  upload_id: string;
+  ingestion_run_id: string;
+  job_id: number;
+  status: 'queued';
+}
