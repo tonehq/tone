@@ -48,6 +48,8 @@ class DoclingReader(DocumentReader):
         "application/vnd.ms-excel": ".xls",
         "text/html": ".html",
         "text/markdown": ".md",
+        "text/plain": ".md",
+        "text/csv": ".csv",
         "image/png": ".png",
         "image/jpeg": ".jpg",
         "image/tiff": ".tiff",
@@ -84,20 +86,26 @@ class DoclingReader(DocumentReader):
             tmp_path = tmp.name
         kwargs = {"page_range": pr} if pr else {}
         logger.info(
-            "Docling parsing {} ({:.2f} MB), page_range={}, ocr={}, tables={} ...",
+            "[parse:docling] parsing {} ({:.2f} MB), page_range={}, ocr={}, tables={} ...",
             content_type, len(file_bytes) / 1024 / 1024, pr or "all", self._ocr, self._tables,
         )
         start = time.monotonic()
         try:
             result = self._get_converter().convert(tmp_path, **kwargs)
             text = result.document.export_to_markdown()
+        except Exception:
+            logger.exception(
+                "[parse:docling] convert failed content_type={} bytes={} page_range={}",
+                content_type, len(file_bytes), pr or "all",
+            )
+            raise
         finally:
             try:
                 os.remove(tmp_path)
             except OSError:
                 pass
         logger.info(
-            "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
+            "[parse:docling] parsed {} -> {} chars in {:.1f}s (page_range={})",
             content_type, len(text), time.monotonic() - start, pr or "all",
         )
         return Document(text=text, native=result.document, metadata={"parser": "docling", "page_range": pr})
@@ -106,14 +114,21 @@ class DoclingReader(DocumentReader):
         pr = page_range or self._page_range
         kwargs = {"page_range": pr} if pr else {}
         logger.info(
-            "Docling parsing path {} ({}), page_range={}, ocr={}, tables={} ...",
+            "[parse:docling] parsing path {} ({}), page_range={}, ocr={}, tables={} ...",
             file_path, content_type, pr or "all", self._ocr, self._tables,
         )
         start = time.monotonic()
-        result = self._get_converter().convert(file_path, **kwargs)
-        text = result.document.export_to_markdown()
+        try:
+            result = self._get_converter().convert(file_path, **kwargs)
+            text = result.document.export_to_markdown()
+        except Exception:
+            logger.exception(
+                "[parse:docling] convert failed path={} content_type={} page_range={}",
+                file_path, content_type, pr or "all",
+            )
+            raise
         logger.info(
-            "Docling parsed {} -> {} chars in {:.1f}s (page_range={})",
+            "[parse:docling] parsed {} -> {} chars in {:.1f}s (page_range={})",
             content_type, len(text), time.monotonic() - start, pr or "all",
         )
         return Document(text=text, native=result.document, metadata={"parser": "docling", "page_range": pr})
@@ -124,10 +139,17 @@ class PdfReader(DocumentReader):
         return content_type == "application/pdf"
 
     def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
-        reader = _PdfReader(io.BytesIO(file_bytes))
-        pages = [p.extract_text() for p in reader.pages]
+        try:
+            reader = _PdfReader(io.BytesIO(file_bytes))
+            pages = [p.extract_text() for p in reader.pages]
+        except Exception:
+            logger.exception(
+                "[parse:pypdf] extract failed bytes={} content_type={}",
+                len(file_bytes), content_type,
+            )
+            raise
         result = "\n\n".join(t for t in pages if t)
-        logger.info("Extracted {} chars from PDF ({} pages)", len(result), len(reader.pages))
+        logger.info("[parse:pypdf] extracted {} chars from PDF ({} pages)", len(result), len(reader.pages))
         return Document(text=result, metadata={"parser": "pypdf2"})
 
 
@@ -141,10 +163,17 @@ class DocxReader(DocumentReader):
         return content_type in self._TYPES
 
     def read(self, file_bytes: bytes, content_type: str, page_range: Optional[Tuple[int, int]] = None) -> Document:
-        doc = _Docx(io.BytesIO(file_bytes))
-        paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        try:
+            doc = _Docx(io.BytesIO(file_bytes))
+            paragraphs = [p.text for p in doc.paragraphs if p.text.strip()]
+        except Exception:
+            logger.exception(
+                "[parse:docx] extract failed bytes={} content_type={}",
+                len(file_bytes), content_type,
+            )
+            raise
         result = "\n\n".join(paragraphs)
-        logger.info("Extracted {} chars from DOCX ({} paragraphs)", len(result), len(paragraphs))
+        logger.info("[parse:docx] extracted {} chars from DOCX ({} paragraphs)", len(result), len(paragraphs))
         return Document(text=result, metadata={"parser": "python-docx"})
 
 

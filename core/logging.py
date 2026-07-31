@@ -169,6 +169,35 @@ def make_trace_id(agent_id, call_id=0):
     return f"{short_uuid}-{agent_id}-{call_id}"
 
 
+# ---------------------------------------------------------------------------
+# Ingestion trace_id — mirrors the call trace_id pattern above so every log
+# line emitted during one ingestion pipeline run carries the same filterable
+# id. Format: "{short_uuid}-ing-{run_id}". The "ing" tag lets an operator
+# distinguish an ingestion trace from a call trace at a glance.
+# ---------------------------------------------------------------------------
+
+def make_ingestion_trace_id(run_id) -> str:
+    """Generate an ingestion trace_id in format: {short_uuid}-ing-{run_id}."""
+    short_uuid = uuid.uuid4().hex[:8]
+    return f"{short_uuid}-ing-{run_id}"
+
+
+def start_ingestion_trace(run_id, existing=None) -> str:
+    """Establish the trace_id for one ingestion run and set the contextvar so
+    every subsequent log line in this task's context carries it.
+
+    Idempotent (mirrors ``start_call_trace``): if ``existing`` is truthy — e.g.
+    the run row already has a persisted ``trace_id`` from a prior retry — that
+    value is reused; otherwise a fresh id is minted. The single caller
+    (``IngestionRunService.ensure_trace_id``, invoked at the top of the
+    ``ingest_upload`` Procrastinate task) persists the returned value onto the
+    run row, so retries and the original attempt share one filterable id.
+    """
+    tid = existing or make_ingestion_trace_id(run_id)
+    set_trace_id(tid)
+    return tid
+
+
 def update_trace_id_with_call_log(current_trace_id, call_log_id):
     """Replace the trailing segment with the given value.
 

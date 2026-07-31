@@ -3,13 +3,17 @@
 The service is transport-agnostic (takes a session + plain args), so we can
 exercise every branch without a live Postgres or an OpenAI key. Focused on:
 
-- ``generate_eval`` inserts an ``Eval`` row with ``question_count`` matching
-  the generator output and ``status="ready"``.
-- ``run_eval`` computes ``run_number = 1`` on first call, ``2`` on second.
+- ``generate_eval`` deletes any existing questions for the upload, then
+  bulk-inserts one ``evals`` row per question.
+- ``run_eval`` computes ``run_number`` from the scalar query, stamps a fresh
+  ``run_id``, scores each question, and bulk-inserts one ``eval_results``
+  row per scored answer via a fresh session.
 - ``run_eval`` builds retrieval from the passed ``ingestion_run_id`` — same
   embedder/store the ingestion used, NOT from any global default.
-- ``run_eval`` failure path never raises and marks the row failed.
-- ``compare_results`` flags verdict downgrades as regressions.
+- ``run_eval`` failure path never raises and marks the run failed, writing
+  a placeholder row per un-scored question.
+- ``_diff_scored_rows`` / ``_summarize_scored_rows`` produce the same shape
+  the CLI already consumes.
 """
 
 from __future__ import annotations
@@ -21,40 +25,11 @@ from uuid import uuid4
 import pytest
 
 from core.services.evals.eval_service import (
+    EvalRunSummary,
     EvalService,
-    _diff_results,
-    _summarize,
+    _diff_scored_rows,
+    _summarize_scored_rows,
 )
-
-
-class _QueryChain:
-    """Minimal SQLAlchemy query-chain stub. Each ``query(Model).filter(...).first()``
-    hop is dispatched through a per-model handler set by the test."""
-
-    def __init__(self, first_map=None, scalar=None, order_first=None):
-        self._first_map = first_map or {}
-        self._scalar = scalar
-        self._order_first = order_first
-        self._current_model = None
-
-    def query(self, *args, **kwargs):
-        self._current_model = args[0] if args else None
-        return self
-
-    def filter(self, *args, **kwargs):
-        return self
-
-    def order_by(self, *args, **kwargs):
-        return self
-
-    def limit(self, *args, **kwargs):
-        return self
-
-    def first(self):
-        return self._first_map.get(self._current_model)
-
-    def scalar(self):
-        return self._scalar
 
 
 def _make_upload(upload_id):
@@ -80,6 +55,19 @@ def _make_run(run_id):
         embedding_dimensions=1536,
         vector_store="pgvector",
         vector_store_ref=None,
+    )
+
+
+def _make_question_row(*, external_id="q1", question_ord=0, org_id=None):
+    return SimpleNamespace(
+        id=uuid4(),
+        organization_id=org_id or uuid4(),
+        external_id=external_id,
+        question_ord=question_ord,
+        question=f"What is {external_id}?",
+        expected_answer=f"Answer to {external_id}",
+        expected_source_snippet="snippet",
+        category="factual",
     )
 
 
@@ -113,7 +101,7 @@ def _service_with_stubs(question_payload, judge_payload):
 # ── generate_eval ──────────────────────────────────────────────────────
 
 
-def test_generate_eval_inserts_new_row_when_none_exists():
+def test_generate_eval_deletes_existing_and_bulk_inserts_new_rows():
     upload_id = uuid4()
     kb = _make_kb(uuid4())
     upload = _make_upload(upload_id)
@@ -129,46 +117,44 @@ def test_generate_eval_inserts_new_row_when_none_exists():
     svc, q_gen, *_ = _service_with_stubs(payload, {})
 
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.side_effect = [
-        upload,  # Upload lookup
-        kb,      # KnowledgeBase lookup
-        None,    # existing Eval → none
-    ]
+    db.query.return_value.filter.return_value.first.side_effect = [upload, kb]
 
     with patch(
         "core.services.evals.eval_service.ProviderKeyService.require_key",
         return_value="sk-xxx",
     ):
-        svc.generate_eval(db, upload_id=upload_id, org_id=org_id)
+        summary = svc.generate_eval(db, upload_id=upload_id, org_id=org_id)
 
-    added = db.add.call_args_list[0][0][0]
-    assert added.question_count == 2
-    assert added.status == "ready"
-    assert added.generated_by_model == "gpt-4o"
-    assert added.generation_prompt_hash == "sha-hex"
-    assert added.upload_id == upload_id
-    assert added.organization_id == org_id
+    # Existing rows for the upload are deleted first.
+    db.query.return_value.filter.return_value.delete.assert_called_once_with(
+        synchronize_session=False
+    )
+    # One bulk_insert per generate_eval call.
+    db.bulk_insert_mappings.assert_called_once()
+    _, inserted_rows = db.bulk_insert_mappings.call_args[0]
+    assert len(inserted_rows) == 2
+    assert [r["external_id"] for r in inserted_rows] == ["q1", "q2"]
+    assert [r["question_ord"] for r in inserted_rows] == [0, 1]
+    assert all(r["upload_id"] == upload_id for r in inserted_rows)
+    assert all(r["organization_id"] == org_id for r in inserted_rows)
+    assert all(r["generated_by_model"] == "gpt-4o" for r in inserted_rows)
+    assert all(r["generation_prompt_hash"] == "sha-hex" for r in inserted_rows)
     assert db.commit.called
     q_gen.generate.assert_called_once()
 
+    assert summary.question_count == 2
+    assert summary.upload_id == upload_id
+    assert summary.generated_by_model == "gpt-4o"
+    assert summary.generation_prompt_hash == "sha-hex"
 
-def test_generate_eval_updates_existing_row_in_place():
+
+def test_generate_eval_regeneration_replaces_rows_in_place():
+    """Second call with different questions still deletes old + inserts new —
+    no leftover rows from the previous batch."""
     upload_id = uuid4()
     kb = _make_kb(uuid4())
     upload = _make_upload(upload_id)
     org_id = uuid4()
-    existing = SimpleNamespace(
-        id=uuid4(),
-        upload_id=upload_id,
-        organization_id=org_id,
-        name="stale",
-        question_count=0,
-        questions={},
-        generated_by_model=None,
-        generation_prompt_hash=None,
-        status="failed",
-        error="prev failure",
-    )
 
     payload = {
         "generated_by_model": "gpt-4o",
@@ -177,44 +163,30 @@ def test_generate_eval_updates_existing_row_in_place():
     svc, *_ = _service_with_stubs(payload, {})
 
     db = MagicMock()
-    db.query.return_value.filter.return_value.first.side_effect = [
-        upload,
-        kb,
-        existing,
-    ]
+    db.query.return_value.filter.return_value.first.side_effect = [upload, kb]
     with patch(
         "core.services.evals.eval_service.ProviderKeyService.require_key",
         return_value="sk-xxx",
     ):
         svc.generate_eval(db, upload_id=upload_id, org_id=org_id)
 
-    # Existing row mutated — no new insert.
-    assert db.add.called is False
-    assert existing.status == "ready"
-    assert existing.question_count == 1
-    assert existing.error is None
-    assert existing.generated_by_model == "gpt-4o"
+    db.query.return_value.filter.return_value.delete.assert_called_once_with(
+        synchronize_session=False
+    )
+    db.bulk_insert_mappings.assert_called_once()
 
 
 # ── run_eval ───────────────────────────────────────────────────────────
 
 
-def _run_eval_with_scalar(scalar_run_number, judge_payload=None):
-    """Helper: exercise run_eval with a stubbed next-run-number scalar."""
+def _run_eval_with_scalar(scalar_run_number, judge_payload=None, extra_persist=None):
+    """Helper: exercise run_eval with a stubbed next-run-number scalar and a
+    single question row."""
     upload_id = uuid4()
     run_id = uuid4()
     run = _make_run(run_id)
     org_id = run.organization_id
-
-    eval_row = SimpleNamespace(
-        id=uuid4(),
-        organization_id=org_id,
-        upload_id=upload_id,
-        questions={"questions": [
-            {"id": "q1", "question": "What?", "expected_answer": "Yes",
-             "expected_source_snippet": "", "category": "factual"},
-        ]},
-    )
+    question_row = _make_question_row(org_id=org_id)
 
     payload = {"generated_by_model": "gpt-4o", "questions": []}
     verdict = judge_payload or {
@@ -227,17 +199,19 @@ def _run_eval_with_scalar(scalar_run_number, judge_payload=None):
     embedder.embed_query.return_value = [0.1] * 4
     store = MagicMock()
     hit = SimpleNamespace(
-        text="matching chunk", score=0.01,
+        text="chunk containing snippet text", score=0.01,
         metadata={"chunk_index": 0, "upload_id": str(upload_id)},
     )
     store.query.return_value = [hit]
 
     db = MagicMock()
     query_chain = MagicMock()
-    # Order of .filter().first() calls in run_eval:
-    #   Eval lookup, IngestionPipelineRun lookup
-    query_chain.filter.return_value.first.side_effect = [eval_row, run]
-    # Order of scalar() call: next_run_number
+    # Order of query hops inside run_eval:
+    #   1. Eval.query — .filter().order_by().all() → questions list
+    #   2. IngestionPipelineRun.query — .filter().first() → run
+    #   3. func.coalesce.query — .filter().scalar() → next_run_number
+    query_chain.filter.return_value.order_by.return_value.all.return_value = [question_row]
+    query_chain.filter.return_value.first.return_value = run
     query_chain.filter.return_value.scalar.return_value = scalar_run_number
     db.query.return_value = query_chain
 
@@ -245,6 +219,18 @@ def _run_eval_with_scalar(scalar_run_number, judge_payload=None):
     openai_client.chat.completions.create.return_value = SimpleNamespace(
         choices=[SimpleNamespace(message=SimpleNamespace(content="the answer"))]
     )
+
+    persisted_rows: list = []
+
+    fresh_session_cm = MagicMock()
+    fresh_session_cm.__enter__.return_value = fresh_session_cm
+    fresh_session_cm.__exit__.return_value = False
+
+    def _capture_bulk_insert(_model, rows):
+        persisted_rows.extend(rows)
+
+    fresh_session_cm.bulk_insert_mappings.side_effect = _capture_bulk_insert
+    session_local = MagicMock(return_value=fresh_session_cm)
 
     with patch(
         "core.services.evals.eval_service.ProviderKeyService.require_key",
@@ -257,16 +243,20 @@ def _run_eval_with_scalar(scalar_run_number, judge_payload=None):
         return_value=store,
     ) as get_store, patch(
         "openai.OpenAI", return_value=openai_client,
+    ), patch(
+        "core.database.session.SessionLocal", session_local,
     ):
         result = svc.run_eval(
             db,
-            eval_id=eval_row.id,
+            upload_id=upload_id,
             ingestion_run_id=run_id,
             triggered_by="cli",
             top_k=8,
         )
 
-    return result, build_embedder, get_store, store, run, judge
+    if extra_persist is not None:
+        extra_persist.extend(persisted_rows)
+    return result, build_embedder, get_store, store, run, judge, persisted_rows
 
 
 def test_run_eval_uses_run_number_from_scalar():
@@ -277,10 +267,16 @@ def test_run_eval_uses_run_number_from_scalar():
     assert result2.run_number == 2
 
 
+def test_run_eval_stamps_new_run_id_each_call():
+    result_a, *_ = _run_eval_with_scalar(1)
+    result_b, *_ = _run_eval_with_scalar(1)
+    assert result_a.run_id != result_b.run_id
+
+
 def test_run_eval_builds_retrieval_from_ingestion_run():
     """Embedder + store MUST be built from the passed run — not from any
     global default — so query and stored vectors are always compatible."""
-    _, build_embedder, get_store, store, run, _ = _run_eval_with_scalar(1)
+    _, build_embedder, get_store, store, run, _, _ = _run_eval_with_scalar(1)
 
     build_embedder.assert_called_once()
     (called_run,), kwargs = build_embedder.call_args
@@ -289,7 +285,6 @@ def test_run_eval_builds_retrieval_from_ingestion_run():
 
     get_store.assert_called_once_with(run.vector_store)
 
-    # store.query filters must include ingestion_run_id pin
     _, query_kwargs = store.query.call_args
     filters = query_kwargs["filters"]
     assert filters["ingestion_run_id"] == run.id
@@ -297,36 +292,47 @@ def test_run_eval_builds_retrieval_from_ingestion_run():
     assert filters["embedding_dimensions"] == 1536
 
 
-def test_run_eval_marks_completed_and_populates_summary():
-    result, *_ = _run_eval_with_scalar(1)
+def test_run_eval_persists_one_result_row_per_question():
+    result, *_, persisted = _run_eval_with_scalar(1)
     assert result.status == "completed"
-    assert result.summary is not None
     assert result.summary["total"] == 1
     assert result.summary["pass"] == 1
-    assert result.per_question and result.per_question[0]["id"] == "q1"
+    assert len(persisted) == 1
+    row = persisted[0]
+    assert row["run_id"] == result.run_id
+    assert row["run_number"] == result.run_number
+    assert row["status"] == "completed"
+    assert row["verdict"] == "PASS"
+    assert row["actual_answer"] == "the answer"
+    assert row["retrieval_hit"] is True
 
 
 def test_run_eval_failure_path_marks_failed_and_does_not_raise():
     """A retrieval crash mid-run must set status='failed', capture the error,
-    and return the row — worker callers rely on run_eval being terminal."""
+    and return the summary — worker callers rely on run_eval being terminal."""
     upload_id = uuid4()
     run_id = uuid4()
     run = _make_run(run_id)
     org_id = run.organization_id
+    question_row = _make_question_row(org_id=org_id)
 
-    eval_row = SimpleNamespace(
-        id=uuid4(),
-        organization_id=org_id,
-        upload_id=upload_id,
-        questions={"questions": [{"id": "q1", "question": "?", "expected_answer": "!"}]},
-    )
     svc, *_ = _service_with_stubs({"generated_by_model": "gpt-4o", "questions": []}, {})
 
     db = MagicMock()
     query_chain = MagicMock()
-    query_chain.filter.return_value.first.side_effect = [eval_row, run]
+    query_chain.filter.return_value.order_by.return_value.all.return_value = [question_row]
+    query_chain.filter.return_value.first.return_value = run
     query_chain.filter.return_value.scalar.return_value = 1
     db.query.return_value = query_chain
+
+    persisted_rows: list = []
+    fresh_session_cm = MagicMock()
+    fresh_session_cm.__enter__.return_value = fresh_session_cm
+    fresh_session_cm.__exit__.return_value = False
+    fresh_session_cm.bulk_insert_mappings.side_effect = (
+        lambda _model, rows: persisted_rows.extend(rows)
+    )
+    session_local = MagicMock(return_value=fresh_session_cm)
 
     with patch(
         "core.services.evals.eval_service.ProviderKeyService.require_key",
@@ -334,15 +340,20 @@ def test_run_eval_failure_path_marks_failed_and_does_not_raise():
     ), patch(
         "core.services.evals.eval_service.build_embedder_from_run",
         side_effect=RuntimeError("boom"),
+    ), patch(
+        "core.database.session.SessionLocal", session_local,
     ):
         result = svc.run_eval(
-            db, eval_id=eval_row.id, ingestion_run_id=run_id,
+            db, upload_id=upload_id, ingestion_run_id=run_id,
             triggered_by="auto", top_k=4,
         )
 
     assert result.status == "failed"
     assert result.error and "boom" in result.error
     assert result.completed_at is not None
+    # Unscored question gets a placeholder row so the run's shape is complete.
+    assert len(persisted_rows) == 1
+    assert persisted_rows[0]["status"] == "failed"
 
 
 def test_run_eval_rejects_unknown_triggered_by():
@@ -350,7 +361,7 @@ def test_run_eval_rejects_unknown_triggered_by():
     with pytest.raises(ValueError):
         svc.run_eval(
             db=MagicMock(),
-            eval_id=uuid4(),
+            upload_id=uuid4(),
             ingestion_run_id=uuid4(),
             triggered_by="bogus",
         )
@@ -359,31 +370,62 @@ def test_run_eval_rejects_unknown_triggered_by():
 # ── compare_results ────────────────────────────────────────────────────
 
 
-def test_diff_flags_verdict_regression():
-    baseline = SimpleNamespace(
-        id=uuid4(), run_number=1, started_at=None,
+def _row(qid, verdict, correctness=1.0, groundedness=1.0, relevance=1.0, hit=True):
+    return {
+        "id": qid,
+        "judge": {
+            "verdict": verdict,
+            "correctness": correctness,
+            "groundedness": groundedness,
+            "relevance": relevance,
+        },
+        "retrieval_hit": hit,
+    }
+
+
+def _summary(run_number, run_id=None):
+    return EvalRunSummary(
+        run_id=run_id or uuid4(),
+        upload_id=uuid4(),
+        ingestion_run_id=uuid4(),
+        run_number=run_number,
+        triggered_by="cli",
+        top_k=8,
+        answer_model="gpt-4o",
+        judge_model="gpt-4o",
+        status="completed",
+        error=None,
+        started_at=None,
+        completed_at=None,
         summary={"pass_rate": 1.0},
-        per_question=[
-            {"id": "q1", "judge": {"verdict": "PASS", "correctness": 1.0, "groundedness": 1.0, "relevance": 1.0}, "retrieval_hit": True},
-        ],
     )
-    candidate = SimpleNamespace(
-        id=uuid4(), run_number=2, started_at=None,
-        summary={"pass_rate": 0.0},
-        per_question=[
-            {"id": "q1", "judge": {"verdict": "FAIL", "correctness": 0.0, "groundedness": 0.0, "relevance": 0.0}, "retrieval_hit": False},
-        ],
+
+
+def test_diff_flags_verdict_regression():
+    baseline = _summary(1)
+    candidate = _summary(2)
+    diff = _diff_scored_rows(
+        baseline_summary=baseline,
+        candidate_summary=candidate,
+        baseline_rows=[_row("q1", "PASS")],
+        candidate_rows=[_row("q1", "FAIL", correctness=0, groundedness=0, relevance=0, hit=False)],
+        score_drop=0.15,
     )
-    diff = _diff_results(baseline, candidate, score_drop=0.15)
     assert diff["regression_count"] == 1
     assert diff["regressions"][0]["note"].startswith("verdict regression")
 
 
 def test_diff_no_regression_when_scores_stable():
-    row = {"id": "q1", "judge": {"verdict": "PASS", "correctness": 1.0, "groundedness": 1.0, "relevance": 1.0}, "retrieval_hit": True}
-    baseline = SimpleNamespace(id=uuid4(), run_number=1, started_at=None, summary={}, per_question=[row])
-    candidate = SimpleNamespace(id=uuid4(), run_number=2, started_at=None, summary={}, per_question=[row])
-    diff = _diff_results(baseline, candidate, score_drop=0.15)
+    baseline = _summary(1)
+    candidate = _summary(2)
+    row = _row("q1", "PASS")
+    diff = _diff_scored_rows(
+        baseline_summary=baseline,
+        candidate_summary=candidate,
+        baseline_rows=[row],
+        candidate_rows=[row],
+        score_drop=0.15,
+    )
     assert diff["regression_count"] == 0
 
 
@@ -397,7 +439,7 @@ def test_summarize_computes_rates():
         {"judge": {"verdict": "FAIL", "correctness": 0.0, "groundedness": 0.0, "relevance": 0.0},
          "retrieval_hit": False, "latency_ms": 200, "category": "factual"},
     ]
-    s = _summarize(rows)
+    s = _summarize_scored_rows(rows)
     assert s["total"] == 2
     assert s["pass_rate"] == 0.5
     assert s["fail_rate"] == 0.5

@@ -19,6 +19,7 @@ from sqlalchemy import cast, func
 from sqlalchemy.orm import Session
 from sqlalchemy.types import String
 
+from core.logging import start_ingestion_trace
 from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
@@ -131,6 +132,44 @@ class IngestionRunService:
         db.commit()
 
     @staticmethod
+    def ensure_trace_id(db: Session, run_id: Any) -> Optional[str]:
+        """Resolve the run's trace_id — read existing off the row (retry case)
+        or mint + persist a new one — and stamp it onto the loguru contextvar
+        so every subsequent log line in this task's context carries it.
+
+        Called at the very top of the Procrastinate worker task
+        (``ingest_upload``) so 100% of ingestion logs — including the
+        pre-``mark_running`` steps (upload load, R2 download) and the
+        failure-path logs — are filterable by ONE value. This is the single
+        point-of-truth that stamps an ingestion trace_id; format lives in
+        ``core.logging.make_ingestion_trace_id``.
+
+        Idempotent: on retries the row already carries a trace_id, so
+        ``start_ingestion_trace(existing=)`` reuses it and no UPDATE is issued.
+        Returns None if the run row is missing (the worker's own upload-load
+        error handling will surface that); the contextvar is left untouched so
+        no misleading id is stamped onto unrelated logs.
+        """
+        row = (
+            db.query(IngestionPipelineRun.trace_id)
+            .filter(IngestionPipelineRun.id == run_id)
+            .first()
+        )
+        if row is None:
+            return None
+        existing = row[0]
+        if existing:
+            return start_ingestion_trace(run_id, existing=existing)
+        tid = start_ingestion_trace(run_id, existing=None)
+        (
+            db.query(IngestionPipelineRun)
+            .filter(IngestionPipelineRun.id == run_id)
+            .update({"trace_id": tid}, synchronize_session=False)
+        )
+        db.commit()
+        return tid
+
+    @staticmethod
     def mark_running(db: Session, run_id: Any) -> IngestionPipelineRun:
         """Flip a pending run to ``running`` and stamp ``started_at``. Called
         by the worker at the start of ``process_document``. The run row was
@@ -150,20 +189,31 @@ class IngestionRunService:
 
     @staticmethod
     def complete_run(
-        db: Session, run_id: Any, *, chunk_count: int
+        db: Session,
+        run_id: Any,
+        *,
+        chunk_count: int,
+        ingestion_stats: Optional[dict] = None,
     ) -> IngestionPipelineRun:
         """Mark a run ready + flip any previously-active run for the same upload
         to inactive so retrieval switches over atomically. The partial unique
         index ``uq_ingestion_pipeline_runs_upload_active`` enforces the
         one-active-per-upload invariant. Also updates the parent KB's
-        ``active_ingestion_pipeline_run_id`` pointer to this run."""
+        ``active_ingestion_pipeline_run_id`` pointer to this run.
+
+        ``ingestion_stats`` is the parser/routing metrics dict produced by
+        ``PdfRoutingService.build().metrics()`` (image / table / page counts,
+        parse timings, pipeline selected). Left NULL on the row when the
+        caller has no metrics (non-docling parsers on non-PDF inputs), so
+        existing behavior is preserved for every caller that omits it.
+        """
         run = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id).first()
         if run is None:
             raise ValueError(f"IngestionPipelineRun {run_id} not found")
 
         # Deactivate the previous active run BEFORE flipping this one, otherwise
         # both rows are momentarily active and the partial-unique index rejects.
-        (
+        deactivated = (
             db.query(IngestionPipelineRun)
             .filter(
                 IngestionPipelineRun.upload_id == run.upload_id,
@@ -173,27 +223,46 @@ class IngestionRunService:
             .update({"is_active": False}, synchronize_session=False)
         )
         db.flush()
+        if deactivated:
+            logger.info(
+                "[ingestion] deactivated {} prior active run(s) upload={} new_run={}",
+                deactivated, run.upload_id, run.id,
+            )
 
         run.status = "ready"
         run.is_active = True
         run.completed_at = datetime.now(timezone.utc)
         run.chunk_count = chunk_count
         run.error = None
+        # Only stamp when the caller actually has metrics — otherwise leave
+        # the column at its persisted value (usually NULL for a first-ready
+        # run). Prevents wiping a prior run's metrics on activate/repoint
+        # paths that reuse this method, and mirrors "if data is there, add
+        # it; else keep the key empty".
+        if ingestion_stats is not None:
+            run.ingestion_stats = ingestion_stats
 
         # Repoint the parent KB at this run.
-        (
-            db.query(KnowledgeBase)
-            .filter(KnowledgeBase.id == run.knowledge_base_id)
-            .update(
-                {"active_ingestion_pipeline_run_id": run.id},
-                synchronize_session=False,
+        try:
+            (
+                db.query(KnowledgeBase)
+                .filter(KnowledgeBase.id == run.knowledge_base_id)
+                .update(
+                    {"active_ingestion_pipeline_run_id": run.id},
+                    synchronize_session=False,
+                )
             )
-        )
-
-        db.commit()
+            db.commit()
+        except Exception:
+            logger.exception(
+                "[ingestion] complete_run commit failed kb={} run={} chunks={}",
+                run.knowledge_base_id, run.id, chunk_count,
+            )
+            raise
         db.refresh(run)
         logger.info(
-            "[ingestion] complete run {} (chunks={})", run.id, chunk_count
+            "[ingestion] complete run {} kb={} (chunks={})",
+            run.id, run.knowledge_base_id, chunk_count,
         )
 
         # Auto-run the RAG eval against this recipe. Enqueue-only — the queue
@@ -217,6 +286,9 @@ class IngestionRunService:
 
     @staticmethod
     def fail_run(db: Session, run_id: Any, *, error: str) -> IngestionPipelineRun:
+        logger.warning(
+            "[ingestion] marking run failed run={} error={}", run_id, error,
+        )
         run = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id).first()
         if run is None:
             raise ValueError(f"IngestionPipelineRun {run_id} not found")

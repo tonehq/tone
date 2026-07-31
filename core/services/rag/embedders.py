@@ -109,15 +109,29 @@ class OpenAIEmbedder(Embedder):
             self.dimensions = dimensions
 
     def embed_texts(self, texts: List[str]) -> List[List[float]]:
+        n = len(texts)
+        logger.info(
+            "[embed:openai] calling texts={} model={} batch_size={}",
+            n, self.model, self.batch_size,
+        )
+        t_start = time.monotonic()
         client = openai.OpenAI(api_key=self.api_key, max_retries=self.max_retries)
         out: List[List[float]] = []
-        for i in range(0, len(texts), self.batch_size):
-            batch = texts[i : i + self.batch_size]
-            self._limiter.acquire(_count_tokens(batch))
-            response = client.embeddings.create(model=self.model, input=batch)
-            out.extend(item.embedding for item in response.data)
+        try:
+            for i in range(0, n, self.batch_size):
+                batch = texts[i : i + self.batch_size]
+                self._limiter.acquire(_count_tokens(batch))
+                response = client.embeddings.create(model=self.model, input=batch)
+                out.extend(item.embedding for item in response.data)
+        except Exception:
+            logger.exception(
+                "[embed:openai] failed model={} texts={} completed_batches={}",
+                self.model, n, len(out),
+            )
+            raise
         logger.info(
-            "Generated {} embeddings (model={}, dimensions={})",
+            "[embed:openai] generated {} embeddings (model={}, dimensions={}, elapsed_s={:.1f})",
             len(out), self.model, len(out[0]) if out else 0,
+            time.monotonic() - t_start,
         )
         return out
