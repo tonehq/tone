@@ -1,0 +1,11 @@
+question,expected_answer,expected_source_snippet,category,external_id
+What time is check-in at Coral Breeze Resort?,Check-in begins at 3:00 PM.,"Check-in time is 3:00 PM",policy,q-checkin-time
+What time is check-out?,Check-out is at 11:00 AM.,"Check-out is at 11:00 AM",policy,q-checkout-time
+Does the resort offer airport transfers?,"Yes, the resort provides paid airport shuttle service that must be booked at least 24 hours in advance.","airport shuttle service",transportation,q-airport-shuttle
+Are pets allowed at Coral Breeze Resort?,"No, pets are not permitted except for certified service animals.","pets are not permitted",policy,q-pet-policy
+What is the cancellation policy?,"Reservations can be cancelled free of charge up to 48 hours before check-in. After that, one night's stay will be charged.","48 hours before check-in",policy,q-cancellation
+What dining options are available on-site?,"The resort has three restaurants: Sunset Grill (seafood), Palm Cafe (all-day dining), and Ocean Bar (drinks and light bites).","Sunset Grill",dining,q-dining-options
+What are the pool hours?,The main pool is open daily from 7:00 AM to 10:00 PM.,"pool is open daily from 7:00 AM to 10:00 PM",amenities,q-pool-hours
+Is breakfast included in the room rate?,Breakfast is included for guests booked on the Bed & Breakfast rate; it is not included in Room-Only bookings.,"Bed & Breakfast rate",pricing,q-breakfast-included
+Does the resort have a spa?,"Yes, the Coral Spa offers massages, facials, and wellness treatments daily from 9:00 AM to 8:00 PM.","Coral Spa",amenities,q-spa
+Is Wi-Fi free for guests?,"Yes, complimentary high-speed Wi-Fi is available in all rooms and public areas.","complimentary high-speed Wi-Fi",amenities,q-wifi
