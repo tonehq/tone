@@ -19,6 +19,7 @@ engine = create_engine(
     pool_size=50,
     max_overflow=70,
     pool_pre_ping=True,
+    pool_recycle=180,
     connect_args=keepalive_kwargs,
 )
 

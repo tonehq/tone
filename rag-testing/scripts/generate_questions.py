@@ -49,14 +49,14 @@ def main() -> int:
     svc = EvalService()
     with db_session() as db:
         existing = svc.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-        if existing is not None and existing.status == "ready" and not args.force:
+        if existing is not None and existing.question_count > 0 and not args.force:
             print(
-                f"[generate] eval {existing.id} already exists for upload {upload_id} "
+                f"[generate] eval already exists for upload {upload_id} "
                 f"({existing.question_count} questions). Use --force to regenerate.",
                 file=sys.stderr,
             )
             return 2
-        eval_row = svc.generate_eval(
+        eval_set = svc.generate_eval(
             db,
             upload_id=upload_id,
             org_id=org_id,
@@ -65,8 +65,8 @@ def main() -> int:
         )
 
     print(
-        f"[generate] eval={eval_row.id} upload={upload_id} "
-        f"questions={eval_row.question_count} model={eval_row.generated_by_model}"
+        f"[generate] upload={upload_id} "
+        f"questions={eval_set.question_count} model={eval_set.generated_by_model}"
     )
     return 0
 

@@ -42,12 +42,17 @@ class JudgeService:
         api_key: str,
         model: str,
     ) -> dict:
+        chunks_list = list(retrieved_chunks)
+        logger.debug(
+            "[eval] judge start model={} answer_chars={} chunks={}",
+            model, len(actual_answer or ""), len(chunks_list),
+        )
         prompt = render_prompt(
             self._get_template(),
             QUESTION=question,
             EXPECTED_ANSWER=expected_answer,
             ACTUAL_ANSWER=actual_answer,
-            RETRIEVED_CONTEXT=_format_context(retrieved_chunks),
+            RETRIEVED_CONTEXT=_format_context(chunks_list),
         )
         try:
             client = openai.OpenAI(api_key=api_key)
@@ -71,6 +76,10 @@ class JudgeService:
 
         verdict = str(raw.get("verdict", "FAIL")).upper()
         if verdict not in {"PASS", "PARTIAL", "FAIL"}:
+            logger.debug(
+                "[eval] judge returned unknown verdict={!r} model={}; coercing to FAIL",
+                raw.get("verdict"), model,
+            )
             verdict = "FAIL"
 
         return {

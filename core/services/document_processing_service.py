@@ -1,5 +1,6 @@
 import os
 import tempfile
+import time
 from typing import Optional
 from uuid import UUID
 
@@ -65,11 +66,19 @@ class DocumentProcessingService:
         delete_existing: bool = False,
     ):
         run: Optional[IngestionPipelineRun] = None
+        t_start = time.monotonic()
         try:
+            logger.info(
+                "[ingestion] process_document start upload={} run={} bytes={} reprocess={}",
+                upload_id, ingestion_run_id, len(file_bytes), delete_existing,
+            )
             with get_db_context() as db:
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
                 if not upload:
-                    logger.error("Upload {} not found, skipping processing", upload_id)
+                    logger.error(
+                        "[ingestion] upload {} not found, skipping processing (run={})",
+                        upload_id, ingestion_run_id,
+                    )
                     return
                 file_type = upload.file_type
                 upload.status = "processing"
@@ -92,15 +101,28 @@ class DocumentProcessingService:
                         )
                         .all()
                     )
+                    if prior:
+                        logger.info(
+                            "[ingestion] reprocess wiping {} prior active run(s) upload={} new_run={}",
+                            len(prior), upload_id, run.id,
+                        )
                     for old in prior:
                         db.delete(old)
                     db.commit()
 
                 api_key = ProviderKeyService.get_key(db, org_id, run.embedding_provider)
                 if not api_key:
+                    logger.error(
+                        "[ingestion] provider key missing org={} provider={} run={}",
+                        org_id, run.embedding_provider, run.id,
+                    )
                     raise EmbeddingProviderUnavailableError(
                         f"No {run.embedding_provider!r} API key configured for embedding"
                     )
+                logger.debug(
+                    "[ingestion] provider key resolved org={} provider={} run={}",
+                    org_id, run.embedding_provider, run.id,
+                )
 
                 parser_cfg = dict(run.parser_config or {})
                 if run.parser == "docling" and DIRECT_PDF_DOCLING and file_type == PDF_CONTENT_TYPE:
@@ -123,6 +145,13 @@ class DocumentProcessingService:
                     embedder=embedder,
                     store=store,
                 )
+                logger.info(
+                    "[ingestion] pipeline built run={} parser={} tokeniser={} "
+                    "embedder={}({}d) store={} file_type={}",
+                    run.id, run.parser, run.tokeniser,
+                    run.embedding_model, run.embedding_dimensions,
+                    run.vector_store, file_type,
+                )
 
             def _on_batch(batch_index: int, start_page: int, end_page: int, count: int, elapsed: float) -> None:
                 logger.info(
@@ -143,16 +172,33 @@ class DocumentProcessingService:
                 file_type == PDF_CONTENT_TYPE and not direct and run.parser == "docling"
             )
             if uses_pdf_html_route:
+                logger.info(
+                    "[ingestion] pdf→html routing start run={} bytes={}",
+                    run.id, len(file_bytes),
+                )
+                t_route = time.monotonic()
                 pdf_fd, pdf_path = tempfile.mkstemp(suffix=".pdf")
                 with os.fdopen(pdf_fd, "wb") as f:
                     f.write(file_bytes)
                 html_fd, html_path = tempfile.mkstemp(suffix=".html")
                 os.close(html_fd)
-                build = PdfRoutingService().build(pdf_path, html_path)
+                try:
+                    build = PdfRoutingService().build(pdf_path, html_path)
+                except Exception:
+                    logger.exception(
+                        "[ingestion] pdf→html routing failed run={} pdf={} html={}",
+                        run.id, pdf_path, html_path,
+                    )
+                    raise
                 _remove_files(pdf_path)
                 pdf_path = None
+                logger.info(
+                    "[ingestion] pdf→html routing done run={} elapsed_s={:.1f}",
+                    run.id, time.monotonic() - t_route,
+                )
 
             try:
+                t_ingest = time.monotonic()
                 if direct:
                     logger.info(
                         "[direct-pdf] docling parsing PDF directly (ocr={}, tables={}, max_pages={})",
@@ -172,14 +218,29 @@ class DocumentProcessingService:
                         page_batch=50,
                         on_batch=_on_batch,
                     )
+                logger.info(
+                    "[ingestion] pipeline ingest done run={} chunks={} elapsed_s={:.1f}",
+                    run.id, num_chunks, time.monotonic() - t_ingest,
+                )
             finally:
                 _remove_files(pdf_path, html_path)
             if not num_chunks:
+                # #1 cause of silent failures — surface all inputs before raising.
+                logger.error(
+                    "[ingestion] extraction produced 0 chunks run={} upload={} "
+                    "file_type={} bytes={} parser={}",
+                    run.id, upload_id, file_type, len(file_bytes), run.parser,
+                )
                 raise ValueError("Text extraction produced no chunks")
 
             ingestion_stats = build.metrics() if build is not None else None
             with get_db_context() as db:
-                IngestionRunService.complete_run(db, run.id, chunk_count=num_chunks)
+                IngestionRunService.complete_run(
+                    db,
+                    run.id,
+                    chunk_count=num_chunks,
+                    ingestion_stats=ingestion_stats,
+                )
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
                 if upload:
                     upload.status = "ready"
@@ -199,10 +260,16 @@ class DocumentProcessingService:
                     synchronize_session=False,
                 )
                 db.commit()
-            logger.info("Upload {} processed: {} chunks stored (run={})", upload_id, num_chunks, run.id)
+            logger.info(
+                "[ingestion] upload {} processed: {} chunks stored (run={}, elapsed_s={:.1f})",
+                upload_id, num_chunks, run.id, time.monotonic() - t_start,
+            )
 
         except Exception as e:
-            logger.exception("[ingestion] upload {} failed", upload_id)
+            logger.exception(
+                "[ingestion] upload {} failed (run={}, elapsed_s={:.1f})",
+                upload_id, ingestion_run_id, time.monotonic() - t_start,
+            )
             try:
                 with get_db_context() as db:
                     # Use the router-created pending run id as the fallback in
@@ -240,11 +307,31 @@ class DocumentProcessingService:
         with get_db_context() as db:
             upload = db.query(Upload).filter(Upload.id == upload_id).first()
             if not upload or not upload.file_path:
-                logger.error("Upload {} not found or has no file_path", upload_id)
+                logger.error(
+                    "[ingestion] upload {} not found or has no file_path (run={})",
+                    upload_id, ingestion_run_id,
+                )
                 return
             file_path = upload.file_path
 
-        file_bytes = R2StorageService().download_file(file_path)
+        logger.info(
+            "[r2] downloading upload={} run={} path={}",
+            upload_id, ingestion_run_id, file_path,
+        )
+        t_dl = time.monotonic()
+        try:
+            file_bytes = R2StorageService().download_file(file_path)
+        except Exception:
+            logger.exception(
+                "[r2] download failed upload={} run={} path={}",
+                upload_id, ingestion_run_id, file_path,
+            )
+            raise
+        logger.info(
+            "[r2] downloaded upload={} run={} bytes={} elapsed_s={:.1f}",
+            upload_id, ingestion_run_id, len(file_bytes),
+            time.monotonic() - t_dl,
+        )
         self.process_document(
             upload_id, org_id, file_bytes,
             ingestion_run_id=ingestion_run_id,

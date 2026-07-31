@@ -6,6 +6,7 @@ embedding provider is a one-line factory registration plus an existing key row.
 
 from __future__ import annotations
 
+import os
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
@@ -38,6 +39,12 @@ class ProviderKeyService:
         )
         if row and row.encrypted_key:
             return decrypt(row.encrypted_key)
+        # Fallback: benchmark / dev runs may not have a per-org api_keys row.
+        # Look up a matching env var (e.g. openai → OPENAI_API_KEY) so the RAG
+        # pipeline can still resolve a key without changing the DB path.
+        env_key = os.getenv(f"{provider_slug.upper()}_API_KEY")
+        if env_key:
+            return env_key
         return None
 
     @staticmethod

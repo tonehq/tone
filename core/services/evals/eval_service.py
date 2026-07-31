@@ -2,18 +2,32 @@
 RAG evaluations.
 
 Transport-agnostic: methods take a SQLAlchemy session + plain args and return
-ORM objects. Every caller (the Procrastinate auto-run task and the
-``rag-testing/`` CLI wrappers) goes through this class — question-generation,
-retrieval, LLM-as-judge, and per-run persistence live in exactly one place."""
+lightweight summary objects (never HTTP-shaped). Every caller (the
+Procrastinate auto-run task and the ``rag-testing/`` CLI wrappers) goes
+through this class — question-generation, retrieval, LLM-as-judge, and
+persistence live in exactly one place.
+
+Persistence shape (post row-per-question refactor):
+- ``evals`` — one row per question. A doc that produces 50 questions
+  becomes 50 rows keyed by ``(upload_id, external_id)``. Regeneration
+  deletes every row for the upload and inserts the new batch.
+- ``eval_results`` — one row per scored answer. All rows in one run share
+  ``run_id`` (a UUID stamped by this service) plus the
+  per-``(upload_id, ingestion_run_id)`` ``run_number`` so a batch is
+  addressable as a unit for summary / compare queries.
+"""
 
 from __future__ import annotations
 
+import time
+import uuid
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Iterable, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from core.models.eval import Eval
@@ -38,6 +52,47 @@ from core.services.rag.readers import CompositeReader
 from shared.config import settings
 
 _VERDICT_RANK = {"FAIL": 0, "PARTIAL": 1, "PASS": 2}
+_RESERVED_QUESTION_KEYS = {
+    "id",
+    "question",
+    "expected_answer",
+    "expected_source_snippet",
+    "category",
+}
+
+
+@dataclass
+class EvalSetSummary:
+    """Snapshot of the question set for one upload — derived from row counts,
+    not a stored parent row. ``question_count == 0`` means "no set exists"."""
+
+    upload_id: UUID
+    organization_id: UUID
+    knowledge_base_id: Optional[UUID]
+    question_count: int
+    generated_by_model: Optional[str]
+    generation_prompt_hash: Optional[str]
+
+
+@dataclass
+class EvalRunSummary:
+    """Snapshot of one eval run (batch of scored answers). Identity is
+    ``run_id`` (UUID stamped across every row of the batch); ``run_number`` is
+    the per-``(upload_id, ingestion_run_id)`` sequence for human ordering."""
+
+    run_id: UUID
+    upload_id: UUID
+    ingestion_run_id: Optional[UUID]
+    run_number: int
+    triggered_by: str
+    top_k: int
+    answer_model: Optional[str]
+    judge_model: Optional[str]
+    status: str  # 'completed' | 'failed'
+    error: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
+    summary: dict = field(default_factory=dict)
 
 
 class EvalService:
@@ -67,10 +122,10 @@ class EvalService:
         org_id: Any,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
-    ) -> Eval:
-        """Extract source text for ``upload_id``, generate a Q&A set, upsert the
-        ``evals`` row (``UNIQUE(upload_id)`` — regeneration replaces in-place).
-        Returns the persisted ``Eval``."""
+    ) -> EvalSetSummary:
+        """Extract source text for ``upload_id``, generate a Q&A set, replace
+        any existing questions for the upload with the new batch. Returns an
+        ``EvalSetSummary``."""
         model = model or settings.EVAL_GENERATION_MODEL
         max_chars = max_chars or settings.EVAL_MAX_CONTEXT_CHARS
 
@@ -93,7 +148,19 @@ class EvalService:
 
         api_key = ProviderKeyService.require_key(db, org_id, "openai")
 
-        file_bytes = self._download(upload.file_path)
+        logger.info(
+            "[eval] generate_eval start upload={} org={} content_type={} model={} max_chars={}",
+            upload_id, org_id, upload.file_type, model, max_chars,
+        )
+
+        try:
+            file_bytes = self._download(upload.file_path)
+        except Exception:
+            logger.exception(
+                "[eval] R2 download failed upload={} path={}",
+                upload_id, upload.file_path,
+            )
+            raise
         try:
             document = self._reader.read(file_bytes, upload.file_type)
         except Exception as e:
@@ -112,56 +179,108 @@ class EvalService:
             max_chars=max_chars,
         )
         questions = payload["questions"]
-
-        existing = db.query(Eval).filter(Eval.upload_id == upload_id).first()
-        name = _eval_name(kb.name, upload_id)
         prompt_hash = self._questions.prompt_hash()
 
-        if existing is None:
-            eval_row = Eval(
-                organization_id=org_id,
-                knowledge_base_id=kb.id,
-                upload_id=upload_id,
-                name=name,
-                question_count=len(questions),
-                questions=payload,
-                generated_by_model=payload["generated_by_model"],
-                generation_prompt_hash=prompt_hash,
-                status="ready",
-                error=None,
-            )
-            db.add(eval_row)
-        else:
-            existing.name = name
-            existing.question_count = len(questions)
-            existing.questions = payload
-            existing.generated_by_model = payload["generated_by_model"]
-            existing.generation_prompt_hash = prompt_hash
-            existing.status = "ready"
-            existing.error = None
-            eval_row = existing
-        db.commit()
-        db.refresh(eval_row)
-        logger.info(
-            "[eval] generated question set eval={} upload={} questions={} model={}",
-            eval_row.id, upload_id, len(questions), model,
+        return self._persist_question_set(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            knowledge_base_id=kb.id,
+            questions=questions,
+            generated_by_model=payload["generated_by_model"],
+            generation_prompt_hash=prompt_hash,
         )
-        return eval_row
+
+    def import_eval(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        questions: List[dict],
+        source_key: str,
+        name: Optional[str] = None,  # kept for signature parity; not persisted
+    ) -> EvalSetSummary:
+        """Pre-seed a question set from an already-authored Q&A list — no LLM
+        generation. Used by the benchmark CLI so a standard dataset (HotpotQA,
+        TAT-QA, ...) can flow through the same ingestion + auto-eval pipeline
+        customers use, but scored against gold Q&A instead of LLM-generated.
+        ``source_key`` is stamped on ``generated_by_model`` as an audit trail —
+        mirrors ``generate_eval`` but obvious enough at read time that these
+        rows are not LLM-authored. Replaces any existing rows for the upload."""
+        del name  # legacy no-op — set names are no longer persisted
+        if not questions:
+            raise EvalGenerationError("import_eval requires a non-empty questions list")
+
+        kb = (
+            db.query(KnowledgeBase)
+            .filter(KnowledgeBase.upload_id == upload_id)
+            .first()
+        )
+        if kb is None:
+            raise EvalNotFoundError(
+                f"No KnowledgeBase found for upload {upload_id}"
+            )
+
+        summary = self._persist_question_set(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            knowledge_base_id=kb.id,
+            questions=list(questions),
+            generated_by_model=source_key,
+            generation_prompt_hash=None,
+        )
+        logger.info(
+            "[eval] imported gold question set upload={} questions={} source={}",
+            upload_id, summary.question_count, source_key,
+        )
+        return summary
 
     def get_eval_by_upload(
         self, db: Session, *, upload_id: Any, org_id: Any
-    ) -> Optional[Eval]:
-        return (
+    ) -> Optional[EvalSetSummary]:
+        """Return a summary of the question set for ``upload_id``, or ``None``
+        if no questions have been generated yet."""
+        row = (
+            db.query(
+                Eval.knowledge_base_id,
+                func.count(Eval.id).label("question_count"),
+                func.max(Eval.generated_by_model).label("generated_by_model"),
+                func.max(Eval.generation_prompt_hash).label("generation_prompt_hash"),
+            )
+            .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
+            .group_by(Eval.knowledge_base_id)
+            .first()
+        )
+        if row is None or row.question_count == 0:
+            return None
+        return EvalSetSummary(
+            upload_id=upload_id,
+            organization_id=org_id,
+            knowledge_base_id=row.knowledge_base_id,
+            question_count=int(row.question_count),
+            generated_by_model=row.generated_by_model,
+            generation_prompt_hash=row.generation_prompt_hash,
+        )
+
+    def list_questions(
+        self, db: Session, *, upload_id: Any, org_id: Any
+    ) -> List[Eval]:
+        """Return the ordered ``Eval`` ORM rows for one upload — the internal
+        seam every runner uses so ordering + org-scoping live in one place."""
+        return list(
             db.query(Eval)
             .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
-            .first()
+            .order_by(Eval.question_ord.asc())
+            .all()
         )
 
     def get_or_generate_eval(
         self, db: Session, *, upload_id: Any, org_id: Any
-    ) -> Eval:
+    ) -> EvalSetSummary:
         existing = self.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-        if existing is not None and existing.status == "ready":
+        if existing is not None and existing.question_count > 0:
             return existing
         return self.generate_eval(db, upload_id=upload_id, org_id=org_id)
 
@@ -171,21 +290,22 @@ class EvalService:
         self,
         db: Session,
         *,
-        eval_id: Any,
+        upload_id: Any,
         ingestion_run_id: Any,
         triggered_by: str,
         top_k: Optional[int] = None,
         answer_model: Optional[str] = None,
         judge_model: Optional[str] = None,
-    ) -> EvalResult:
-        """Execute the Q&A set against the pipeline recipe pinned by
-        ``ingestion_run_id`` — the embedder + vector store are rebuilt from the
-        run so query and stored vectors are guaranteed compatible.
+    ) -> EvalRunSummary:
+        """Execute every question for ``upload_id`` against the pipeline recipe
+        pinned by ``ingestion_run_id``. Every scored answer is written as one
+        ``eval_results`` row, tagged with the same ``run_id`` UUID + the next
+        per-``(upload_id, ingestion_run_id)`` ``run_number``.
 
-        Persists a row with ``status=running`` up-front so a partial run is
-        visible; updates to ``completed`` / ``failed`` at the end. Never
-        re-raises: worker callers (see ``eval_ingestion_run``) rely on this
-        method being terminal so a bad eval can't fail the ingestion."""
+        Never re-raises: worker callers (see ``eval_ingestion_run``) rely on
+        this method being terminal so a bad eval can't fail the ingestion.
+        On mid-run crash the completed rows are still persisted and a failed
+        ``EvalRunSummary`` is returned."""
         if triggered_by not in {"auto", "manual", "cli"}:
             raise ValueError(
                 f"triggered_by must be one of 'auto'|'manual'|'cli'; got {triggered_by!r}"
@@ -194,15 +314,12 @@ class EvalService:
         answer_model = answer_model or settings.EVAL_ANSWER_MODEL
         judge_model = judge_model or settings.EVAL_JUDGE_MODEL
 
-        eval_row = db.query(Eval).filter(Eval.id == eval_id).first()
-        if eval_row is None:
-            raise EvalNotFoundError(f"Eval {eval_id} not found")
-
-        questions = _questions_list(eval_row.questions)
+        questions = self._questions_scoped(db, upload_id=upload_id)
         if not questions:
             raise EvalRunError(
-                f"Eval {eval_id} has no questions — regenerate before running"
+                f"Upload {upload_id} has no eval questions — regenerate before running"
             )
+        organization_id = questions[0].organization_id
 
         run = (
             db.query(IngestionPipelineRun)
@@ -212,140 +329,339 @@ class EvalService:
         if run is None:
             raise EvalNotFoundError(f"IngestionPipelineRun {ingestion_run_id} not found")
 
-        next_run_number = (
+        next_run_number = int(
             db.query(func.coalesce(func.max(EvalResult.run_number), 0) + 1)
-            .filter(EvalResult.eval_id == eval_id)
+            .filter(
+                EvalResult.ingestion_run_id == run.id,
+                EvalResult.eval_id.in_([q.id for q in questions]),
+            )
             .scalar()
         )
-        result = EvalResult(
-            organization_id=eval_row.organization_id,
-            eval_id=eval_row.id,
-            run_number=int(next_run_number),
+        run_id = uuid.uuid4()
+        started_at = datetime.now(timezone.utc)
+        run_summary = EvalRunSummary(
+            run_id=run_id,
+            upload_id=upload_id,
             ingestion_run_id=run.id,
+            run_number=next_run_number,
             triggered_by=triggered_by,
             top_k=int(top_k),
             answer_model=answer_model,
             judge_model=judge_model,
             status="running",
-            started_at=datetime.now(timezone.utc),
+            error=None,
+            started_at=started_at,
+            completed_at=None,
+            summary={},
         )
-        db.add(result)
-        db.commit()
-        db.refresh(result)
 
         logger.info(
-            "[eval] running eval={} run_number={} ingestion_run={} top_k={} triggered_by={}",
-            eval_row.id, result.run_number, run.id, top_k, triggered_by,
+            "[eval] running run_id={} upload={} run_number={} ingestion_run={} questions={} "
+            "top_k={} answer_model={} judge_model={} triggered_by={}",
+            run_id, upload_id, next_run_number, run.id, len(questions),
+            top_k, answer_model, judge_model, triggered_by,
         )
 
+        # Snapshot every attribute we still need AFTER the LLM loop while the
+        # ORM rows are attached, then close the caller's session so no pool
+        # connection is held across the long (10+ minute) LLM loop — Neon's
+        # idle_in_transaction_session_timeout would drop it and both the
+        # follow-up query AND the outer ``with`` block's implicit rollback
+        # would explode.
+        embedding_provider_val = run.embedding_provider
+        vector_store_val = run.vector_store
+        vector_store_ref_val = dict(run.vector_store_ref or {})
+        question_dtos = [_question_to_dto(q) for q in questions]
+        db.close()
+
+        scored_rows: List[dict] = []
         try:
-            api_key = ProviderKeyService.require_key(
-                db, eval_row.organization_id, run.embedding_provider
-            )
+            # Fresh short-lived session ONLY for the key lookups; released
+            # immediately so nothing is held during the LLM loop below.
+            from core.database.session import SessionLocal
+            with SessionLocal() as tmp:
+                api_key = ProviderKeyService.require_key(
+                    tmp, organization_id, embedding_provider_val
+                )
+                openai_key = ProviderKeyService.require_key(
+                    tmp, organization_id, "openai"
+                )
             embedder = build_embedder_from_run(run, api_key=api_key)
-            store = get_vector_store(run.vector_store, **(run.vector_store_ref or {}))
-            openai_key = ProviderKeyService.require_key(
-                db, eval_row.organization_id, "openai"
-            )
+            store = get_vector_store(vector_store_val, **vector_store_ref_val)
             answer_template = self._loader.load("answer_from_context.md")
 
-            per_question = []
-            for q in questions:
-                per_question.append(
-                    self._score_one_question(
-                        question=q,
-                        embedder=embedder,
-                        store=store,
-                        run=run,
-                        top_k=int(top_k),
-                        answer_model=answer_model,
-                        judge_model=judge_model,
-                        answer_template=answer_template,
-                        openai_key=openai_key,
-                    )
+            total_q = len(question_dtos)
+            # Progress every N questions (or on the last one). Without this, a
+            # 200-question eval that hangs looks identical to one that's just
+            # slow — the periodic tick tells you it's alive AND how it's going.
+            progress_every = max(1, total_q // 10) if total_q else 1
+            for idx, q in enumerate(question_dtos):
+                scored = self._score_one_question(
+                    question=q,
+                    embedder=embedder,
+                    store=store,
+                    run=run,
+                    top_k=int(top_k),
+                    answer_model=answer_model,
+                    judge_model=judge_model,
+                    answer_template=answer_template,
+                    openai_key=openai_key,
                 )
+                scored_rows.append(scored)
+                done = idx + 1
+                if done % progress_every == 0 or done == total_q:
+                    passes = sum(1 for r in scored_rows if (r.get("judge") or {}).get("verdict") == "PASS")
+                    fails = sum(1 for r in scored_rows if (r.get("judge") or {}).get("verdict") == "FAIL")
+                    logger.info(
+                        "[eval] progress run_id={} run_number={} question={}/{} pass_so_far={} fail_so_far={}",
+                        run_id, next_run_number, done, total_q, passes, fails,
+                    )
 
-            summary = _summarize(per_question)
-            result.per_question = per_question
-            result.summary = summary
-            result.status = "completed"
-            result.completed_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(result)
+            completed_at = datetime.now(timezone.utc)
+            self._persist_result_batch(
+                organization_id=organization_id,
+                run_id=run_id,
+                ingestion_run_id=run.id,
+                run_number=next_run_number,
+                triggered_by=triggered_by,
+                top_k=int(top_k),
+                answer_model=answer_model,
+                judge_model=judge_model,
+                started_at=started_at,
+                completed_at=completed_at,
+                scored_rows=scored_rows,
+                question_dtos=question_dtos,
+                statuses=["completed"] * len(question_dtos),
+            )
+            run_summary.status = "completed"
+            run_summary.completed_at = completed_at
+            run_summary.summary = _summarize_scored_rows(scored_rows)
             logger.info(
-                "[eval] completed eval={} run_number={} pass={} fail={} pass_rate={:.2%} hit_rate={:.2%}",
-                eval_row.id, result.run_number,
-                summary["pass"], summary["fail"],
-                summary["pass_rate"], summary["retrieval_hit_rate"],
+                "[eval] completed run_id={} run_number={} pass={} fail={} pass_rate={:.2%} hit_rate={:.2%}",
+                run_id, next_run_number,
+                run_summary.summary["pass"], run_summary.summary["fail"],
+                run_summary.summary["pass_rate"], run_summary.summary["retrieval_hit_rate"],
             )
         except EmbeddingProviderUnavailableError as e:
-            self._mark_failed(db, result, str(e))
+            self._mark_failed(
+                run_summary=run_summary,
+                organization_id=organization_id,
+                question_dtos=question_dtos,
+                scored_rows=scored_rows,
+                error=str(e),
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception(
-                "[eval] run failed eval={} run_number={}",
-                eval_row.id, result.run_number,
+                "[eval] run failed run_id={} run_number={}",
+                run_id, next_run_number,
             )
-            self._mark_failed(db, result, f"{type(e).__name__}: {e}")
+            self._mark_failed(
+                run_summary=run_summary,
+                organization_id=organization_id,
+                question_dtos=question_dtos,
+                scored_rows=scored_rows,
+                error=f"{type(e).__name__}: {e}",
+            )
 
-        return result
+        return run_summary
 
-    def list_results(
-        self, db: Session, eval_id: Any, *, limit: Optional[int] = None
-    ) -> List[EvalResult]:
-        q = (
-            db.query(EvalResult)
-            .filter(EvalResult.eval_id == eval_id)
-            .order_by(EvalResult.run_number.desc())
-        )
-        if limit is not None:
-            q = q.limit(limit)
-        return list(q)
+    def list_runs(
+        self, db: Session, *, upload_id: Any, limit: Optional[int] = None
+    ) -> List[EvalRunSummary]:
+        """Return each run's aggregate summary, newest first."""
+        return self._runs_for_upload(db, upload_id=upload_id, limit=limit)
 
     def latest_result_for_ingestion_run(
         self, db: Session, ingestion_run_id: Any
-    ) -> Optional[EvalResult]:
-        return (
-            db.query(EvalResult)
+    ) -> Optional[EvalRunSummary]:
+        row = (
+            db.query(EvalResult.run_id, func.max(EvalResult.started_at).label("started_at"))
             .filter(EvalResult.ingestion_run_id == ingestion_run_id)
-            .order_by(EvalResult.started_at.desc())
+            .group_by(EvalResult.run_id)
+            .order_by(func.max(EvalResult.started_at).desc())
             .first()
         )
+        if row is None:
+            return None
+        return self._build_run_summary(db, run_id=row.run_id)
+
+    def latest_summaries_by_ingestion(
+        self,
+        db: Session,
+        *,
+        org_id: Any,
+        upload_id: Any,
+        ingestion_run_ids: Iterable[Any],
+    ) -> dict:
+        """For each ingestion run id in ``ingestion_run_ids``, return the latest
+        eval batch summary (``EvalRunSummary``). ONE aggregated SQL query — used
+        by the KB Ingestion-Runs table to paint the per-row "Evals" chip
+        without an N+1. Rows without any eval batch are simply absent from the
+        returned map so the caller can render "—"."""
+        ids = [i for i in ingestion_run_ids if i is not None]
+        if not ids:
+            return {}
+        rows = _run_grouped_query(
+            db,
+            upload_id=upload_id,
+            organization_id=org_id,
+            ingestion_run_ids=ids,
+        ).all()
+        # Multiple batches per ingestion run are possible (manual re-runs);
+        # keep only the newest — the grouped query already orders DESC by
+        # started_at, so the first one we see per key wins.
+        by_ingestion: dict = {}
+        for r in rows:
+            key = str(r.ingestion_run_id) if r.ingestion_run_id else None
+            if key is None or key in by_ingestion:
+                continue
+            by_ingestion[key] = _row_to_run_summary(r)
+        return by_ingestion
+
+    def list_runs_for_ingestion(
+        self,
+        db: Session,
+        *,
+        org_id: Any,
+        upload_id: Any,
+        ingestion_run_id: Any,
+    ) -> List[EvalRunSummary]:
+        """Every eval batch that scored the given ingestion run — newest first.
+        Powers the drawer's run-picker."""
+        rows = _run_grouped_query(
+            db,
+            upload_id=upload_id,
+            organization_id=org_id,
+            ingestion_run_ids=[ingestion_run_id],
+        ).all()
+        return [_row_to_run_summary(r) for r in rows]
+
+    def get_run_detail(
+        self, db: Session, *, org_id: Any, run_id: Any
+    ) -> Optional[dict]:
+        """Return the summary + per-question scored rows for one eval batch.
+        Org-scoped: only rows belonging to ``org_id`` are considered so a
+        caller from another tenant sees ``None``."""
+        summary_row = _run_grouped_query(
+            db, run_id=run_id, organization_id=org_id
+        ).first()
+        if summary_row is None:
+            return None
+        summary = _row_to_run_summary(summary_row)
+        questions = self._scored_rows_for_run(db, run_id=run_id, org_id=org_id)
+        return {"summary": summary, "questions": questions}
 
     def compare_results(
         self,
         db: Session,
-        baseline_result_id: Any,
-        candidate_result_id: Any,
+        baseline_run_id: Any,
+        candidate_run_id: Any,
         *,
         score_drop: float = 0.15,
     ) -> dict:
-        """Diff two runs. Mirrors the CLI ``compare_runs.py`` output shape so
-        the CLI can hand its rendering off to a single call."""
-        baseline = db.query(EvalResult).filter(EvalResult.id == baseline_result_id).first()
-        candidate = db.query(EvalResult).filter(EvalResult.id == candidate_result_id).first()
+        """Diff two runs identified by ``run_id`` UUIDs. Same output shape as
+        the pre-refactor implementation so ``compare_runs.py`` needs no
+        changes beyond the id it passes in."""
+        baseline = self._build_run_summary(db, run_id=baseline_run_id)
+        candidate = self._build_run_summary(db, run_id=candidate_run_id)
         if baseline is None or candidate is None:
             raise EvalNotFoundError(
-                f"compare_results: missing row (baseline={baseline_result_id}, "
-                f"candidate={candidate_result_id})"
+                f"compare_results: missing run (baseline={baseline_run_id}, "
+                f"candidate={candidate_run_id})"
             )
-        return _diff_results(baseline, candidate, score_drop=score_drop)
+        baseline_rows = self._scored_rows_for_run(db, run_id=baseline_run_id)
+        candidate_rows = self._scored_rows_for_run(db, run_id=candidate_run_id)
+        return _diff_scored_rows(
+            baseline_summary=baseline,
+            candidate_summary=candidate,
+            baseline_rows=baseline_rows,
+            candidate_rows=candidate_rows,
+            score_drop=score_drop,
+        )
 
     def compare_latest_two(
-        self, db: Session, eval_id: Any, *, score_drop: float = 0.15
+        self, db: Session, *, upload_id: Any, score_drop: float = 0.15
     ) -> dict:
-        rows = self.list_results(db, eval_id, limit=2)
-        if len(rows) < 2:
+        runs = self._runs_for_upload(db, upload_id=upload_id, limit=2)
+        if len(runs) < 2:
             raise EvalNotFoundError(
-                f"Eval {eval_id} has fewer than 2 completed runs; nothing to compare"
+                f"Upload {upload_id} has fewer than 2 completed runs; nothing to compare"
             )
-        candidate, baseline = rows[0], rows[1]  # DESC order → [newest, previous]
-        return _diff_results(baseline, candidate, score_drop=score_drop)
+        candidate, baseline = runs[0], runs[1]  # DESC → [newest, previous]
+        return self.compare_results(
+            db,
+            baseline_run_id=baseline.run_id,
+            candidate_run_id=candidate.run_id,
+            score_drop=score_drop,
+        )
 
     # ── Internals ──────────────────────────────────────────────────────
 
     def _download(self, file_path: str) -> bytes:
         r2 = self._r2 or _default_r2_service()
         return r2.download_file(file_path)
+
+    def _questions_scoped(self, db: Session, *, upload_id: Any) -> List[Eval]:
+        return list(
+            db.query(Eval)
+            .filter(Eval.upload_id == upload_id)
+            .order_by(Eval.question_ord.asc())
+            .all()
+        )
+
+    def _persist_question_set(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        knowledge_base_id: Any,
+        questions: List[dict],
+        generated_by_model: Optional[str],
+        generation_prompt_hash: Optional[str],
+    ) -> EvalSetSummary:
+        """Replace every question for ``upload_id`` with the new batch. Cascade
+        drops any existing ``eval_results`` rows for the deleted questions."""
+        db.query(Eval).filter(Eval.upload_id == upload_id).delete(
+            synchronize_session=False
+        )
+        rows = []
+        for idx, q in enumerate(questions):
+            extras = {
+                k: v for k, v in q.items() if k not in _RESERVED_QUESTION_KEYS
+            } or None
+            rows.append(
+                {
+                    "id": uuid.uuid4(),
+                    "organization_id": org_id,
+                    "knowledge_base_id": knowledge_base_id,
+                    "upload_id": upload_id,
+                    "external_id": str(q.get("id") or f"q{idx + 1}"),
+                    "question_ord": idx,
+                    "question": str(q.get("question", "")),
+                    "expected_answer": str(q.get("expected_answer", "")),
+                    "expected_source_snippet": q.get("expected_source_snippet") or None,
+                    "category": q.get("category"),
+                    "generated_by_model": generated_by_model,
+                    "generation_prompt_hash": generation_prompt_hash,
+                    "extras": extras,
+                }
+            )
+        if rows:
+            db.bulk_insert_mappings(Eval, rows)
+        db.commit()
+        logger.info(
+            "[eval] persisted question set upload={} questions={} model={}",
+            upload_id, len(rows), generated_by_model,
+        )
+        return EvalSetSummary(
+            upload_id=upload_id,
+            organization_id=org_id,
+            knowledge_base_id=knowledge_base_id,
+            question_count=len(rows),
+            generated_by_model=generated_by_model,
+            generation_prompt_hash=generation_prompt_hash,
+        )
 
     def _score_one_question(
         self,
@@ -360,10 +676,9 @@ class EvalService:
         answer_template: str,
         openai_key: str,
     ) -> dict:
-        import time
-
         import openai
 
+        eval_id = question["eval_id"]
         qid = question.get("id", "?")
         q_text = question.get("question", "")
         expected = question.get("expected_answer", "")
@@ -373,6 +688,7 @@ class EvalService:
         t0 = time.monotonic()
         retrieval_error = None
         try:
+            t_ret = time.monotonic()
             q_vec = embedder.embed_query(q_text)
             hits = store.query(
                 q_vec,
@@ -393,6 +709,11 @@ class EvalService:
                 }
                 for h in hits
             ]
+            top_score = retrieved[0]["score"] if retrieved else None
+            logger.debug(
+                "[eval] retrieved qid={} candidates={} top_score={} elapsed_ms={}",
+                qid, len(retrieved), top_score, int((time.monotonic() - t_ret) * 1000),
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception("[eval] retrieval failed qid={}", qid)
             retrieved = []
@@ -402,6 +723,7 @@ class EvalService:
 
         answer_error = None
         try:
+            t_ans = time.monotonic()
             client = openai.OpenAI(api_key=openai_key)
             prompt = render_prompt(
                 answer_template,
@@ -414,11 +736,17 @@ class EvalService:
                 temperature=0.0,
             )
             actual_answer = (resp.choices[0].message.content or "").strip()
+            logger.debug(
+                "[eval] answer qid={} model={} chars={} elapsed_ms={}",
+                qid, answer_model, len(actual_answer),
+                int((time.monotonic() - t_ans) * 1000),
+            )
         except Exception as e:  # noqa: BLE001
             logger.exception("[eval] answer LLM failed qid={} model={}", qid, answer_model)
             actual_answer = ""
             answer_error = f"{type(e).__name__}: {e}"
 
+        t_judge = time.monotonic()
         verdict = self._judge.judge(
             question=q_text,
             expected_answer=expected,
@@ -427,9 +755,15 @@ class EvalService:
             api_key=openai_key,
             model=judge_model,
         )
+        logger.debug(
+            "[eval] judge qid={} verdict={} correctness={:.2f} elapsed_ms={}",
+            qid, verdict.get("verdict"), float(verdict.get("correctness", 0.0) or 0.0),
+            int((time.monotonic() - t_judge) * 1000),
+        )
         latency_ms = int((time.monotonic() - t0) * 1000)
 
         return {
+            "eval_id": eval_id,
             "id": qid,
             "category": category,
             "question": q_text,
@@ -444,12 +778,164 @@ class EvalService:
             "answer_error": answer_error,
         }
 
-    def _mark_failed(self, db: Session, result: EvalResult, error: str) -> None:
-        result.status = "failed"
-        result.error = error
-        result.completed_at = datetime.now(timezone.utc)
-        db.commit()
-        db.refresh(result)
+    def _mark_failed(
+        self,
+        *,
+        run_summary: EvalRunSummary,
+        organization_id: Any,
+        question_dtos: List[dict],
+        scored_rows: List[dict],
+        error: str,
+    ) -> None:
+        logger.warning(
+            "[eval] marking run_id={} failed error={}", run_summary.run_id, error,
+        )
+        # Rows we DID score before the crash still get persisted; remaining
+        # questions get placeholder ``status=failed`` rows so the run's shape
+        # (N rows for N questions) is preserved for downstream aggregation.
+        scored_ids = {r["eval_id"] for r in scored_rows}
+        statuses = ["completed"] * len(scored_rows)
+        remaining = [q for q in question_dtos if q["eval_id"] not in scored_ids]
+        for q in remaining:
+            scored_rows.append(
+                {
+                    "eval_id": q["eval_id"],
+                    "id": q["id"],
+                    "category": q.get("category"),
+                    "retrieval_hit": False,
+                    "retrieved_chunks": None,
+                    "actual_answer": None,
+                    "judge": {},
+                    "latency_ms": None,
+                    "retrieval_error": None,
+                    "answer_error": None,
+                    "run_error": error,
+                }
+            )
+            statuses.append("failed")
+        completed_at = datetime.now(timezone.utc)
+        try:
+            self._persist_result_batch(
+                organization_id=organization_id,
+                run_id=run_summary.run_id,
+                ingestion_run_id=run_summary.ingestion_run_id,
+                run_number=run_summary.run_number,
+                triggered_by=run_summary.triggered_by,
+                top_k=run_summary.top_k,
+                answer_model=run_summary.answer_model,
+                judge_model=run_summary.judge_model,
+                started_at=run_summary.started_at,
+                completed_at=completed_at,
+                scored_rows=scored_rows,
+                question_dtos=question_dtos,
+                statuses=statuses,
+            )
+        except Exception:
+            logger.exception(
+                "[eval] _mark_failed persist failed run_id={}", run_summary.run_id,
+            )
+        run_summary.status = "failed"
+        run_summary.error = error
+        run_summary.completed_at = completed_at
+        run_summary.summary = _summarize_scored_rows(
+            [r for r, s in zip(scored_rows, statuses) if s == "completed"]
+        )
+
+    def _persist_result_batch(
+        self,
+        *,
+        organization_id: Any,
+        run_id: UUID,
+        ingestion_run_id: Optional[Any],
+        run_number: int,
+        triggered_by: str,
+        top_k: int,
+        answer_model: Optional[str],
+        judge_model: Optional[str],
+        started_at: Optional[datetime],
+        completed_at: Optional[datetime],
+        scored_rows: List[dict],
+        question_dtos: List[dict],
+        statuses: List[str],
+    ) -> None:
+        """Bulk-insert every scored answer on a brand-new session so we never
+        inherit a broken pool connection from the LLM-loop session."""
+        del question_dtos  # eval_id already stamped on each scored row
+        if not scored_rows:
+            return
+        rows = []
+        for scored, status in zip(scored_rows, statuses):
+            judge = scored.get("judge") or {}
+            rows.append(
+                {
+                    "id": uuid.uuid4(),
+                    "organization_id": organization_id,
+                    "eval_id": scored["eval_id"],
+                    "ingestion_run_id": ingestion_run_id,
+                    "run_id": run_id,
+                    "run_number": run_number,
+                    "triggered_by": triggered_by,
+                    "top_k": top_k,
+                    "answer_model": answer_model,
+                    "judge_model": judge_model,
+                    "status": status,
+                    "actual_answer": scored.get("actual_answer"),
+                    "retrieval_hit": bool(scored.get("retrieval_hit")),
+                    "retrieved_chunks": scored.get("retrieved_chunks"),
+                    "verdict": judge.get("verdict"),
+                    "correctness": _to_float(judge.get("correctness")),
+                    "groundedness": _to_float(judge.get("groundedness")),
+                    "relevance": _to_float(judge.get("relevance")),
+                    "judge_reasoning": judge.get("reasoning"),
+                    "latency_ms": scored.get("latency_ms"),
+                    "retrieval_error": scored.get("retrieval_error"),
+                    "answer_error": scored.get("answer_error"),
+                    "started_at": started_at,
+                    "completed_at": completed_at,
+                }
+            )
+        from core.database.session import SessionLocal
+        with SessionLocal() as fresh:
+            fresh.bulk_insert_mappings(EvalResult, rows)
+            fresh.commit()
+        logger.info(
+            "[eval] persisted run_id={} rows={} completed={} failed={}",
+            run_id, len(rows), statuses.count("completed"), statuses.count("failed"),
+        )
+
+    def _runs_for_upload(
+        self, db: Session, *, upload_id: Any, limit: Optional[int] = None
+    ) -> List[EvalRunSummary]:
+        rows = _run_grouped_query(db, upload_id=upload_id).all()
+        summaries = [_row_to_run_summary(r) for r in rows]
+        if limit is not None:
+            summaries = summaries[:limit]
+        return summaries
+
+    def _build_run_summary(
+        self, db: Session, *, run_id: Any
+    ) -> Optional[EvalRunSummary]:
+        row = _run_grouped_query(db, run_id=run_id).first()
+        if row is None:
+            return None
+        return _row_to_run_summary(row)
+
+    def _scored_rows_for_run(
+        self, db: Session, *, run_id: Any, org_id: Optional[Any] = None
+    ) -> List[dict]:
+        """Return the joined ``(EvalResult, Eval)`` rows for one run as plain
+        dicts — this is what the diff helper consumes. ``org_id`` is optional
+        for CLI callers; user-facing APIs pass it so cross-tenant reads are
+        impossible even if a caller guesses a ``run_id``."""
+        q = (
+            db.query(EvalResult, Eval)
+            .join(Eval, Eval.id == EvalResult.eval_id)
+            .filter(EvalResult.run_id == run_id)
+        )
+        if org_id is not None:
+            q = q.filter(EvalResult.organization_id == org_id)
+        joined = q.order_by(Eval.question_ord.asc()).all()
+        return [_result_row_to_dict(r, e) for r, e in joined]
 
 
 def _default_r2_service():
@@ -460,24 +946,24 @@ def _default_r2_service():
     return R2StorageService()
 
 
-def _eval_name(kb_name: Optional[str], upload_id: Any) -> str:
-    base = (kb_name or "kb").strip() or "kb"
-    suffix = str(upload_id).replace("-", "")[:8]
-    return f"{base}-{suffix}"[:255]
+def _question_to_dto(row: Eval) -> dict:
+    return {
+        "eval_id": row.id,
+        "id": row.external_id,
+        "question": row.question,
+        "expected_answer": row.expected_answer,
+        "expected_source_snippet": row.expected_source_snippet or "",
+        "category": row.category or "unknown",
+    }
 
 
-def _questions_list(payload: Any) -> List[dict]:
-    """Accept either the wrapped payload (``{"questions": [...]}``) or a bare
-    list, since older CLI-generated rows nested the list under a top-level
-    key and the current generator does the same."""
-    if isinstance(payload, dict):
-        qs = payload.get("questions")
-        if isinstance(qs, list):
-            return qs
-        return []
-    if isinstance(payload, list):
-        return payload
-    return []
+def _to_float(v: Any) -> Optional[float]:
+    if v is None:
+        return None
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return None
 
 
 def _build_context(chunks: Iterable[dict]) -> str:
@@ -485,7 +971,10 @@ def _build_context(chunks: Iterable[dict]) -> str:
     return "\n\n".join(parts) if parts else "(no chunks retrieved)"
 
 
-def _summarize(rows: List[dict]) -> dict:
+def _summarize_scored_rows(rows: List[dict]) -> dict:
+    """Roll up the in-memory scored-row list — used at the tail of ``run_eval``
+    so the returned ``EvalRunSummary`` carries the same summary payload the
+    CLI used to read off ``result.summary``."""
     total = len(rows)
     counts = {"PASS": 0, "PARTIAL": 0, "FAIL": 0}
     hit_count = 0
@@ -505,7 +994,7 @@ def _summarize(rows: List[dict]) -> dict:
         gnd_sum += float(judge.get("groundedness", 0) or 0)
         rel_sum += float(judge.get("relevance", 0) or 0)
         latency_sum += int(r.get("latency_ms", 0) or 0)
-        cat = r.get("category", "unknown")
+        cat = r.get("category") or "unknown"
         c = by_category.setdefault(
             cat, {"total": 0, "PASS": 0, "PARTIAL": 0, "FAIL": 0, "hits": 0}
         )
@@ -532,11 +1021,140 @@ def _summarize(rows: List[dict]) -> dict:
     }
 
 
-def _diff_results(
-    baseline: EvalResult, candidate: EvalResult, *, score_drop: float
+def _run_grouped_query(
+    db: Session,
+    *,
+    upload_id: Any = None,
+    run_id: Any = None,
+    organization_id: Any = None,
+    ingestion_run_ids: Optional[Iterable[Any]] = None,
+):
+    """Aggregate ``eval_results`` rows into one row per run, computing the
+    summary via SQL so we never buffer every answer into memory just to
+    render a per-run tally.
+
+    Optional filters (used by the KB drawer / column endpoints):
+    - ``organization_id``: tenant-scope the query.
+    - ``ingestion_run_ids``: narrow to batches that scored one (or several)
+      ingestion runs — powers the per-ingestion "Evals" chip in the UI."""
+    q = (
+        db.query(
+            EvalResult.run_id.label("run_id"),
+            func.max(Eval.upload_id).label("upload_id"),
+            func.max(EvalResult.organization_id).label("organization_id"),
+            func.max(EvalResult.ingestion_run_id).label("ingestion_run_id"),
+            func.max(EvalResult.run_number).label("run_number"),
+            func.max(EvalResult.triggered_by).label("triggered_by"),
+            func.max(EvalResult.top_k).label("top_k"),
+            func.max(EvalResult.answer_model).label("answer_model"),
+            func.max(EvalResult.judge_model).label("judge_model"),
+            func.max(EvalResult.started_at).label("started_at"),
+            func.max(EvalResult.completed_at).label("completed_at"),
+            func.count(EvalResult.id).label("total"),
+            func.sum(case((EvalResult.verdict == "PASS", 1), else_=0)).label("pass_count"),
+            func.sum(case((EvalResult.verdict == "PARTIAL", 1), else_=0)).label("partial_count"),
+            func.sum(case((EvalResult.verdict == "FAIL", 1), else_=0)).label("fail_count"),
+            func.sum(case((EvalResult.retrieval_hit.is_(True), 1), else_=0)).label("hit_count"),
+            func.sum(case((EvalResult.status == "failed", 1), else_=0)).label("failed_status_count"),
+            func.coalesce(func.avg(EvalResult.correctness), 0.0).label("avg_correctness"),
+            func.coalesce(func.avg(EvalResult.groundedness), 0.0).label("avg_groundedness"),
+            func.coalesce(func.avg(EvalResult.relevance), 0.0).label("avg_relevance"),
+            func.coalesce(func.sum(EvalResult.latency_ms), 0).label("duration_ms"),
+        )
+        .join(Eval, Eval.id == EvalResult.eval_id)
+        .group_by(EvalResult.run_id)
+        .order_by(func.max(EvalResult.started_at).desc())
+    )
+    if upload_id is not None:
+        q = q.filter(Eval.upload_id == upload_id)
+    if run_id is not None:
+        q = q.filter(EvalResult.run_id == run_id)
+    if organization_id is not None:
+        q = q.filter(EvalResult.organization_id == organization_id)
+    if ingestion_run_ids is not None:
+        # ``.in_([])`` returns no rows, which is exactly what we want when
+        # the caller passes an empty list.
+        q = q.filter(EvalResult.ingestion_run_id.in_(list(ingestion_run_ids)))
+    return q
+
+
+def _row_to_run_summary(row) -> EvalRunSummary:
+    total = int(row.total or 0)
+    passes = int(row.pass_count or 0)
+    partials = int(row.partial_count or 0)
+    fails = int(row.fail_count or 0)
+    hits = int(row.hit_count or 0)
+    failed_status = int(row.failed_status_count or 0)
+    summary = {
+        "total": total,
+        "pass": passes,
+        "partial": partials,
+        "fail": fails,
+        "pass_rate": (passes / total) if total else 0.0,
+        "partial_rate": (partials / total) if total else 0.0,
+        "fail_rate": (fails / total) if total else 0.0,
+        "retrieval_hit_rate": (hits / total) if total else 0.0,
+        "avg_correctness": float(row.avg_correctness or 0.0),
+        "avg_groundedness": float(row.avg_groundedness or 0.0),
+        "avg_relevance": float(row.avg_relevance or 0.0),
+        "total_questions": total,
+        "duration_ms": int(row.duration_ms or 0),
+    }
+    status = "failed" if failed_status > 0 else "completed"
+    return EvalRunSummary(
+        run_id=row.run_id,
+        upload_id=row.upload_id,
+        ingestion_run_id=row.ingestion_run_id,
+        run_number=int(row.run_number or 0),
+        triggered_by=row.triggered_by,
+        top_k=int(row.top_k or 0),
+        answer_model=row.answer_model,
+        judge_model=row.judge_model,
+        status=status,
+        error=None,
+        started_at=row.started_at,
+        completed_at=row.completed_at,
+        summary=summary,
+    )
+
+
+def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
+    return {
+        "id": question.external_id,
+        "eval_id": question.id,
+        "category": question.category or "unknown",
+        "question": question.question,
+        "expected_answer": question.expected_answer,
+        "expected_source_snippet": question.expected_source_snippet or "",
+        "retrieval_hit": bool(result.retrieval_hit),
+        "retrieved_chunks": result.retrieved_chunks or [],
+        "actual_answer": result.actual_answer or "",
+        "judge": {
+            "verdict": result.verdict or "FAIL",
+            "correctness": float(result.correctness or 0.0),
+            "groundedness": float(result.groundedness or 0.0),
+            "relevance": float(result.relevance or 0.0),
+            "reasoning": result.judge_reasoning,
+        },
+        "latency_ms": result.latency_ms,
+        "retrieval_error": result.retrieval_error,
+        "answer_error": result.answer_error,
+        "status": result.status,
+    }
+
+
+def _diff_scored_rows(
+    *,
+    baseline_summary: EvalRunSummary,
+    candidate_summary: EvalRunSummary,
+    baseline_rows: List[dict],
+    candidate_rows: List[dict],
+    score_drop: float,
 ) -> dict:
-    b_rows = _index_by_id(baseline.per_question or [])
-    c_rows = _index_by_id(candidate.per_question or [])
+    """Compare two runs' per-question rows. Output shape mirrors the
+    pre-refactor helper so ``compare_runs.py`` needs no template changes."""
+    b_rows = _index_by_id(baseline_rows)
+    c_rows = _index_by_id(candidate_rows)
     all_ids = sorted(set(b_rows) | set(c_rows))
 
     per_question_diff: List[dict] = []
@@ -594,16 +1212,16 @@ def _diff_results(
 
     return {
         "baseline": {
-            "id": str(baseline.id),
-            "run_number": baseline.run_number,
-            "started_at": baseline.started_at.isoformat() if baseline.started_at else None,
-            "summary": baseline.summary or {},
+            "id": str(baseline_summary.run_id),
+            "run_number": baseline_summary.run_number,
+            "started_at": baseline_summary.started_at.isoformat() if baseline_summary.started_at else None,
+            "summary": baseline_summary.summary or {},
         },
         "candidate": {
-            "id": str(candidate.id),
-            "run_number": candidate.run_number,
-            "started_at": candidate.started_at.isoformat() if candidate.started_at else None,
-            "summary": candidate.summary or {},
+            "id": str(candidate_summary.run_id),
+            "run_number": candidate_summary.run_number,
+            "started_at": candidate_summary.started_at.isoformat() if candidate_summary.started_at else None,
+            "summary": candidate_summary.summary or {},
         },
         "score_drop_threshold": score_drop,
         "regressions": regressions,
