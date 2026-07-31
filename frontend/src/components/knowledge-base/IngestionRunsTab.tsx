@@ -4,8 +4,11 @@ import { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Copy, Loader2, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
+import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
 import { Badge } from '@/components/ui/badge';
+import { useEvalSummariesByIngestion } from '@/lib/api/evals';
 import { useActivateIngestionRun, useIngestionRuns } from '@/lib/api/ingestion-runs';
+import type { EvalRunSummary, EvalRunSummaryTotals } from '@/types/eval';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { IngestionRun, IngestionRunStatus } from '@/types/ingestionRun';
 import { cn } from '@/utils/cn';
@@ -50,6 +53,46 @@ const statusStyle: Record<
 
 const DEFAULT_PAGE_SIZE = 20;
 
+// Color the "Evals" chip by pass rate — grey when no batch exists yet, red
+// on any FAIL, amber on any PARTIAL (no FAIL), green when everything passed.
+function evalChipTone(summary: EvalRunSummary | undefined): {
+  className: string;
+  label: string;
+} {
+  if (!summary) {
+    return {
+      className: 'bg-muted text-muted-foreground ring-1 ring-border/60',
+      label: '—',
+    };
+  }
+  const totals = summary.summary as EvalRunSummaryTotals;
+  const total = totals?.total ?? 0;
+  if (total === 0) {
+    return {
+      className: 'bg-muted text-muted-foreground ring-1 ring-border/60',
+      label: '—',
+    };
+  }
+  const label = `${totals.pass}/${total}`;
+  if (summary.status === 'failed' || totals.fail > 0) {
+    return {
+      className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
+      label,
+    };
+  }
+  if (totals.partial > 0) {
+    return {
+      className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
+      label,
+    };
+  }
+  return {
+    className:
+      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
+    label,
+  };
+}
+
 export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRunsTabProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -67,8 +110,16 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const activate = useActivateIngestionRun(uploadId);
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
+  const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
+
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
+
+  // Batch-fetch the latest eval-batch summary for every visible ingestion run
+  // so the "Evals" column paints in one query instead of N.
+  const visibleRunIds = useMemo(() => runs.map((r) => r.id), [runs]);
+  const { data: evalSummariesResp } = useEvalSummariesByIngestion(uploadId, visibleRunIds);
+  const evalSummariesByIngestion = evalSummariesResp?.items ?? {};
 
   // When the parent doesn't pass the KB's active run id (e.g. the KB payload
   // isn't reachable in that view), derive it from the runs list so the
@@ -191,6 +242,34 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         ),
       },
       {
+        key: 'evals',
+        title: 'Evals',
+        align: 'center',
+        width: 'w-[110px]',
+        render: (_v, r) => {
+          const summary = evalSummariesByIngestion[r.id];
+          const chip = evalChipTone(summary);
+          const totals = summary?.summary as EvalRunSummaryTotals | undefined;
+          const tooltip = summary
+            ? `${totals?.pass ?? 0} pass · ${totals?.partial ?? 0} partial · ${totals?.fail ?? 0} fail (batch #${summary.run_number}) — click to view`
+            : 'No eval batch has scored this run yet — click to view';
+          return (
+            <CustomTooltip content={tooltip}>
+              <button
+                type="button"
+                onClick={() => setDrawerRun(r)}
+                className={cn(
+                  'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:brightness-110',
+                  chip.className,
+                )}
+              >
+                {chip.label}
+              </button>
+            </CustomTooltip>
+          );
+        },
+      },
+      {
         key: 'completed_at',
         title: 'Completed',
         dataIndex: 'completed_at',
@@ -258,7 +337,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         },
       },
     ],
-    [resolvedActiveRunId, activatingId],
+    [resolvedActiveRunId, activatingId, evalSummariesByIngestion],
   );
 
   return (
@@ -312,6 +391,13 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
           }
         />
       </div>
+
+      <EvalResultsDrawer
+        open={drawerRun !== null}
+        onClose={() => setDrawerRun(null)}
+        uploadId={uploadId}
+        ingestionRun={drawerRun}
+      />
     </div>
   );
 }

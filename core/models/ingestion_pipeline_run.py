@@ -76,6 +76,25 @@ class IngestionPipelineRun(OrgScopedModel):
     # ``NoReferencedTableError``. Mirrors the prior ``KnowledgeBase.procrastinate_job_id``
     # setup for the same reason.
     procrastinate_job_id = Column(BigInteger, nullable=True, index=True)
+    # Stable per-run id stamped onto every log line during the run so the full
+    # log stream for one ingestion can be filtered by a single value (mirrors
+    # ``calls.trace_id`` for voice calls). Format: "{short_uuid}-ing-{run_id}",
+    # minted + persisted by ``IngestionRunService.ensure_trace_id`` at the top
+    # of the ``ingest_upload`` Procrastinate task (so pre-``mark_running`` logs
+    # also carry it); format itself lives in
+    # ``core.logging.make_ingestion_trace_id``. Nullable because rows created
+    # before this column existed have no id; the migration does not backfill
+    # (historical runs never emitted a trace_id in their logs anyway).
+    trace_id = Column(String(128), nullable=True, index=True)
+    # Per-run parser/routing metrics — image / table / page counts, parse
+    # timings, pipeline selected, etc. Populated in ``complete_run`` from
+    # ``PdfRoutingService.build().metrics()`` (see
+    # ``core/services/rag/pdf_router.py``). NULL when the parser did not
+    # produce metrics (e.g. non-docling parsers on non-PDF inputs). Same
+    # shape is also written to ``uploads.meta_data["routing"]`` and
+    # ``knowledge_bases.ingestion_stats`` (latest run); this per-run copy is
+    # the audit trail across re-ingests with different parser configs.
+    ingestion_stats = Column(JSONB, nullable=True)
 
     upload = relationship("Upload")
     knowledge_base = relationship(
@@ -112,6 +131,8 @@ class IngestionPipelineRun(OrgScopedModel):
             "error": self.error,
             "chunk_count": self.chunk_count,
             "procrastinate_job_id": self.procrastinate_job_id,
+            "trace_id": self.trace_id,
+            "ingestion_stats": self.ingestion_stats,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

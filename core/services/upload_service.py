@@ -14,6 +14,7 @@ observes the upload)."""
 from __future__ import annotations
 
 import mimetypes
+import time
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 from uuid import UUID, uuid4
@@ -98,7 +99,23 @@ class UploadService(BaseService):
 
         r2 = self._r2 or R2StorageService()
         object_key = f"knowledge-base/{self.org_id}/{uuid4()}/{resolved_name}"
-        r2.upload_fileobj(stream, object_key, content_type=resolved_type)
+        logger.info(
+            "[upload] uploading to R2 org={} key={} content_type={} size={}",
+            self.org_id, object_key, resolved_type, resolved_size,
+        )
+        t_r2 = time.monotonic()
+        try:
+            r2.upload_fileobj(stream, object_key, content_type=resolved_type)
+        except Exception:
+            logger.exception(
+                "[upload] R2 upload failed org={} key={}",
+                self.org_id, object_key,
+            )
+            raise
+        logger.info(
+            "[upload] R2 upload ok key={} elapsed_s={:.1f}",
+            object_key, time.monotonic() - t_r2,
+        )
 
         try:
             upload = Upload(
@@ -159,6 +176,11 @@ class UploadService(BaseService):
                 logger.debug("Best-effort R2 cleanup failed for {}: {}", object_key, exc)
             raise
 
+        logger.info(
+            "[upload] created upload={} kb={} org={} agent={} name={}",
+            upload.id, kb.id, self.org_id, agent_id, resolved_name,
+        )
+
         run = self._begin_ingestion_run(
             upload=upload,
             kb=kb,
@@ -175,6 +197,10 @@ class UploadService(BaseService):
                 IngestionRunService.fail_run(self.db, run.id, error=f"enqueue failed: {exc}")
                 raise
             IngestionRunService.set_procrastinate_job_id(self.db, run.id, job_id)
+            logger.info(
+                "[upload] ingestion enqueued upload={} run={} job_id={}",
+                upload.id, run.id, job_id,
+            )
 
         return upload, kb, run
 

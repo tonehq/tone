@@ -4,12 +4,13 @@ apples-to-apples comparable across model / parser / embedder swaps.
 
 For each document in ``rag-benchmarks/<key>/docs/``:
   1. Create the ``Upload`` + ``KnowledgeBase`` via ``UploadService`` (no defer yet).
-  2. Pre-seed the ``evals`` row from ``qa.jsonl`` via ``EvalService.import_eval``
-     (``status='ready'``).
+  2. Pre-seed the ``evals`` rows from ``qa.jsonl`` via ``EvalService.import_eval``
+     (one row per question).
   3. Fire ``enqueue_upload(...)`` so ingestion runs. When the pipeline finishes,
      the existing ``eval_ingestion_run`` auto-task calls
-     ``EvalService.get_or_generate_eval`` which short-circuits on ``ready`` —
-     no LLM question generation, straight to ``run_eval`` against gold Q&A.
+     ``EvalService.get_or_generate_eval`` which short-circuits when questions
+     already exist — no LLM question generation, straight to ``run_eval``
+     against gold Q&A.
 
 Dataset folder layout expected under ``rag-benchmarks/<key>/``:
     docs/<doc_filename>.<ext>           # one file per KB (any format ingestion supports)
@@ -100,8 +101,9 @@ async def _import_one_doc(
     doc_path: Path,
     questions: list[dict],
     org_id: UUID,
-) -> tuple[str, str, str]:
-    """Wire one doc through the pipeline. Returns ``(upload_id, kb_id, eval_id)``."""
+) -> tuple[str, str, int]:
+    """Wire one doc through the pipeline. Returns
+    ``(upload_id, kb_id, question_count)``."""
     from core.database.session import SessionLocal
     from core.services.evals.eval_service import EvalService
     from core.services.ingestion_queue import enqueue_upload
@@ -121,17 +123,17 @@ async def _import_one_doc(
             upload_meta_data={"source": source_key},
             enqueue_ingestion=False,
         )
-        eval_row = EvalService().import_eval(
+        eval_set = EvalService().import_eval(
             db,
             upload_id=upload.id,
             org_id=org_id,
             questions=questions,
             source_key=source_key,
         )
-        # Ingestion fires AFTER the eval row is pre-seeded — the auto-run task
-        # then finds status='ready' and skips LLM question generation.
+        # Ingestion fires AFTER the question rows are pre-seeded — the auto-run
+        # task then finds them and skips LLM question generation.
         await enqueue_upload(upload.id, org_id, run.id)
-        return str(upload.id), str(kb.id), str(eval_row.id)
+        return str(upload.id), str(kb.id), eval_set.question_count
     finally:
         db.close()
 
@@ -170,7 +172,7 @@ def main() -> int:
         questions = qa_by_doc.get(doc_path.name)
         if not questions:
             continue
-        upload_id, kb_id, eval_id = asyncio.run(
+        upload_id, kb_id, question_count = asyncio.run(
             _import_one_doc(
                 key=args.key,
                 doc_path=doc_path,
@@ -179,7 +181,7 @@ def main() -> int:
             )
         )
         print(
-            f"  ✔ {doc_path.name} → upload={upload_id} kb={kb_id} eval={eval_id} questions={len(questions)}"
+            f"  ✔ {doc_path.name} → upload={upload_id} kb={kb_id} questions={question_count}"
         )
 
     print("done — ingestion is running in the background; auto-eval will score against gold Q&A when it completes.")

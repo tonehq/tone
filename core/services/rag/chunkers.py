@@ -26,15 +26,26 @@ class TokenAwareChunker(Chunker):
         self.overlap_tokens = overlap_tokens
 
     def chunk(self, document: Document) -> List[Chunk]:
+        logger.debug(
+            "[chunk:token-aware] input chars={} max_tokens={} overlap={}",
+            len(document.text), self.max_tokens, self.overlap_tokens,
+        )
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.max_tokens,
             chunk_overlap=self.overlap_tokens,
             length_function=self.tokenizer.count_tokens,
             separators=["\n\n", "\n", ". ", " ", ""],
         )
-        chunks = [Chunk(index=i, text=t) for i, t in enumerate(splitter.split_text(document.text))]
+        try:
+            chunks = [Chunk(index=i, text=t) for i, t in enumerate(splitter.split_text(document.text))]
+        except Exception:
+            logger.exception(
+                "[chunk:token-aware] split failed chars={} max_tokens={} tokenizer={}",
+                len(document.text), self.max_tokens, type(self.tokenizer).__name__,
+            )
+            raise
         logger.info(
-            "Token-aware split into {} chunks (max_tokens={}, tokenizer={})",
+            "[chunk:token-aware] split into {} chunks (max_tokens={}, tokenizer={})",
             len(chunks), self.max_tokens, type(self.tokenizer).__name__,
         )
         return chunks
@@ -46,15 +57,26 @@ class RecursiveCharacterChunker(Chunker):
         self.chunk_overlap = chunk_overlap
 
     def chunk(self, document: Document) -> List[Chunk]:
+        logger.debug(
+            "[chunk:recursive] input chars={} chunk_size={} overlap={}",
+            len(document.text), self.chunk_size, self.chunk_overlap,
+        )
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap,
             length_function=len,
             separators=["\n\n", "\n", ". ", " ", ""],
         )
-        chunks = [Chunk(index=i, text=t) for i, t in enumerate(splitter.split_text(document.text))]
+        try:
+            chunks = [Chunk(index=i, text=t) for i, t in enumerate(splitter.split_text(document.text))]
+        except Exception:
+            logger.exception(
+                "[chunk:recursive] split failed chars={} chunk_size={}",
+                len(document.text), self.chunk_size,
+            )
+            raise
         logger.info(
-            "Split text into {} chunks (chunk_size={}, overlap={})",
+            "[chunk:recursive] split text into {} chunks (chunk_size={}, overlap={})",
             len(chunks), self.chunk_size, self.chunk_overlap,
         )
         return chunks
@@ -76,11 +98,23 @@ class DoclingHybridChunker(Chunker):
                 max_tokens=self.max_tokens,
             )
         except Exception as e:
-            logger.info("OpenAI tokenizer unavailable ({}); using HuggingFace tokenizer", e)
-            return HuggingFaceTokenizer.from_pretrained(
-                model_name="sentence-transformers/all-MiniLM-L6-v2",
-                max_tokens=self.max_tokens,
+            # Expected fallback when tiktoken lacks the encoding for a new model;
+            # keep at debug so this doesn't drown real ingestion signal.
+            logger.debug(
+                "[chunk:docling] OpenAI tokenizer unavailable ({}); using HuggingFace tokenizer",
+                e,
             )
+            try:
+                return HuggingFaceTokenizer.from_pretrained(
+                    model_name="sentence-transformers/all-MiniLM-L6-v2",
+                    max_tokens=self.max_tokens,
+                )
+            except Exception:
+                logger.exception(
+                    "[chunk:docling] tokenizer resolve failed embedding_model={}",
+                    self.embedding_model,
+                )
+                raise
 
     def _get_chunker(self):
         if self._chunker is None:
@@ -88,15 +122,29 @@ class DoclingHybridChunker(Chunker):
         return self._chunker
 
     def chunk(self, document: Document) -> List[Chunk]:
+        logger.debug(
+            "[chunk:docling] input chars={} native={} max_tokens={}",
+            len(document.text), document.native is not None, self.max_tokens,
+        )
         if document.native is None:
+            # Docling requires a native document object; without it, fall back
+            # to a plain recursive-char splitter (already emits its own logs).
+            logger.debug("[chunk:docling] no native doc; falling back to RecursiveCharacterChunker")
             if self._fallback is None:
                 self._fallback = RecursiveCharacterChunker()
             return self._fallback.chunk(document)
-        chunker = self._get_chunker()
-        chunks: List[Chunk] = []
-        for i, ch in enumerate(chunker.chunk(dl_doc=document.native)):
-            text = chunker.contextualize(ch)
-            if text and text.strip():
-                chunks.append(Chunk(index=i, text=text))
-        logger.info("Docling HybridChunker -> {} chunks (max_tokens={})", len(chunks), self.max_tokens)
+        try:
+            chunker = self._get_chunker()
+            chunks: List[Chunk] = []
+            for i, ch in enumerate(chunker.chunk(dl_doc=document.native)):
+                text = chunker.contextualize(ch)
+                if text and text.strip():
+                    chunks.append(Chunk(index=i, text=text))
+        except Exception:
+            logger.exception(
+                "[chunk:docling] hybrid chunk failed chars={} max_tokens={}",
+                len(document.text), self.max_tokens,
+            )
+            raise
+        logger.info("[chunk:docling] HybridChunker -> {} chunks (max_tokens={})", len(chunks), self.max_tokens)
         return chunks

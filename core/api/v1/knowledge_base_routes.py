@@ -48,6 +48,14 @@ class SetAgentKbActiveRunRequest(BaseModel):
 
     active_ingestion_pipeline_run_id: Optional[UUID] = None
 
+
+class EvalSummaryByIngestionRequest(BaseModel):
+    """Body for ``POST /{upload_id}/eval-summary/by-ingestion`` — batch lookup
+    used by the runs table to paint the per-row "Evals" chip without an N+1.
+    """
+
+    ingestion_run_ids: List[UUID] = Field(default_factory=list)
+
 from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.models.agent import Agent
@@ -56,6 +64,7 @@ from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.services.document_processing_service import DocumentProcessingService
+from core.services.evals.eval_service import EvalRunSummary, EvalService
 from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
 from core.services.ingestion_run_service import IngestionRunService
 from core.services.rag.embedder_factory import EMBEDDERS
@@ -106,6 +115,27 @@ def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> di
     payload = upload.to_dict()
     payload["url"] = _signed_url(upload.file_path, r2)
     return payload
+
+
+def _eval_run_summary_to_dict(s: EvalRunSummary) -> dict:
+    """Transport-layer serializer for ``EvalRunSummary`` (a dataclass, so it
+    has no ``to_dict``). Kept here rather than on the service so the service
+    stays HTTP-agnostic."""
+    return {
+        "run_id": str(s.run_id),
+        "upload_id": str(s.upload_id),
+        "ingestion_run_id": str(s.ingestion_run_id) if s.ingestion_run_id else None,
+        "run_number": s.run_number,
+        "triggered_by": s.triggered_by,
+        "top_k": s.top_k,
+        "answer_model": s.answer_model,
+        "judge_model": s.judge_model,
+        "status": s.status,
+        "error": s.error,
+        "started_at": s.started_at.isoformat() if s.started_at else None,
+        "completed_at": s.completed_at.isoformat() if s.completed_at else None,
+        "summary": s.summary or {},
+    }
 
 
 def _kb_for_upload(db: Session, org_id: UUID, upload_id: UUID) -> KnowledgeBase:
@@ -166,6 +196,10 @@ async def _start_ingestion_run(
         IngestionRunService.fail_run(db, run.id, error=f"enqueue failed: {exc}")
         raise
     IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
+    logger.info(
+        "[ingestion] enqueued upload={} run={} job_id={} reprocess={}",
+        upload.id, run.id, job_id, delete_existing,
+    )
     return run, job_id
 
 
@@ -331,6 +365,11 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
+        logger.info(
+            "[upload] received upload org={} user={} agent={} file_name={} content_type={} size={}",
+            org_id, user_id, agent_uuid, file_name, content_type, size_bytes,
+        )
+
         upload, _kb, _run = await UploadService(
             db, user_id=user_id, org_id=org_id
         ).create_upload_from_file(
@@ -412,8 +451,20 @@ def build_knowledge_base_router(
             )
         content_type = file.content_type or "application/octet-stream"
 
+        logger.info(
+            "[upload] replace requested upload={} org={} old_name={} new_name={} new_size={}",
+            upload.id, org_id, upload.file_name, new_name, size_bytes,
+        )
+
         new_object_key = f"knowledge-base/{org_id}/{uuid4()}/{new_name}"
-        R2StorageService().upload_fileobj(file.file, new_object_key, content_type=content_type)
+        try:
+            R2StorageService().upload_fileobj(file.file, new_object_key, content_type=content_type)
+        except Exception:
+            logger.exception(
+                "[upload] R2 replace upload failed upload={} key={}",
+                upload.id, new_object_key,
+            )
+            raise
 
         old_path = upload.file_path
 
@@ -478,6 +529,11 @@ def build_knowledge_base_router(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Upload has no stored file to reprocess",
             )
+
+        logger.info(
+            "[ingestion] reprocess requested upload={} org={} user={} prev_status={}",
+            upload.id, org_id, claims.user_id, upload.status,
+        )
 
         # Flip to processing and drop the stale error so the UI reflects the
         # retry immediately, before the background task runs.
@@ -759,6 +815,85 @@ def build_knowledge_base_router(
             )
         activated = IngestionRunService.activate_run(db, run.id)
         return activated.to_dict()
+
+    @router.post("/{upload_id}/eval-summary/by-ingestion")
+    def eval_summary_by_ingestion(
+        upload_id: str,
+        body: EvalSummaryByIngestionRequest = Body(default_factory=EvalSummaryByIngestionRequest),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Batch lookup: for each ingestion run id in the body, return the
+        latest eval-batch summary. Powers the "Evals" chip in the runs table
+        (one call for every visible page — no N+1). Missing keys → no eval
+        was run for that ingestion run."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        by_ingestion = EvalService().latest_summaries_by_ingestion(
+            db,
+            org_id=org_id,
+            upload_id=upload.id,
+            ingestion_run_ids=body.ingestion_run_ids,
+        )
+        return {
+            "items": {k: _eval_run_summary_to_dict(v) for k, v in by_ingestion.items()},
+        }
+
+    @router.get("/{upload_id}/runs/{ingestion_run_id}/eval-runs")
+    def list_eval_runs_for_ingestion(
+        upload_id: str,
+        ingestion_run_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Every eval batch that scored one ingestion run, newest first — the
+        drawer's run-picker reads from this."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            iid = UUID(ingestion_run_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ingestion_run_id"
+            )
+        summaries = EvalService().list_runs_for_ingestion(
+            db,
+            org_id=org_id,
+            upload_id=upload.id,
+            ingestion_run_id=iid,
+        )
+        return {"items": [_eval_run_summary_to_dict(s) for s in summaries]}
+
+    @router.get("/{upload_id}/eval-runs/{run_id}")
+    def get_eval_run_detail(
+        upload_id: str,
+        run_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Return summary + every scored question for one eval batch — the
+        drawer body. Org-scoped in the service so a caller from another tenant
+        gets 404 even with a valid ``run_id``."""
+        org_id = resolve_org_id(claims)
+        # Validate the upload exists in the caller's org — separate from the
+        # eval batch's own org scoping so a wrong upload_id never falls through
+        # to a valid batch.
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            rid = UUID(run_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id"
+            )
+        detail = EvalService().get_run_detail(db, org_id=org_id, run_id=rid)
+        if detail is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Eval run not found"
+            )
+        return {
+            "summary": _eval_run_summary_to_dict(detail["summary"]),
+            "questions": detail["questions"],
+        }
 
     @router.put(
         "/agents/{agent_id}/knowledge-bases/{kb_id}/active-run",

@@ -36,8 +36,8 @@ def _run_one(doc_slug: str, args) -> int:
             print(f"[eval] {doc_slug} has no active ingestion run", file=sys.stderr)
             return 1
 
-        eval_row = svc.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-        if eval_row is None:
+        eval_set = svc.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
+        if eval_set is None:
             print(
                 f"[eval] {doc_slug} has no eval. Run generate_questions.py first.",
                 file=sys.stderr,
@@ -47,7 +47,7 @@ def _run_one(doc_slug: str, args) -> int:
         try:
             result = svc.run_eval(
                 db,
-                eval_id=eval_row.id,
+                upload_id=upload_id,
                 ingestion_run_id=run.id,
                 triggered_by="cli",
                 top_k=args.top_k,
