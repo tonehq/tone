@@ -56,6 +56,49 @@ class EvalSummaryByIngestionRequest(BaseModel):
 
     ingestion_run_ids: List[UUID] = Field(default_factory=list)
 
+
+class ManualQuestionIn(BaseModel):
+    """One user-authored Q&A pair. ``expected_source_snippet`` and
+    ``category`` are optional; ``external_id`` is optional (auto-minted
+    when absent)."""
+
+    question: str = Field(..., min_length=1, max_length=4000)
+    expected_answer: str = Field(..., min_length=1, max_length=8000)
+    expected_source_snippet: Optional[str] = Field(default=None, max_length=8000)
+    category: Optional[str] = Field(default=None, max_length=64)
+    external_id: Optional[str] = Field(default=None, max_length=64)
+
+
+class AddManualQuestionsRequest(BaseModel):
+    """Body for ``POST /{upload_id}/evals/manual`` — appends questions to the
+    upload's eval set without wiping existing rows."""
+
+    questions: List[ManualQuestionIn] = Field(..., min_length=1, max_length=200)
+
+
+class UpdateQuestionRequest(BaseModel):
+    """Body for ``PUT /{upload_id}/evals/questions/{question_id}``. All fields
+    optional so callers can PATCH-style update; explicit ``null`` on the
+    optional fields clears them."""
+
+    question: Optional[str] = Field(default=None, min_length=1, max_length=4000)
+    expected_answer: Optional[str] = Field(default=None, min_length=1, max_length=8000)
+    expected_source_snippet: Optional[str] = Field(default=None, max_length=8000)
+    category: Optional[str] = Field(default=None, max_length=64)
+
+
+class TriggerEvalRunRequest(BaseModel):
+    """Body for ``POST /{upload_id}/evals/run`` — the ``ingestion_run_id`` is
+    optional; when omitted the active ingestion run for the upload is used.
+
+    Per-run overrides (``top_k`` / ``answer_model`` / ``judge_model``) are
+    intentionally NOT exposed here yet — the shared Procrastinate task does
+    not accept them, and quietly ignoring caller-supplied values would break
+    the API contract. Add them here + wire them through the task if a real
+    need arises."""
+
+    ingestion_run_id: Optional[UUID] = None
+
 from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.models.agent import Agent
@@ -65,7 +108,12 @@ from core.models.upload import Upload
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.services.document_processing_service import DocumentProcessingService
 from core.services.evals.eval_service import EvalRunSummary, EvalService
-from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
+from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
+from core.services.ingestion_queue import (
+    enqueue_eval_for_ingestion_run,
+    enqueue_reprocess,
+    enqueue_upload,
+)
 from core.services.ingestion_run_service import IngestionRunService
 from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
@@ -893,6 +941,298 @@ def build_knowledge_base_router(
         return {
             "summary": _eval_run_summary_to_dict(detail["summary"]),
             "questions": detail["questions"],
+        }
+
+    # ── Manual eval question authoring ─────────────────────────────────
+    # Users author their own Q&A pairs (typed in the UI) in addition to the
+    # LLM-generated set. All four routes below are org-scoped and delegate to
+    # ``EvalService``; scoring itself stays on the existing ``run_eval``
+    # pipeline (retrieval + answer LLM + judge LLM), so manual questions flow
+    # through the same drawer/summary UI as generated / benchmark-imported
+    # ones — the ``generated_by_model`` field distinguishes them.
+
+    def _eval_question_to_payload(row) -> dict:
+        return {
+            "id": str(row.id),
+            "upload_id": str(row.upload_id),
+            "knowledge_base_id": str(row.knowledge_base_id),
+            "external_id": row.external_id,
+            "question_ord": row.question_ord,
+            "question": row.question,
+            "expected_answer": row.expected_answer,
+            "expected_source_snippet": row.expected_source_snippet,
+            "category": row.category,
+            "generated_by_model": row.generated_by_model,
+            "generation_prompt_hash": row.generation_prompt_hash,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+        }
+
+    def _eval_set_summary_to_dict(s) -> dict:
+        return {
+            "upload_id": str(s.upload_id),
+            "organization_id": str(s.organization_id),
+            "knowledge_base_id": str(s.knowledge_base_id) if s.knowledge_base_id else None,
+            "question_count": s.question_count,
+            "generated_by_model": s.generated_by_model,
+            "generation_prompt_hash": s.generation_prompt_hash,
+        }
+
+    @router.get("/{upload_id}/evals/questions")
+    def list_eval_questions(
+        upload_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Return every eval question for one upload (ordered by
+        ``question_ord``). Powers the manual-authoring modal so the user can
+        see, edit, and delete existing questions alongside adding new ones."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        rows = EvalService().list_questions(db, upload_id=upload.id, org_id=org_id)
+        return {"items": [_eval_question_to_payload(r) for r in rows]}
+
+    @router.post(
+        "/{upload_id}/evals/manual",
+        status_code=status.HTTP_201_CREATED,
+    )
+    def add_manual_eval_questions(
+        upload_id: str,
+        body: AddManualQuestionsRequest = Body(...),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Append user-authored Q&A pairs to the upload's eval set. Never
+        replaces existing rows — that's ``generate_eval`` / ``import_eval``.
+        All validation (non-empty fields, external_id collisions, KB exists)
+        lives in the service so CLI / worker callers get the same guarantees."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        payload = [q.model_dump(exclude_none=True) for q in body.questions]
+        try:
+            summary = EvalService().add_questions_manual(
+                db,
+                upload_id=upload.id,
+                org_id=org_id,
+                questions=payload,
+            )
+        except EvalNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from e
+        except EvalGenerationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
+        return _eval_set_summary_to_dict(summary)
+
+    @router.post(
+        "/{upload_id}/evals/upload-csv",
+        status_code=status.HTTP_201_CREATED,
+    )
+    async def upload_eval_questions_csv(
+        upload_id: str,
+        file: UploadFile = File(...),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Append eval questions parsed from an uploaded CSV. Same semantics as
+        ``POST /evals/manual`` — never wipes existing rows and stamps
+        ``generated_by_model='manual'``. Row validation (non-empty fields,
+        external_id collisions, KB exists) is enforced by the service so this
+        route stays a thin adapter."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            raw = await file.read()
+        finally:
+            await file.close()
+        if not raw:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded file is empty.",
+            )
+        try:
+            summary = EvalService().add_questions_from_csv(
+                db,
+                upload_id=upload.id,
+                org_id=org_id,
+                csv_bytes=raw,
+            )
+        except EvalNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from e
+        except EvalGenerationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
+        return _eval_set_summary_to_dict(summary)
+
+    @router.put("/{upload_id}/evals/questions/{question_id}")
+    def update_eval_question(
+        upload_id: str,
+        question_id: str,
+        body: UpdateQuestionRequest = Body(...),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Patch one question row. Org-scoped so cross-tenant reads return
+        404. ``upload_id`` is validated to belong to the caller's org (its
+        presence in the URL isn't security by itself — the service also
+        checks the row's ``organization_id``)."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            qid = UUID(question_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid question_id",
+            )
+        patch = body.model_dump(exclude_unset=True)
+        if not patch:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No fields to update",
+            )
+        try:
+            row = EvalService().update_question(
+                db, question_id=qid, org_id=org_id, patch=patch,
+            )
+        except EvalNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from e
+        except EvalGenerationError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)
+            ) from e
+        return _eval_question_to_payload(row)
+
+    @router.delete(
+        "/{upload_id}/evals/questions/{question_id}",
+        status_code=status.HTTP_200_OK,
+    )
+    def delete_eval_question(
+        upload_id: str,
+        question_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Delete one question row. Cascades to its ``eval_results`` rows
+        via the FK. Historic ``eval_results`` for OTHER questions in the same
+        run are untouched — deletion is per-question, not per-batch."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            qid = UUID(question_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid question_id",
+            )
+        try:
+            EvalService().delete_question(db, question_id=qid, org_id=org_id)
+        except EvalNotFoundError as e:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(e)
+            ) from e
+        return {"ok": True}
+
+    @router.post(
+        "/{upload_id}/evals/run",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def trigger_manual_eval_run(
+        upload_id: str,
+        body: TriggerEvalRunRequest = Body(default_factory=TriggerEvalRunRequest),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Enqueue an eval run against the upload's questions.
+
+        The actual scoring (retrieve → answer LLM → judge LLM) runs on the
+        Procrastinate ``eval`` queue exactly like the auto-run after
+        ingestion — this endpoint just defers the job so the HTTP request
+        returns immediately instead of blocking for the 5-10 minutes an eval
+        can take. Idempotency is intentionally NOT enforced: each click
+        creates a fresh ``eval_results`` batch with a new ``run_id``, which
+        is what the user asked for when they hit "Run".
+
+        When ``ingestion_run_id`` is omitted, the currently-active ingestion
+        run for the upload is used. Rejects with 400 when no run exists
+        (upload never ingested) or when no active run is available (all runs
+        failed / pending)."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+
+        summary = EvalService().get_eval_by_upload(
+            db, upload_id=upload.id, org_id=org_id
+        )
+        if summary is None or summary.question_count == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No eval questions exist for this upload — add or generate questions first.",
+            )
+
+        if body.ingestion_run_id is not None:
+            run = (
+                db.query(IngestionPipelineRun)
+                .filter(
+                    IngestionPipelineRun.id == body.ingestion_run_id,
+                    IngestionPipelineRun.upload_id == upload.id,
+                    IngestionPipelineRun.organization_id == org_id,
+                )
+                .first()
+            )
+            if run is None:
+                raise HTTPException(
+                    status_code=status.HTTP_404_NOT_FOUND,
+                    detail="Ingestion run not found for this upload",
+                )
+        else:
+            run = (
+                db.query(IngestionPipelineRun)
+                .filter(
+                    IngestionPipelineRun.upload_id == upload.id,
+                    IngestionPipelineRun.organization_id == org_id,
+                    IngestionPipelineRun.is_active.is_(True),
+                )
+                .first()
+            )
+            if run is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No active ingestion run for this upload — ingest the document first.",
+                )
+        if run.status != "ready":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cannot run eval against a run with status={run.status!r}; only 'ready' is allowed",
+            )
+
+        try:
+            job_id = await enqueue_eval_for_ingestion_run(run.id, triggered_by="manual")
+        except Exception as exc:
+            logger.exception(
+                "[eval] manual run enqueue failed upload={} run={}",
+                upload.id, run.id,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to enqueue eval run: {exc}",
+            ) from exc
+
+        logger.info(
+            "[eval] manual run enqueued upload={} ingestion_run={} job_id={} user={}",
+            upload.id, run.id, job_id, claims.user_id,
+        )
+        return {
+            "upload_id": str(upload.id),
+            "ingestion_run_id": str(run.id),
+            "job_id": job_id,
+            "status": "queued",
         }
 
     @router.put(
