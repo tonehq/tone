@@ -1,12 +1,13 @@
 'use client';
 
-import { useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { FileUp, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-react';
 
 import {
   CustomButton,
   CustomModal,
   CustomTooltip,
+  SelectInput,
   TextAreaField,
   TextInput,
 } from '@/components/shared';
@@ -18,6 +19,7 @@ import {
   useUpdateEvalQuestion,
   useUploadEvalQuestionsCsv,
 } from '@/lib/api/evals';
+import { useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type { EvalQuestion, ManualQuestionInput, UpdateQuestionPatch } from '@/types/eval';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -71,6 +73,35 @@ export default function ManualEvalsModal({ open, onClose, uploadId }: ManualEval
   const uploadCsvMutation = useUploadEvalQuestionsCsv(uploadId);
   const csvInputRef = useRef<HTMLInputElement | null>(null);
   const [csvFile, setCsvFile] = useState<File | null>(null);
+
+  const { data: runsResp } = useIngestionRuns(open ? uploadId : null, {
+    status_filter: ['ready'],
+    page_size: 100,
+    sort_by: 'run_number',
+    sort_order: 'desc',
+  });
+  const readyRuns = useMemo(() => runsResp?.data ?? [], [runsResp]);
+
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(null);
+  useEffect(() => {
+    if (!open || readyRuns.length === 0) {
+      setSelectedRunId(null);
+      return;
+    }
+    if (!selectedRunId || !readyRuns.some((r) => r.id === selectedRunId)) {
+      const active = readyRuns.find((r) => r.is_active);
+      setSelectedRunId((active ?? readyRuns[0]).id);
+    }
+  }, [open, readyRuns, selectedRunId]);
+
+  const runOptions = useMemo(
+    () =>
+      readyRuns.map((r) => ({
+        value: r.id,
+        label: `Run #${r.run_number}${r.is_active ? ' (active)' : ''} · ${r.parser} · ${r.embedding_model}`,
+      })),
+    [readyRuns],
+  );
 
   const [draft, setDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -184,7 +215,9 @@ export default function ManualEvalsModal({ open, onClose, uploadId }: ManualEval
 
   const handleRunEval = async () => {
     try {
-      await runMutation.mutateAsync(undefined);
+      await runMutation.mutateAsync(
+        selectedRunId ? { ingestion_run_id: selectedRunId } : undefined,
+      );
       showToast.success(
         'Eval run queued',
         'Scoring runs in the background — results appear in the ingestion runs table when done.',
@@ -194,24 +227,56 @@ export default function ManualEvalsModal({ open, onClose, uploadId }: ManualEval
     }
   };
 
+  const hasReadyRuns = readyRuns.length > 0;
+  const runDisabled = questions.length === 0 || runMutation.isPending || !hasReadyRuns;
+  const runButton = (
+    <CustomButton
+      type="primary"
+      onClick={handleRunEval}
+      loading={runMutation.isPending}
+      disabled={runDisabled}
+    >
+      <Play className="mr-1 size-4" />
+      Run eval
+    </CustomButton>
+  );
+
   const footer = (
     <div className="flex w-full items-center justify-between gap-3">
-      <span className="text-xs text-muted-foreground">
+      <span className="shrink-0 text-xs text-muted-foreground">
         {questions.length} total · {manualCount} manual
       </span>
-      <div className="flex items-center gap-2">
+      {hasReadyRuns && (
+        <div className="flex min-w-0 flex-1 items-center justify-end gap-2">
+          <label
+            htmlFor="eval-ingestion-run"
+            className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground"
+          >
+            Ingest recipe
+          </label>
+          <div className="min-w-[260px]">
+            <SelectInput
+              name="eval-ingestion-run"
+              value={selectedRunId ?? undefined}
+              onValueChange={(v) => setSelectedRunId(v || null)}
+              options={runOptions}
+              placeholder="Select an ingestion run"
+              disabled={runMutation.isPending}
+            />
+          </div>
+        </div>
+      )}
+      <div className="flex shrink-0 items-center gap-2">
         <CustomButton type="default" onClick={onClose}>
           Close
         </CustomButton>
-        <CustomButton
-          type="primary"
-          onClick={handleRunEval}
-          loading={runMutation.isPending}
-          disabled={questions.length === 0 || runMutation.isPending}
-        >
-          <Play className="mr-1 size-4" />
-          Run eval
-        </CustomButton>
+        {!hasReadyRuns ? (
+          <CustomTooltip content="No ready ingestion runs to evaluate against">
+            <span>{runButton}</span>
+          </CustomTooltip>
+        ) : (
+          runButton
+        )}
       </div>
     </div>
   );
@@ -221,7 +286,7 @@ export default function ManualEvalsModal({ open, onClose, uploadId }: ManualEval
       open={open}
       onClose={onClose}
       title="Manual eval questions"
-      description="Add your own Q&A pairs, then hit Run to score them against the active ingestion pipeline."
+      description="Add your own Q&A pairs, then hit Run to score them against the selected ingestion pipeline (defaults to the active run)."
       width="sm:max-w-3xl"
       footer={footer}
     >
