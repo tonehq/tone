@@ -75,7 +75,7 @@ class DocumentProcessingService:
             with get_db_context() as db:
                 upload = db.query(Upload).filter(Upload.id == upload_id).first()
                 if not upload:
-                    logger.error(
+                    logger.warning(
                         "[ingestion] upload {} not found, skipping processing (run={})",
                         upload_id, ingestion_run_id,
                     )
@@ -112,7 +112,7 @@ class DocumentProcessingService:
 
                 api_key = ProviderKeyService.get_key(db, org_id, run.embedding_provider)
                 if not api_key:
-                    logger.error(
+                    logger.warning(
                         "[ingestion] provider key missing org={} provider={} run={}",
                         org_id, run.embedding_provider, run.id,
                     )
@@ -226,7 +226,7 @@ class DocumentProcessingService:
                 _remove_files(pdf_path, html_path)
             if not num_chunks:
                 # #1 cause of silent failures — surface all inputs before raising.
-                logger.error(
+                logger.warning(
                     "[ingestion] extraction produced 0 chunks run={} upload={} "
                     "file_type={} bytes={} parser={}",
                     run.id, upload_id, file_type, len(file_bytes), run.parser,
@@ -307,7 +307,7 @@ class DocumentProcessingService:
         with get_db_context() as db:
             upload = db.query(Upload).filter(Upload.id == upload_id).first()
             if not upload or not upload.file_path:
-                logger.error(
+                logger.warning(
                     "[ingestion] upload {} not found or has no file_path (run={})",
                     upload_id, ingestion_run_id,
                 )
