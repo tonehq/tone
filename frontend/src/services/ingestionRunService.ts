@@ -1,6 +1,11 @@
 import axiosInstance from '@/utils/axios';
 
 import type {
+  CreateIngestionRunPayload,
+  CreateIngestionRunResponse,
+  PipelineOptions,
+} from '@/types/pipelineOptions';
+import type {
   IngestionRun,
   ListIngestionRunsParams,
   PaginatedIngestionRuns,
@@ -54,6 +59,22 @@ export const setAgentKbActiveRun = async (
   const res = await axiosInstance.put<AgentKnowledgeBaseRow>(
     `/knowledge-base/agents/${agentId}/knowledge-bases/${kbId}/active-run`,
     { active_ingestion_pipeline_run_id: runId } satisfies AgentKbActiveRunPayload,
+  );
+  return res.data;
+};
+
+export const getPipelineOptions = async (): Promise<PipelineOptions> => {
+  const res = await axiosInstance.get<PipelineOptions>('/knowledge-base/pipeline-options');
+  return res.data;
+};
+
+export const createCustomIngestionRun = async (
+  uploadId: string,
+  payload: CreateIngestionRunPayload,
+): Promise<CreateIngestionRunResponse> => {
+  const res = await axiosInstance.post<CreateIngestionRunResponse>(
+    `/knowledge-base/${uploadId}/runs`,
+    payload,
   );
   return res.data;
 };
