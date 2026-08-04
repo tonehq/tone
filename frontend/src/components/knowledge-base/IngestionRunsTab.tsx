@@ -1,11 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock, Copy, ListChecks, Loader2, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, ListChecks, Loader2, Plus, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
 import ManualEvalsModal from '@/components/knowledge-base/ManualEvalsModal';
+import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
 import { useEvalSummariesByIngestion } from '@/lib/api/evals';
 import { useActivateIngestionRun, useIngestionRuns } from '@/lib/api/ingestion-runs';
@@ -113,6 +114,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
 
   const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
   const [manualEvalsOpen, setManualEvalsOpen] = useState(false);
+  const [newRunOpen, setNewRunOpen] = useState(false);
 
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
@@ -359,6 +361,15 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
             </Badge>
           )}
           <CustomButton
+            type="primary"
+            size="sm"
+            onClick={() => setNewRunOpen(true)}
+            aria-label="Start a new ingestion run"
+          >
+            <Plus className="mr-1 size-4" />
+            New run
+          </CustomButton>
+          <CustomButton
             type="default"
             size="sm"
             onClick={() => setManualEvalsOpen(true)}
@@ -415,6 +426,12 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
       <ManualEvalsModal
         open={manualEvalsOpen}
         onClose={() => setManualEvalsOpen(false)}
+        uploadId={uploadId}
+      />
+
+      <NewIngestionRunModal
+        open={newRunOpen}
+        onClose={() => setNewRunOpen(false)}
         uploadId={uploadId}
       />
     </div>
