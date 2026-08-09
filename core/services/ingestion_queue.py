@@ -6,7 +6,17 @@ from uuid import UUID
 from loguru import logger
 from procrastinate import App, PsycopgConnector
 
+from core.logging import get_applied_level, setup_logging
 from shared.config import settings
+
+# The Procrastinate worker starts via ``python -m procrastinate --app=core.services.ingestion_queue.app``
+# which imports this module but never runs ``main.py``, so ``setup_logging()`` never fires and the
+# default loguru format is used — stripping the ``trace_id=...`` prefix from every ingestion log.
+# Installing the custom sink at import time fixes worker logs without affecting other processes:
+# ``setup_logging`` is skipped when the sink is already applied (API server via ``main.py``,
+# call subprocess via DB-resolved level), so no other entrypoint's log configuration is overridden.
+if get_applied_level() is None:
+    setup_logging()
 
 
 def _conninfo() -> str:
