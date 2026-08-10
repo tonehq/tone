@@ -32,7 +32,7 @@ spec:
       terminationGracePeriodSeconds: 2100
       containers:
         - name: staging-tone-call-worker
-          image: developer390/tone:${IMAGE_TAG}
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - uvicorn
@@ -132,4 +132,4 @@ spec:
                             pass
                         time.sleep(5)
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth
