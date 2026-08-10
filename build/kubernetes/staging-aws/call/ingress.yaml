@@ -21,7 +21,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: staging-call-aws.trytone.ai
+    - host: staging-call.trytone.ai
       http:
         paths:
           - path: /
@@ -48,7 +48,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: staging-call-aws.trytone.ai
+    - host: staging-call.trytone.ai
       http:
         paths:
           - path: /pod/0(/|$)(.*)
