@@ -11,8 +11,10 @@ metadata:
     service.beta.kubernetes.io/aws-load-balancer-type: "external"
     service.beta.kubernetes.io/aws-load-balancer-nlb-target-type: "ip"
     service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
-    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-04b50c5f6a8a89a0b"
+    service.beta.kubernetes.io/aws-load-balancer-subnets: "subnet-0f9ee3bb11e7341de"
     service.beta.kubernetes.io/aws-load-balancer-eip-allocations: "eipalloc-0414a3c0466743f2c"
+
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
 spec:
   type: LoadBalancer
   externalTrafficPolicy: Cluster
