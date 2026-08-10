@@ -27,7 +27,7 @@ spec:
       terminationGracePeriodSeconds: 20
       containers:
         - name: tone-call-worker
-          image: developer390/tone:${IMAGE_TAG}
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - uvicorn
@@ -100,4 +100,4 @@ spec:
                   - -c
                   - "curl -sf http://localhost:8080/drain || true && sleep 280"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

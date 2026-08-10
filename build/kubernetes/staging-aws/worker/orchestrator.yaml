@@ -27,7 +27,7 @@ spec:
       terminationGracePeriodSeconds: 60
       containers:
         - name: staging-tone-orchestrator
-          image: developer390/tone:${IMAGE_TAG}
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - python
@@ -81,4 +81,4 @@ spec:
             - name: INFISICAL_HOST
               value: "https://secrets.trytone.ai"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth
