@@ -20,7 +20,7 @@ metadata:
 spec:
   ingressClassName: nginx
   rules:
-    - host: staging-api-aws.trytone.ai
+    - host: staging-api.trytone.ai
       http:
         paths:
           - path: /
