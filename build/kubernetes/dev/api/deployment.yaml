@@ -17,7 +17,7 @@ spec:
         kubernetes.io/os: linux
       containers:
         - name: tone-api
-          image: developer390/tone:${IMAGE_TAG}
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -45,4 +45,4 @@ spec:
             - name: INFISICAL_HOST
               value: "https://secrets.trytone.ai"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth
