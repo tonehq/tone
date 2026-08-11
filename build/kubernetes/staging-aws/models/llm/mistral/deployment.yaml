@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-llm-mistral-deployment
+  name: llm-mistral
   namespace: staging
   labels:
-    app: staging-llm-mistral
+    app: llm-mistral
 spec:
   replicas: 1
   progressDeadlineSeconds: 1800
@@ -12,11 +12,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: staging-llm-mistral
+      app: llm-mistral
   template:
     metadata:
       labels:
-        app: staging-llm-mistral
+        app: llm-mistral
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"

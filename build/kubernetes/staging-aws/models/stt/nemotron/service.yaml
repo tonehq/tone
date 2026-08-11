@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-stt-nemotron-service
+  name: stt-nemotron-service
   namespace: staging
   labels:
-    app: staging-stt-nemotron
+    app: stt-nemotron
 spec:
   selector:
-    app: staging-stt-nemotron
+    app: stt-nemotron
   ports:
     - name: http
       port: 9000

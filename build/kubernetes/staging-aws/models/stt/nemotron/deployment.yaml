@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-stt-nemotron-deployment
+  name: stt-nemotron
   namespace: staging
   labels:
-    app: staging-stt-nemotron
+    app: stt-nemotron
 spec:
   replicas: 1
   progressDeadlineSeconds: 2400
@@ -12,11 +12,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: staging-stt-nemotron
+      app: stt-nemotron
   template:
     metadata:
       labels:
-        app: staging-stt-nemotron
+        app: stt-nemotron
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9000"

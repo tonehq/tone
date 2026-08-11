@@ -60,19 +60,19 @@ jobs:
         include:
           - model: nemotron
             changed: ${{ needs.detect.outputs.nemotron }}
-            deployment: staging-stt-nemotron-deployment
+            deployment: stt-nemotron
             manifest_dir: build/kubernetes/staging-aws/models/stt/nemotron
           - model: qwen
             changed: ${{ needs.detect.outputs.qwen }}
-            deployment: staging-tts-qwen-deployment
+            deployment: tts-qwen
             manifest_dir: build/kubernetes/staging-aws/models/tts/qwen
           - model: cosyvoice
             changed: ${{ needs.detect.outputs.cosyvoice }}
-            deployment: staging-tts-cosyvoice-deployment
+            deployment: tts-cosyvoice
             manifest_dir: build/kubernetes/staging-aws/models/tts/cosyvoice
           - model: mistral
             changed: ${{ needs.detect.outputs.mistral }}
-            deployment: staging-llm-mistral-deployment
+            deployment: llm-mistral
             manifest_dir: build/kubernetes/staging-aws/models/llm/mistral
     steps:
       - name: Should deploy
