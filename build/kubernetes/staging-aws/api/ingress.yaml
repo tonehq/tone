@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: staging-tone-api-aws-ingress
+  name: tone-api-aws-ingress
   namespace: staging
   annotations:
     nginx.ingress.kubernetes.io/proxy-body-size: "100m"
@@ -27,6 +27,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: staging-tone-api-service
+                name: tone-api-service
                 port:
                   number: 80

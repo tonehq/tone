@@ -1,10 +1,10 @@
 apiVersion: policy/v1
 kind: PodDisruptionBudget
 metadata:
-  name: staging-tone-call-worker-pdb
+  name: tone-inbound-call-worker-pdb
   namespace: staging
 spec:
   maxUnavailable: 1
   selector:
     matchLabels:
-      app: staging-tone-call-worker
+      app: tone-inbound-call-worker

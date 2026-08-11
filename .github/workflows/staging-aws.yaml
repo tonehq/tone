@@ -95,16 +95,16 @@ jobs:
 
       - name: Rollout restart deployments
         run: |
-          kubectl rollout restart deployment/staging-tone-api-deployment -n staging
-          kubectl rollout restart statefulset/staging-tone-call-worker -n staging
-          kubectl rollout restart statefulset/staging-tone-outbound-call-worker -n staging
-          kubectl rollout restart deployment/staging-tone-worker -n staging
-          kubectl rollout restart deployment/staging-tone-orchestrator -n staging
+          kubectl rollout restart deployment/tone-api -n staging
+          kubectl rollout restart statefulset/tone-inbound-call-worker -n staging
+          kubectl rollout restart statefulset/tone-outbound-call-worker -n staging
+          kubectl rollout restart deployment/tone-worker -n staging
+          kubectl rollout restart deployment/tone-orchestrator -n staging
 
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=420s
-          kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
-          kubectl rollout status deployment/staging-tone-orchestrator -n staging --timeout=180s
+          kubectl rollout status deployment/tone-api -n staging --timeout=180s
+          kubectl rollout status statefulset/tone-inbound-call-worker -n staging --timeout=180s
+          kubectl rollout status statefulset/tone-outbound-call-worker -n staging --timeout=420s
+          kubectl rollout status deployment/tone-worker -n staging --timeout=180s
+          kubectl rollout status deployment/tone-orchestrator -n staging --timeout=180s

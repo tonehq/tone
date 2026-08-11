@@ -4,7 +4,7 @@ metadata:
   name: vllm-logging-config
   namespace: staging
   labels:
-    app: staging-llm-mistral
+    app: llm-mistral
 data:
   logging_config.json: |
     {

@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-0
+  name: tone-inbound-call-pod-0
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-0
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-0
   ports:
   - port: 80
     targetPort: 8080
@@ -18,15 +18,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-1
+  name: tone-inbound-call-pod-1
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-1
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-1
   ports:
   - port: 80
     targetPort: 8080
@@ -35,15 +35,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-2
+  name: tone-inbound-call-pod-2
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-2
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-2
   ports:
   - port: 80
     targetPort: 8080
@@ -52,15 +52,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-3
+  name: tone-inbound-call-pod-3
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-3
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-3
   ports:
   - port: 80
     targetPort: 8080
@@ -69,15 +69,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-4
+  name: tone-inbound-call-pod-4
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-4
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-4
   ports:
   - port: 80
     targetPort: 8080
@@ -86,15 +86,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-5
+  name: tone-inbound-call-pod-5
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-5
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-5
   ports:
   - port: 80
     targetPort: 8080
@@ -103,15 +103,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-6
+  name: tone-inbound-call-pod-6
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-6
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-6
   ports:
   - port: 80
     targetPort: 8080
@@ -120,15 +120,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-7
+  name: tone-inbound-call-pod-7
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-7
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-7
   ports:
   - port: 80
     targetPort: 8080
@@ -137,15 +137,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-8
+  name: tone-inbound-call-pod-8
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-8
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-8
   ports:
   - port: 80
     targetPort: 8080
@@ -154,15 +154,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-9
+  name: tone-inbound-call-pod-9
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-9
+    statefulset.kubernetes.io/pod-name: tone-inbound-call-worker-9
   ports:
   - port: 80
     targetPort: 8080

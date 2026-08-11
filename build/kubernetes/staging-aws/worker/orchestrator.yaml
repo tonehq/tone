@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-orchestrator
+  name: tone-orchestrator
   namespace: staging
   labels:
-    app: staging-tone-orchestrator
+    app: tone-orchestrator
     environment: staging
     component: worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: staging-tone-orchestrator
+      app: tone-orchestrator
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: staging-tone-orchestrator
+        app: tone-orchestrator
         environment: staging
         component: worker
     spec:
@@ -26,7 +26,7 @@ spec:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 60
       containers:
-        - name: staging-tone-orchestrator
+        - name: tone-orchestrator
           image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
