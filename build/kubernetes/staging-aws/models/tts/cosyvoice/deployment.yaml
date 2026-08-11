@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tts-cosyvoice-deployment
+  name: tts-cosyvoice
   namespace: staging
   labels:
-    app: staging-tts-cosyvoice
+    app: tts-cosyvoice
 spec:
   replicas: 1
   progressDeadlineSeconds: 2400
@@ -12,11 +12,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: staging-tts-cosyvoice
+      app: tts-cosyvoice
   template:
     metadata:
       labels:
-        app: staging-tts-cosyvoice
+        app: tts-cosyvoice
     spec:
       nodeSelector:
         gpu: speech

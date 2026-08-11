@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tts-cosyvoice-service
+  name: tts-cosyvoice-service
   namespace: staging
   labels:
-    app: staging-tts-cosyvoice
+    app: tts-cosyvoice
 spec:
   selector:
-    app: staging-tts-cosyvoice
+    app: tts-cosyvoice
   ports:
     - port: 80
       targetPort: 8188

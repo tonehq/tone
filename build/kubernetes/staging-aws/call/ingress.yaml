@@ -1,7 +1,7 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: staging-tone-call-aws-ingress
+  name: tone-inbound-call-aws-ingress
   namespace: staging
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -15,7 +15,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-expose-headers: "Content-Length, Content-Range, Content-Type, X-Request-Id"
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "3600"
-    nginx.ingress.kubernetes.io/websocket-services: "staging-tone-call-service"
+    nginx.ingress.kubernetes.io/websocket-services: "tone-inbound-call-service"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     nginx.ingress.kubernetes.io/ssl-redirect: "false"
 spec:
@@ -28,14 +28,14 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: staging-tone-call-service
+                name: tone-inbound-call-service
                 port:
                   number: 80
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: staging-tone-call-pod-aws-ingress
+  name: tone-inbound-call-pod-aws-ingress
   namespace: staging
   annotations:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -55,20 +55,20 @@ spec:
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-0
+                name: tone-inbound-call-pod-0
                 port:
                   number: 80
           - path: /pod/1(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-1
+                name: tone-inbound-call-pod-1
                 port:
                   number: 80
           - path: /pod/2(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-2
+                name: tone-inbound-call-pod-2
                 port:
                   number: 80
