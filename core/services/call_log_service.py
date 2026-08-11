@@ -13,6 +13,7 @@ from core.models.upload import Upload
 from core.services.base import BaseService
 from core.services.pod_registry_service import resolve_pod_id
 from core.services.post_call import PostCallHandler
+from shared.config import settings
 
 
 class CallLogService(BaseService):
@@ -167,7 +168,7 @@ class CallLogService(BaseService):
     ) -> Upload:
         upload = Upload(
             organization_id=organization_id,
-            container_name="call-recordings",
+            container_name=settings.R2_BUCKET_NAME,
             file_path=r2_object_key,
             file_name=file_name,
             file_type=content_type,

@@ -394,9 +394,17 @@ class PipecatPipelineRunner(PipelineRunner):
                     r2_object_key = None
                     if audio_bytes and file_name:
                         try:
-                            from core.services.r2_storage_service import R2StorageService
+                            from core.services.r2_storage_service import (
+                                CALL_RECORDING,
+                                R2StorageService,
+                                build_r2_object_key,
+                            )
                             r2 = R2StorageService()
-                            r2_object_key = f"{agent_uuid_str}/{file_name}"
+                            r2_object_key = build_r2_object_key(
+                                org_id=agent.organization_id,
+                                kind=CALL_RECORDING,
+                                subpath=f"{agent_uuid_str}/{file_name}",
+                            )
                             r2.upload_file(audio_bytes, r2_object_key, content_type="audio/mpeg")
 
                             with get_db_context() as db:
