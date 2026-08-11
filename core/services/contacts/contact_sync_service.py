@@ -45,7 +45,7 @@ from core.services.contacts.contact_metadata_validation import (
     validate_contact_metadata,
 )
 from core.services.contacts.contact_upsert import upsert_contact
-from core.services.r2_storage_service import R2StorageService
+from core.services.r2_storage_service import CONTACT_IMPORT, R2StorageService, build_r2_object_key
 from shared.config import settings
 
 _LOG_TAG = "[contact-sync]"
@@ -161,7 +161,11 @@ class ContactSyncService(BaseService):
         content_type = getattr(file, "content_type", None) or "text/csv"
 
         org_id = self.org_id
-        object_key = f"contacts/{org_id}/{uuid4()}/{file_name}"
+        object_key = build_r2_object_key(
+            org_id=org_id,
+            kind=CONTACT_IMPORT,
+            subpath=f"{uuid4()}/{file_name}",
+        )
         r2 = R2StorageService()
         r2.upload_fileobj(fileobj, object_key, content_type=content_type)
 
