@@ -1,16 +1,16 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: staging-tone-doc-worker
+  name: tone-doc-worker
   namespace: staging
   labels:
-    app: staging-tone-worker
+    app: tone-worker
     environment: staging
     component: autoscaling
 spec:
   scaleTargetRef:
     kind: Deployment
-    name: staging-tone-worker
+    name: tone-worker
   pollingInterval: 15
   cooldownPeriod: 300
   minReplicaCount: 0
@@ -39,10 +39,10 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: staging-tone-outbound-call-worker
+  name: tone-outbound-call-worker
   namespace: staging
   labels:
-    app: staging-tone-outbound-call-worker
+    app: tone-outbound-call-worker
     environment: staging
     component: autoscaling
   annotations:
@@ -50,7 +50,7 @@ metadata:
 spec:
   scaleTargetRef:
     kind: StatefulSet
-    name: staging-tone-outbound-call-worker
+    name: tone-outbound-call-worker
   pollingInterval: 15
   cooldownPeriod: 600
   minReplicaCount: 0

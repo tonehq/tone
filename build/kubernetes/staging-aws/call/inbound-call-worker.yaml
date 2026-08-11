@@ -1,25 +1,25 @@
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
-  name: staging-tone-call-worker
+  name: tone-inbound-call-worker
   namespace: staging
   labels:
-    app: staging-tone-call-worker
+    app: tone-inbound-call-worker
     environment: staging
     component: call
 spec:
-  serviceName: staging-tone-call-headless
+  serviceName: tone-inbound-call-headless
   podManagementPolicy: Parallel
   replicas: 3
   selector:
     matchLabels:
-      app: staging-tone-call-worker
+      app: tone-inbound-call-worker
   updateStrategy:
     type: RollingUpdate
   template:
     metadata:
       labels:
-        app: staging-tone-call-worker
+        app: tone-inbound-call-worker
         environment: staging
         component: call
       annotations:
@@ -31,7 +31,7 @@ spec:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 2100
       containers:
-        - name: staging-tone-call-worker
+        - name: tone-inbound-call-worker
           image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:

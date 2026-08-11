@@ -1,10 +1,10 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tts-qwen-deployment
+  name: tts-qwen
   namespace: staging
   labels:
-    app: staging-tts-qwen
+    app: tts-qwen
 spec:
   replicas: 1
   progressDeadlineSeconds: 1800
@@ -12,11 +12,11 @@ spec:
     type: Recreate
   selector:
     matchLabels:
-      app: staging-tts-qwen
+      app: tts-qwen
   template:
     metadata:
       labels:
-        app: staging-tts-qwen
+        app: tts-qwen
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "8000"

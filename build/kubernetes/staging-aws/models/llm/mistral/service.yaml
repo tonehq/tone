@@ -1,13 +1,13 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-llm-mistral-service
+  name: llm-mistral-service
   namespace: staging
   labels:
-    app: staging-llm-mistral
+    app: llm-mistral
 spec:
   selector:
-    app: staging-llm-mistral
+    app: llm-mistral
   ports:
     - port: 80
       targetPort: 8000
