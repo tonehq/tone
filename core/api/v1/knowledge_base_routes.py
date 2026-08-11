@@ -119,7 +119,7 @@ from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
-from core.services.r2_storage_service import R2StorageService
+from core.services.r2_storage_service import KB_DOCUMENT, R2StorageService, build_r2_object_key
 from core.services.upload_service import UploadService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
@@ -504,7 +504,11 @@ def build_knowledge_base_router(
             upload.id, org_id, upload.file_name, new_name, size_bytes,
         )
 
-        new_object_key = f"knowledge-base/{org_id}/{uuid4()}/{new_name}"
+        new_object_key = build_r2_object_key(
+            org_id=org_id,
+            kind=KB_DOCUMENT,
+            subpath=f"{uuid4()}/{new_name}",
+        )
         try:
             R2StorageService().upload_fileobj(file.file, new_object_key, content_type=content_type)
         except Exception:
