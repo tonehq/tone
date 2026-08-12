@@ -1,0 +1,39 @@
+{
+  "provider": "aws",
+  "service": "kubernetes",
+  "resource": "aws.eks.Cluster + aws.eks.NodeGroup",
+  "config": {
+    "region": "us-east-1",
+    "vpc_id": "",
+    "public_subnet_ids": [],
+    "private_subnet_ids": [],
+    "vpc_cidr": "10.1.0.0/16",
+    "primary_az": "us-east-1a",
+    "secondary_az": "us-east-1b",
+    "public_subnet_cidrs": [
+      "10.1.0.0/20",
+      "10.1.16.0/20"
+    ],
+    "private_subnet_cidrs": [
+      "10.1.32.0/20"
+    ],
+    "nat_gateway": true,
+    "k8s_version": "1.32",
+    "ami_type": "AL2023_x86_64_STANDARD",
+    "capacity_type": "ON_DEMAND",
+    "disk_size": 50,
+    "node_pools": [
+      {
+        "name": "cpuapp",
+        "instance_type": "c6a.xlarge",
+        "min": 1,
+        "max": 4,
+        "desired": 2,
+        "disk_size": 50,
+        "labels": {},
+        "taints": []
+      }
+    ]
+  },
+  "notes": "All node pools share one subnet (single AZ) by design. node_subnet_ids is always [private[0]]."
+}

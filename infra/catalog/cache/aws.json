@@ -1,0 +1,13 @@
+{
+  "provider": "aws",
+  "service": "cache",
+  "resource": "aws.elasticache.ReplicationGroup",
+  "implemented": false,
+  "config": {
+    "region": "",
+    "node_type": "",
+    "engine_version": "",
+    "num_cache_nodes": "",
+    "transit_encryption": true
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "provider": "digitalocean",
+  "service": "filestorage",
+  "resource": "digitalocean.SpacesBucket",
+  "implemented": false,
+  "config": {
+    "region": "nyc3",
+    "bucket_name": "",
+    "acl": "private"
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "provider": "upstash",
+  "service": "cache",
+  "resource": "upstash.RedisDatabase",
+  "notes": "Fixed single-region is legacy in provider v2; use region=global + primary_region",
+  "config": {
+    "region": "global",
+    "primary_region": "us-east-1",
+    "read_regions": [],
+    "eviction": true,
+    "tls": true
+  }
+}

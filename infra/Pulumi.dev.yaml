@@ -1,0 +1,13 @@
+config:
+  azure-native:subscriptionId: b11e1f9d-8f15-4268-8a3b-f1d9e7b345f2
+  azure-native:location: westus3
+  aws:region: us-east-1
+  cloudflare:apiToken:
+    secure: AAABAMOI/RctUSEu0XV+m8kblVZHt7Am1Tmc1rvuOCNoM8flo5M2rhoURTqtQ7aab8+5Bflmmi7eRenvVbiLApq9XcY+RSLGT7ha1f7/AoIY4PciXQ==
+  neon:apiKey:
+    secure: AAABAN/mKP2drw7qROLDFZ5IlOxNy6JE4eKcVZbE5gt0K3rUjGJEWZn0PebTOwVm/JC4J5Bbm63Uoj+QT1Yt8ys9t8hlwx+hZW0mF7JSq27nu+Wl0vTgpAs/8Di8QsxachDAJy8=
+  upstash:email: parandhama.reddy@trytone.ai
+  upstash:apiKey:
+    secure: AAABAJimXyRvV8pHVDwxr5rc+Opm53TBTcGSVR7bPiaR2RAJdEHk/twN2Z16PH4dGMCvyqUDRzoMxcZ3pZOxPQykL4Y=
+  digitalocean:token:
+    secure: AAABAKBIeuyxwTVdDA0asnrYXp5tp8bFSzjeNwrviygcp7zDQA0d7f9qaohoo2J8s38vVUFb7IcpoxYefayWBMQRgSDUThYRk9TRaWivYsJodTEiVxhOiJarcNfz2WF6ZSf0qnRnZQ==
