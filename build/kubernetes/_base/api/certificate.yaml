@@ -1,0 +1,19 @@
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ${RESOURCE_PREFIX}api-certificate
+  namespace: ${NAMESPACE}
+spec:
+  secretName: ${RESOURCE_PREFIX}api-certificate
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  commonName: ${API_DOMAIN}
+  dnsNames:
+  - ${API_DOMAIN}
+  duration: 2160h # 90 days
+  renewBefore: 720h # 30 days
+  privateKey:
+    algorithm: RSA
+    encoding: PKCS1
+    size: 2048

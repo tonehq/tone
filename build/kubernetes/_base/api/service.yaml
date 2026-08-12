@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${RESOURCE_PREFIX}api-service
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${RESOURCE_PREFIX}api
+    environment: ${ENVIRONMENT}
+spec:
+  selector:
+    app: ${RESOURCE_PREFIX}api
+  ports:
+    - port: 80
+      targetPort: 8000
+      protocol: TCP
+  type: ClusterIP

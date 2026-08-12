@@ -1,0 +1,81 @@
+name: Monitoring (Grafana Alloy) — any cluster
+
+# ONE reusable monitoring workflow for ALL environments, driven ENTIRELY by the
+# build/kubernetes/envs/<target>.env file the app also uses. Pick a target and it
+# reads that file for CLUSTER_NAME + which secret holds the kubeconfig
+# (KUBE_CONFIG_SECRET) — no per-target wiring in this workflow.
+#
+# Per target you need:
+#   1. build/kubernetes/envs/<target>.env  → CLUSTER_NAME + KUBE_CONFIG_SECRET
+#   2. the GitHub secret named by KUBE_CONFIG_SECRET (the kubeconfig value)
+#   3. add <target> to the `options` list below
+#
+# Repo-level shared secrets (one Grafana Cloud stack, keyed by `cluster` label):
+#   GRAFANA_LOKI_URL, GRAFANA_LOKI_USER, GRAFANA_PROM_URL, GRAFANA_PROM_USER,
+#   GRAFANA_CLOUD_API_KEY
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Environment / cluster (matches build/kubernetes/envs/<target>.env)"
+        type: choice
+        options:
+          - staging-do
+          # - staging-aws
+          # - staging
+
+env:
+  RENDER_DIR: build/kubernetes/.rendered/monitoring
+
+jobs:
+  deploy-monitoring:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve env file
+        run: echo "ENV_FILE=build/kubernetes/envs/${{ inputs.target }}.env" >> "$GITHUB_ENV"
+
+      # CLUSTER_NAME (non-secret) straight from the env file.
+      - name: Load CLUSTER_NAME
+        run: grep -E '^CLUSTER_NAME=' "$ENV_FILE" >> "$GITHUB_ENV"
+
+      # Kubeconfig from the secret NAMED in the env file (same pattern as the app).
+      - name: Set up kubeconfig from env file
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          SRC=$(grep -E '^KUBE_CONFIG_SECRET=' "$ENV_FILE" | cut -d= -f2)
+          test -n "$SRC" || { echo "::error::KUBE_CONFIG_SECRET missing in $ENV_FILE"; exit 1; }
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$ALL_SECRETS" | jq -r --arg k "$SRC" '.[$k] // empty' > "$HOME/.kube/config"
+          test -s "$HOME/.kube/config" || { echo "::error::secret $SRC is empty/undefined"; exit 1; }
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Render monitoring for this cluster
+        run: ./build/kubernetes/render-monitoring.sh "$CLUSTER_NAME" "$RENDER_DIR"
+
+      - name: Create monitoring namespace
+        run: kubectl apply -f "$RENDER_DIR/namespace.yaml"
+
+      - name: Create Grafana Cloud credentials secret
+        run: |
+          kubectl create secret generic grafana-cloud-credentials \
+            --namespace=monitoring \
+            --from-literal=loki-url="${{ secrets.GRAFANA_LOKI_URL }}" \
+            --from-literal=loki-user="${{ secrets.GRAFANA_LOKI_USER }}" \
+            --from-literal=prom-url="${{ secrets.GRAFANA_PROM_URL }}" \
+            --from-literal=prom-user="${{ secrets.GRAFANA_PROM_USER }}" \
+            --from-literal=api-key="${{ secrets.GRAFANA_CLOUD_API_KEY }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Apply monitoring manifests
+        run: |
+          kubectl apply -f "$RENDER_DIR/rbac.yaml"
+          kubectl apply -f "$RENDER_DIR/configmap.yaml"
+          kubectl apply -f "$RENDER_DIR/daemonset.yaml"
+
+      - name: Wait for Alloy rollout
+        run: kubectl rollout status daemonset/alloy -n monitoring --timeout=180s
