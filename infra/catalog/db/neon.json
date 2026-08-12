@@ -1,0 +1,13 @@
+{
+  "provider": "neon",
+  "service": "db",
+  "resource": "neon.Project",
+  "config": {
+    "org_id": "org-floral-dew-78790515",
+    "region_id": "aws-us-east-1",
+    "pg_version": 17,
+    "branch_name": "main",
+    "database_name": "tone",
+    "role_name": "tone_owner"
+  }
+}

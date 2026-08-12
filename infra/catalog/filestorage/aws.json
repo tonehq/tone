@@ -1,0 +1,12 @@
+{
+  "provider": "aws",
+  "service": "filestorage",
+  "resource": "aws.s3.BucketV2",
+  "implemented": false,
+  "config": {
+    "region": "",
+    "bucket_name": "",
+    "versioning": false,
+    "force_destroy": false
+  }
+}

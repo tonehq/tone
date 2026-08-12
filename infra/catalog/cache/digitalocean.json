@@ -1,0 +1,14 @@
+{
+  "provider": "digitalocean",
+  "service": "cache",
+  "resource": "digitalocean.DatabaseCluster (engine=valkey)",
+  "notes": "DO replaced Redis with Valkey; engine 'redis' still accepted on older clusters",
+  "config": {
+    "region": "nyc3",
+    "engine": "valkey",
+    "version": "8",
+    "size": "db-s-1vcpu-1gb",
+    "node_count": 1,
+    "eviction_policy": "allkeys_lru"
+  }
+}

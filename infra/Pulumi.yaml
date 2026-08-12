@@ -1,0 +1,22 @@
+name: tone-infra
+description: Tone infrastructure
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: venv
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: aws-python
+packages:
+  neon:
+    source: terraform-provider
+    version: 1.3.0
+    parameters:
+      - kislerdm/neon
+  upstash:
+    source: terraform-provider
+    version: 1.3.0
+    parameters:
+      - upstash/upstash
