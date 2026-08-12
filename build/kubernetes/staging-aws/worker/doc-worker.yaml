@@ -1,23 +1,23 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-worker
+  name: tone-worker
   namespace: staging
   labels:
-    app: staging-tone-worker
+    app: tone-worker
     environment: staging
     component: worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: staging-tone-worker
+      app: tone-worker
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: staging-tone-worker
+        app: tone-worker
         environment: staging
         component: worker
     spec:
@@ -25,8 +25,8 @@ spec:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 120
       containers:
-        - name: staging-tone-worker
-          image: developer390/tone:${IMAGE_TAG}
+        - name: tone-worker
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - python
@@ -82,4 +82,4 @@ spec:
             - name: INFISICAL_HOST
               value: "https://secrets.trytone.ai"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

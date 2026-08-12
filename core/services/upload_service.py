@@ -29,7 +29,7 @@ from core.services.audit_actions import AgentAuditAction, AuditResourceType
 from core.services.base import BaseService
 from core.services.ingestion_queue import enqueue_upload
 from core.services.ingestion_run_service import IngestionRunService
-from core.services.r2_storage_service import R2StorageService
+from core.services.r2_storage_service import KB_DOCUMENT, R2StorageService, build_r2_object_key
 from shared.config import settings
 
 
@@ -98,7 +98,11 @@ class UploadService(BaseService):
             raise ValueError("Empty file — refusing to create an upload for a zero-byte source")
 
         r2 = self._r2 or R2StorageService()
-        object_key = f"knowledge-base/{self.org_id}/{uuid4()}/{resolved_name}"
+        object_key = build_r2_object_key(
+            org_id=self.org_id,
+            kind=KB_DOCUMENT,
+            subpath=f"{uuid4()}/{resolved_name}",
+        )
         logger.info(
             "[upload] uploading to R2 org={} key={} content_type={} size={}",
             self.org_id, object_key, resolved_type, resolved_size,

@@ -1,24 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-orchestrator
-  namespace: staging
+  name: ${RESOURCE_PREFIX}orchestrator
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-orchestrator
-    environment: staging
+    app: ${RESOURCE_PREFIX}orchestrator
+    environment: ${ENVIRONMENT}
     component: worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: staging-tone-orchestrator
+      app: ${RESOURCE_PREFIX}orchestrator
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: staging-tone-orchestrator
-        environment: staging
+        app: ${RESOURCE_PREFIX}orchestrator
+        environment: ${ENVIRONMENT}
         component: worker
     spec:
       serviceAccountName: tone-worker
@@ -26,8 +26,8 @@ spec:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 60
       containers:
-        - name: staging-tone-orchestrator
-          image: developer390/tone:${IMAGE_TAG}
+        - name: ${RESOURCE_PREFIX}orchestrator
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - python
@@ -42,14 +42,14 @@ spec:
             - "--fetch-job-polling-interval=5"
           resources:
             requests:
-              cpu: "250m"
-              memory: "512Mi"
+              cpu: "${ORCH_CPU_REQUEST}"
+              memory: "${ORCH_MEM_REQUEST}"
             limits:
-              cpu: "1"
-              memory: "1Gi"
+              cpu: "${ORCH_CPU_LIMIT}"
+              memory: "${ORCH_MEM_LIMIT}"
           env:
             - name: ENV
-              value: "staging"
+              value: "${APP_ENV}"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -79,6 +79,6 @@ spec:
                   name: infisical-credentials
                   key: project_id
             - name: INFISICAL_HOST
-              value: "https://secrets.trytone.ai"
+              value: "${INFISICAL_HOST}"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

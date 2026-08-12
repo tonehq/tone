@@ -1,41 +1,41 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-api-deployment
-  namespace: staging
+  name: ${RESOURCE_PREFIX}api-deployment
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-api
-    environment: staging
+    app: ${RESOURCE_PREFIX}api
+    environment: ${ENVIRONMENT}
 spec:
-  replicas: 1
+  replicas: ${API_REPLICAS}
   selector:
     matchLabels:
-      app: staging-tone-api
+      app: ${RESOURCE_PREFIX}api
   template:
     metadata:
       labels:
-        app: staging-tone-api
-        environment: staging
+        app: ${RESOURCE_PREFIX}api
+        environment: ${ENVIRONMENT}
     spec:
       nodeSelector:
         kubernetes.io/os: linux
       containers:
-        - name: staging-tone-api
-          image: developer390/tone:${IMAGE_TAG}
+        - name: ${RESOURCE_PREFIX}api
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
           command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
           resources:
             requests:
-              cpu: "100m"
-              memory: "512Mi"
+              cpu: "${API_CPU_REQUEST}"
+              memory: "${API_MEM_REQUEST}"
             limits:
-              cpu: "256m"
-              memory: "1Gi"
+              cpu: "${API_CPU_LIMIT}"
+              memory: "${API_MEM_LIMIT}"
           env:
             - name: ENV
-              value: "staging"
+              value: "${APP_ENV}"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -59,6 +59,6 @@ spec:
                   name: infisical-credentials
                   key: project_id
             - name: INFISICAL_HOST
-              value: "https://secrets.trytone.ai"
+              value: "${INFISICAL_HOST}"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

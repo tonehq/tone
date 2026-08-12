@@ -1,14 +1,14 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-api-service
+  name: tone-api-service
   namespace: staging
   labels:
-    app: staging-tone-api
+    app: tone-api
     environment: staging
 spec:
   selector:
-    app: staging-tone-api
+    app: tone-api
   ports:
     - port: 80
       targetPort: 8000

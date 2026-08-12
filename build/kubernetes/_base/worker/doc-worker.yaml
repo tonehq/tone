@@ -1,32 +1,32 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-worker
-  namespace: staging
+  name: ${RESOURCE_PREFIX}worker
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}worker
+    environment: ${ENVIRONMENT}
     component: worker
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: staging-tone-worker
+      app: ${RESOURCE_PREFIX}worker
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app: staging-tone-worker
-        environment: staging
+        app: ${RESOURCE_PREFIX}worker
+        environment: ${ENVIRONMENT}
         component: worker
     spec:
       nodeSelector:
         kubernetes.io/os: linux
       terminationGracePeriodSeconds: 120
       containers:
-        - name: staging-tone-worker
-          image: developer390/tone:${IMAGE_TAG}
+        - name: ${RESOURCE_PREFIX}worker
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
           imagePullPolicy: Always
           command:
             - python
@@ -41,14 +41,14 @@ spec:
             - "--fetch-job-polling-interval=5"
           resources:
             requests:
-              cpu: "1"
-              memory: "3Gi"
+              cpu: "${DOCWORKER_CPU_REQUEST}"
+              memory: "${DOCWORKER_MEM_REQUEST}"
             limits:
-              cpu: "2"
-              memory: "5Gi"
+              cpu: "${DOCWORKER_CPU_LIMIT}"
+              memory: "${DOCWORKER_MEM_LIMIT}"
           env:
             - name: ENV
-              value: "staging"
+              value: "${APP_ENV}"
             - name: POD_NAME
               valueFrom:
                 fieldRef:
@@ -80,6 +80,6 @@ spec:
                   name: infisical-credentials
                   key: project_id
             - name: INFISICAL_HOST
-              value: "https://secrets.trytone.ai"
+              value: "${INFISICAL_HOST}"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

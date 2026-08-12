@@ -1,15 +1,15 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-0
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-0
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-0
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-0
   ports:
     - port: 80
       targetPort: 8080
@@ -18,15 +18,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-1
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-1
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-1
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-1
   ports:
     - port: 80
       targetPort: 8080
@@ -35,15 +35,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-2
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-2
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-2
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-2
   ports:
     - port: 80
       targetPort: 8080
@@ -52,15 +52,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-3
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-3
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-3
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-3
   ports:
     - port: 80
       targetPort: 8080
@@ -69,15 +69,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-4
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-4
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-4
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-4
   ports:
     - port: 80
       targetPort: 8080
@@ -86,15 +86,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-5
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-5
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-5
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-5
   ports:
     - port: 80
       targetPort: 8080
@@ -103,15 +103,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-6
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-6
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-6
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-6
   ports:
     - port: 80
       targetPort: 8080
@@ -120,15 +120,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-7
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-7
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-7
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-7
   ports:
     - port: 80
       targetPort: 8080
@@ -137,15 +137,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-8
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-8
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-8
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-8
   ports:
     - port: 80
       targetPort: 8080
@@ -154,15 +154,15 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: staging-tone-call-pod-9
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-9
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}call-worker
+    environment: ${ENVIRONMENT}
     component: call
 spec:
   selector:
-    statefulset.kubernetes.io/pod-name: staging-tone-call-worker-9
+    statefulset.kubernetes.io/pod-name: ${RESOURCE_PREFIX}call-worker-9
   ports:
     - port: 80
       targetPort: 8080
@@ -171,8 +171,8 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: staging-tone-call-pod-ingress
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-pod-ingress
+  namespace: ${NAMESPACE}
   annotations:
     kubernetes.io/ingress.class: "nginx"
     nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
@@ -186,79 +186,79 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - staging-call.trytone.ai
-      secretName: staging-tone-call-certificate
+        - ${CALL_DOMAIN}
+      secretName: ${RESOURCE_PREFIX}call-certificate
   rules:
-    - host: staging-call.trytone.ai
+    - host: ${CALL_DOMAIN}
       http:
         paths:
           - path: /pod/0(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-0
+                name: ${RESOURCE_PREFIX}call-pod-0
                 port:
                   number: 80
           - path: /pod/1(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-1
+                name: ${RESOURCE_PREFIX}call-pod-1
                 port:
                   number: 80
           - path: /pod/2(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-2
+                name: ${RESOURCE_PREFIX}call-pod-2
                 port:
                   number: 80
           - path: /pod/3(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-3
+                name: ${RESOURCE_PREFIX}call-pod-3
                 port:
                   number: 80
           - path: /pod/4(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-4
+                name: ${RESOURCE_PREFIX}call-pod-4
                 port:
                   number: 80
           - path: /pod/5(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-5
+                name: ${RESOURCE_PREFIX}call-pod-5
                 port:
                   number: 80
           - path: /pod/6(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-6
+                name: ${RESOURCE_PREFIX}call-pod-6
                 port:
                   number: 80
           - path: /pod/7(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-7
+                name: ${RESOURCE_PREFIX}call-pod-7
                 port:
                   number: 80
           - path: /pod/8(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-8
+                name: ${RESOURCE_PREFIX}call-pod-8
                 port:
                   number: 80
           - path: /pod/9(/|$)(.*)
             pathType: ImplementationSpecific
             backend:
               service:
-                name: staging-tone-call-pod-9
+                name: ${RESOURCE_PREFIX}call-pod-9
                 port:
                   number: 80

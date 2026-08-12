@@ -1,16 +1,16 @@
-name: Staging (DigitalOcean DOKS) CI/CD
+name: Staging DO (DigitalOcean DOKS) CI/CD
 
 on:
-  push:
-    branches: ["staging"]
+  # Manual-only: commits/pushes to staging-do do NOT auto-deploy.
+  # Run it from Actions -> "Staging DO ... CI/CD" -> Run workflow when ready.
   workflow_dispatch:
 
-# Deploys by rendering build/kubernetes/_base with build/kubernetes/envs/staging.env.
+# Deploys by rendering build/kubernetes/_base with build/kubernetes/envs/staging-do.env.
 # EVERYTHING env-specific — namespace, resource names, capacity, AND which GitHub
 # secret holds the kubeconfig (KUBE_CONFIG_SECRET) — lives in that one env file.
 env:
-  ENV_FILE: build/kubernetes/envs/staging.env
-  RENDER_DIR: build/kubernetes/.rendered/staging
+  ENV_FILE: build/kubernetes/envs/staging-do.env
+  RENDER_DIR: build/kubernetes/.rendered/staging-do
 
 jobs:
   build-and-deploy:
@@ -35,10 +35,10 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            ghcr.io/tonehq/tone:staging-latest
+            ghcr.io/tonehq/tone:staging-do-latest
             ghcr.io/tonehq/tone:${{ github.sha }}
-          cache-from: type=registry,ref=ghcr.io/tonehq/tone:staging-buildcache
-          cache-to: type=registry,ref=ghcr.io/tonehq/tone:staging-buildcache,mode=max
+          cache-from: type=registry,ref=ghcr.io/tonehq/tone:staging-do-buildcache
+          cache-to: type=registry,ref=ghcr.io/tonehq/tone:staging-do-buildcache,mode=max
           secrets: |
             pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
 
@@ -101,10 +101,12 @@ jobs:
           kubectl rollout restart deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE"
           kubectl rollout restart deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE"
 
+      # Generous timeouts: the app image is large and the FIRST pull onto a fresh
+      # node can exceed a few minutes. Later deploys reuse the cached layers.
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE" --timeout=420s
-          kubectl rollout status deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE" --timeout=600s

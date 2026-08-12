@@ -12,6 +12,9 @@ env:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -19,8 +22,9 @@ jobs:
 
       - uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKER_USERNAME }}
-          password: ${{ secrets.DOCKER_PASSWORD }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - uses: docker/build-push-action@v5
         with:
@@ -28,10 +32,10 @@ jobs:
           file: Dockerfile
           push: true
           tags: |
-            developer390/tone:staging-aws-latest
-            developer390/tone:${{ github.sha }}
-          cache-from: type=registry,ref=developer390/tone:staging-buildcache
-          cache-to: type=registry,ref=developer390/tone:staging-buildcache,mode=max
+            ghcr.io/tonehq/tone:staging-aws-latest
+            ghcr.io/tonehq/tone:${{ github.sha }}
+          cache-from: type=registry,ref=ghcr.io/tonehq/tone:staging-buildcache
+          cache-to: type=registry,ref=ghcr.io/tonehq/tone:staging-buildcache,mode=max
           secrets: |
             pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
 
@@ -91,16 +95,16 @@ jobs:
 
       - name: Rollout restart deployments
         run: |
-          kubectl rollout restart deployment/staging-tone-api-deployment -n staging
-          kubectl rollout restart statefulset/staging-tone-call-worker -n staging
-          kubectl rollout restart statefulset/staging-tone-outbound-call-worker -n staging
-          kubectl rollout restart deployment/staging-tone-worker -n staging
-          kubectl rollout restart deployment/staging-tone-orchestrator -n staging
+          kubectl rollout restart deployment/tone-api -n staging
+          kubectl rollout restart statefulset/tone-inbound-call-worker -n staging
+          kubectl rollout restart statefulset/tone-outbound-call-worker -n staging
+          kubectl rollout restart deployment/tone-worker -n staging
+          kubectl rollout restart deployment/tone-orchestrator -n staging
 
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=420s
-          kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
-          kubectl rollout status deployment/staging-tone-orchestrator -n staging --timeout=180s
+          kubectl rollout status deployment/tone-api -n staging --timeout=180s
+          kubectl rollout status statefulset/tone-inbound-call-worker -n staging --timeout=180s
+          kubectl rollout status statefulset/tone-outbound-call-worker -n staging --timeout=420s
+          kubectl rollout status deployment/tone-worker -n staging --timeout=180s
+          kubectl rollout status deployment/tone-orchestrator -n staging --timeout=180s

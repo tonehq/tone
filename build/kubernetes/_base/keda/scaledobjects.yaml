@@ -1,20 +1,20 @@
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: staging-tone-doc-worker
-  namespace: staging
+  name: ${RESOURCE_PREFIX}doc-worker
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}worker
+    environment: ${ENVIRONMENT}
     component: autoscaling
 spec:
   scaleTargetRef:
     kind: Deployment
-    name: staging-tone-worker
+    name: ${RESOURCE_PREFIX}worker
   pollingInterval: 15
   cooldownPeriod: 300
-  minReplicaCount: 0
-  maxReplicaCount: 2
+  minReplicaCount: ${DOC_MIN_REPLICAS}
+  maxReplicaCount: ${DOC_MAX_REPLICAS}
   advanced:
     restoreToOriginalReplicaCount: true
     horizontalPodAutoscalerConfig:
@@ -39,22 +39,22 @@ spec:
 apiVersion: keda.sh/v1alpha1
 kind: ScaledObject
 metadata:
-  name: staging-tone-outbound-call-worker
-  namespace: staging
+  name: ${RESOURCE_PREFIX}outbound-call-worker
+  namespace: ${NAMESPACE}
   labels:
-    app: staging-tone-outbound-call-worker
-    environment: staging
+    app: ${RESOURCE_PREFIX}outbound-call-worker
+    environment: ${ENVIRONMENT}
     component: autoscaling
   annotations:
     autoscaling.keda.sh/paused-replicas: "1"
 spec:
   scaleTargetRef:
     kind: StatefulSet
-    name: staging-tone-outbound-call-worker
+    name: ${RESOURCE_PREFIX}outbound-call-worker
   pollingInterval: 15
   cooldownPeriod: 600
-  minReplicaCount: 0
-  maxReplicaCount: 4
+  minReplicaCount: ${OUTBOUND_MIN_REPLICAS}
+  maxReplicaCount: ${OUTBOUND_MAX_REPLICAS}
   advanced:
     restoreToOriginalReplicaCount: true
     horizontalPodAutoscalerConfig:

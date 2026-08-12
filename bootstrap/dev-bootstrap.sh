@@ -1,10 +1,40 @@
 #!/usr/bin/env bash
 # dev-bootstrap.sh — Full development environment setup for Tone
 #
+# ─────────────────────────────────────────────────────────────────────
+# PREREQUISITES — set these up BEFORE running this script
+# ─────────────────────────────────────────────────────────────────────
+#
+#   1. Homebrew (macOS only) — install from https://brew.sh
+#
+#   2. Cloudsmith URL exported in your shell (for the private tone-pipecat
+#      package). Get the real URL from Cloudsmith → tonehq/tone → Set Me
+#      Up → Python, then:
+#        export PIP_EXTRA_INDEX_URL="https://<user>:<token>@dl.cloudsmith.io/<entitlement>/tonehq/tone/python/simple/"
+#
+#   3. Infisical login — run once, opens a browser:
+#        infisical login
+#      (The CLI itself is auto-installed by this script if missing.)
+#
+#   4. .env file at the project root with AT LEAST these keys:
+#        INFISICAL_PROJECT_ID=<your-project-id>
+#        INFISICAL_ENV=<staging|dev|production>
+#        DATABASE_URL=<postgres-connection-string>   # or provided via Infisical
+#
+#   5. A reachable Postgres database — the DATABASE_URL above must point
+#      to a live DB the current user can create tables in. Alembic will
+#      run all migrations against it.
+#
+#   6. Optional (for seeding API keys automatically): export provider
+#      keys before running, e.g. OPENAI_API_KEY, DEEPGRAM_API_KEY,
+#      ELEVENLABS_API_KEY, etc. Missing keys are skipped, not failed.
+#
+# ─────────────────────────────────────────────────────────────────────
 # To run:
-#   # One-shot full dev setup — no Infisical wrapper needed here; the script
-#   # itself validates Infisical login as a preflight step.
 #   ./bootstrap/dev-bootstrap.sh
+#
+# Note: the seed step (dev/seed.py) is INTERACTIVE — it will prompt for
+# organization name, owner email, and password. Have those ready.
 #
 # What it does:
 #   1. Installs Python 3.11 (via Homebrew on macOS, apt on Linux)

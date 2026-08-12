@@ -1,0 +1,119 @@
+name: Cluster bootstrap (operators + namespace + secrets)
+
+# ONE-TIME per-cluster setup — run this BEFORE the first app deploy.
+# Installs the cluster-wide operators the app manifests depend on and creates the
+# app namespace + its secrets. Idempotent (safe to re-run), but not part of the
+# per-push app pipeline: cluster lifecycle != app lifecycle.
+#
+# Driven entirely by build/kubernetes/envs/<target>.env. That file names WHICH
+# GitHub secret holds each value (NAMESPACE + *_SECRET keys); the values live in
+# GitHub secrets and are resolved at run time via toJSON(secrets). So the GitHub
+# secrets you must create are whatever the env file's *_SECRET keys point to, e.g.
+# for staging-do:
+#   STAGING_DO_KUBE_CONFIG_JSON      (kubeconfig)
+#   STAGING_DO_INFISICAL_TOKEN       + STAGING_DO_INFISICAL_PROJECT_ID
+#   GHCR_PULL_TOKEN                  (PAT with read:packages, for ghcr-auth)
+#   STAGING_DO_KEDA_POSTGRES         (postgresql://…?sslmode=require)
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: "Environment / cluster (matches build/kubernetes/envs/<target>.env)"
+        type: choice
+        options:
+          - staging
+          - staging-do
+          # - staging-aws
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve env file
+        run: echo "ENV_FILE=build/kubernetes/envs/${{ inputs.target }}.env" >> "$GITHUB_ENV"
+
+      - name: Load NAMESPACE
+        run: grep -E '^NAMESPACE=' "$ENV_FILE" >> "$GITHUB_ENV"
+
+      - name: Set up kubeconfig from env file
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          SRC=$(grep -E '^KUBE_CONFIG_SECRET=' "$ENV_FILE" | cut -d= -f2)
+          test -n "$SRC" || { echo "::error::KUBE_CONFIG_SECRET missing in $ENV_FILE"; exit 1; }
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$ALL_SECRETS" | jq -r --arg k "$SRC" '.[$k] // empty' > "$HOME/.kube/config"
+          test -s "$HOME/.kube/config" || { echo "::error::secret $SRC is empty/undefined"; exit 1; }
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      # ── Cluster-wide operators the app manifests depend on ──
+      - name: Install cert-manager (ClusterIssuer / Certificate CRDs)
+        run: |
+          helm repo add jetstack https://charts.jetstack.io
+          helm repo update
+          helm upgrade --install cert-manager jetstack/cert-manager \
+            -n cert-manager --create-namespace --set crds.enabled=true --wait
+
+      - name: Install KEDA (ScaledObject / TriggerAuthentication CRDs)
+        run: |
+          helm repo add kedacore https://kedacore.github.io/charts
+          helm repo update
+          helm upgrade --install keda kedacore/keda -n keda --create-namespace --wait
+
+      - name: Install ingress-nginx (DigitalOcean Load Balancer)
+        run: |
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo update
+          helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
+            -n ingress-nginx --create-namespace --wait
+
+      # ── App namespace + its secrets ──
+      # Each value is resolved from the GitHub secret NAMED in the env file
+      # (*_SECRET keys). Values stay local to this step — never written to
+      # $GITHUB_ENV — and GitHub masks them in logs (they are registered secrets).
+      - name: Create app namespace + secrets
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          # get <ENV_FILE_KEY> -> prints the value of the GitHub secret it names
+          get() {
+            local name val
+            name=$(grep -E "^$1=" "$ENV_FILE" | cut -d= -f2)
+            test -n "$name" || { echo "::error::$1 missing in $ENV_FILE"; exit 1; }
+            val=$(printf '%s' "$ALL_SECRETS" | jq -r --arg k "$name" '.[$k] // empty')
+            test -n "$val" || { echo "::error::GitHub secret '$name' (from $1) is empty/undefined"; exit 1; }
+            printf '%s' "$val"
+          }
+
+          kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic infisical-credentials -n "$NAMESPACE" \
+            --from-literal=token="$(get INFISICAL_TOKEN_SECRET)" \
+            --from-literal=project_id="$(get INFISICAL_PROJECT_ID_SECRET)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret docker-registry ghcr-auth -n "$NAMESPACE" \
+            --docker-server=ghcr.io \
+            --docker-username="${{ github.actor }}" \
+            --docker-password="$(get GHCR_PULL_TOKEN_SECRET)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+          kubectl create secret generic keda-postgres -n "$NAMESPACE" \
+            --from-literal=connectionString="$(get KEDA_POSTGRES_SECRET)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
+      - name: Show ingress Load Balancer IP (point DNS here)
+        run: |
+          echo "Waiting for the ingress-nginx external IP…"
+          for i in $(seq 1 30); do
+            IP=$(kubectl get svc -n ingress-nginx ingress-nginx-controller \
+                  -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true)
+            [ -n "$IP" ] && break
+            sleep 10
+          done
+          echo "Ingress LB IP: ${IP:-<pending — check DigitalOcean networking>}"
+          echo "Point do-api.trytone.ai and do-call.trytone.ai at that IP."

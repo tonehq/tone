@@ -10,6 +10,30 @@ from loguru import logger
 from shared.config import settings
 
 
+# Canonical R2 folder names — new uploads land under `{org_id}/{kind}/{subpath}`.
+# Kept as constants (not the DB `purpose` values) so the layout stays stable
+# even if a `purpose` value is ever renamed for other reasons.
+KB_DOCUMENT = "kb_document"
+CALL_RECORDING = "call_recording"
+CONTACT_IMPORT = "contact_import"
+
+_ALLOWED_R2_KINDS = frozenset({KB_DOCUMENT, CALL_RECORDING, CONTACT_IMPORT})
+
+
+def build_r2_object_key(*, org_id, kind: str, subpath: str) -> str:
+    """Compose an R2 object key as ``{org_id}/{kind}/{subpath}``.
+
+    Single source of truth for new-upload keys. Callers MUST use this instead
+    of formatting keys inline so every new upload lands under the canonical
+    per-org layout.
+    """
+    if kind not in _ALLOWED_R2_KINDS:
+        raise ValueError(
+            f"Unknown R2 kind: {kind!r}; expected one of {sorted(_ALLOWED_R2_KINDS)}"
+        )
+    return f"{org_id}/{kind}/{subpath.lstrip('/')}"
+
+
 class R2StorageService:
     def __init__(self):
         self._client = boto3.client(

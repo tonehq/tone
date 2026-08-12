@@ -129,6 +129,13 @@ We believe in democratizing AI voice technology through open source solutions. O
 
 Runs Python install, venv, dependencies, migrations, procrastinate schema, DB seed, Node.js install, and frontend `npm install` — all in one go.
 
+> **Before running:** open `bootstrap/dev-bootstrap.sh` and read the
+> **PREREQUISITES** block at the top. It lists everything you must have
+> in place first (Homebrew, `PIP_EXTRA_INDEX_URL`, `infisical login`,
+> `.env` keys, a reachable Postgres DB, optional provider API keys).
+> The seed step is interactive — have your organization name, owner
+> email, and password ready.
+
 ```bash
 ./bootstrap/dev-bootstrap.sh
 ```
@@ -229,6 +236,38 @@ Prefer to run each step yourself? Follow the manual backend and frontend steps b
   - Frontend: [http://localhost:3000](http://localhost:3000)
   - Backend API: [http://localhost:8000](http://localhost:8000)
   - API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+
+### Initializing a new database
+
+Use `bootstrap/db-bootstrap.sh` when your machine is already set up
+(Python, venv, dependencies, Node all installed) and you just need to
+initialize a **fresh, empty database** — for example, pointing at a
+newly provisioned staging/production DB, or resetting your local DB.
+
+It runs three steps:
+1. `alembic upgrade head` — creates the full schema
+2. Applies the Procrastinate ingestion-queue schema (one-time per env)
+3. Runs `dev/seed.py` — creates the first user + org and seeds the
+   global provider/model/voice catalogue
+
+```bash
+# Local — reads DATABASE_URL from .env
+./bootstrap/db-bootstrap.sh
+
+# With Infisical (DATABASE_URL and provider API keys injected from Infisical)
+infisical run --projectId "$INFISICAL_PROJECT_ID" --env="$INFISICAL_ENV" -- \
+    ./bootstrap/db-bootstrap.sh
+```
+
+Prerequisites (also listed at the top of `bootstrap/db-bootstrap.sh`):
+- Python venv activated with dependencies installed
+- A reachable, empty Postgres DB — `DATABASE_URL` in `.env` (or
+  injected by `infisical run`)
+- Optional: provider API keys in env (`OPENAI_API_KEY`, etc.) if you
+  want them seeded automatically
+
+The seed step is **interactive** — have organization name, owner email,
+and password ready.
 
 ### Adding a new organization
 

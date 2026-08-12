@@ -1,27 +1,27 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: staging-tone-api-deployment
+  name: tone-api
   namespace: staging
   labels:
-    app: staging-tone-api
+    app: tone-api
     environment: staging
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: staging-tone-api
+      app: tone-api
   template:
     metadata:
       labels:
-        app: staging-tone-api
+        app: tone-api
         environment: staging
     spec:
       nodeSelector:
         kubernetes.io/os: linux
       containers:
-        - name: staging-tone-api
-          image: developer390/tone:${IMAGE_TAG}
+        - name: tone-api
+          image: ghcr.io/tonehq/tone:${IMAGE_TAG}
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
@@ -61,4 +61,4 @@ spec:
             - name: INFISICAL_HOST
               value: "https://secrets.trytone.ai"
       imagePullSecrets:
-        - name: dockerhub-auth
+        - name: ghcr-auth

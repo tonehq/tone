@@ -1,8 +1,8 @@
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
-  name: staging-tone-call-ingress
-  namespace: staging
+  name: ${RESOURCE_PREFIX}call-ingress
+  namespace: ${NAMESPACE}
   annotations:
     kubernetes.io/ingress.class: "nginx"
     # Timeouts for long-lived voice connections
@@ -19,7 +19,7 @@ metadata:
     nginx.ingress.kubernetes.io/cors-allow-credentials: "true"
     nginx.ingress.kubernetes.io/cors-max-age: "3600"
     # WebSocket support
-    nginx.ingress.kubernetes.io/websocket-services: "staging-tone-call-service"
+    nginx.ingress.kubernetes.io/websocket-services: "${RESOURCE_PREFIX}call-service"
     nginx.ingress.kubernetes.io/proxy-http-version: "1.1"
     # TLS
     cert-manager.io/cluster-issuer: "letsencrypt-prod"
@@ -28,30 +28,30 @@ spec:
   ingressClassName: nginx
   tls:
     - hosts:
-        - staging-call.trytone.ai
-      secretName: staging-tone-call-certificate
+        - ${CALL_DOMAIN}
+      secretName: ${RESOURCE_PREFIX}call-certificate
   rules:
-    - host: staging-call.trytone.ai
+    - host: ${CALL_DOMAIN}
       http:
         paths:
           - path: /
             pathType: Prefix
             backend:
               service:
-                name: staging-tone-call-service
+                name: ${RESOURCE_PREFIX}call-service
                 port:
                   number: 80
           - path: /health
             pathType: Exact
             backend:
               service:
-                name: staging-tone-call-service
+                name: ${RESOURCE_PREFIX}call-service
                 port:
                   number: 80
           - path: /ready
             pathType: Exact
             backend:
               service:
-                name: staging-tone-call-service
+                name: ${RESOURCE_PREFIX}call-service
                 port:
                   number: 80
