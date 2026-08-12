@@ -2313,7 +2313,19 @@ class AgentService(BaseService):
         tool_ids: List[str],
         oauth_overrides: Optional[Dict[str, Optional[str]]] = None,
     ) -> None:
-        uuids = [UUID(str(tid)) for tid in tool_ids]
+        # Drop empty/whitespace/None entries and dedupe (order-preserving) so a
+        # stray "" or duplicate id from the client can't blow up UUID parsing
+        # or the "not found" check below.
+        cleaned = list(dict.fromkeys(
+            str(tid).strip() for tid in (tool_ids or []) if tid and str(tid).strip()
+        ))
+        try:
+            uuids = [UUID(t) for t in cleaned]
+        except (ValueError, TypeError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid tool_id in request: {e}",
+            )
         if uuids:
             existing_tools = self.query(Tool).filter(Tool.id.in_(uuids)).all()
             found = {t.id for t in existing_tools}
@@ -2386,7 +2398,19 @@ class AgentService(BaseService):
         mcp_server_ids: List[str],
         oauth_overrides: Optional[Dict[str, Optional[str]]] = None,
     ) -> None:
-        uuids = {UUID(str(sid)) for sid in mcp_server_ids}
+        # Drop empty/whitespace/None entries and dedupe so a stray "" or
+        # duplicated id from the client can't crash UUID parsing or the
+        # "not found" check below (mirrors ``_sync_tools``).
+        cleaned = list(dict.fromkeys(
+            str(sid).strip() for sid in (mcp_server_ids or []) if sid and str(sid).strip()
+        ))
+        try:
+            uuids = {UUID(s) for s in cleaned}
+        except (ValueError, TypeError) as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid mcp_server_id in request: {e}",
+            )
 
         if uuids:
             existing = self.query(McpServer).filter(McpServer.id.in_(uuids)).all()

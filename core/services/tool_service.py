@@ -384,6 +384,7 @@ class ToolService(BaseService):
                 agent_id=aid,
                 tool_id=tool_id,
                 agent_config_id=published_map[aid],
+                organization_id=self.org_id,
                 created_at=now,
                 updated_at=now,
             )
