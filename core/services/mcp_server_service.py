@@ -602,6 +602,7 @@ class McpServerService(BaseService):
                 agent_id=agent_id,
                 mcp_server_id=mcp_server_id,
                 agent_config_id=published_map[agent_id],
+                organization_id=self.org_id,
                 created_at=now,
                 updated_at=now,
             ))
