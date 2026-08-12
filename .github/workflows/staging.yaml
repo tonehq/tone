@@ -1,8 +1,16 @@
-name: Staging CI/CD
+name: Staging (DigitalOcean DOKS) CI/CD
 
 on:
   push:
     branches: ["staging"]
+  workflow_dispatch:
+
+# Deploys by rendering build/kubernetes/_base with build/kubernetes/envs/staging.env.
+# EVERYTHING env-specific — namespace, resource names, capacity, AND which GitHub
+# secret holds the kubeconfig (KUBE_CONFIG_SECRET) — lives in that one env file.
+env:
+  ENV_FILE: build/kubernetes/envs/staging.env
+  RENDER_DIR: build/kubernetes/.rendered/staging
 
 jobs:
   build-and-deploy:
@@ -34,53 +42,69 @@ jobs:
           secrets: |
             pip_extra_index=${{ secrets.PIP_EXTRA_INDEX_URL }}
 
-      - uses: azure/k8s-set-context@v4
-        with:
-          kubeconfig: ${{ secrets.STAGING_KUBE_CONFIG_JSON }}
+      # Resolve NAMESPACE + RESOURCE_PREFIX (non-secret) from the env file.
+      - name: Load env config
+        run: grep -E '^(NAMESPACE|RESOURCE_PREFIX)=' "$ENV_FILE" >> "$GITHUB_ENV"
+
+      # Resolve the kubeconfig from the secret NAMED in the env file
+      # (KUBE_CONFIG_SECRET). toJSON(secrets) lets us index by that name.
+      - name: Set up kubeconfig from env file
+        env:
+          ALL_SECRETS: ${{ toJSON(secrets) }}
+        run: |
+          SRC=$(grep -E '^KUBE_CONFIG_SECRET=' "$ENV_FILE" | cut -d= -f2)
+          test -n "$SRC" || { echo "::error::KUBE_CONFIG_SECRET missing in $ENV_FILE"; exit 1; }
+          mkdir -p "$HOME/.kube"
+          printf '%s' "$ALL_SECRETS" | jq -r --arg k "$SRC" '.[$k] // empty' > "$HOME/.kube/config"
+          test -s "$HOME/.kube/config" || { echo "::error::secret $SRC is empty/undefined"; exit 1; }
+          chmod 600 "$HOME/.kube/config"
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+
+      - name: Render app manifests from shared templates
+        run: ./build/kubernetes/render.sh "$ENV_FILE" "$RENDER_DIR"
 
       - name: Create namespace
-        run: kubectl create namespace staging --dry-run=client -o yaml | kubectl apply -f -
+        run: kubectl create namespace "$NAMESPACE" --dry-run=client -o yaml | kubectl apply -f -
 
-      - name: Substitute IMAGE_TAG in deployment manifests
+      - name: Substitute IMAGE_TAG in rendered manifests
         run: |
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/api/deployment.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/call/inbound-call-worker.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/call/outbound-call-worker.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/worker/doc-worker.yaml
-          sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" build/kubernetes/staging/worker/orchestrator.yaml
+          for m in api/deployment call/inbound-call-worker call/outbound-call-worker \
+                   worker/doc-worker worker/orchestrator; do
+            sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" "$RENDER_DIR/$m.yaml"
+          done
 
       - name: Apply all manifests
         run: |
-          kubectl apply -f build/kubernetes/staging/letsencrypt-prod.yaml
-          kubectl apply -f build/kubernetes/staging/api/service.yaml
-          kubectl apply -f build/kubernetes/staging/api/deployment.yaml
-          kubectl apply -f build/kubernetes/staging/api/certificate.yaml
-          kubectl apply -f build/kubernetes/staging/api/ingress.yaml
-          kubectl apply -f build/kubernetes/staging/call/pdb.yaml
-          kubectl apply -f build/kubernetes/staging/call/service.yaml
-          kubectl apply -f build/kubernetes/staging/call/inbound-call-worker.yaml
-          kubectl apply -f build/kubernetes/staging/call/outbound-call-worker.yaml
-          kubectl apply -f build/kubernetes/staging/call/certificate.yaml
-          kubectl apply -f build/kubernetes/staging/call/ingress.yaml
-          kubectl apply -f build/kubernetes/staging/call/pod-routing.yaml
-          kubectl apply -f build/kubernetes/staging/worker/rbac.yaml
-          kubectl apply -f build/kubernetes/staging/worker/doc-worker.yaml
-          kubectl apply -f build/kubernetes/staging/worker/orchestrator.yaml
-          kubectl apply -f build/kubernetes/staging/keda/trigger-auth.yaml
-          kubectl apply -f build/kubernetes/staging/keda/scaledobjects.yaml
+          kubectl apply -f "$RENDER_DIR/letsencrypt-prod.yaml"
+          kubectl apply -f "$RENDER_DIR/api/service.yaml"
+          kubectl apply -f "$RENDER_DIR/api/deployment.yaml"
+          kubectl apply -f "$RENDER_DIR/api/certificate.yaml"
+          kubectl apply -f "$RENDER_DIR/api/ingress.yaml"
+          kubectl apply -f "$RENDER_DIR/call/pdb.yaml"
+          kubectl apply -f "$RENDER_DIR/call/service.yaml"
+          kubectl apply -f "$RENDER_DIR/call/inbound-call-worker.yaml"
+          kubectl apply -f "$RENDER_DIR/call/outbound-call-worker.yaml"
+          kubectl apply -f "$RENDER_DIR/call/certificate.yaml"
+          kubectl apply -f "$RENDER_DIR/call/ingress.yaml"
+          kubectl apply -f "$RENDER_DIR/call/pod-routing.yaml"
+          kubectl apply -f "$RENDER_DIR/worker/rbac.yaml"
+          kubectl apply -f "$RENDER_DIR/worker/doc-worker.yaml"
+          kubectl apply -f "$RENDER_DIR/worker/orchestrator.yaml"
+          kubectl apply -f "$RENDER_DIR/keda/trigger-auth.yaml"
+          kubectl apply -f "$RENDER_DIR/keda/scaledobjects.yaml"
 
       - name: Rollout restart deployments
         run: |
-          kubectl rollout restart deployment/staging-tone-api-deployment -n staging
-          kubectl rollout restart statefulset/staging-tone-call-worker -n staging
-          kubectl rollout restart statefulset/staging-tone-outbound-call-worker -n staging
-          kubectl rollout restart deployment/staging-tone-worker -n staging
-          kubectl rollout restart deployment/staging-tone-orchestrator -n staging
+          kubectl rollout restart deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE"
+          kubectl rollout restart statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE"
+          kubectl rollout restart statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE"
+          kubectl rollout restart deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE"
+          kubectl rollout restart deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE"
 
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/staging-tone-api-deployment -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-call-worker -n staging --timeout=180s
-          kubectl rollout status statefulset/staging-tone-outbound-call-worker -n staging --timeout=420s
-          kubectl rollout status deployment/staging-tone-worker -n staging --timeout=180s
-          kubectl rollout status deployment/staging-tone-orchestrator -n staging --timeout=180s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE" --timeout=420s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE" --timeout=180s

@@ -21,9 +21,9 @@ on:
         description: "Environment / cluster (matches build/kubernetes/envs/<target>.env)"
         type: choice
         options:
+          - staging
           - staging-do
           # - staging-aws
-          # - staging
 
 env:
   RENDER_DIR: build/kubernetes/.rendered/monitoring
