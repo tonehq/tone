@@ -1,0 +1,86 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ${RESOURCE_PREFIX}doc-worker
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${RESOURCE_PREFIX}worker
+    environment: ${ENVIRONMENT}
+    component: autoscaling
+spec:
+  scaleTargetRef:
+    kind: Deployment
+    name: ${RESOURCE_PREFIX}worker
+  pollingInterval: 15
+  cooldownPeriod: 300
+  minReplicaCount: ${DOC_MIN_REPLICAS}
+  maxReplicaCount: ${DOC_MAX_REPLICAS}
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 300
+  triggers:
+    - type: postgresql
+      authenticationRef:
+        name: keda-postgres-auth
+      metadata:
+        targetQueryValue: "1"
+        activationTargetQueryValue: "0"
+        query: >-
+          SELECT count(*) FROM procrastinate_jobs
+          WHERE queue_name = 'ingestion'
+            AND (
+                  status = 'doing'
+               OR (status = 'todo' AND (scheduled_at IS NULL OR scheduled_at <= now()))
+            )
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: ${RESOURCE_PREFIX}outbound-call-worker
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${RESOURCE_PREFIX}outbound-call-worker
+    environment: ${ENVIRONMENT}
+    component: autoscaling
+  annotations:
+    autoscaling.keda.sh/paused-replicas: "1"
+spec:
+  scaleTargetRef:
+    kind: StatefulSet
+    name: ${RESOURCE_PREFIX}outbound-call-worker
+  pollingInterval: 15
+  cooldownPeriod: 600
+  minReplicaCount: ${OUTBOUND_MIN_REPLICAS}
+  maxReplicaCount: ${OUTBOUND_MAX_REPLICAS}
+  advanced:
+    restoreToOriginalReplicaCount: true
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 600
+          policies:
+            - type: Pods
+              value: 1
+              periodSeconds: 120
+  triggers:
+    - type: postgresql
+      authenticationRef:
+        name: keda-postgres-auth
+      metadata:
+        targetQueryValue: "2"
+        activationTargetQueryValue: "0"
+        query: >-
+          SELECT
+            (SELECT count(*) FROM calls
+               WHERE ended_at IS NULL
+                 AND started_at IS NOT NULL
+                 AND started_at > now() - interval '2 hours'
+                 AND direction = 'outbound')
+          + (SELECT count(*) FROM scheduled_calls
+               WHERE status IN ('processing', 'dispatched'))
+          + (SELECT count(*) FROM scheduled_calls
+               WHERE status = 'scheduled'
+                 AND scheduled_at <= now() + interval '3 minutes')

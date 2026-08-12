@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${RESOURCE_PREFIX}api-deployment
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${RESOURCE_PREFIX}api
+    environment: ${ENVIRONMENT}
+spec:
+  replicas: ${API_REPLICAS}
+  selector:
+    matchLabels:
+      app: ${RESOURCE_PREFIX}api
+  template:
+    metadata:
+      labels:
+        app: ${RESOURCE_PREFIX}api
+        environment: ${ENVIRONMENT}
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      containers:
+        - name: ${RESOURCE_PREFIX}api
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          command: ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+          resources:
+            requests:
+              cpu: "${API_CPU_REQUEST}"
+              memory: "${API_MEM_REQUEST}"
+            limits:
+              cpu: "${API_CPU_LIMIT}"
+              memory: "${API_MEM_LIMIT}"
+          env:
+            - name: ENV
+              value: "${APP_ENV}"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['app']"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+            - name: INFISICAL_HOST
+              value: "${INFISICAL_HOST}"
+      imagePullSecrets:
+        - name: ghcr-auth

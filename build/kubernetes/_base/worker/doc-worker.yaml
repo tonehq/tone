@@ -1,0 +1,85 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${RESOURCE_PREFIX}worker
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${RESOURCE_PREFIX}worker
+    environment: ${ENVIRONMENT}
+    component: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${RESOURCE_PREFIX}worker
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: ${RESOURCE_PREFIX}worker
+        environment: ${ENVIRONMENT}
+        component: worker
+    spec:
+      nodeSelector:
+        kubernetes.io/os: linux
+      terminationGracePeriodSeconds: 120
+      containers:
+        - name: ${RESOURCE_PREFIX}worker
+          image: ${IMAGE_REPO}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          command:
+            - python
+            - "-m"
+            - procrastinate
+            - "--app=core.services.ingestion_queue.app"
+            - worker
+            - "--name=$(POD_NAME)"
+            - "--queues=ingestion,eval"
+            - "--concurrency=1"
+            - "--no-listen-notify"
+            - "--fetch-job-polling-interval=5"
+          resources:
+            requests:
+              cpu: "${DOCWORKER_CPU_REQUEST}"
+              memory: "${DOCWORKER_MEM_REQUEST}"
+            limits:
+              cpu: "${DOCWORKER_CPU_LIMIT}"
+              memory: "${DOCWORKER_MEM_LIMIT}"
+          env:
+            - name: ENV
+              value: "${APP_ENV}"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: DEPLOYMENT_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: "metadata.labels['app']"
+            - name: DOCLING_NUM_THREADS
+              value: "2"
+            - name: OMP_NUM_THREADS
+              value: "2"
+            - name: OPENBLAS_NUM_THREADS
+              value: "2"
+            - name: MKL_NUM_THREADS
+              value: "2"
+            - name: INFISICAL_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: token
+            - name: INFISICAL_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: infisical-credentials
+                  key: project_id
+            - name: INFISICAL_HOST
+              value: "${INFISICAL_HOST}"
+      imagePullSecrets:
+        - name: ghcr-auth

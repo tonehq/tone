@@ -1,0 +1,108 @@
+# Grafana Alloy DaemonSet — runs one collector pod on every node (including
+# GPU / tainted nodes) to gather logs and node metrics for Grafana Cloud.
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: alloy
+  namespace: monitoring
+  labels:
+    app: alloy
+    component: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: alloy
+  template:
+    metadata:
+      labels:
+        app: alloy
+        component: monitoring
+    spec:
+      serviceAccountName: alloy
+      # Run on every node, tolerating all taints (GPU/system nodes included).
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: alloy
+          image: grafana/alloy:v1.5.1
+          args:
+            - run
+            - /etc/alloy/config.alloy
+            - --storage.path=/var/lib/alloy/data
+            - --server.http.listen-addr=0.0.0.0:12345
+          securityContext:
+            runAsUser: 0
+            privileged: false
+          ports:
+            - name: http
+              containerPort: 12345
+          env:
+            - name: CLUSTER_NAME
+              value: "${CLUSTER_NAME}"
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+            - name: LOKI_URL
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: loki-url
+            - name: LOKI_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: loki-user
+            - name: PROM_URL
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: prom-url
+            - name: PROM_USER
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: prom-user
+            - name: GRAFANA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-cloud-credentials
+                  key: api-key
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi
+          volumeMounts:
+            - name: config
+              mountPath: /etc/alloy
+            - name: data
+              mountPath: /var/lib/alloy/data
+            # Host filesystem for node_exporter metrics (always present on EKS).
+            - name: rootfs
+              mountPath: /host/root
+              readOnly: true
+              mountPropagation: HostToContainer
+            - name: procfs
+              mountPath: /host/proc
+              readOnly: true
+            - name: sysfs
+              mountPath: /host/sys
+              readOnly: true
+      volumes:
+        - name: config
+          configMap:
+            name: alloy-config
+        - name: data
+          emptyDir: {}
+        - name: rootfs
+          hostPath:
+            path: /
+        - name: procfs
+          hostPath:
+            path: /proc
+        - name: sysfs
+          hostPath:
+            path: /sys
