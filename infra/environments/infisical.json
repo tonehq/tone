@@ -1,0 +1,42 @@
+{
+  "env_name": "infisical",
+  "services": {
+    "vm": {
+      "provider": "digitalocean",
+      "config": {
+        "region": "nyc3",
+        "size": "s-2vcpu-2gb",
+        "image": "ubuntu-24-04-x64",
+        "ssh_key_names": [],
+        "open_ports": [
+          22,
+          80,
+          443,
+          8080
+        ],
+        "allowed_sources": [
+          "0.0.0.0/0",
+          "::/0"
+        ],
+        "monitoring": true,
+        "backups": true,
+        "reserved_ip": true,
+        "user_data": "",
+        "ssh_public_key_paths": [
+          "~/.ssh/id_ed25519.pub"
+        ]
+      }
+    },
+    "db": {
+      "provider": "neon",
+      "config": {
+        "org_id": "org-floral-dew-78790515",
+        "region_id": "aws-us-east-1",
+        "pg_version": 17,
+        "branch_name": "main",
+        "database_name": "infisical",
+        "role_name": "infisical_owner"
+      }
+    }
+  }
+}

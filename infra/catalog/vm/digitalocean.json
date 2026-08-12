@@ -1,0 +1,29 @@
+{
+  "provider": "digitalocean",
+  "service": "vm",
+  "resource": "digitalocean.Droplet + Firewall (+ optional ReservedIp)",
+  "notes": "ssh_public_key_paths uploads a local public key as a managed DO resource. ssh_key_names references keys already in the account. At least one is required or the droplet is unreachable. reserved_ip survives droplet rebuilds.",
+  "config": {
+    "region": "nyc3",
+    "size": "s-2vcpu-4gb",
+    "image": "ubuntu-24-04-x64",
+    "ssh_key_names": [],
+    "open_ports": [
+      22,
+      80,
+      443,
+      8080
+    ],
+    "allowed_sources": [
+      "0.0.0.0/0",
+      "::/0"
+    ],
+    "monitoring": true,
+    "backups": false,
+    "reserved_ip": true,
+    "user_data": "",
+    "ssh_public_key_paths": [
+      "~/.ssh/id_ed25519.pub"
+    ]
+  }
+}

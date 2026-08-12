@@ -1,0 +1,16 @@
+{
+  "provider": "azure",
+  "service": "db",
+  "resource": "azure-native.dbforpostgresql.Server (Flexible Server)",
+  "notes": "Region capacity is restricted per subscription. Verify with: az postgres flexible-server list-skus -l <region>",
+  "config": {
+    "resource_group": "",
+    "location": "westus3",
+    "server_name": "",
+    "version": "16",
+    "administrator_login": "toneadmin",
+    "sku_name": "Standard_B1ms",
+    "sku_tier": "Burstable",
+    "storage_gb": 32
+  }
+}

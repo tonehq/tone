@@ -1,0 +1,16 @@
+{
+  "provider": "aws",
+  "service": "db",
+  "resource": "aws.rds.Instance",
+  "implemented": false,
+  "config": {
+    "region": "",
+    "engine_version": "",
+    "instance_class": "",
+    "allocated_storage": "",
+    "database_name": "",
+    "username": "",
+    "multi_az": false,
+    "publicly_accessible": false
+  }
+}

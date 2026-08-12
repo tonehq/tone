@@ -1,0 +1,12 @@
+{
+  "provider": "digitalocean",
+  "service": "db",
+  "resource": "digitalocean.DatabaseCluster (engine=pg) + DatabaseDb",
+  "config": {
+    "region": "nyc3",
+    "version": "16",
+    "size": "db-s-1vcpu-1gb",
+    "node_count": 1,
+    "database_name": "tone"
+  }
+}

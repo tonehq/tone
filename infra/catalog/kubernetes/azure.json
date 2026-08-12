@@ -1,0 +1,22 @@
+{
+  "provider": "azure",
+  "service": "kubernetes",
+  "resource": "azure-native.containerservice.ManagedCluster",
+  "notes": "kubernetes_version must be 1.34+. First node pool becomes the System pool inside the cluster; the rest are AgentPool resources with mode=User. All pools share the AKS-managed VNet.",
+  "config": {
+    "resource_group": "",
+    "location": "westus3",
+    "kubernetes_version": "1.35",
+    "os_disk_size_gb": 50,
+    "availability_zones": [],
+    "node_pools": [
+      {
+        "name": "cpuapp",
+        "instance_type": "Standard_D2s_v3",
+        "min": 1,
+        "max": 4,
+        "desired": 2
+      }
+    ]
+  }
+}

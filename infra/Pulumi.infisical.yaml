@@ -1,0 +1,5 @@
+config:
+  digitalocean:token:
+    secure: AAABAPRm8QlImZVT5zzstJyDoDJ8Tpi1+NGkO0C+EpwGshHuX/kHrnLqplv+oeeV4/Yu0ln+GlIlfduZU8nDMezdEu7zTSnV4J83FdhuNSkq/7g7OiwSX9MZf5SuRxWZFc2uqP6GgQ==
+  neon:apiKey:
+    secure: AAABANj/u9I0wlphTEmsdKtLUXPFOMnIYSjhJzUjGIZ6c2MYtKxH/pmPDZaeSKakTFskDmqrZcxsWpFbUUwc38ZjbMtjChi+G5RnWfaQVcoMjV3i0PZSDJpzTYqUbCeXPtkdWxQ=

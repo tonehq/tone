@@ -1,0 +1,12 @@
+{
+  "provider": "cloudflare",
+  "service": "filestorage",
+  "resource": "cloudflare.R2Bucket",
+  "notes": "location is a coarse hint only: ENAM, WNAM, WEUR, EEUR, APAC. No per-region match to AWS/Azure regions.",
+  "config": {
+    "account_id": "1b1060704a77f9c68db9b50ec521f5b9",
+    "bucket_name": "",
+    "location": "ENAM",
+    "storage_class": "Standard"
+  }
+}

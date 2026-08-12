@@ -1,0 +1,18 @@
+[project]
+  name = "pulumi_neon"
+  description = "A Pulumi provider dynamically bridged from neon."
+  dependencies = ["parver>=0.2.1", "pulumi>=3.247.0,<4.0.0", "semver>=2.8.1", "typing-extensions>=4.11,<5; python_version < \"3.11\""]
+  readme = "README.md"
+  requires-python = ">=3.9"
+  version = "0.15.0"
+  [project.urls]
+    Repository = "https://github.com/kislerdm/terraform-provider-neon"
+
+[build-system]
+  requires = ["setuptools>=61.0"]
+  build-backend = "setuptools.build_meta"
+
+[tool]
+  [tool.setuptools]
+    [tool.setuptools.package-data]
+      pulumi_neon = ["py.typed", "pulumi-plugin.json"]

@@ -1,0 +1,14 @@
+{
+  "provider": "azure",
+  "service": "filestorage",
+  "resource": "azure-native.storage.StorageAccount + BlobContainer",
+  "implemented": false,
+  "config": {
+    "resource_group": "",
+    "location": "",
+    "account_name": "",
+    "container_name": "",
+    "account_tier": "Standard",
+    "replication_type": "LRS"
+  }
+}

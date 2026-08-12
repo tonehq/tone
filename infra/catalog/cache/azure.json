@@ -1,0 +1,13 @@
+{
+  "provider": "azure",
+  "service": "cache",
+  "resource": "azure-native.redisenterprise.RedisEnterprise + Database",
+  "notes": "Microsoft.Cache/Redis is retiring and blocked in many regions. Azure Managed Redis has no free tier and is capacity-constrained; InsufficientCapacity means try another sku_name or region.",
+  "config": {
+    "resource_group": "",
+    "location": "westus3",
+    "cache_name": "",
+    "sku_name": "Balanced_B1",
+    "eviction_policy": "AllKeysLRU"
+  }
+}
