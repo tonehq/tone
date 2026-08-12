@@ -174,6 +174,18 @@ def delete_mcp_server(
     return svc.delete_mcp_server(mcp_server_id)
 
 
+@router.get("/get_agents_by_mcp_server")
+def get_agents_by_mcp_server(
+    mcp_server_id: str = Query(..., description="The MCP server ID to fetch attached agents for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """Agents whose published version reaches this server — feeds the edit
+    form's Agents section (counterpart of upsert_mcp_server's ``agent_ids``)."""
+    svc = _get_service(claims, db)
+    return svc.get_agents_by_mcp_server(mcp_server_id)
+
+
 @router.post("/attach_mcp_server_to_agents")
 def attach_mcp_server_to_agents(
     body: AttachMcpServerRequest,

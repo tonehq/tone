@@ -109,6 +109,18 @@ class DetachToolRequest(BaseModel):
     agent_ids: List[str]
 
 
+@router.get("/get_agents_by_tool")
+def get_agents_by_tool(
+    tool_id: str = Query(..., description="The tool ID to fetch attached agents for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """Agents whose published version carries this tool — feeds the edit form's
+    Agents section (the counterpart of upsert_tool's ``agent_ids``)."""
+    svc = _get_service(claims, db)
+    return svc.get_agents_by_tool(tool_id)
+
+
 @router.post("/attach_tool_to_agents")
 def attach_tool_to_agents(
     body: AttachToolRequest,
