@@ -101,10 +101,12 @@ jobs:
           kubectl rollout restart deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE"
           kubectl rollout restart deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE"
 
+      # Generous timeouts: the app image is large and the FIRST pull onto a fresh
+      # node can exceed a few minutes. Later deploys reuse the cached layers.
       - name: Wait for rollouts
         run: |
-          kubectl rollout status deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE" --timeout=420s
-          kubectl rollout status deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE" --timeout=180s
-          kubectl rollout status deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE" --timeout=180s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}api-deployment -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}call-worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status statefulset/${RESOURCE_PREFIX}outbound-call-worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}worker -n "$NAMESPACE" --timeout=600s
+          kubectl rollout status deployment/${RESOURCE_PREFIX}orchestrator -n "$NAMESPACE" --timeout=600s
