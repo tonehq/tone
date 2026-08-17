@@ -181,6 +181,65 @@ def get_mcp_servers_for_agent(agent_id: int):
         return servers
 
 
+def build_mcp_request_headers(server) -> dict:
+    """Resolve every request header an MCP server authenticates with.
+
+    Static ``auth_config`` first, then custom ``meta_data`` headers (e.g.
+    ClickUp's ``x-workspace-id``), then the linked-connection header which
+    overrides both. Shared by the live-call registration path and the offline
+    text harness so both authenticate identically.
+    """
+    from core.services.mcp_server_service import build_auth_headers, headers_from_meta
+    from core.utils.oauth_resolution import effective_of
+
+    headers = build_auth_headers(
+        server.auth_config, auth_type=getattr(server, "auth_type", None)
+    )
+    headers.update(headers_from_meta(getattr(server, "meta_data", None)))
+
+    oauth_connection_id = effective_of(server)
+    if oauth_connection_id:
+        try:
+            from core.database.session import get_db_context
+            from core.services.oauth_service import OAuthService
+
+            with get_db_context() as db:
+                svc = OAuthService(db, org_id=server.organization_id)
+                connection = svc.get_connection(oauth_connection_id)
+                if connection:
+                    scope_check = svc.validate_connection_for_provider(connection)
+                    if not scope_check["ok"]:
+                        logger.warning(
+                            "MCP server '{}' OAuth connection {} is missing scopes {} — "
+                            "some tools may be unavailable; reconnect to grant them",
+                            server.name, oauth_connection_id, scope_check["missing"],
+                        )
+                    header_name, header_value = svc.resolve_connection_auth_header(connection)
+                    headers[header_name] = header_value
+                    logger.info(
+                        "MCP server '{}' authenticated via connection {}",
+                        server.name, oauth_connection_id,
+                    )
+                else:
+                    logger.warning(
+                        "MCP server '{}' references missing OAuth connection {} — "
+                        "reconnect it in Integrations settings",
+                        server.name, oauth_connection_id,
+                    )
+        except Exception:
+            logger.exception(
+                "MCP server '{}': failed to resolve OAuth access token", server.name
+            )
+
+    if not headers:
+        logger.warning(
+            "MCP server '{}' resolved NO auth headers — if it requires auth, "
+            "tool discovery will return nothing. Check its auth_config / OAuth connection.",
+            server.name,
+        )
+    return headers
+
+
 def get_mcp_server_refs(agent_id: int) -> list:
     """`[{id, name}, ...]` for the agent's active MCP servers.
 
@@ -333,79 +392,12 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
-    from core.services.mcp_server_service import build_auth_headers, headers_from_meta
 
     all_tool_schemas = []
 
     for server in servers:
         try:
-            # Header precedence mirrors validate_mcp_connection exactly: static auth_config first,
-            # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
-            # linked-connection header (resolved below) overrides everything. Keeping the order
-            # identical here ensures a server that validates with one set of headers authenticates
-            # with the same set during a live call. ``auth_type`` selects the header shape explicitly
-            # for rows written after the migration; older rows (auth_type is None) fall back to inference.
-            headers = build_auth_headers(server.auth_config, auth_type=getattr(server, "auth_type", None))
-            headers.update(headers_from_meta(getattr(server, "meta_data", None)))
-
-            # Connector-backed servers (e.g. ClickUp, Google Calendar) authenticate via a
-            # linked connection, NOT a static header. Resolve its header so their tools
-            # actually load — without this the remote returns 0 tools (or 401) and the
-            # agent silently can't book anything. OAuth / bearer / client-credentials
-            # connections resolve to a fresh (auto-refreshed) ``Authorization: Bearer``;
-            # API-key connections resolve to their custom header (e.g. ``X-API-Key``).
-            # Prefers the agent-version override, falling back to the server default.
-            from core.utils.oauth_resolution import effective_of
-            oauth_connection_id = effective_of(server)
-            if oauth_connection_id:
-                try:
-                    from core.database.session import get_db_context
-                    from core.services.oauth_service import OAuthService
-
-                    with get_db_context() as db:
-                        svc = OAuthService(db, org_id=server.organization_id)
-                        connection = svc.get_connection(oauth_connection_id)
-                        if connection:
-                            # Non-blocking scope check: surface a clear warning if the granted
-                            # scopes don't cover what the provider needs, so a partially-authorized
-                            # connection doesn't quietly expose a subset of tools.
-                            scope_check = svc.validate_connection_for_provider(connection)
-                            if not scope_check["ok"]:
-                                logger.warning(
-                                    "MCP server '{}' OAuth connection {} is missing scopes {} — "
-                                    "some tools may be unavailable; reconnect to grant them",
-                                    server.name, oauth_connection_id, scope_check["missing"],
-                                )
-                            # Same resolver used at config/validation time, so call-time and
-                            # validation headers match for every credential kind (bearer for
-                            # OAuth/bearer/client-credentials, custom header for API keys).
-                            header_name, header_value = svc.resolve_connection_auth_header(connection)
-                            headers[header_name] = header_value
-                            logger.info(
-                                "MCP server '{}' authenticated via connection {}",
-                                server.name, oauth_connection_id,
-                            )
-                        else:
-                            logger.warning(
-                                "MCP server '{}' references missing OAuth connection {} — "
-                                "reconnect it in Integrations settings",
-                                server.name, oauth_connection_id,
-                            )
-                except Exception:
-                    logger.exception(
-                        "MCP server '{}': failed to resolve OAuth access token",
-                        server.name,
-                    )
-
-            if not headers:
-                # Surfaces the most common silent failure: a server that requires auth
-                # but whose credential isn't materialised into a request header, so the
-                # remote returns 0 tools (or 401) and booking silently no-ops.
-                logger.warning(
-                    "MCP server '{}' resolved NO auth headers — if it requires auth, "
-                    "tool discovery will return nothing. Check its auth_config / OAuth connection.",
-                    server.name,
-                )
+            headers = build_mcp_request_headers(server)
             if server.transport_type == "sse":
                 server_params = SseServerParameters(url=server.server_url, headers=headers)
             elif server.transport_type == "streamable_http":
