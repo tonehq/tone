@@ -40,6 +40,7 @@ if _LOAD_FULL_API:
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
         contact_syncs, agent_contacts,
+        ingestion_configs,
         generated_api_keys,
     )
 from core.middleware.request_context import RequestContextMiddleware
@@ -165,6 +166,7 @@ if ee_enabled:
         api_v1.include_router(contact_schemas.field_router, tags=["contact-schema"])
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
+        api_v1.include_router(ingestion_configs.router, tags=["ingestion-config"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
         api_v1.include_router(
             ee_generated_api_keys.router,
@@ -208,6 +210,7 @@ else:
         api_v1.include_router(contact_schemas.field_router, tags=["contact-schema"])
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
+        api_v1.include_router(ingestion_configs.router, tags=["ingestion-config"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
         api_v1.include_router(
             generated_api_keys.router,
