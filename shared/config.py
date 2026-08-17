@@ -184,6 +184,10 @@ class Settings:
         self.HUBSPOT_MCP_CLIENT_ID: str = get_secret("HUBSPOT_MCP_CLIENT_ID", "")
         self.HUBSPOT_MCP_CLIENT_SECRET: str = get_secret("HUBSPOT_MCP_CLIENT_SECRET", "")
 
+        self.SALESFORCE_CLIENT_ID: str = get_secret("SALESFORCE_CLIENT_ID", "")
+        self.SALESFORCE_CLIENT_SECRET: str = get_secret("SALESFORCE_CLIENT_SECRET", "")
+        self.SALESFORCE_MY_DOMAIN: str = get_secret("SALESFORCE_MY_DOMAIN", "")
+
         self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY", "")
 
         # Global OpenAI key used as a fallback for AI helper features (e.g. system-prompt
