@@ -39,10 +39,10 @@ _HTTP_TIMEOUT = 15.0
 
 
 def _pre_registered_client(host: str) -> Optional[Tuple[str, Optional[str]]]:
-    """Return (client_id, client_secret) for MCP hosts that don't support Dynamic Client
-    Registration (RFC 7591) and require a pre-registered app instead.
+    """Env-var fallback for MCP hosts that don't support Dynamic Client Registration.
 
-    Hosts not listed here fall through to the DCR path in ``_register_client``.
+    Primary source is the org's ``app_integrations`` row — see
+    :meth:`McpOAuthService.resolve_client_credentials`.
     """
     from shared.config import settings
 
@@ -92,6 +92,42 @@ class McpOAuthService(BaseService):
     def __init__(self, db, org_id, redirect_uri: str):
         super().__init__(db, org_id=org_id)
         self.redirect_uri = redirect_uri
+
+    def resolve_client_credentials(
+        self, host: str, app_integration_id=None
+    ) -> Optional[Tuple[str, Optional[str]]]:
+        from core.models.app_integration import AppIntegration
+
+        row = None
+        if app_integration_id:
+            row = (
+                self.query(AppIntegration)
+                .filter(AppIntegration.id == app_integration_id)
+                .first()
+            )
+        if row is None:
+            candidates = (
+                self.query(AppIntegration)
+                .filter(AppIntegration.is_enabled.is_(True))
+                .all()
+            )
+            row = next(
+                (
+                    c
+                    for c in candidates
+                    if host
+                    in {
+                        urlparse(c.auth_url or "").netloc,
+                        urlparse(c.token_url or "").netloc,
+                    }
+                ),
+                None,
+            )
+        if row is not None:
+            credentials = row.credentials()
+            if credentials.get("client_id"):
+                return credentials["client_id"], credentials.get("client_secret") or None
+        return _pre_registered_client(host)
 
     # ── Discovery ────────────────────────────────────────────────────────
 
@@ -231,7 +267,7 @@ class McpOAuthService(BaseService):
 
         # Providers like HubSpot don't support Dynamic Client Registration — use the
         # operator-configured client credentials for those hosts instead of calling DCR.
-        pre_registered = _pre_registered_client(host)
+        pre_registered = self.resolve_client_credentials(host, integration_uuid)
         if pre_registered:
             client_id, client_secret = pre_registered
         else:

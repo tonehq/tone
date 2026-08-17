@@ -12,6 +12,7 @@ from core.api.v1.oauth import (
     _decode_pkce_state,
     _encode_pkce_state,
     _resolve_pkce_state,
+    apply_resource_indicator,
 )
 from core.models.oauth_connection import OAuthConnection
 from core.utils.pkce import pkce_pair
@@ -285,6 +286,7 @@ def callback(
     # didn't require PKCE just ignore the extra field.
     if verifier:
         token_data["code_verifier"] = verifier
+    apply_resource_indicator(config, token_data)
     # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
     token_kwargs: Dict[str, Any] = {"data": token_data}
     if config.get("token_auth") == "basic":
