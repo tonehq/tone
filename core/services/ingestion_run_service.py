@@ -36,10 +36,21 @@ class IngestionRunService:
         org_id: Any,
         knowledge_base_id: Any,
         request_config: Optional[dict] = None,
+        *,
+        ingestion_config_id: Optional[Any] = None,
     ) -> dict:
-        """Merge system defaults (from ``shared/config.py``) with an optional
-        request-supplied override map. This is the single place defaults are
-        applied — nothing else in the pipeline bakes them in."""
+        """Merge system defaults (from ``shared/config.py``) with either a
+        saved ``IngestionConfig`` (snapshot mode, wins over any request map)
+        or an optional request-supplied override map. This is the single
+        place defaults are applied — nothing else in the pipeline bakes them
+        in.
+
+        When ``ingestion_config_id`` is provided, the config's fields are
+        snapshotted onto the result and ``request_config`` is IGNORED (per
+        product decision: a saved config is a fixed recipe, no per-field
+        overrides). The config is fetched org-scoped, so an id belonging to
+        another org raises 404 exactly like the CRUD endpoints.
+        """
         cfg = {
             "parser": settings.DEFAULT_PARSER,
             "parser_config": None,
@@ -49,9 +60,78 @@ class IngestionRunService:
             "embedding_model": settings.DEFAULT_EMBEDDING_MODEL,
             "embedding_dimensions": settings.DEFAULT_EMBEDDING_DIMENSIONS,
             "embedding_version": None,
+            "embedding_config": None,
             "vector_store": settings.DEFAULT_VECTOR_STORE,
             "vector_store_ref": None,
         }
+        if ingestion_config_id is not None:
+            # Local imports — avoid an import cycle between
+            # IngestionRunService and IngestionConfigService, and defer the
+            # heavier RAG registry imports to the snapshot path only.
+            from core.services.ingestion_config_service import IngestionConfigService
+            from core.services.rag.embedder_factory import EMBEDDERS
+            from core.services.rag.factory import VECTOR_STORES
+            from core.services.rag.parser_factory import PARSERS
+            from core.services.rag.tokeniser_factory import TOKENISERS
+
+            ic = IngestionConfigService(db, org_id=org_id).get_config(ingestion_config_id)
+            # is_active=false configs are user-hidden — refuse at run time so
+            # a stale UI / script can't dial a retired recipe.
+            if not ic.is_active:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail="Ingestion config is inactive and cannot be used for new runs.",
+                )
+            # Re-validate slugs against the LIVE registries: a config saved
+            # months ago may reference a parser/tokeniser/embedder/store
+            # that has since been removed. Surface a 400 at the endpoint
+            # instead of enqueuing a run that crashes mid-ingest.
+            if ic.parser not in PARSERS:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Saved config references unknown parser {ic.parser!r}. "
+                        f"Available: {sorted(PARSERS)}"
+                    ),
+                )
+            if ic.tokeniser not in TOKENISERS:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Saved config references unknown tokeniser {ic.tokeniser!r}. "
+                        f"Available: {sorted(TOKENISERS)}"
+                    ),
+                )
+            if ic.embedding_provider not in EMBEDDERS:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Saved config references unknown embedding provider "
+                        f"{ic.embedding_provider!r}. Available: {sorted(EMBEDDERS)}"
+                    ),
+                )
+            if ic.vector_store not in VECTOR_STORES:
+                raise HTTPException(
+                    status_code=http_status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Saved config references unknown vector store "
+                        f"{ic.vector_store!r}. Available: {sorted(VECTOR_STORES)}"
+                    ),
+                )
+            cfg.update({
+                "parser": ic.parser,
+                "parser_config": ic.parser_config,
+                "tokeniser": ic.tokeniser,
+                "tokeniser_config": ic.tokeniser_config,
+                "embedding_provider": ic.embedding_provider,
+                "embedding_model": ic.embedding_model,
+                "embedding_dimensions": ic.embedding_dimensions,
+                "embedding_version": ic.embedding_version,
+                "embedding_config": ic.embedding_config,
+                "vector_store": ic.vector_store,
+                "vector_store_ref": ic.vector_store_ref,
+            })
+            return cfg
         if request_config:
             for key in list(cfg.keys()):
                 if key in request_config and request_config[key] is not None:
@@ -67,6 +147,7 @@ class IngestionRunService:
         org_id: Any,
         config: dict,
         procrastinate_job_id: Optional[int] = None,
+        ingestion_config_id: Optional[Any] = None,
     ) -> IngestionPipelineRun:
         """Insert a run row in ``pending`` status BEFORE the Procrastinate job
         is deferred. The row exists so the router can stamp the returned
@@ -74,42 +155,78 @@ class IngestionRunService:
         ``running`` at start of processing. Auto-assigns the next per-upload
         ``run_number``. Does NOT flip ``is_active`` on the previous run — that
         happens only in ``complete_run`` so a failed re-ingest leaves the
-        previous ready run serving retrieval."""
-        next_run_number = (
-            db.query(func.coalesce(func.max(IngestionPipelineRun.run_number), 0) + 1)
-            .filter(IngestionPipelineRun.upload_id == upload_id)
-            .scalar()
-        )
-        run = IngestionPipelineRun(
-            organization_id=org_id,
-            upload_id=upload_id,
-            knowledge_base_id=knowledge_base_id,
-            run_number=next_run_number,
-            parser=config["parser"],
-            parser_config=config.get("parser_config"),
-            tokeniser=config["tokeniser"],
-            tokeniser_config=config.get("tokeniser_config"),
-            embedding_provider=config["embedding_provider"],
-            embedding_model=config["embedding_model"],
-            embedding_dimensions=config["embedding_dimensions"],
-            embedding_version=config.get("embedding_version"),
-            vector_store=config["vector_store"],
-            vector_store_ref=config.get("vector_store_ref"),
-            status="pending",
-            is_active=False,
-            started_at=None,
-            procrastinate_job_id=procrastinate_job_id,
-        )
-        db.add(run)
-        db.commit()
-        db.refresh(run)
+        previous ready run serving retrieval.
+
+        ``ingestion_config_id`` (optional) is stamped on the row in the SAME
+        INSERT so audit joins always know which saved config produced the
+        run — no split-write window where a pending row exists without its
+        source id.
+
+        Auto-retries the INSERT once on a ``(upload_id, run_number)`` unique
+        violation so two concurrent ``POST /runs`` for the same upload don't
+        both crash with a 500."""
+        from sqlalchemy.exc import IntegrityError
+
+        last_exc: Optional[Exception] = None
+        for attempt in (1, 2):
+            next_run_number = (
+                db.query(func.coalesce(func.max(IngestionPipelineRun.run_number), 0) + 1)
+                .filter(IngestionPipelineRun.upload_id == upload_id)
+                .scalar()
+            )
+            run = IngestionPipelineRun(
+                organization_id=org_id,
+                upload_id=upload_id,
+                knowledge_base_id=knowledge_base_id,
+                run_number=next_run_number,
+                parser=config["parser"],
+                parser_config=config.get("parser_config"),
+                tokeniser=config["tokeniser"],
+                tokeniser_config=config.get("tokeniser_config"),
+                embedding_provider=config["embedding_provider"],
+                embedding_model=config["embedding_model"],
+                embedding_dimensions=config["embedding_dimensions"],
+                embedding_version=config.get("embedding_version"),
+                embedding_config=config.get("embedding_config"),
+                vector_store=config["vector_store"],
+                vector_store_ref=config.get("vector_store_ref"),
+                status="pending",
+                is_active=False,
+                started_at=None,
+                procrastinate_job_id=procrastinate_job_id,
+                ingestion_config_id=ingestion_config_id,
+            )
+            db.add(run)
+            try:
+                db.commit()
+                db.refresh(run)
+                break
+            except IntegrityError as exc:
+                last_exc = exc
+                db.rollback()
+                if attempt == 2:
+                    logger.exception(
+                        "[ingestion] begin_pending_run: run_number race persisted "
+                        "after retry upload={} tried_run_number={}",
+                        upload_id, next_run_number,
+                    )
+                    raise
+                logger.info(
+                    "[ingestion] begin_pending_run: run_number race upload={} "
+                    "tried={} — retrying once",
+                    upload_id, next_run_number,
+                )
+        else:  # pragma: no cover — retry loop always returns or raises
+            raise last_exc  # type: ignore[misc]
+
         logger.info(
             "[ingestion] pending run {} (upload={}, run_number={}, parser={}, "
-            "tokeniser={}, provider={}, model={}, dims={}, store={})",
+            "tokeniser={}, provider={}, model={}, dims={}, store={}, config_id={})",
             run.id, upload_id, run.run_number,
             run.parser, run.tokeniser,
             run.embedding_provider, run.embedding_model,
             run.embedding_dimensions, run.vector_store,
+            ingestion_config_id,
         )
         return run
 
@@ -120,12 +237,20 @@ class IngestionRunService:
         """Stamp the Procrastinate job id on a pending run. Called by the
         router immediately after ``defer_async`` returns, since ``defer_async``
         can't be executed before the run row exists (we need ``run.id`` in the
-        task payload)."""
+        task payload).
+
+        Explicitly stamps ``updated_at`` because bulk ``.update({...})``
+        bypasses the ORM's Python-side ``onupdate`` on ``TimestampModel``,
+        which would otherwise leave lists sorted by ``updated_at`` looking
+        stale after a run transitions."""
         (
             db.query(IngestionPipelineRun)
             .filter(IngestionPipelineRun.id == run_id)
             .update(
-                {"procrastinate_job_id": job_id},
+                {
+                    "procrastinate_job_id": job_id,
+                    "updated_at": datetime.now(timezone.utc),
+                },
                 synchronize_session=False,
             )
         )
@@ -164,7 +289,10 @@ class IngestionRunService:
         (
             db.query(IngestionPipelineRun)
             .filter(IngestionPipelineRun.id == run_id)
-            .update({"trace_id": tid}, synchronize_session=False)
+            .update(
+                {"trace_id": tid, "updated_at": datetime.now(timezone.utc)},
+                synchronize_session=False,
+            )
         )
         db.commit()
         return tid
@@ -220,7 +348,10 @@ class IngestionRunService:
                 IngestionPipelineRun.is_active.is_(True),
                 IngestionPipelineRun.id != run.id,
             )
-            .update({"is_active": False}, synchronize_session=False)
+            .update(
+                {"is_active": False, "updated_at": datetime.now(timezone.utc)},
+                synchronize_session=False,
+            )
         )
         db.flush()
         if deactivated:
@@ -332,7 +463,10 @@ class IngestionRunService:
                 IngestionPipelineRun.is_active.is_(True),
                 IngestionPipelineRun.id != run.id,
             )
-            .update({"is_active": False}, synchronize_session=False)
+            .update(
+                {"is_active": False, "updated_at": datetime.now(timezone.utc)},
+                synchronize_session=False,
+            )
         )
         db.flush()
         run.is_active = True
