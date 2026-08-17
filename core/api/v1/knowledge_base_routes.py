@@ -215,17 +215,22 @@ async def _start_ingestion_run(
     org_id: UUID,
     request_config: dict | None,
     delete_existing: bool,
+    ingestion_config_id: UUID | None = None,
 ) -> tuple[IngestionPipelineRun, int]:
     """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
     stamp the returned job id on the run. Shared by every KB write path
     (upload / replace / reprocess / custom /runs) so the "create-run → enqueue
     → stamp" trio lives in exactly one place.
 
+    When ``ingestion_config_id`` is set, the run row's recipe columns are
+    snapshotted from that saved config (``request_config`` is ignored, per
+    product decision) and the id is stamped on the run for audit.
+
     On defer failure the pending run is marked ``failed`` (not orphaned) and
     the exception is re-raised for the caller to translate to an HTTP error.
     """
     cfg = IngestionRunService.resolve_run_config(
-        db, org_id, kb.id, request_config
+        db, org_id, kb.id, request_config, ingestion_config_id=ingestion_config_id
     )
     run = IngestionRunService.begin_pending_run(
         db,
@@ -233,6 +238,7 @@ async def _start_ingestion_run(
         knowledge_base_id=kb.id,
         org_id=org_id,
         config=cfg,
+        ingestion_config_id=ingestion_config_id,
     )
     enqueue = enqueue_reprocess if delete_existing else enqueue_upload
     try:
@@ -245,8 +251,8 @@ async def _start_ingestion_run(
         raise
     IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
     logger.info(
-        "[ingestion] enqueued upload={} run={} job_id={} reprocess={}",
-        upload.id, run.id, job_id, delete_existing,
+        "[ingestion] enqueued upload={} run={} job_id={} reprocess={} config_id={}",
+        upload.id, run.id, job_id, delete_existing, ingestion_config_id,
     )
     return run, job_id
 
@@ -758,12 +764,19 @@ def build_knowledge_base_router(
         pipeline configuration (parser / tokeniser / embedder / vector store).
         Previous runs are preserved so evals can compare them.
 
-        Body may contain any subset of:
+        Body may contain either:
+
+        - ``ingestion_config_id`` (UUID) — snapshot every recipe field from a
+          saved ``IngestionConfig``. When present, individual field overrides
+          in the body are ignored (a saved config is a fixed recipe).
+
+        or any subset of the individual fields:
         ``parser`` (str), ``parser_config`` (dict),
         ``tokeniser`` (str), ``tokeniser_config`` (dict),
         ``embedding_provider`` (str), ``embedding_model`` (str),
         ``embedding_dimensions`` (int), ``embedding_version`` (str),
         ``vector_store`` (str), ``vector_store_ref`` (dict).
+
         Anything omitted falls back to system defaults resolved by
         ``IngestionRunService.resolve_run_config``.
         """
@@ -775,39 +788,63 @@ def build_knowledge_base_router(
                 detail="Upload has no stored file to reprocess",
             )
 
+        raw_body = body or {}
+
+        # Parse the optional ingestion_config_id up front (backend enforces
+        # even if the frontend omits validation).
+        ingestion_config_id: UUID | None = None
+        raw_config_id = raw_body.get("ingestion_config_id")
+        if raw_config_id:
+            try:
+                ingestion_config_id = UUID(str(raw_config_id))
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid ingestion_config_id",
+                )
+
         allowed = {
             "parser", "parser_config",
             "tokeniser", "tokeniser_config",
             "embedding_provider", "embedding_model",
-            "embedding_dimensions", "embedding_version",
+            "embedding_dimensions", "embedding_version", "embedding_config",
             "vector_store", "vector_store_ref",
         }
-        run_config = {k: v for k, v in (body or {}).items() if k in allowed}
+        run_config = {k: v for k, v in raw_body.items() if k in allowed}
 
-        # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser / provider / store)
-        # so the queued job doesn't error mid-ingest.
-        if "parser" in run_config and run_config["parser"] not in PARSERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown parser {run_config['parser']!r}. Available: {sorted(PARSERS)}",
-            )
-        if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown tokeniser {run_config['tokeniser']!r}. Available: {sorted(TOKENISERS)}",
-            )
-        if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown embedding provider {run_config['embedding_provider']!r}. "
-                f"Available: {sorted(EMBEDDERS)}",
-            )
-        if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown vector store {run_config['vector_store']!r}. "
-                f"Available: {sorted(VECTOR_STORES)}",
-            )
+        # When a saved config is picked, ignore any per-field overrides in
+        # the body — the recipe is fixed by the config (product decision).
+        # Skip the slug validation too: those fields were validated when the
+        # config was created, and the snapshot happens in resolve_run_config.
+        if ingestion_config_id is None:
+            # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser
+            # / provider / store) so the queued job doesn't error mid-ingest.
+            if "parser" in run_config and run_config["parser"] not in PARSERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unknown parser {run_config['parser']!r}. Available: {sorted(PARSERS)}",
+                )
+            if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unknown tokeniser {run_config['tokeniser']!r}. Available: {sorted(TOKENISERS)}",
+                )
+            if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unknown embedding provider {run_config['embedding_provider']!r}. "
+                    f"Available: {sorted(EMBEDDERS)}",
+                )
+            if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=f"Unknown vector store {run_config['vector_store']!r}. "
+                    f"Available: {sorted(VECTOR_STORES)}",
+                )
+        else:
+            # Discard any per-field entries silently when a config was chosen
+            # so the response reflects what was actually applied.
+            run_config = {}
 
         kb = _kb_for_upload(db, org_id, upload.id)
         run, job_id = await _start_ingestion_run(
@@ -817,16 +854,38 @@ def build_knowledge_base_router(
             org_id=org_id,
             request_config=run_config or None,
             delete_existing=False,
+            ingestion_config_id=ingestion_config_id,
         )
         logger.info(
-            "[ingestion] enqueued custom run for upload {} (run={}, job={}, overrides={})",
-            upload.id, run.id, job_id, sorted(run_config.keys()),
+            "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
+            "config_id={}, overrides={})",
+            upload.id, run.id, job_id, ingestion_config_id, sorted(run_config.keys()),
         )
+        # Echo the EFFECTIVE recipe snapshotted onto the run row (not the
+        # request's raw run_config, which is intentionally empty when a saved
+        # config was picked). This way the client can verify what was actually
+        # applied without a follow-up GET.
+        effective_config = {
+            "parser": run.parser,
+            "parser_config": run.parser_config,
+            "tokeniser": run.tokeniser,
+            "tokeniser_config": run.tokeniser_config,
+            "embedding_provider": run.embedding_provider,
+            "embedding_model": run.embedding_model,
+            "embedding_dimensions": run.embedding_dimensions,
+            "embedding_version": run.embedding_version,
+            "embedding_config": run.embedding_config,
+            "vector_store": run.vector_store,
+            "vector_store_ref": run.vector_store_ref,
+        }
         return {
             "upload_id": str(upload.id),
             "ingestion_run_id": str(run.id),
             "job_id": job_id,
-            "run_config": run_config,
+            "ingestion_config_id": (
+                str(ingestion_config_id) if ingestion_config_id else None
+            ),
+            "run_config": effective_config,
             "status": "queued",
         }
 

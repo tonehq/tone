@@ -20,7 +20,11 @@ export interface PipelineOptions {
 // IngestionRunService.resolve_run_config.
 // MVP omits parser_config / tokeniser_config / vector_store_ref /
 // embedding_version — power-user JSON config is a follow-up.
+// When ingestion_config_id is set, the backend snapshots every recipe field
+// from the saved IngestionConfig and ignores individual field overrides
+// (per product decision — a saved config is a fixed recipe).
 export interface CreateIngestionRunPayload {
+  ingestion_config_id?: string;
   parser?: string;
   tokeniser?: string;
   embedding_provider?: string;
@@ -34,6 +38,7 @@ export interface CreateIngestionRunResponse {
   upload_id: string;
   ingestion_run_id: string;
   job_id: number;
+  ingestion_config_id: string | null;
   run_config: Record<string, unknown>;
   status: string;
 }
