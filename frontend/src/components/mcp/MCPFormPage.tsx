@@ -67,6 +67,7 @@ interface MCPFormState {
   name: string;
   description: string;
   server_url: string;
+  secret_url: boolean;
   timeout: number;
   transport_type: TransportType;
   use_bearer_token: boolean;
@@ -84,6 +85,7 @@ const DEFAULT_VALUES: MCPFormState = {
   name: '',
   description: '',
   server_url: '',
+  secret_url: false,
   timeout: 20,
   transport_type: 'shttp',
   use_bearer_token: false,
@@ -128,6 +130,18 @@ function getFaviconUrl(hostname: string | null): string | null {
  * else is ``none``. Kept as a pure function so the payload builder and any
  * "what auth is active?" label reads from a single source.
  */
+const MASKED_URL = '********';
+
+function publicUrlFor(url: string): string {
+  try {
+    const parsed = new URL(url);
+    const first = parsed.pathname.split('/').filter(Boolean)[0];
+    return first ? `${parsed.origin}/${first}` : parsed.origin;
+  } catch {
+    return url;
+  }
+}
+
 function deriveAuthType(s: MCPFormState): MCPAuthType {
   if (s.use_bearer_token && s.bearer_token.trim()) return 'bearer';
   if (s.use_api_key && s.api_key.trim()) return 'api_key';
@@ -147,7 +161,8 @@ function serverToFormState(s: MCPServer): MCPFormState {
   return {
     name: s.name ?? '',
     description: s.description ?? '',
-    server_url: s.server_url ?? '',
+    server_url: (s.auth_config?.server_url ? MASKED_URL : s.server_url) ?? '',
+    secret_url: !!s.auth_config?.server_url,
     timeout: typeof meta.timeout === 'number' ? meta.timeout : 20,
     transport_type: s.transport_type === 'streamable_http' ? 'shttp' : 'sse',
     use_bearer_token: useBearer,
@@ -168,6 +183,7 @@ function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsert
   const authConfig: Record<string, string> = {};
   if (s.use_bearer_token && s.bearer_token.trim()) authConfig.bearer_token = s.bearer_token;
   if (s.use_api_key && s.api_key.trim()) authConfig.api_key = s.api_key;
+  if (s.secret_url && s.server_url.trim()) authConfig.server_url = s.server_url.trim();
 
   const headersMap = Object.fromEntries(
     s.http_headers.filter((h) => h.key.trim()).map((h) => [h.key.trim(), h.value]),
@@ -177,7 +193,9 @@ function formStateToUpsertPayload(s: MCPFormState, id?: string): MCPServerUpsert
     ...(id ? { id } : {}),
     name: s.name,
     description: s.description,
-    server_url: s.server_url,
+    ...(s.secret_url && s.server_url.trim() === MASKED_URL
+      ? {}
+      : { server_url: s.secret_url ? publicUrlFor(s.server_url) : s.server_url }),
     transport_type: s.transport_type === 'shttp' ? 'streamable_http' : 'sse',
     auth_type: deriveAuthType(s),
     auth_config: Object.keys(authConfig).length > 0 ? authConfig : null,
@@ -340,6 +358,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
   const watchedProtocol = watch('transport_type');
   const watchedTimeout = watch('timeout');
   const watchedServerUrl = watch('server_url') ?? '';
+  const watchedSecretUrl = watch('secret_url') ?? false;
   const watchedOAuthId = watch('oauth_connection_id') ?? '';
   const watchedAppIntegrationId = watch('app_integration_id') ?? NO_APP_INTEGRATION;
   const { appIntegrations, oauthConnections, catalog } =
@@ -720,10 +739,36 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                     control={control}
                     rules={{ required: 'Server URL is required' }}
                     label="Server URL"
-                    helperText="Webhook and tool request endpoint."
+                    helperText={
+                      watchedSecretUrl
+                        ? 'Stored encrypted. Saved values show as ******** — retype the full URL to change it.'
+                        : 'Webhook and tool request endpoint.'
+                    }
                     placeholder="https://api.example.com/mcp"
                     rows={2}
                     isRequired
+                  />
+
+                  <Controller
+                    name="secret_url"
+                    control={control}
+                    render={({ field }) => (
+                      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
+                        <input
+                          type="checkbox"
+                          className="mt-0.5"
+                          checked={!!field.value}
+                          onChange={(e) => field.onChange(e.target.checked)}
+                        />
+                        <span className="text-sm">
+                          <span className="font-medium">URL contains a secret token</span>
+                          <span className="block text-muted-foreground">
+                            For providers that embed credentials in the URL path (e.g. Zoho CRM).
+                            The URL is encrypted at rest and never returned by the API.
+                          </span>
+                        </span>
+                      </label>
+                    )}
                   />
 
                   <Controller

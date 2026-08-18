@@ -110,6 +110,7 @@ export const PROVIDER_LOGOS: Record<string, string> = {
   linear: FAVICON('linear.app'),
   jira: FAVICON('atlassian.com'),
   salesforce: FAVICON('salesforce.com'),
+  zohocrm: FAVICON('zoho.com'),
   zoom: FAVICON('zoom.us'),
 };
 

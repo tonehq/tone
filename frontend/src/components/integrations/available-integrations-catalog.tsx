@@ -53,6 +53,7 @@ interface OAuthTile extends ProviderCardConfig {
   /** Admin-supplied logo URL from ``app_integrations.icon_url`` — takes
    *  precedence over the static frontend registry. */
   iconUrl?: string | null;
+  authType?: string;
 }
 
 export default function AvailableIntegrationsCatalog({
@@ -116,6 +117,7 @@ export default function AvailableIntegrationsCatalog({
         id: p.id,
         isDefault: p.is_default,
         iconUrl: p.icon_url ?? null,
+        authType: p.auth_type,
       };
     });
 
@@ -169,7 +171,7 @@ export default function AvailableIntegrationsCatalog({
                 }
                 categoryLabel={
                   <>
-                    OAuth
+                    {tile.authType === 'oauth' ? 'OAuth' : 'MCP'}
                     {tile.scopeCount > 0 && (
                       <span className="inline-flex items-center gap-0.5 normal-case tracking-normal text-muted-foreground/70">
                         <ShieldCheck className="size-3" />
@@ -179,7 +181,17 @@ export default function AvailableIntegrationsCatalog({
                   </>
                 }
                 cta={
-                  tile.configured ? (
+                  tile.authType !== 'oauth' ? (
+                    <CustomButton
+                      type="default"
+                      size="sm"
+                      onClick={() => router.push('/mcp/create')}
+                      className="w-full justify-center gap-1.5"
+                    >
+                      Set up
+                      <ArrowUpRight className="size-3.5" />
+                    </CustomButton>
+                  ) : tile.configured ? (
                     <CustomButton
                       type="default"
                       size="sm"

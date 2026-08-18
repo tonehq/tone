@@ -1,4 +1,5 @@
 import base64
+from urllib.parse import urlparse
 import uuid as uuid_lib
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -165,6 +166,50 @@ def _apply_legacy_auth_config(decrypted: dict, headers: dict) -> None:
         headers[target] = value
 
 
+SECRET_URL_KEY = "server_url"
+_MASKED_URL = "********"
+
+
+def effective_server_url(auth_config, fallback: str) -> str:
+    return (auth_config or {}).get(SECRET_URL_KEY) or fallback
+
+
+def resolve_server_url(mcp_server) -> str:
+    decrypted = decrypt_auth_config(mcp_server.auth_config) or {}
+    return decrypted.get(SECRET_URL_KEY) or mcp_server.server_url
+
+
+def has_secret_url(auth_config) -> bool:
+    return bool((auth_config or {}).get(SECRET_URL_KEY))
+
+
+def public_url_for(secret_url: str) -> str:
+    parsed = urlparse(secret_url)
+    origin = f"{parsed.scheme}://{parsed.netloc}"
+    first = next((seg for seg in parsed.path.split("/") if seg), None)
+    return f"{origin}/{first}" if first else origin
+
+
+def strip_masked_secret_url(incoming, existing_auth_config):
+    if not incoming or incoming.get(SECRET_URL_KEY) != _MASKED_URL:
+        return incoming
+    result = dict(incoming)
+    previous = (decrypt_auth_config(existing_auth_config) or {}).get(SECRET_URL_KEY)
+    if previous:
+        result[SECRET_URL_KEY] = previous
+    else:
+        result.pop(SECRET_URL_KEY, None)
+    return result
+
+
+def mask_auth_config_url(auth_config) -> dict:
+    if not auth_config:
+        return auth_config
+    if SECRET_URL_KEY not in auth_config:
+        return auth_config
+    return {**auth_config, SECRET_URL_KEY: _MASKED_URL}
+
+
 def headers_from_meta(meta_data) -> dict:
     """Extract the custom request headers the MCP form stores under
     ``meta_data.http_headers`` (e.g. ClickUp's ``x-workspace-id``).
@@ -308,12 +353,17 @@ class McpServerService(BaseService):
             connection_fields = {"server_url", "transport_type", "auth_config", "oauth_connection_id", "auth_type"}
             validation_result = None
             if connection_fields & update_data.keys():
-                validate_url = update_data.get("server_url", existing.server_url)
                 validate_transport = update_data.get("transport_type", existing.transport_type)
                 if "auth_config" in update_data:
+                    update_data["auth_config"] = strip_masked_secret_url(
+                        update_data["auth_config"], existing.auth_config
+                    )
                     validate_auth = update_data["auth_config"]
                 else:
                     validate_auth = decrypt_auth_config(existing.auth_config)
+                validate_url = effective_server_url(
+                    validate_auth, update_data.get("server_url", existing.server_url)
+                )
                 effective_meta = update_data.get("meta_data", existing.meta_data)
                 effective_auth_type = update_data.get("auth_type", existing.auth_type)
                 # OAuth bearer takes precedence over any custom header of the same name.
@@ -376,7 +426,8 @@ class McpServerService(BaseService):
             **self._resolve_oauth_headers(oauth_connection_id),
         }
         validation_result = await self.validate_mcp_connection(
-            data["server_url"], transport_type, data.get("auth_config"),
+            effective_server_url(data.get("auth_config"), data["server_url"]),
+            transport_type, data.get("auth_config"),
             extra_headers=extra_headers, auth_type=auth_type,
         )
 
@@ -837,7 +888,7 @@ class McpServerService(BaseService):
             **self._resolve_oauth_headers(mcp_server.oauth_connection_id),
         }
         result = await self.validate_mcp_connection(
-            mcp_server.server_url,
+            resolve_server_url(mcp_server),
             mcp_server.transport_type,
             decrypted_auth,
             extra_headers=extra_headers,
@@ -861,7 +912,7 @@ class McpServerService(BaseService):
             "icon": mcp_server.icon,
             "transport_type": mcp_server.transport_type,
             "auth_type": normalize_auth_type(mcp_server.auth_type),
-            "auth_config": decrypt_auth_config(mcp_server.auth_config),
+            "auth_config": mask_auth_config_url(decrypt_auth_config(mcp_server.auth_config)),
             "meta_data": mcp_server.meta_data,
             "oauth_connection_id": (
                 str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None
