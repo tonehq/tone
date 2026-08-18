@@ -169,6 +169,21 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         ),
       },
       {
+        key: 'ingestion_config',
+        title: 'Config',
+        width: 'w-[180px]',
+        render: (_v, r) =>
+          r.ingestion_config_name ? (
+            <CustomTooltip content={r.ingestion_config_name}>
+              <span className="line-clamp-1 max-w-[170px] text-sm text-foreground">
+                {r.ingestion_config_name}
+              </span>
+            </CustomTooltip>
+          ) : (
+            <span className="text-sm italic text-muted-foreground">Custom</span>
+          ),
+      },
+      {
         key: 'status',
         title: 'Status',
         dataIndex: 'status',
