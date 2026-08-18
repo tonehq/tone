@@ -120,6 +120,14 @@ class IngestionPipelineRun(OrgScopedModel):
         back_populates="run",
         cascade="all, delete-orphan",
     )
+    # Read-only backref for surfacing the source config's name in listings.
+    # `ingestion_config_id` is nullable + `ON DELETE SET NULL`, so this may
+    # be None even for runs that were originally created from a saved config.
+    ingestion_config = relationship(
+        "IngestionConfig",
+        foreign_keys=[ingestion_config_id],
+        lazy="joined",
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -147,6 +155,9 @@ class IngestionPipelineRun(OrgScopedModel):
             "procrastinate_job_id": self.procrastinate_job_id,
             "ingestion_config_id": (
                 str(self.ingestion_config_id) if self.ingestion_config_id else None
+            ),
+            "ingestion_config_name": (
+                self.ingestion_config.name if self.ingestion_config is not None else None
             ),
             "trace_id": self.trace_id,
             "ingestion_stats": self.ingestion_stats,
