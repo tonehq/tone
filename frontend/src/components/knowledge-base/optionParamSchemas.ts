@@ -205,3 +205,25 @@ export function getCompatibilityHint(
   if (!option) return undefined;
   return OPTION_COMPATIBILITY_HINTS[section]?.[option];
 }
+
+// Max input tokens per embedding model slug — used to cap a tokeniser's
+// max_tokens against the picked model's input limit. Keys match slugs the
+// user types into the "Embedding model" field. Unknown models return
+// undefined so the cap is not enforced (permissive fallback for models not
+// yet catalogued here).
+const EMBEDDING_MODEL_MAX_TOKENS: Record<string, number> = {
+  'text-embedding-3-small': 8191,
+  'text-embedding-3-large': 8191,
+  'text-embedding-ada-002': 8191,
+  'embed-english-v3.0': 512,
+  'embed-multilingual-v3.0': 512,
+  'sentence-transformers/all-MiniLM-L6-v2': 512,
+  'voyage-3': 32000,
+  'voyage-3-large': 32000,
+  'jina-embeddings-v3': 8192,
+};
+
+/** Look up the max input tokens for an embedding model slug, if known. */
+export function getEmbeddingModelMaxTokens(model: string): number | undefined {
+  return EMBEDDING_MODEL_MAX_TOKENS[model.trim()];
+}
