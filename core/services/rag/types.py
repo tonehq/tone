@@ -15,6 +15,13 @@ class Document:
 class Chunk:
     index: int
     text: str
+    # Optional source-position metadata. Set by chunkers that know where each
+    # chunk sits in the original document (chonkie exposes these on its own
+    # Chunk objects) so downstream features like source-excerpt highlighting
+    # and diff-based re-ingest can locate the span without re-parsing. None
+    # for chunkers that don't track positions (e.g. Docling's HybridChunker).
+    start_index: Optional[int] = None
+    end_index: Optional[int] = None
 
 
 @dataclass

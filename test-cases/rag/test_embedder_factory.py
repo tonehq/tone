@@ -37,6 +37,7 @@ class StubEmbedder(Embedder):
 def test_get_embedder_unknown_provider_raises():
     with pytest.raises(EmbeddingProviderUnavailableError):
         get_embedder("nosuch", model="x", api_key="k")
+    assert "google" in sorted(EMBEDDERS)
 
 
 def test_register_embedder_lets_new_provider_resolve():
