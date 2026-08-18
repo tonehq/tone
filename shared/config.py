@@ -5,6 +5,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
+class InfisicalConfigError(RuntimeError):
+    pass
+
+
 def get_infisical_secrets() -> dict:
     token = os.getenv("INFISICAL_TOKEN")
     project_id = os.getenv("INFISICAL_PROJECT_ID")
@@ -12,32 +16,45 @@ def get_infisical_secrets() -> dict:
     if not token or not project_id:
         return {}
 
+    environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
+    host = os.getenv("INFISICAL_HOST", "https://secrets.trytone.ai")
+    source = f"host={host} project_id={project_id} environment={environment}"
+
     try:
         from infisical_sdk import InfisicalSDKClient
+    except ImportError as exc:
+        raise InfisicalConfigError(
+            "INFISICAL_TOKEN and INFISICAL_PROJECT_ID are set but the "
+            "'infisical_sdk' package is not installed. Install it or unset "
+            "those variables to fall back to .env."
+        ) from exc
 
-        environment = os.getenv("INFISICAL_ENV", os.getenv("ENV", "dev"))
-
-        host = os.getenv("INFISICAL_HOST", "https://secrets.trytone.ai")
-
-        client = InfisicalSDKClient(
-            host=host,
-            token=token
-        )
-
+    try:
+        client = InfisicalSDKClient(host=host, token=token)
         secrets_response = client.secrets.list_secrets(
             project_id=project_id,
             environment_slug=environment,
-            secret_path="/"
+            secret_path="/",
+        )
+    except Exception as exc:
+        raise InfisicalConfigError(
+            f"Failed to load secrets from Infisical ({source}). "
+            f"Check INFISICAL_TOKEN, INFISICAL_PROJECT_ID and INFISICAL_ENV. "
+            f"Underlying error: {exc}"
+        ) from exc
+
+    secrets = {
+        secret.secretKey: secret.secretValue
+        for secret in secrets_response.secrets
+    }
+
+    if not secrets:
+        raise InfisicalConfigError(
+            f"Infisical returned no secrets ({source}). The project, "
+            f"environment slug or secret path is probably wrong."
         )
 
-        secrets = {}
-        for secret in secrets_response.secrets:
-            secrets[secret.secretKey] = secret.secretValue
-
-        return secrets
-
-    except Exception:
-        return {}
+    return secrets
 
 
 class Settings:
