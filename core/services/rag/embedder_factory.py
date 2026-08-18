@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING, Dict, Type
 
 from loguru import logger
 
-from core.services.rag.embedders import Embedder, OpenAIEmbedder
+from core.services.rag.embedders import Embedder, GoogleEmbedder, OpenAIEmbedder
 from core.services.rag.errors import EmbeddingProviderUnavailableError
 
 if TYPE_CHECKING:  # avoid circular import — model imports service tree
@@ -20,6 +20,7 @@ if TYPE_CHECKING:  # avoid circular import — model imports service tree
 
 EMBEDDERS: Dict[str, Type[Embedder]] = {
     "openai": OpenAIEmbedder,
+    "google": GoogleEmbedder,
 }
 
 
