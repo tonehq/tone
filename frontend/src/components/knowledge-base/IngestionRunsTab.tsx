@@ -5,6 +5,7 @@ import { CheckCircle2, Clock, Copy, ListChecks, Loader2, Plus, XCircle } from 'l
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import ManualEvalsModal from '@/components/knowledge-base/ManualEvalsModal';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
@@ -175,18 +176,35 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         width: 'w-[140px]',
         render: (_value, record) => {
           const s = statusStyle[record.status] ?? statusStyle.pending;
-          return (
+          const pill = (
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
                 s.className,
               )}
-              title={record.error ?? undefined}
             >
               {s.icon}
               {s.label}
             </span>
           );
+          // For error rows, show a bounded, scrollable tooltip instead of the
+          // browser's native `title` popup (which renders as a very tall,
+          // unbounded block for long stack traces).
+          const friendlyError = formatIngestionError(record.error);
+          if (friendlyError) {
+            return (
+              <CustomTooltip
+                content={
+                  <div className="max-h-40 max-w-xs overflow-auto whitespace-pre-wrap break-words text-xs leading-snug">
+                    {friendlyError}
+                  </div>
+                }
+              >
+                {pill}
+              </CustomTooltip>
+            );
+          }
+          return pill;
         },
       },
       {
@@ -310,14 +328,24 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
       {
         key: 'error',
         title: 'Error',
-        render: (_v, r) =>
-          r.error ? (
-            <CustomTooltip content={r.error}>
-              <span className="line-clamp-1 max-w-[280px] text-xs text-destructive">{r.error}</span>
+        render: (_v, r) => {
+          const friendly = formatIngestionError(r.error);
+          return friendly ? (
+            <CustomTooltip
+              content={
+                <div className="max-h-40 max-w-xs overflow-auto whitespace-pre-wrap break-words text-xs leading-snug">
+                  {friendly}
+                </div>
+              }
+            >
+              <span className="line-clamp-1 max-w-[280px] text-xs text-destructive">
+                {friendly}
+              </span>
             </CustomTooltip>
           ) : (
             <span className="text-muted-foreground">—</span>
-          ),
+          );
+        },
       },
       {
         key: 'actions',

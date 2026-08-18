@@ -4,6 +4,7 @@ import { AlertTriangle, Calendar, FileText, HardDrive, RotateCcw, User } from 'l
 
 import { CustomButton } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
@@ -83,8 +84,7 @@ function truncateFileName(name: string, max = 72): string {
 }
 
 function getErrorMessage(doc: Pick<KnowledgeBaseDocument, 'meta_data'>): string | null {
-  const error = doc.meta_data?.error;
-  return typeof error === 'string' && error.trim() ? error : null;
+  return formatIngestionError(doc.meta_data?.error);
 }
 
 interface KnowledgeBaseOverviewProps {

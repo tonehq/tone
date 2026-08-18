@@ -24,6 +24,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -419,21 +420,62 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
+        # Fast-path duplicate-name check: KnowledgeBase enforces
+        # UniqueConstraint(organization_id, name) — without this pre-check the
+        # collision becomes an opaque IntegrityError → HTTP 500 with no user
+        # message. Surface a friendly 409 here BEFORE R2 write so no orphan
+        # blob is created for the doomed insert. The IntegrityError catch
+        # below still covers the (rare) race where two concurrent uploads
+        # land the same name between this check and the service commit.
+        duplicate_name = (
+            db.query(KnowledgeBase.id)
+            .filter(
+                KnowledgeBase.organization_id == org_id,
+                KnowledgeBase.name == file_name,
+            )
+            .first()
+        )
+        if duplicate_name is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"A document named '{file_name}' already exists. "
+                    "Rename the file or delete the existing document."
+                ),
+            )
+
         logger.info(
             "[upload] received upload org={} user={} agent={} file_name={} content_type={} size={}",
             org_id, user_id, agent_uuid, file_name, content_type, size_bytes,
         )
 
-        upload, _kb, _run = await UploadService(
-            db, user_id=user_id, org_id=org_id
-        ).create_upload_from_file(
-            fileobj=file.file,
-            file_name=file_name,
-            content_type=content_type,
-            size_bytes=size_bytes,
-            agent_id=agent_uuid,
-            agent_config_id=agent_config.id if agent_config is not None else None,
-        )
+        try:
+            upload, _kb, _run = await UploadService(
+                db, user_id=user_id, org_id=org_id
+            ).create_upload_from_file(
+                fileobj=file.file,
+                file_name=file_name,
+                content_type=content_type,
+                size_bytes=size_bytes,
+                agent_id=agent_uuid,
+                agent_config_id=agent_config.id if agent_config is not None else None,
+            )
+        except IntegrityError as exc:
+            # Race safety net: another concurrent upload committed the same
+            # name after our pre-check. The service has already rolled back
+            # and cleaned up the R2 blob (upload_service.py). Only translate
+            # the unique_violation (pg code 23505) — re-raise other integrity
+            # errors so we don't silently mask an unrelated schema issue.
+            pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
+            if pgcode == "23505":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"A document named '{file_name}' already exists. "
+                        "Rename the file or delete the existing document."
+                    ),
+                ) from exc
+            raise
 
         return _upload_to_payload(upload)
 
@@ -822,24 +864,34 @@ def build_knowledge_base_router(
             if "parser" in run_config and run_config["parser"] not in PARSERS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unknown parser {run_config['parser']!r}. Available: {sorted(PARSERS)}",
+                    detail=(
+                        f"Unknown parser '{run_config['parser']}'. "
+                        f"Available: {', '.join(sorted(PARSERS))}."
+                    ),
                 )
             if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unknown tokeniser {run_config['tokeniser']!r}. Available: {sorted(TOKENISERS)}",
+                    detail=(
+                        f"Unknown tokeniser '{run_config['tokeniser']}'. "
+                        f"Available: {', '.join(sorted(TOKENISERS))}."
+                    ),
                 )
             if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unknown embedding provider {run_config['embedding_provider']!r}. "
-                    f"Available: {sorted(EMBEDDERS)}",
+                    detail=(
+                        f"Unknown embedding provider '{run_config['embedding_provider']}'. "
+                        f"Available: {', '.join(sorted(EMBEDDERS))}."
+                    ),
                 )
             if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Unknown vector store {run_config['vector_store']!r}. "
-                    f"Available: {sorted(VECTOR_STORES)}",
+                    detail=(
+                        f"Unknown vector store '{run_config['vector_store']}'. "
+                        f"Available: {', '.join(sorted(VECTOR_STORES))}."
+                    ),
                 )
         else:
             # Discard any per-field entries silently when a config was chosen

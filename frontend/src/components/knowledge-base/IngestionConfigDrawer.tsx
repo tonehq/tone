@@ -12,7 +12,9 @@ import {
 } from '@/components/shared';
 import OptionParamsModal from '@/components/knowledge-base/OptionParamsModal';
 import {
+  EMBEDDING_MODEL_CHOICES,
   getCompatibilityHint,
+  getEmbeddingModelDefaultDimensions,
   getEmbeddingModelMaxTokens,
   hasParams,
   type ParamSection,
@@ -360,13 +362,35 @@ export default function IngestionConfigDrawer({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <TextInput
+              <SelectInput
                 name="embedding_model"
                 label="Embedding model"
                 isRequired
-                placeholder="e.g. text-embedding-3-large"
-                value={form.embedding_model}
-                onChange={(e) => setForm((f) => ({ ...f, embedding_model: e.target.value }))}
+                // If an edited config carries a legacy model that's no longer
+                // in the curated list, keep it selectable so the drawer can
+                // still open and save without silently switching models.
+                options={
+                  form.embedding_model &&
+                  !EMBEDDING_MODEL_CHOICES.some((m) => m.value === form.embedding_model)
+                    ? [
+                        ...EMBEDDING_MODEL_CHOICES,
+                        { value: form.embedding_model, label: `${form.embedding_model} (legacy)` },
+                      ]
+                    : EMBEDDING_MODEL_CHOICES
+                }
+                value={form.embedding_model || undefined}
+                onValueChange={(v) =>
+                  setForm((f) => {
+                    if (v === f.embedding_model) return f;
+                    const dims = getEmbeddingModelDefaultDimensions(v);
+                    return {
+                      ...f,
+                      embedding_model: v,
+                      embedding_dimensions: dims != null ? String(dims) : f.embedding_dimensions,
+                    };
+                  })
+                }
+                placeholder="Select an embedding model"
                 disabled={pending}
                 helperText={
                   getEmbeddingModelMaxTokens(form.embedding_model) !== undefined
@@ -380,16 +404,17 @@ export default function IngestionConfigDrawer({
                 isRequired
                 type="number"
                 min={1}
-                placeholder="e.g. 3072"
+                placeholder="Auto-set by model"
                 value={form.embedding_dimensions}
                 onChange={(e) => setForm((f) => ({ ...f, embedding_dimensions: e.target.value }))}
                 error={form.embedding_dimensions.trim() !== '' && !dimensionsValid}
                 helperText={
                   form.embedding_dimensions.trim() !== '' && !dimensionsValid
                     ? 'Must be a positive integer.'
-                    : undefined
+                    : 'Determined by the selected embedding model.'
                 }
                 disabled={pending}
+                readOnly
               />
             </div>
 

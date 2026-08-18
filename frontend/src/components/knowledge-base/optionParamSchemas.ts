@@ -227,3 +227,23 @@ const EMBEDDING_MODEL_MAX_TOKENS: Record<string, number> = {
 export function getEmbeddingModelMaxTokens(model: string): number | undefined {
   return EMBEDDING_MODEL_MAX_TOKENS[model.trim()];
 }
+
+// Curated list of embedding models exposed in the ingestion-config UI. Each
+// entry pins the default output dimensions so the "Embedding dimensions"
+// field can auto-populate and stay read-only. Scoped to OpenAI's v3 models
+// for now — extend as we officially support more providers/models.
+export interface EmbeddingModelChoice {
+  value: string;
+  label: string;
+  dimensions: number;
+}
+
+export const EMBEDDING_MODEL_CHOICES: EmbeddingModelChoice[] = [
+  { value: 'text-embedding-3-small', label: 'text-embedding-3-small', dimensions: 1536 },
+  { value: 'text-embedding-3-large', label: 'text-embedding-3-large', dimensions: 3072 },
+];
+
+/** Default output dimensions for a supported embedding model, if known. */
+export function getEmbeddingModelDefaultDimensions(model: string): number | undefined {
+  return EMBEDDING_MODEL_CHOICES.find((m) => m.value === model.trim())?.dimensions;
+}
