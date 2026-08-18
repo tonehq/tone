@@ -11,6 +11,12 @@ from __future__ import annotations
 
 from typing import Dict, Optional, Type
 
+from core.services.rag.chonkie_chunkers import (
+    ChonkieRecursiveChunker,
+    ChonkieSdpmChunker,
+    ChonkieSemanticChunker,
+    ChonkieSentenceChunker,
+)
 from core.services.rag.chunkers import (
     Chunker,
     DoclingHybridChunker,
@@ -48,6 +54,10 @@ TOKENISERS: Dict[str, Type[Chunker]] = {
     "docling_hybrid": DoclingHybridChunker,
     "recursive_char": RecursiveCharacterChunker,
     "token_aware": _TokenAwareChunkerAdapter,
+    "chonkie_recursive": ChonkieRecursiveChunker,
+    "chonkie_sentence": ChonkieSentenceChunker,
+    "chonkie_semantic": ChonkieSemanticChunker,
+    "chonkie_sdpm": ChonkieSdpmChunker,
 }
 
 

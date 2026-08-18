@@ -64,7 +64,7 @@ class Settings:
         def get_secret(key: str, default: str = "") -> str:
             return infisical_secrets.get(key) or os.getenv(key, default)
 
-        self.DATABASE_URL: str = get_secret("DATABASE_URL")
+        self.DATABASE_URL: str = "postgresql://neondb_owner:npg_HPjY5NERS7Uf@ep-crimson-boat-aq6kyekg-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
         self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY", "your-secret-key-here")
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_HOURS: int = 24
