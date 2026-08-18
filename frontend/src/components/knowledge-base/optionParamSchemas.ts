@@ -20,6 +20,7 @@ export interface ParamFieldSpec {
   placeholder?: string;
   helperText?: string;
   min?: number;
+  max?: number;
   step?: number;
   defaultValue?: string | number | boolean;
 }
@@ -116,8 +117,12 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         label: 'Batch size',
         type: 'number',
         min: 1,
+        // OpenAI's /v1/embeddings endpoint caps inputs at 2048 per request.
+        // Kept in sync with backend `_MAX_OPENAI_BATCH_SIZE` in
+        // core/services/ingestion_config_service.py.
+        max: 2048,
         placeholder: '100',
-        helperText: 'Texts embedded per API call.',
+        helperText: 'Texts embedded per API call. OpenAI limit: 2048.',
         defaultValue: 100,
       },
       {
@@ -125,7 +130,12 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         label: 'Max retries',
         type: 'number',
         min: 0,
+        // Anything beyond 10 is a fat-finger — each doomed request wastes
+        // seconds on the ingestion critical path. Kept in sync with
+        // `_MAX_EMBEDDING_RETRIES` on the backend.
+        max: 10,
         placeholder: '6',
+        helperText: 'Retries per failing batch. Max: 10.',
         defaultValue: 6,
       },
       {
