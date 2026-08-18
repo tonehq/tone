@@ -73,6 +73,8 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
       },
     ],
     // DoclingHybridChunker(max_tokens=512, embedding_model="text-embedding-3-small")
+    // The tokenizer model is pinned to the backend default — users don't pick
+    // it since it only counts tokens for splitting, not for embedding.
     docling_hybrid: [
       {
         key: 'max_tokens',
@@ -82,23 +84,11 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         placeholder: '512',
         defaultValue: 512,
       },
-      {
-        key: 'embedding_model',
-        label: 'Embedding model (for token counting)',
-        type: 'string',
-        placeholder: 'text-embedding-3-small',
-        helperText: 'Model used only to count tokens while chunking.',
-      },
     ],
     // _TokenAwareChunkerAdapter(tokenizer_model=None, max_tokens=512, overlap_tokens=64)
+    // The tokenizer model is pinned to the backend default — users don't pick
+    // it since it only counts tokens for splitting, not for embedding.
     token_aware: [
-      {
-        key: 'tokenizer_model',
-        label: 'Tokenizer model',
-        type: 'string',
-        placeholder: 'text-embedding-3-small or sentence-transformers/all-MiniLM-L6-v2',
-        helperText: 'OpenAI model slug or a HuggingFace model id.',
-      },
       {
         key: 'max_tokens',
         label: 'Max tokens per chunk',
