@@ -11,6 +11,13 @@ import {
   type ParamSection,
 } from '@/components/knowledge-base/optionParamSchemas';
 
+// OpenAI's rule-of-thumb English conversion (1 token ≈ 4 chars). Used only to
+// translate the embedding model's token cap into an approximate char cap for
+// `recursive_char.chunk_size`, which is measured in characters — so the user
+// gets the same "you can't exceed the model's input" guardrail as the
+// token-based tokenisers.
+const CHARS_PER_TOKEN = 4;
+
 type ParamValue = string | number | boolean | null;
 
 interface OptionParamsModalProps {
@@ -105,12 +112,29 @@ export default function OptionParamsModal({
           next[spec.key] = `Must be ≥ ${spec.min}.`;
           continue;
         }
+        if (spec.max !== undefined && n > spec.max) {
+          next[spec.key] = `Must be ≤ ${spec.max.toLocaleString()}.`;
+          continue;
+        }
         // Tokeniser max_tokens must fit the picked embedding model's input
         // limit; unknown models return undefined here and skip the cap.
         if (section === 'tokeniser' && spec.key === 'max_tokens' && contextValues?.embeddingModel) {
           const cap = getEmbeddingModelMaxTokens(contextValues.embeddingModel);
           if (cap !== undefined && n > cap) {
             next[spec.key] = `Must be ≤ ${cap} (limit of ${contextValues.embeddingModel}).`;
+          }
+        }
+        // recursive_char.chunk_size is measured in characters — approximate
+        // the picked embedding model's token cap into a char cap so the
+        // same guardrail applies (skipped when the model is unknown).
+        if (section === 'tokeniser' && spec.key === 'chunk_size' && contextValues?.embeddingModel) {
+          const tokenCap = getEmbeddingModelMaxTokens(contextValues.embeddingModel);
+          if (tokenCap !== undefined) {
+            const charCap = tokenCap * CHARS_PER_TOKEN;
+            if (n > charCap) {
+              next[spec.key] =
+                `Must be ≤ ${charCap.toLocaleString()} chars (≈ ${tokenCap.toLocaleString()} tokens, limit of ${contextValues.embeddingModel}).`;
+            }
           }
         }
       }
@@ -185,16 +209,26 @@ export default function OptionParamsModal({
               );
             }
             // Errors take precedence, then the spec's own helper text, then
-            // an appended cap hint when we know the embedding model's limit
-            // for tokeniser.max_tokens (undefined → hint omitted).
-            const cap =
-              section === 'tokeniser' && spec.key === 'max_tokens' && contextValues?.embeddingModel
-                ? getEmbeddingModelMaxTokens(contextValues.embeddingModel)
-                : undefined;
-            const capHint =
-              cap !== undefined
-                ? `Max: ${cap} tokens (${contextValues!.embeddingModel})`
-                : undefined;
+            // an appended cap hint when we know the embedding model's limit.
+            // Applied to tokeniser.max_tokens (native tokens) AND
+            // tokeniser.chunk_size (char-approximated) so both units surface
+            // the same guardrail. Unknown models → hint omitted.
+            let capHint: string | undefined;
+            if (
+              section === 'tokeniser' &&
+              (spec.key === 'max_tokens' || spec.key === 'chunk_size') &&
+              contextValues?.embeddingModel
+            ) {
+              const tokenCap = getEmbeddingModelMaxTokens(contextValues.embeddingModel);
+              if (tokenCap !== undefined) {
+                if (spec.key === 'max_tokens') {
+                  capHint = `Max: ${tokenCap.toLocaleString()} tokens (${contextValues.embeddingModel})`;
+                } else {
+                  const charCap = tokenCap * CHARS_PER_TOKEN;
+                  capHint = `Max: ~${charCap.toLocaleString()} chars (≈ ${tokenCap.toLocaleString()} tokens, ${contextValues.embeddingModel})`;
+                }
+              }
+            }
             const composedHelper =
               errors[spec.key] ??
               ([spec.helperText, capHint].filter(Boolean).join(' ') || undefined);
@@ -205,6 +239,7 @@ export default function OptionParamsModal({
                 label={spec.label}
                 type={spec.type === 'number' ? 'number' : 'text'}
                 min={spec.min}
+                max={spec.max}
                 step={spec.step}
                 placeholder={spec.placeholder}
                 value={value === null || value === undefined ? '' : String(value)}
