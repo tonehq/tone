@@ -90,32 +90,32 @@ class IngestionRunService:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Saved config references unknown parser {ic.parser!r}. "
-                        f"Available: {sorted(PARSERS)}"
+                        f"Config parser '{ic.parser}' is no longer available. "
+                        f"Available: {', '.join(sorted(PARSERS))}."
                     ),
                 )
             if ic.tokeniser not in TOKENISERS:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Saved config references unknown tokeniser {ic.tokeniser!r}. "
-                        f"Available: {sorted(TOKENISERS)}"
+                        f"Config tokeniser '{ic.tokeniser}' is no longer available. "
+                        f"Available: {', '.join(sorted(TOKENISERS))}."
                     ),
                 )
             if ic.embedding_provider not in EMBEDDERS:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Saved config references unknown embedding provider "
-                        f"{ic.embedding_provider!r}. Available: {sorted(EMBEDDERS)}"
+                        f"Config embedding provider '{ic.embedding_provider}' is no longer "
+                        f"available. Available: {', '.join(sorted(EMBEDDERS))}."
                     ),
                 )
             if ic.vector_store not in VECTOR_STORES:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"Saved config references unknown vector store "
-                        f"{ic.vector_store!r}. Available: {sorted(VECTOR_STORES)}"
+                        f"Config vector store '{ic.vector_store}' is no longer available. "
+                        f"Available: {', '.join(sorted(VECTOR_STORES))}."
                     ),
                 )
             cfg.update({
