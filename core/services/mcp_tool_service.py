@@ -314,6 +314,96 @@ def _schema_has_unresolved_refs(schema) -> tuple:
     return bool(unresolved), unresolved
 
 
+_MAX_INLINE_DEPTH = 24
+_MAX_SCHEMA_BYTES = 60000
+_UNSUPPORTED_KEYS = ("$schema", "$id", "$defs", "definitions")
+
+
+def _resolve_pointer(ref: str, root: dict):
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return None
+    cur = root
+    for token in ref[2:].split("/"):
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(cur, dict) and token in cur:
+            cur = cur[token]
+        elif isinstance(cur, list):
+            try:
+                cur = cur[int(token)]
+            except (ValueError, IndexError):
+                return None
+        else:
+            return None
+    return cur
+
+
+def sanitize_json_schema(schema, root=None, depth=0, seen=None, budget=None):
+    if root is None:
+        root = schema if isinstance(schema, dict) else {}
+    if seen is None:
+        seen = set()
+    if budget is None:
+        budget = {"bytes": 0, "truncated": 0}
+
+    if isinstance(schema, list):
+        return [sanitize_json_schema(v, root, depth + 1, seen, budget) for v in schema]
+    if not isinstance(schema, dict):
+        budget["bytes"] += 8
+        return schema
+    if depth > _MAX_INLINE_DEPTH or budget["bytes"] > _MAX_SCHEMA_BYTES:
+        budget["truncated"] += 1
+        return {"type": "object"}
+
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        if ref in seen:
+            return {"type": "object"}
+        target = _resolve_pointer(ref, root)
+        if not isinstance(target, dict):
+            return {"type": "object"}
+        merged = {k: v for k, v in schema.items() if k != "$ref"}
+        merged = {**target, **merged}
+        return sanitize_json_schema(merged, root, depth + 1, seen | {ref}, budget)
+
+    out = {}
+    for key, value in schema.items():
+        if key in _UNSUPPORTED_KEYS:
+            continue
+        budget["bytes"] += len(key) + 4
+        if key == "const":
+            out["enum"] = [value]
+            continue
+        out[key] = sanitize_json_schema(value, root, depth + 1, seen, budget)
+    return out
+
+
+def install_schema_sanitizer(mcp_client) -> None:
+    original = getattr(mcp_client, "_convert_mcp_schema_to_pipecat", None)
+    if original is None:
+        logger.debug("MCPClient has no _convert_mcp_schema_to_pipecat; skipping sanitizer")
+        return
+
+    def converting(tool_name, tool_schema, *args, **kwargs):
+        try:
+            raw = (tool_schema or {}).get("input_schema") or {}
+            budget = {"bytes": 0, "truncated": 0}
+            cleaned = sanitize_json_schema(raw, budget=budget)
+            if budget["truncated"]:
+                logger.warning(
+                    "MCP tool '{}': {} schema branch(es) collapsed to a generic object "
+                    "(depth>{} or size>{}B) — the model loses those parameter shapes",
+                    tool_name, budget["truncated"], _MAX_INLINE_DEPTH, _MAX_SCHEMA_BYTES,
+                )
+            if cleaned != raw:
+                tool_schema = {**tool_schema, "input_schema": cleaned}
+                logger.debug("Sanitized schema for MCP tool '{}'", tool_name)
+        except Exception:
+            logger.exception("Schema sanitize failed for MCP tool '{}'; using original", tool_name)
+        return original(tool_name, tool_schema, *args, **kwargs)
+
+    mcp_client._convert_mcp_schema_to_pipecat = converting
+
+
 async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
     """Pre-list the MCP server's tools, validate their JSON schemas, and configure
     ``mcp_client``'s built-in ``tools_filter`` to skip ones with unresolved $refs.
@@ -406,6 +496,7 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
+            install_schema_sanitizer(mcp_client)
             # Pipecat's newer MCPClient requires an explicit start() (or `async with`) before
             # register_tools / tool calls — without it `_ensure_connected` raises
             # "MCPClient is not connected". We use start() (not `async with`) because the
