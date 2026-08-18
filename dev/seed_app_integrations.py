@@ -148,6 +148,23 @@ DEFAULT_INTEGRATIONS = [
         "pkce_required": True,
         "sort_order": 40,
     },
+    {
+        "slug": "zoho_crm",
+        "display_name": "Zoho CRM",
+        "description": (
+            "Read and write CRM data — contacts, leads, notes, and email — during calls."
+        ),
+        "category": "dev_crm",
+        "icon_url": None,
+        "auth_type": "none",
+        "auth_url": None,
+        "token_url": None,
+        "scopes": [],
+        "extra_auth_params": {},
+        "credential_env_keys": {},
+        "pkce_required": False,
+        "sort_order": 50,
+    },
 ]
 
 
