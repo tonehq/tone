@@ -5,6 +5,7 @@ import { Save } from 'lucide-react';
 
 import { CheckboxField, CustomButton, CustomModal, TextInput } from '@/components/shared';
 import {
+  getEmbeddingModelMaxTokens,
   getFieldSpecs,
   type ParamFieldSpec,
   type ParamSection,
@@ -24,6 +25,12 @@ interface OptionParamsModalProps {
   onSave: (values: Record<string, unknown>) => void;
   /** Human title for the modal, e.g. "Tokeniser params — recursive_char". */
   title: string;
+  /** Context values from the parent form used to validate a field against
+      other selections in the same recipe. Currently used to cap the
+      tokeniser's `max_tokens` against the picked embedding model's input
+      token limit. Optional — sections that don't need cross-field
+      validation simply omit it. */
+  contextValues?: { embeddingModel?: string };
 }
 
 function inputToState(spec: ParamFieldSpec, raw: unknown): ParamValue {
@@ -54,6 +61,7 @@ export default function OptionParamsModal({
   initialValues,
   onSave,
   title,
+  contextValues,
 }: OptionParamsModalProps) {
   // Referentially stable per (section, option) — prevents the seed effect
   // from re-firing on every parent render (which was wiping in-progress
@@ -95,6 +103,15 @@ export default function OptionParamsModal({
         }
         if (spec.min !== undefined && n < spec.min) {
           next[spec.key] = `Must be ≥ ${spec.min}.`;
+          continue;
+        }
+        // Tokeniser max_tokens must fit the picked embedding model's input
+        // limit; unknown models return undefined here and skip the cap.
+        if (section === 'tokeniser' && spec.key === 'max_tokens' && contextValues?.embeddingModel) {
+          const cap = getEmbeddingModelMaxTokens(contextValues.embeddingModel);
+          if (cap !== undefined && n > cap) {
+            next[spec.key] = `Must be ≤ ${cap} (limit of ${contextValues.embeddingModel}).`;
+          }
         }
       }
     }
@@ -167,6 +184,20 @@ export default function OptionParamsModal({
                 />
               );
             }
+            // Errors take precedence, then the spec's own helper text, then
+            // an appended cap hint when we know the embedding model's limit
+            // for tokeniser.max_tokens (undefined → hint omitted).
+            const cap =
+              section === 'tokeniser' && spec.key === 'max_tokens' && contextValues?.embeddingModel
+                ? getEmbeddingModelMaxTokens(contextValues.embeddingModel)
+                : undefined;
+            const capHint =
+              cap !== undefined
+                ? `Max: ${cap} tokens (${contextValues!.embeddingModel})`
+                : undefined;
+            const composedHelper =
+              errors[spec.key] ??
+              ([spec.helperText, capHint].filter(Boolean).join(' ') || undefined);
             return (
               <TextInput
                 key={spec.key}
@@ -179,7 +210,7 @@ export default function OptionParamsModal({
                 value={value === null || value === undefined ? '' : String(value)}
                 onChange={(e) => setValues((s) => ({ ...s, [spec.key]: e.target.value }))}
                 error={!!errors[spec.key]}
-                helperText={errors[spec.key] ?? spec.helperText}
+                helperText={composedHelper}
               />
             );
           })}
