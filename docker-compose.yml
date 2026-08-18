@@ -1,0 +1,81 @@
+# Local development backing services for Tone.
+#
+#     docker compose up -d
+#
+# Brings up the two stateful dependencies the app expects on localhost, with
+# credentials matching the defaults in .env.example:
+#
+#     DATABASE_URL=postgresql://tone:tone@localhost:5432/tone
+#     REDIS_URL=redis://localhost:6379/0
+#
+# Then, in your virtualenv:
+#
+#     alembic upgrade head
+#     PYTHONPATH=. python -m procrastinate --app=core.services.ingestion_queue.app schema --apply
+#     python dev/seed.py
+#     uvicorn main:app --reload --host 0.0.0.0 --port 8000
+#
+# There is deliberately no `api` service here. The application image cannot be
+# built without credentials for the private Cloudsmith index that hosts
+# `tone-pipecat` (see PIP_EXTRA_INDEX_URL in .env.example), so a compose file
+# that claimed to build it would just fail for anyone without an entitlement
+# token. These two services are the part that does work unauthenticated.
+
+name: tone
+
+services:
+  postgres:
+    # pgvector, not plain postgres: the initial migration runs
+    # `CREATE EXTENSION IF NOT EXISTS vector`, and the knowledge-base embedding
+    # columns use the `vector` / `halfvec` types.
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: tone
+      POSTGRES_PASSWORD: tone
+      POSTGRES_DB: tone
+    # The image defaults to max_connections=100, which the app exhausts on its
+    # own: core/database/base.py builds an engine with pool_size=50 and
+    # max_overflow=70, so a single process can ask for 120 connections, and the
+    # call/ingestion workers open pools of their own on top of that.
+    command:
+      - postgres
+      - -c
+      - max_connections=200
+    ports:
+      # Loopback only — the credentials here are tone/tone.
+      - "127.0.0.1:5432:5432"
+    # Docker gives a container 64MB of /dev/shm. Parallel query workers and
+    # large sorts spill into it and fail with "could not resize shared memory
+    # segment ... No space left on device".
+    shm_size: 256mb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      # -h 127.0.0.1 matters: during first-run initdb the entrypoint starts a
+      # temporary server that listens on the unix socket only. A socket probe
+      # reports healthy several seconds before anything can connect on 5432,
+      # then flaps back to unhealthy while the real server starts.
+      test: ["CMD-SHELL", "pg_isready -U tone -d tone -h 127.0.0.1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      # Loopback only — this Redis takes no password.
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  postgres-data:
+  redis-data:
