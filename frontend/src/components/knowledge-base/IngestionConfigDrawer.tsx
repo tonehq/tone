@@ -13,6 +13,7 @@ import {
 import OptionParamsModal from '@/components/knowledge-base/OptionParamsModal';
 import {
   getCompatibilityHint,
+  getEmbeddingModelMaxTokens,
   hasParams,
   type ParamSection,
 } from '@/components/knowledge-base/optionParamSchemas';
@@ -86,6 +87,11 @@ interface ParamsEditorState {
   title: string;
   initial: Record<string, unknown> | null;
   apply: (next: Record<string, unknown>) => void;
+  // Cross-field context passed through to OptionParamsModal so a param
+  // like tokeniser.max_tokens can validate against another field (the
+  // picked embedding model). Optional — sections without cross-field
+  // validation leave it undefined.
+  contextValues?: { embeddingModel?: string };
 }
 
 export default function IngestionConfigDrawer({
@@ -175,6 +181,7 @@ export default function IngestionConfigDrawer({
         option: form.tokeniser,
         title: `Tokeniser params — ${form.tokeniser}`,
         initial: form.tokeniser_config,
+        contextValues: { embeddingModel: form.embedding_model },
         apply: (next) =>
           setForm((f) => ({ ...f, tokeniser_config: Object.keys(next).length ? next : null })),
       });
@@ -334,25 +341,6 @@ export default function IngestionConfigDrawer({
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
               <SelectInput
-                name="tokeniser"
-                label="Tokeniser"
-                isRequired
-                options={tokeniserOptions}
-                value={form.tokeniser || undefined}
-                onValueChange={(v) =>
-                  setForm((f) =>
-                    v === f.tokeniser ? f : { ...f, tokeniser: v, tokeniser_config: null },
-                  )
-                }
-                placeholder="Select a tokeniser"
-                disabled={pending}
-                helperText={getCompatibilityHint('tokeniser', form.tokeniser)}
-              />
-              {configureButton('tokeniser', form.tokeniser, form.tokeniser_config)}
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
-              <SelectInput
                 name="embedding_provider"
                 label="Embedding provider"
                 isRequired
@@ -380,6 +368,11 @@ export default function IngestionConfigDrawer({
                 value={form.embedding_model}
                 onChange={(e) => setForm((f) => ({ ...f, embedding_model: e.target.value }))}
                 disabled={pending}
+                helperText={
+                  getEmbeddingModelMaxTokens(form.embedding_model) !== undefined
+                    ? `Max input: ${getEmbeddingModelMaxTokens(form.embedding_model)} tokens`
+                    : undefined
+                }
               />
               <TextInput
                 name="embedding_dimensions"
@@ -398,6 +391,25 @@ export default function IngestionConfigDrawer({
                 }
                 disabled={pending}
               />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
+              <SelectInput
+                name="tokeniser"
+                label="Tokeniser"
+                isRequired
+                options={tokeniserOptions}
+                value={form.tokeniser || undefined}
+                onValueChange={(v) =>
+                  setForm((f) =>
+                    v === f.tokeniser ? f : { ...f, tokeniser: v, tokeniser_config: null },
+                  )
+                }
+                placeholder="Select a tokeniser"
+                disabled={pending}
+                helperText={getCompatibilityHint('tokeniser', form.tokeniser)}
+              />
+              {configureButton('tokeniser', form.tokeniser, form.tokeniser_config)}
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
@@ -430,6 +442,7 @@ export default function IngestionConfigDrawer({
           initialValues={paramsEditor.initial}
           onSave={paramsEditor.apply}
           title={paramsEditor.title}
+          contextValues={paramsEditor.contextValues}
         />
       )}
     </>
