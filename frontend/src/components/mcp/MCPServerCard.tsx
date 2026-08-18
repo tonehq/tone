@@ -1,6 +1,7 @@
 'use client';
 
 import { ActionMenu } from '@/components/shared';
+import { getProviderLogoUrl } from '@/components/service-providers/constants';
 import { Card, CardContent } from '@/components/ui/card';
 import type { MCPServer } from '@/types/mcp';
 import { cn } from '@/utils/cn';
@@ -28,7 +29,12 @@ function getApexDomain(hostname: string): string {
 function getFaviconUrl(serverUrl: string | null | undefined): string | null {
   const hostname = getServerHostname(serverUrl);
   if (!hostname) return null;
-  return `https://www.google.com/s2/favicons?domain=${getApexDomain(hostname)}&sz=64`;
+  const apex = getApexDomain(hostname);
+  return (
+    getProviderLogoUrl(hostname) ??
+    getProviderLogoUrl(apex) ??
+    `https://www.google.com/s2/favicons?domain=${apex}&sz=64`
+  );
 }
 
 interface MCPServerCardProps {
