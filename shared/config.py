@@ -110,17 +110,17 @@ class Settings:
         # stay off in production — enable only in dev/staging for agent testing.
         self.ENABLE_WS_TEST_ENDPOINT: bool = get_secret("ENABLE_WS_TEST_ENDPOINT", "false").lower() == "true"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
-        self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "staging-tone-call-worker")
+        self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "tone-call-worker")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
         # Dedicated OUTBOUND voice-pod pool (WebSocket "test bridge" trigger runs its media here,
         # NOT on the API/orchestrator pod — see WebSocketCallEngine). The originator picks a pod
         # from this StatefulSet (via PodPicker over this prefix) and hands the bridge off over the
         # StatefulSet's headless service (intra-cluster, no ingress) at ``{pod}.{headless}.{ns}.svc``.
         self.OUTBOUND_CALL_WORKER_PREFIX: str = get_secret(
-            "OUTBOUND_CALL_WORKER_PREFIX", "staging-tone-outbound-call-worker"
+            "OUTBOUND_CALL_WORKER_PREFIX", "tone-outbound-call-worker"
         )
         self.OUTBOUND_CALL_HEADLESS_SERVICE: str = get_secret(
-            "OUTBOUND_CALL_HEADLESS_SERVICE", "staging-tone-outbound-call-headless"
+            "OUTBOUND_CALL_HEADLESS_SERVICE", "tone-outbound-call-headless"
         )
         self.OUTBOUND_CALL_WORKER_PORT: int = int(get_secret("OUTBOUND_CALL_WORKER_PORT", "8080"))
         # Per voice-pod concurrent-call ceiling, enforced at the pod's ws-bridge-start route
