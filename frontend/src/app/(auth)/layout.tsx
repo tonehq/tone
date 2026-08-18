@@ -3,11 +3,20 @@
 import { Mic, ShieldCheck, Zap } from 'lucide-react';
 import { motion, useMotionValue, useSpring, useTransform, type MotionValue } from 'framer-motion';
 import { useEffect, useRef, useState } from 'react';
+import dynamic from 'next/dynamic';
 import { usePathname } from 'next/navigation';
 
 import { Logo } from '@/components/ui/logo';
 import { ThemeToggle } from '@/components/shared';
-import { AgentFlowAnimation } from '@/components/auth/agent-flow-animation';
+
+// Client-only — framer-motion renders rounded transform values on the server
+// and full-precision on the client, producing spurious hydration warnings for
+// this purely decorative subtree. Skipping SSR removes the mismatch without
+// touching the animation itself.
+const AgentFlowAnimation = dynamic(
+  () => import('@/components/auth/agent-flow-animation').then((m) => m.AgentFlowAnimation),
+  { ssr: false },
+);
 
 const STATS = [
   { icon: Mic, value: '50+', label: 'Voice models' },

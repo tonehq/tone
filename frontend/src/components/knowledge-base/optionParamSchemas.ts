@@ -107,6 +107,150 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         defaultValue: 64,
       },
     ],
+    // ChonkieRecursiveChunker(chunk_size=512, tokenizer="character", min_characters_per_chunk=24)
+    chonkie_recursive: [
+      {
+        key: 'chunk_size',
+        label: 'Chunk size (tokens)',
+        type: 'number',
+        min: 1,
+        placeholder: '512',
+        helperText: 'Maximum tokens per chunk (measured by the selected tokenizer).',
+        defaultValue: 512,
+      },
+      {
+        key: 'min_characters_per_chunk',
+        label: 'Min characters per chunk',
+        type: 'number',
+        min: 1,
+        placeholder: '24',
+        defaultValue: 24,
+      },
+    ],
+    // ChonkieSentenceChunker(chunk_size=512, chunk_overlap=0, min_sentences_per_chunk=1, min_characters_per_sentence=12)
+    chonkie_sentence: [
+      {
+        key: 'chunk_size',
+        label: 'Chunk size (tokens)',
+        type: 'number',
+        min: 1,
+        placeholder: '512',
+        defaultValue: 512,
+      },
+      {
+        key: 'chunk_overlap',
+        label: 'Chunk overlap (tokens)',
+        type: 'number',
+        min: 0,
+        placeholder: '0',
+        defaultValue: 0,
+      },
+      {
+        key: 'min_sentences_per_chunk',
+        label: 'Min sentences per chunk',
+        type: 'number',
+        min: 1,
+        placeholder: '1',
+        defaultValue: 1,
+      },
+      {
+        key: 'min_characters_per_sentence',
+        label: 'Min characters per sentence',
+        type: 'number',
+        min: 1,
+        placeholder: '12',
+        defaultValue: 12,
+      },
+    ],
+    // ChonkieSemanticChunker(chunk_size=512, embedding_model="minishlab/potion-base-32M",
+    //   threshold=0.8, similarity_window=3, min_sentences_per_chunk=1,
+    //   min_characters_per_sentence=24, skip_window=0)
+    chonkie_semantic: [
+      {
+        key: 'chunk_size',
+        label: 'Chunk size (tokens)',
+        type: 'number',
+        min: 1,
+        placeholder: '512',
+        defaultValue: 512,
+      },
+      {
+        key: 'embedding_model',
+        label: 'Chunker embedding model',
+        type: 'string',
+        placeholder: 'minishlab/potion-base-32M',
+        helperText:
+          'Local model used to score sentence similarity for splitting (separate from the pipeline embedder).',
+        defaultValue: 'minishlab/potion-base-32M',
+      },
+      {
+        key: 'threshold',
+        label: 'Similarity threshold',
+        type: 'number',
+        min: 0,
+        max: 1,
+        step: 0.05,
+        placeholder: '0.8',
+        helperText:
+          'Cosine similarity cutoff for keeping neighbouring sentences in the same chunk (0–1).',
+        defaultValue: 0.8,
+      },
+      {
+        key: 'similarity_window',
+        label: 'Similarity window (sentences)',
+        type: 'number',
+        min: 1,
+        placeholder: '3',
+        defaultValue: 3,
+      },
+      {
+        key: 'min_sentences_per_chunk',
+        label: 'Min sentences per chunk',
+        type: 'number',
+        min: 1,
+        placeholder: '1',
+        defaultValue: 1,
+      },
+    ],
+    // ChonkieSdpmChunker inherits SemanticChunker + defaults skip_window=1.
+    chonkie_sdpm: [
+      {
+        key: 'chunk_size',
+        label: 'Chunk size (tokens)',
+        type: 'number',
+        min: 1,
+        placeholder: '512',
+        defaultValue: 512,
+      },
+      {
+        key: 'embedding_model',
+        label: 'Chunker embedding model',
+        type: 'string',
+        placeholder: 'minishlab/potion-base-32M',
+        helperText:
+          'Local model used to score sentence similarity for splitting (separate from the pipeline embedder).',
+        defaultValue: 'minishlab/potion-base-32M',
+      },
+      {
+        key: 'threshold',
+        label: 'Similarity threshold',
+        type: 'number',
+        min: 0,
+        max: 1,
+        step: 0.05,
+        placeholder: '0.8',
+        defaultValue: 0.8,
+      },
+      {
+        key: 'skip_window',
+        label: 'Skip window (double-pass merging)',
+        type: 'number',
+        min: 1,
+        placeholder: '1',
+        helperText: 'Number of non-adjacent groups considered for merging on the second pass.',
+        defaultValue: 1,
+      },
+    ],
   },
   embedding: {
     // OpenAIEmbedder(api_key, model, batch_size=100, max_retries=6, tokens_per_minute=900000, dimensions)
@@ -194,6 +338,14 @@ const OPTION_COMPATIBILITY_HINTS: Partial<Record<ParamSection, Record<string, st
       'Best paired with the docling parser — silently falls back to recursive_char otherwise',
     token_aware:
       'Works with any parser; splits by token count using an OpenAI or HuggingFace tokenizer',
+    chonkie_recursive:
+      'Chonkie recursive splitter — general-purpose default; respects paragraph/sentence structure',
+    chonkie_sentence:
+      'Chonkie sentence-aware splitter — best for prose and call transcripts; never cuts mid-sentence',
+    chonkie_semantic:
+      'Chonkie embedding-similarity splitter — higher retrieval recall; slower ingestion (downloads a small local model on first use)',
+    chonkie_sdpm:
+      'Chonkie Semantic Double-Pass Merging — highest quality for long-form documents; slower still',
   },
 };
 
