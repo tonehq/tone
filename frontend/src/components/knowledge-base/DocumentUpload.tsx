@@ -167,9 +167,19 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     } else {
       // Leave the modal open with the failed files still listed so the user
       // can retry them. The per-file mutation already invalidates the table.
+      // Surface the backend `detail` when present (e.g. the 409 duplicate-
+      // name message) so the user sees WHY the upload failed instead of a
+      // generic "retry" prompt.
+      const detail =
+        typeof lastError === 'object' && lastError !== null
+          ? ((lastError as { response?: { data?: { detail?: unknown } } }).response?.data
+              ?.detail as string | undefined)
+          : undefined;
       showToast.error(
         `${succeeded} of ${total} uploaded`,
-        `${failed.length} failed — retry the remaining files.`,
+        typeof detail === 'string' && detail
+          ? detail
+          : `${failed.length} failed — retry the remaining files.`,
       );
     }
   };

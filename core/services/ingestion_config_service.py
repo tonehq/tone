@@ -93,31 +93,27 @@ class IngestionConfigService(BaseService):
         if parser is not None and parser not in PARSERS:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unknown parser {parser!r}. Available: {sorted(PARSERS)}"
-                ),
+                detail=f"Unknown parser '{parser}'. Available: {', '.join(sorted(PARSERS))}.",
             )
         if tokeniser is not None and tokeniser not in TOKENISERS:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unknown tokeniser {tokeniser!r}. Available: {sorted(TOKENISERS)}"
-                ),
+                detail=f"Unknown tokeniser '{tokeniser}'. Available: {', '.join(sorted(TOKENISERS))}.",
             )
         if embedding_provider is not None and embedding_provider not in EMBEDDERS:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    f"Unknown embedding provider {embedding_provider!r}. "
-                    f"Available: {sorted(EMBEDDERS)}"
+                    f"Unknown embedding provider '{embedding_provider}'. "
+                    f"Available: {', '.join(sorted(EMBEDDERS))}."
                 ),
             )
         if vector_store is not None and vector_store not in VECTOR_STORES:
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    f"Unknown vector store {vector_store!r}. "
-                    f"Available: {sorted(VECTOR_STORES)}"
+                    f"Unknown vector store '{vector_store}'. "
+                    f"Available: {', '.join(sorted(VECTOR_STORES))}."
                 ),
             )
 
@@ -156,7 +152,7 @@ class IngestionConfigService(BaseService):
         if not name or not name.strip():
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail="name is required.",
+                detail="Name is required.",
             )
         if embedding_dimensions is None or embedding_dimensions <= 0:
             raise HTTPException(
@@ -167,10 +163,8 @@ class IngestionConfigService(BaseService):
             raise HTTPException(
                 status_code=http_status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    f"embedding_dimensions {embedding_dimensions} is not supported. "
-                    f"Allowed: {sorted(self._ALLOWED_EMBEDDING_DIMENSIONS)}. "
-                    "Add a knowledge_base_chunk_embeddings.embedding_<dim> column + "
-                    "HNSW index to enable a new value."
+                    "Invalid embedding dimensions. Allowed: "
+                    f"{', '.join(str(d) for d in sorted(self._ALLOWED_EMBEDDING_DIMENSIONS))}."
                 ),
             )
         self._validate_slugs(
@@ -254,14 +248,14 @@ class IngestionConfigService(BaseService):
             if dims is None or dims <= 0:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="embedding_dimensions must be a positive integer.",
+                    detail="Embedding dimensions must be a positive integer.",
                 )
             if dims not in self._ALLOWED_EMBEDDING_DIMENSIONS:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
                     detail=(
-                        f"embedding_dimensions {dims} is not supported. "
-                        f"Allowed: {sorted(self._ALLOWED_EMBEDDING_DIMENSIONS)}."
+                        "Invalid embedding dimensions. Allowed: "
+                        f"{', '.join(str(d) for d in sorted(self._ALLOWED_EMBEDDING_DIMENSIONS))}."
                     ),
                 )
 
@@ -270,7 +264,7 @@ class IngestionConfigService(BaseService):
             if not new_name:
                 raise HTTPException(
                     status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="name cannot be blank.",
+                    detail="Name cannot be blank.",
                 )
             if new_name != row.name and self._name_taken(new_name, exclude_id=row.id):
                 raise HTTPException(
