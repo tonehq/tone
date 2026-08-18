@@ -182,13 +182,6 @@ def get_mcp_servers_for_agent(agent_id: int):
 
 
 def build_mcp_request_headers(server) -> dict:
-    """Resolve every request header an MCP server authenticates with.
-
-    Static ``auth_config`` first, then custom ``meta_data`` headers (e.g.
-    ClickUp's ``x-workspace-id``), then the linked-connection header which
-    overrides both. Shared by the live-call registration path and the offline
-    text harness so both authenticate identically.
-    """
     from core.services.mcp_server_service import build_auth_headers, headers_from_meta
     from core.utils.oauth_resolution import effective_of
 
@@ -392,16 +385,18 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
+    from core.services.mcp_server_service import resolve_server_url
 
     all_tool_schemas = []
 
     for server in servers:
         try:
             headers = build_mcp_request_headers(server)
+            connect_url = resolve_server_url(server)
             if server.transport_type == "sse":
-                server_params = SseServerParameters(url=server.server_url, headers=headers)
+                server_params = SseServerParameters(url=connect_url, headers=headers)
             elif server.transport_type == "streamable_http":
-                server_params = StreamableHttpParameters(url=server.server_url, headers=headers)
+                server_params = StreamableHttpParameters(url=connect_url, headers=headers)
             else:
                 logger.warning("Unsupported transport type '{}' for MCP server '{}', skipping", server.transport_type, server.name)
                 continue
