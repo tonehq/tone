@@ -137,12 +137,19 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         placeholder: '512',
         defaultValue: 512,
       },
+      // No dynamic max is possible in the current ParamFieldSpec schema, so
+      // we cap at a sane absolute ceiling; the backend also enforces
+      // `chunk_overlap < chunk_size` and raises a clear ValueError, but the
+      // helper text keeps the constraint visible in the UI.
       {
         key: 'chunk_overlap',
         label: 'Chunk overlap (tokens)',
         type: 'number',
         min: 0,
+        max: 4096,
         placeholder: '0',
+        helperText:
+          'Tokens repeated between adjacent chunks. Must be strictly less than Chunk size.',
         defaultValue: 0,
       },
       {
@@ -292,6 +299,42 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
         defaultValue: 900000,
       },
     ],
+    // GoogleEmbedder(api_key, model, dimensions, batch_size=100, max_retries=6, task_type="RETRIEVAL_DOCUMENT")
+    google: [
+      {
+        key: 'batch_size',
+        label: 'Batch size',
+        type: 'number',
+        min: 1,
+        max: 100,
+        placeholder: '100',
+        helperText: 'Texts embedded per API call. Gemini limit: 100.',
+        defaultValue: 100,
+      },
+      {
+        key: 'max_retries',
+        label: 'Max retries',
+        type: 'number',
+        min: 0,
+        max: 10,
+        placeholder: '6',
+        helperText: 'Retries per failing batch. Max: 10.',
+        defaultValue: 6,
+      },
+      // Free-text today because the shared ParamFieldSpec has no 'select'
+      // variant; helperText enumerates the only two values Gemini accepts
+      // for retrieval so an operator can spot a typo before the run fails.
+      // TODO: promote to an enum field once ParamFieldSpec grows options.
+      {
+        key: 'task_type',
+        label: 'Task type',
+        type: 'string',
+        placeholder: 'RETRIEVAL_DOCUMENT',
+        helperText:
+          'Must be exactly RETRIEVAL_DOCUMENT (indexing) or RETRIEVAL_QUERY (search). Case-sensitive; any other value fails the ingestion.',
+        defaultValue: 'RETRIEVAL_DOCUMENT',
+      },
+    ],
   },
   vector_store: {
     // pgvector + memory take no user params — they build off the session /
@@ -347,6 +390,11 @@ const OPTION_COMPATIBILITY_HINTS: Partial<Record<ParamSection, Record<string, st
     chonkie_sdpm:
       'Chonkie Semantic Double-Pass Merging — highest quality for long-form documents; slower still',
   },
+  embedding: {
+    openai: 'Requires OPENAI_API_KEY (env) or a per-org OpenAI key in Settings',
+    google:
+      'Uses task-type hinting (RETRIEVAL_DOCUMENT for indexing, RETRIEVAL_QUERY for search). Requires GOOGLE_API_KEY (env) or a per-org Google key in Settings.',
+  },
 };
 
 /** Read the one-line compatibility hint for an option, or undefined when none is defined. */
@@ -373,6 +421,8 @@ const EMBEDDING_MODEL_MAX_TOKENS: Record<string, number> = {
   'voyage-3': 32000,
   'voyage-3-large': 32000,
   'jina-embeddings-v3': 8192,
+  'gemini-embedding-001': 2048,
+  'gemini-embedding-2': 8192,
 };
 
 /** Look up the max input tokens for an embedding model slug, if known. */
@@ -393,6 +443,8 @@ export interface EmbeddingModelChoice {
 export const EMBEDDING_MODEL_CHOICES: EmbeddingModelChoice[] = [
   { value: 'text-embedding-3-small', label: 'text-embedding-3-small', dimensions: 1536 },
   { value: 'text-embedding-3-large', label: 'text-embedding-3-large', dimensions: 3072 },
+  { value: 'gemini-embedding-001', label: 'gemini-embedding-001 (Google)', dimensions: 3072 },
+  { value: 'gemini-embedding-2', label: 'gemini-embedding-2 (Google)', dimensions: 3072 },
 ];
 
 /** Default output dimensions for a supported embedding model, if known. */
