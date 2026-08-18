@@ -29,6 +29,12 @@ export interface IngestionRun {
   chunk_count: number | null;
   procrastinate_job_id: number | null;
 
+  // Source recipe (saved IngestionConfig) this run was created from. Both may
+  // be null: ad-hoc "Custom" runs and runs whose source config was later
+  // deleted (FK ON DELETE SET NULL).
+  ingestion_config_id: string | null;
+  ingestion_config_name: string | null;
+
   created_at: string;
   updated_at: string;
 }
