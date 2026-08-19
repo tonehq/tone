@@ -1,8 +1,106 @@
 import os
 from typing import Optional
 from dotenv import load_dotenv
+from loguru import logger
 
 load_dotenv()
+
+
+# ── Environment classification ──────────────────────────────────────────────
+# Names we treat as "developer laptop / CI" — Tier B (deployed-only) keys are
+# NOT required in these envs. Everything else (staging, production, uat, …) is
+# treated as deployed and must supply the full set.
+DEV_ENV_NAMES = frozenset({"dev", "development", "local", "test"})
+
+# ── Mandatory env vars (missing = pod refuses to start) ─────────────────────
+# Strict env-only policy (see .env.example). Every setting whose absence would
+# cause runtime failure or a wrong-by-default behavior is listed here — nothing
+# in this module carries a code-side fallback. Keys where empty is a legitimate
+# "off / disabled" value (bool flags that default to false; concurrency knobs
+# whose comments say 0 = unlimited/on-demand) intentionally stay OFF this list.
+
+# Tier A — required in EVERY env, including dev.
+MANDATORY_KEYS: tuple[str, ...] = (
+    # Core auth + identity
+    "DATABASE_URL",
+    "JWT_SECRET_KEY",
+    "ENV",
+    "DEFAULT_ORG_ID",
+    "LOG_LEVEL",
+    # HTTP surface
+    "COOKIE_SAMESITE",
+    "CORS_ALLOW_ORIGINS",
+    "CORS_ALLOW_ORIGIN_REGEX",
+    "APPLICATION_URL",
+    "BASE_API_URL",
+    # Call/worker routing (non-zero ints or non-empty strings required)
+    "CALL_WORKER_PREFIX",
+    "OUTBOUND_CALL_WORKER_PREFIX",
+    "OUTBOUND_CALL_HEADLESS_SERVICE",
+    "OUTBOUND_CALL_WORKER_PORT",
+    "POD_SYNC_NAMESPACE",
+    "MAX_CONCURRENT_CALLS",
+    # Loki per-call sync tuning (int knobs — empty would ValueError on int())
+    "LOKI_SYNC_DELAY_SECONDS",
+    "LOKI_SYNC_PRE_BUFFER_SECONDS",
+    "LOKI_SYNC_POST_BUFFER_SECONDS",
+    "LOKI_SYNC_PAGE_LIMIT",
+    "LOKI_SYNC_MAX_PAGES",
+    "LOKI_SYNC_HTTP_TIMEOUT",
+    "LOKI_SYNC_MAX_RETRIES",
+    # RAG defaults — every value maps to a registry entry
+    "DEFAULT_PARSER",
+    "DEFAULT_TOKENISER",
+    "DEFAULT_EMBEDDING_PROVIDER",
+    "DEFAULT_EMBEDDING_MODEL",
+    "DEFAULT_EMBEDDING_DIMENSIONS",
+    "DEFAULT_VECTOR_STORE",
+    # RAG eval harness
+    "EVAL_AUTO_RUN_ENABLED",
+    "EVAL_GENERATION_MODEL",
+    "EVAL_ANSWER_MODEL",
+    "EVAL_JUDGE_MODEL",
+    "EVAL_TOP_K",
+    "EVAL_MAX_CONTEXT_CHARS",
+)
+
+# Tier B — additionally required when ENV is not one of DEV_ENV_NAMES.
+MANDATORY_PROD_KEYS: tuple[str, ...] = (
+    "INFISICAL_TOKEN",
+    "INFISICAL_PROJECT_ID",
+    "REDIS_URL",
+    "LOKI_URL",
+    "GRAFANA_API_KEY",
+    "R2_ACCESS_KEY_ID",
+    "R2_SECRET_ACCESS_KEY",
+    "R2_BUCKET_NAME",
+    "R2_ENDPOINT_URL",
+    "BASE_CALL_URL",
+)
+
+# Values we treat as "unset" even when the string is non-empty — the historical
+# in-code placeholder should never satisfy a mandatory check.
+INSECURE_PLACEHOLDERS: dict[str, set[str]] = {
+    "JWT_SECRET_KEY": {"your-secret-key-here"},
+    "REDIS_URL": {"redis://localhost:6379/0"},
+}
+
+
+def _int_env(raw: str) -> int:
+    """int() that treats empty string as 0.
+
+    Import-safety only: keeps ``int(get_secret("K"))`` from crashing before
+    ``_validate_required`` runs. Missing values that MUST be present are
+    caught by the validator afterwards; 0 is a legitimate value for the
+    knobs left off ``MANDATORY_KEYS`` (e.g. MAX_CONCURRENT_OUTBOUND_CALLS,
+    OUTBOUND_BG_WORKERS — see comments below).
+    """
+    return int(raw) if raw else 0
+
+
+def _bool_env(raw: str) -> bool:
+    """Truthy string ("true", case-insensitive) → True; empty/anything else → False."""
+    return (raw or "").strip().lower() == "true"
 
 
 class InfisicalConfigError(RuntimeError):
@@ -61,17 +159,23 @@ class Settings:
     def __init__(self):
         infisical_secrets = get_infisical_secrets()
 
-        def get_secret(key: str, default: str = "") -> str:
-            return infisical_secrets.get(key) or os.getenv(key, default)
+        # Raw (pre-coercion) values keyed by env name. The validator inspects
+        # this dict so it can tell "unset" from a legitimate 0 / False /
+        # empty-list value that a Settings attribute might not distinguish.
+        self._raw: dict[str, str] = {}
 
-        self.DATABASE_URL: str = "postgresql://neondb_owner:npg_HPjY5NERS7Uf@ep-crimson-boat-aq6kyekg-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
-        self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY", "your-secret-key-here")
+        def get_secret(key: str) -> str:
+            value = infisical_secrets.get(key) or os.getenv(key, "")
+            self._raw[key] = value
+            return value
+
+        self.DATABASE_URL: str = get_secret("DATABASE_URL")
+        self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY")
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_HOURS: int = 24
         self.REFRESH_TOKEN_EXPIRE_DAYS: int = 30
-        
 
-        self.ENVIRONMENT: str = get_secret("ENV", "development")
+        self.ENVIRONMENT: str = get_secret("ENV")
 
         # ── Auth cookies (httpOnly access/refresh token transport) ──────────
         # Tokens ride in httpOnly cookies instead of JS-readable storage so an
@@ -82,15 +186,11 @@ class Settings:
         # "Am I running on a developer's laptop?" is a HOST question, not a
         # secrets-source question — read it straight from the local .env (via
         # os.getenv) so it isn't overwritten by whatever ENV value Infisical
-        # happens to inject (e.g. INFISICAL_ENV=staging → ENV=staging in
-        # Infisical → self.ENVIRONMENT="staging"). Falls back to the merged
-        # value only when nothing is in the OS env.
+        # happens to inject.
         _local_env = (os.getenv("ENV") or self.ENVIRONMENT or "").lower()
-        _cookie_is_local = _local_env in ("development", "dev", "local", "test")
-        self.COOKIE_DOMAIN: str = get_secret("COOKIE_DOMAIN", "")
-        self.COOKIE_SECURE: bool = get_secret(
-            "COOKIE_SECURE", "false" if _cookie_is_local else "true"
-        ).lower() == "true"
+        _cookie_is_local = _local_env in DEV_ENV_NAMES
+        self.COOKIE_DOMAIN: str = get_secret("COOKIE_DOMAIN")
+        self.COOKIE_SECURE: bool = _bool_env(get_secret("COOKIE_SECURE"))
         # Local dev safety net: when a laptop is pointed at a staging Infisical
         # env, the pulled cookie values (Domain=.trytone.ai; Secure) get baked
         # into every Set-Cookie and the browser silently drops them on
@@ -101,7 +201,7 @@ class Settings:
             self.COOKIE_DOMAIN = ""
             self.COOKIE_SECURE = False
         # One of "lax" | "strict" | "none". "none" REQUIRES COOKIE_SECURE=true.
-        self.COOKIE_SAMESITE: str = get_secret("COOKIE_SAMESITE", "lax").lower()
+        self.COOKIE_SAMESITE: str = get_secret("COOKIE_SAMESITE").lower()
 
         # ── CORS (credentialed requests can't use a wildcard origin) ────────
         # Browsers reject `Access-Control-Allow-Origin: *` together with
@@ -109,50 +209,40 @@ class Settings:
         # is an exact comma-separated list (local dev); CORS_ALLOW_ORIGIN_REGEX
         # covers every *.trytone.ai subdomain in deployed envs.
         self.CORS_ALLOW_ORIGINS: list = [
-            o.strip()
-            for o in get_secret(
-                "CORS_ALLOW_ORIGINS", "http://localhost:3000,http://localhost:3001"
-            ).split(",")
-            if o.strip()
+            o.strip() for o in get_secret("CORS_ALLOW_ORIGINS").split(",") if o.strip()
         ]
-        self.CORS_ALLOW_ORIGIN_REGEX: str = get_secret(
-            "CORS_ALLOW_ORIGIN_REGEX", r"https://([a-z0-9-]+\.)*trytone\.ai"
-        )
+        self.CORS_ALLOW_ORIGIN_REGEX: str = get_secret("CORS_ALLOW_ORIGIN_REGEX")
 
-        self.POD_PINNING_ENABLED: bool = get_secret("POD_PINNING_ENABLED", "false").lower() == "true"
+        self.POD_PINNING_ENABLED: bool = _bool_env(get_secret("POD_PINNING_ENABLED"))
         # Telephony-free WebSocket test endpoint (/ws/test). Runs a real, paid
         # LLM/STT/TTS pipeline and takes no auth, so it is OFF by default and should
         # stay off in production — enable only in dev/staging for agent testing.
-        self.ENABLE_WS_TEST_ENDPOINT: bool = get_secret("ENABLE_WS_TEST_ENDPOINT", "false").lower() == "true"
-        self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST", "")
-        self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX", "tone-call-worker")
-        self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE", "staging")
+        self.ENABLE_WS_TEST_ENDPOINT: bool = _bool_env(get_secret("ENABLE_WS_TEST_ENDPOINT"))
+        self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST")
+        self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX")
+        self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE")
         # Dedicated OUTBOUND voice-pod pool (WebSocket "test bridge" trigger runs its media here,
         # NOT on the API/orchestrator pod — see WebSocketCallEngine). The originator picks a pod
         # from this StatefulSet (via PodPicker over this prefix) and hands the bridge off over the
         # StatefulSet's headless service (intra-cluster, no ingress) at ``{pod}.{headless}.{ns}.svc``.
-        self.OUTBOUND_CALL_WORKER_PREFIX: str = get_secret(
-            "OUTBOUND_CALL_WORKER_PREFIX", "tone-outbound-call-worker"
-        )
-        self.OUTBOUND_CALL_HEADLESS_SERVICE: str = get_secret(
-            "OUTBOUND_CALL_HEADLESS_SERVICE", "tone-outbound-call-headless"
-        )
-        self.OUTBOUND_CALL_WORKER_PORT: int = int(get_secret("OUTBOUND_CALL_WORKER_PORT", "8080"))
+        self.OUTBOUND_CALL_WORKER_PREFIX: str = get_secret("OUTBOUND_CALL_WORKER_PREFIX")
+        self.OUTBOUND_CALL_HEADLESS_SERVICE: str = get_secret("OUTBOUND_CALL_HEADLESS_SERVICE")
+        self.OUTBOUND_CALL_WORKER_PORT: int = _int_env(get_secret("OUTBOUND_CALL_WORKER_PORT"))
         # Per voice-pod concurrent-call ceiling, enforced at the pod's ws-bridge-start route
         # (429 when full → the originator queues the overflow). 0/<=0 = unlimited. Set on the
         # call-worker manifests; previously an unread env var, now honoured in code.
-        self.MAX_CONCURRENT_CALLS: int = int(get_secret("MAX_CONCURRENT_CALLS", "2"))
+        self.MAX_CONCURRENT_CALLS: int = _int_env(get_secret("MAX_CONCURRENT_CALLS"))
         # Optional shared secret for the intra-cluster ws-bridge-start hand-off. Empty = no check
         # (same trust model as /ws — the route is not exposed via any ingress). When set, the
         # originator sends it and the pod requires it.
-        self.WS_BRIDGE_INTERNAL_TOKEN: str = get_secret("WS_BRIDGE_INTERNAL_TOKEN", "")
+        self.WS_BRIDGE_INTERNAL_TOKEN: str = get_secret("WS_BRIDGE_INTERNAL_TOKEN")
 
         # Public base URL (scheme + host, no /api/v1) that Twilio can reach for
         # outbound-call TwiML + status callbacks. Root-mounted telephony routes hang
         # off this (e.g. {BASE_CALL_URL}/twiml/outbound). Required for outbound dialing;
         # scheduled dials run in the worker with no request context to derive it from.
         # Locally: an ngrok URL. Prod: the public API host.
-        self.BASE_CALL_URL: str = get_secret("BASE_CALL_URL", "").rstrip("/")
+        self.BASE_CALL_URL: str = get_secret("BASE_CALL_URL").rstrip("/")
 
         # WebSocket call trigger (provider="websocket"): the outbound call is bridged over a
         # WebSocket client to a REMOTE deployment's /ws/test endpoint (agent-to-agent, no PSTN),
@@ -161,79 +251,76 @@ class Settings:
         # trigger. The remote agent is normally resolved by the dialed to_number on that side
         # (like a real call); WS_CALL_TARGET_AGENT_ID is an OPTIONAL fallback used only when a
         # call carries no number to route on.
-        self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL", "").rstrip("/")
-        self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID", "")
+        self.WS_CALL_TARGET_URL: str = get_secret("WS_CALL_TARGET_URL").rstrip("/")
+        self.WS_CALL_TARGET_AGENT_ID: str = get_secret("WS_CALL_TARGET_AGENT_ID")
         # Single-process / local-dev escape hatch. The WS bridge is normally handed off to a
         # dedicated outbound-call-worker pod (keeps media OFF the API/orchestrator pod). When no such
         # pod is registered — e.g. a local `uvicorn main:app` with no WORKER_MODE=voice sibling —
         # PodPicker.for_outbound finds nothing and the row would hold forever. With this flag ON the
         # originator runs the bridge IN-PROCESS instead. OFF by default so staging/prod keep the pod
         # hand-off; set true only for local/single-node runs.
-        self.WS_BRIDGE_ALLOW_INLINE: bool = (
-            get_secret("WS_BRIDGE_ALLOW_INLINE", "false").lower() == "true"
-        )
+        self.WS_BRIDGE_ALLOW_INLINE: bool = _bool_env(get_secret("WS_BRIDGE_ALLOW_INLINE"))
         # NB: access to the WebSocket ("test bridge") trigger is limited to users whose
         # ``members.role == 'super_admin'`` — see OutboundCallService.is_ws_trigger_allowed. The
         # role is assigned via SQL only (no UI/API), so the allowlist changes without a redeploy.
 
-
-        self.APPLICATION_URL: str = get_secret("APPLICATION_URL", "http://localhost:3000")
-        self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY", "")
+        self.APPLICATION_URL: str = get_secret("APPLICATION_URL")
+        self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY")
 
         self.LICENSE_KEY: Optional[str] = get_secret("TONE_LICENSE_KEY") or None
-        self.SKIP_LICENSE_CHECK: bool = get_secret("SKIP_LICENSE_CHECK", "false").lower() == "true"
+        self.SKIP_LICENSE_CHECK: bool = _bool_env(get_secret("SKIP_LICENSE_CHECK"))
 
-        self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID", "00000000-0000-0000-0000-000000000001")
+        self.DEFAULT_ORG_ID: str = get_secret("DEFAULT_ORG_ID")
 
         # Auth token for scripts/API calls
-        self.AUTH_TOKEN: str = get_secret("AUTH_TOKEN", "")
+        self.AUTH_TOKEN: str = get_secret("AUTH_TOKEN")
 
         # Base API URL for scripts
-        self.BASE_API_URL: str = get_secret("BASE_API_URL", "http://localhost:8000/api/v1")
+        self.BASE_API_URL: str = get_secret("BASE_API_URL")
 
         # Redis
-        self.REDIS_URL: str = get_secret("REDIS_URL", "redis://localhost:6379/0")
+        self.REDIS_URL: str = get_secret("REDIS_URL")
 
         # Logging. LOG_LEVEL is the baseline level every process boots at. For calls,
         # a finer level can be set per organization / per agent in the DB
         # (agents.log_level > organizations.log_level > this env baseline) — resolved by
         # core/services/log_level_resolver.py. Blank/invalid falls back to INFO.
-        self.LOG_LEVEL: str = get_secret("LOG_LEVEL", "INFO")
+        self.LOG_LEVEL: str = get_secret("LOG_LEVEL")
 
         # Cloudflare R2 storage
-        self.R2_ACCESS_KEY_ID: str = get_secret("R2_ACCESS_KEY_ID", "")
-        self.R2_SECRET_ACCESS_KEY: str = get_secret("R2_SECRET_ACCESS_KEY", "")
-        self.R2_BUCKET_NAME: str = get_secret("R2_BUCKET_NAME", "")
-        self.R2_ENDPOINT_URL: str = get_secret("R2_ENDPOINT_URL", "")
+        self.R2_ACCESS_KEY_ID: str = get_secret("R2_ACCESS_KEY_ID")
+        self.R2_SECRET_ACCESS_KEY: str = get_secret("R2_SECRET_ACCESS_KEY")
+        self.R2_BUCKET_NAME: str = get_secret("R2_BUCKET_NAME")
+        self.R2_ENDPOINT_URL: str = get_secret("R2_ENDPOINT_URL")
 
         # Google OAuth
-        self.GOOGLE_CLIENT_ID: str = get_secret("GOOGLE_CLIENT_ID", "")
-        self.GOOGLE_CLIENT_SECRET: str = get_secret("GOOGLE_CLIENT_SECRET", "")
+        self.GOOGLE_CLIENT_ID: str = get_secret("GOOGLE_CLIENT_ID")
+        self.GOOGLE_CLIENT_SECRET: str = get_secret("GOOGLE_CLIENT_SECRET")
 
         # Pre-registered OAuth clients for MCP servers that don't support Dynamic Client
         # Registration (RFC 7591). HubSpot's official MCP server (mcp.hubspot.com) requires
         # creating an "MCP Auth App" in the HubSpot developer portal to obtain these.
-        self.HUBSPOT_MCP_CLIENT_ID: str = get_secret("HUBSPOT_MCP_CLIENT_ID", "")
-        self.HUBSPOT_MCP_CLIENT_SECRET: str = get_secret("HUBSPOT_MCP_CLIENT_SECRET", "")
+        self.HUBSPOT_MCP_CLIENT_ID: str = get_secret("HUBSPOT_MCP_CLIENT_ID")
+        self.HUBSPOT_MCP_CLIENT_SECRET: str = get_secret("HUBSPOT_MCP_CLIENT_SECRET")
 
-        self.SALESFORCE_CLIENT_ID: str = get_secret("SALESFORCE_CLIENT_ID", "")
-        self.SALESFORCE_CLIENT_SECRET: str = get_secret("SALESFORCE_CLIENT_SECRET", "")
-        self.SALESFORCE_MY_DOMAIN: str = get_secret("SALESFORCE_MY_DOMAIN", "")
+        self.SALESFORCE_CLIENT_ID: str = get_secret("SALESFORCE_CLIENT_ID")
+        self.SALESFORCE_CLIENT_SECRET: str = get_secret("SALESFORCE_CLIENT_SECRET")
+        self.SALESFORCE_MY_DOMAIN: str = get_secret("SALESFORCE_MY_DOMAIN")
 
-        self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY", "")
+        self.LLAMA_CLOUD_API_KEY: str = get_secret("LLAMA_CLOUD_API_KEY")
 
         # Global OpenAI key used as a fallback for AI helper features (e.g. system-prompt
         # generation) when an org hasn't configured its own provider key.
-        self.OPENAI_API_KEY: str = get_secret("OPENAI_API_KEY", "")
+        self.OPENAI_API_KEY: str = get_secret("OPENAI_API_KEY")
 
-        self.LIVEKIT_URL: str = get_secret("LIVEKIT_URL", "")
-        self.LIVEKIT_API_KEY: str = get_secret("LIVEKIT_API_KEY", "")
-        self.LIVEKIT_API_SECRET: str = get_secret("LIVEKIT_API_SECRET", "")
-        self.DAILY_API_KEY: str = get_secret("DAILY_API_KEY", "")
-        self.WEBRTC_CLIENT_BASE_URL: str = get_secret("WEBRTC_CLIENT_BASE_URL", "")
-        self.CALL_WORKER_INTERNAL_URL: str = get_secret("CALL_WORKER_INTERNAL_URL", "")
+        self.LIVEKIT_URL: str = get_secret("LIVEKIT_URL")
+        self.LIVEKIT_API_KEY: str = get_secret("LIVEKIT_API_KEY")
+        self.LIVEKIT_API_SECRET: str = get_secret("LIVEKIT_API_SECRET")
+        self.DAILY_API_KEY: str = get_secret("DAILY_API_KEY")
+        self.WEBRTC_CLIENT_BASE_URL: str = get_secret("WEBRTC_CLIENT_BASE_URL")
+        self.CALL_WORKER_INTERNAL_URL: str = get_secret("CALL_WORKER_INTERNAL_URL")
 
-        self.SEND_SMS_DEFAULT_TO_NUMBER: str = get_secret("SEND_SMS_DEFAULT_TO_NUMBER", "")
+        self.SEND_SMS_DEFAULT_TO_NUMBER: str = get_secret("SEND_SMS_DEFAULT_TO_NUMBER")
 
         # ── Grafana Loki (log egress + per-call read-back) ──────────────────
         # LOKI_URL/LOKI_USER/GRAFANA_API_KEY are the same secrets the Alloy
@@ -241,22 +328,21 @@ class Settings:
         # manifests). We surface them here so the per-call log sync can READ a
         # finished call's lines back out of Loki. All blank in local dev, which
         # makes loki_read_configured() False and the sync a safe no-op.
-        self.LOKI_URL: str = get_secret("LOKI_URL", "")  # push endpoint (…/loki/api/v1/push)
-        self.LOKI_USER: str = get_secret("LOKI_USER", "")
-        self.GRAFANA_API_KEY: str = get_secret("GRAFANA_API_KEY", "")
+        self.LOKI_URL: str = get_secret("LOKI_URL")  # push endpoint (…/loki/api/v1/push)
+        self.LOKI_USER: str = get_secret("LOKI_USER")
+        self.GRAFANA_API_KEY: str = get_secret("GRAFANA_API_KEY")
 
-        # Query endpoint for reading logs back. Defaults to deriving from the
-        # push URL (swap the trailing /push for /query_range) so a single
-        # LOKI_URL secret configures both directions; override explicitly when
-        # the Grafana Cloud query host differs from the push host.
+        # Query endpoint for reading logs back. Derived from the push URL
+        # (swap the trailing /push for /query_range) when LOKI_QUERY_URL is not
+        # explicitly provided.
         self.LOKI_QUERY_URL: str = (
-            get_secret("LOKI_QUERY_URL", "")
+            get_secret("LOKI_QUERY_URL")
             or (self.LOKI_URL.replace("/loki/api/v1/push", "/loki/api/v1/query_range") if self.LOKI_URL else "")
         )
         # Read creds default to the push creds; override if a dedicated
         # read-scoped (logs:read) token is provisioned.
-        self.LOKI_QUERY_USER: str = get_secret("LOKI_QUERY_USER", "") or self.LOKI_USER
-        self.LOKI_QUERY_TOKEN: str = get_secret("LOKI_QUERY_TOKEN", "") or self.GRAFANA_API_KEY
+        self.LOKI_QUERY_USER: str = get_secret("LOKI_QUERY_USER") or self.LOKI_USER
+        self.LOKI_QUERY_TOKEN: str = get_secret("LOKI_QUERY_TOKEN") or self.GRAFANA_API_KEY
 
         # Per-call sync tuning. No enable/disable flag — the post-call action is
         # always wired; loki_read_configured() alone gates it.
@@ -265,31 +351,29 @@ class Settings:
         # Set LOKI_SYNC_APP_LABEL to a single workload (builds {app="<value>"}),
         # e.g. staging-tone-call-worker. Left blank, the query falls back to the
         # env-agnostic {component=~"call|api"} (Alloy labels tone pods with
-        # component={call,api,worker}). NOTE: there is no app="tone" label — app
-        # values are the workload names, which is why the old default matched
-        # nothing.
-        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL", "").strip()
-        self.LOKI_SYNC_DELAY_SECONDS: int = int(get_secret("LOKI_SYNC_DELAY_SECONDS", "120"))
-        self.LOKI_SYNC_PRE_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_PRE_BUFFER_SECONDS", "30"))
-        self.LOKI_SYNC_POST_BUFFER_SECONDS: int = int(get_secret("LOKI_SYNC_POST_BUFFER_SECONDS", "60"))
-        self.LOKI_SYNC_PAGE_LIMIT: int = int(get_secret("LOKI_SYNC_PAGE_LIMIT", "5000"))
-        self.LOKI_SYNC_MAX_PAGES: int = int(get_secret("LOKI_SYNC_MAX_PAGES", "50"))
-        self.LOKI_SYNC_HTTP_TIMEOUT: int = int(get_secret("LOKI_SYNC_HTTP_TIMEOUT", "30"))
-        self.LOKI_SYNC_MAX_RETRIES: int = int(get_secret("LOKI_SYNC_MAX_RETRIES", "5"))
+        # component={call,api,worker}).
+        self.LOKI_SYNC_APP_LABEL: str = get_secret("LOKI_SYNC_APP_LABEL").strip()
+        self.LOKI_SYNC_DELAY_SECONDS: int = _int_env(get_secret("LOKI_SYNC_DELAY_SECONDS"))
+        self.LOKI_SYNC_PRE_BUFFER_SECONDS: int = _int_env(get_secret("LOKI_SYNC_PRE_BUFFER_SECONDS"))
+        self.LOKI_SYNC_POST_BUFFER_SECONDS: int = _int_env(get_secret("LOKI_SYNC_POST_BUFFER_SECONDS"))
+        self.LOKI_SYNC_PAGE_LIMIT: int = _int_env(get_secret("LOKI_SYNC_PAGE_LIMIT"))
+        self.LOKI_SYNC_MAX_PAGES: int = _int_env(get_secret("LOKI_SYNC_MAX_PAGES"))
+        self.LOKI_SYNC_HTTP_TIMEOUT: int = _int_env(get_secret("LOKI_SYNC_HTTP_TIMEOUT"))
+        self.LOKI_SYNC_MAX_RETRIES: int = _int_env(get_secret("LOKI_SYNC_MAX_RETRIES"))
 
         # Per-batch outbound concurrency knob — the UI "Concurrent calls" selector's upper
         # bound AND the default limit a batch gets when it doesn't request one. NOT a global
         # in-flight ceiling: the limit is enforced per scheduling batch (rows sharing a
         # ``batch_id``), so N concurrent batches can each run up to this many at once. 0
-        # (default) = unset: the selector has no cap and a batch with no requested value runs
+        # = unset: the selector has no cap and a batch with no requested value runs
         # with no per-batch limit. See core/services/outbound_capacity.py for the resolver.
-        self.MAX_CONCURRENT_OUTBOUND_CALLS: int = int(get_secret("MAX_CONCURRENT_OUTBOUND_CALLS", "0"))
+        self.MAX_CONCURRENT_OUTBOUND_CALLS: int = _int_env(get_secret("MAX_CONCURRENT_OUTBOUND_CALLS"))
         # Cap for the OUTBOUND best-effort background thread pools — pipeline cache pre-warming
         # (after a dial, while it rings) and the completion refill (enqueueing a batch's next
-        # call off the status webhook). 0 (default) = ON-DEMAND: no threads are held idle; one
+        # call off the status webhook). 0 = ON-DEMAND: no threads are held idle; one
         # is created at call time only when needed, up to the runtime's default cap. Set > 0 to
         # pin an explicit ceiling. Kept as a knob for future tuning.
-        self.OUTBOUND_BG_WORKERS: int = int(get_secret("OUTBOUND_BG_WORKERS", "0"))
+        self.OUTBOUND_BG_WORKERS: int = _int_env(get_secret("OUTBOUND_BG_WORKERS"))
 
         # ── RAG ingestion defaults ──────────────────────────────────────────
         # Baseline parser / tokeniser / embedder / vector-store used when a
@@ -297,29 +381,83 @@ class Settings:
         # entry (see core/services/rag/parser_factory.py, tokeniser_factory.py,
         # embedder_factory.py, factory.py). Consumed only by
         # IngestionRunService.resolve_run_config — no other file bakes these in.
-        self.DEFAULT_PARSER: str = get_secret("DEFAULT_PARSER", "docling")
-        self.DEFAULT_TOKENISER: str = get_secret("DEFAULT_TOKENISER", "docling_hybrid")
-        self.DEFAULT_EMBEDDING_PROVIDER: str = get_secret("DEFAULT_EMBEDDING_PROVIDER", "openai")
-        self.DEFAULT_EMBEDDING_MODEL: str = get_secret("DEFAULT_EMBEDDING_MODEL", "text-embedding-3-small")
-        self.DEFAULT_EMBEDDING_DIMENSIONS: int = int(get_secret("DEFAULT_EMBEDDING_DIMENSIONS", "1536"))
-        self.DEFAULT_VECTOR_STORE: str = get_secret("DEFAULT_VECTOR_STORE", "pgvector")
+        self.DEFAULT_PARSER: str = get_secret("DEFAULT_PARSER")
+        self.DEFAULT_TOKENISER: str = get_secret("DEFAULT_TOKENISER")
+        self.DEFAULT_EMBEDDING_PROVIDER: str = get_secret("DEFAULT_EMBEDDING_PROVIDER")
+        self.DEFAULT_EMBEDDING_MODEL: str = get_secret("DEFAULT_EMBEDDING_MODEL")
+        self.DEFAULT_EMBEDDING_DIMENSIONS: int = _int_env(get_secret("DEFAULT_EMBEDDING_DIMENSIONS"))
+        self.DEFAULT_VECTOR_STORE: str = get_secret("DEFAULT_VECTOR_STORE")
 
         # Pinecone vector store — API key for the "pinecone" backend in the RAG
         # store factory. Empty in envs that only use pgvector; the store itself
         # raises EmbeddingProviderUnavailableError if a run requests pinecone
         # without a key configured.
-        self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY", "")
+        self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY")
 
         # ── RAG evaluation harness ──────────────────────────────────────────
         # Auto-runs after every successful ingestion (IngestionRunService.complete_run
         # enqueues eval_ingestion_run when EVAL_AUTO_RUN_ENABLED is true). All
         # eval knobs live here — no other file bakes them in.
-        self.EVAL_AUTO_RUN_ENABLED: bool = get_secret("EVAL_AUTO_RUN_ENABLED", "true").lower() == "true"
-        self.EVAL_GENERATION_MODEL: str = get_secret("EVAL_GENERATION_MODEL", "gpt-4o")
-        self.EVAL_ANSWER_MODEL: str = get_secret("EVAL_ANSWER_MODEL", "gpt-4o")
-        self.EVAL_JUDGE_MODEL: str = get_secret("EVAL_JUDGE_MODEL", "gpt-4o")
-        self.EVAL_TOP_K: int = int(get_secret("EVAL_TOP_K", "8"))
-        self.EVAL_MAX_CONTEXT_CHARS: int = int(get_secret("EVAL_MAX_CONTEXT_CHARS", "60000"))
+        self.EVAL_AUTO_RUN_ENABLED: bool = _bool_env(get_secret("EVAL_AUTO_RUN_ENABLED"))
+        self.EVAL_GENERATION_MODEL: str = get_secret("EVAL_GENERATION_MODEL")
+        self.EVAL_ANSWER_MODEL: str = get_secret("EVAL_ANSWER_MODEL")
+        self.EVAL_JUDGE_MODEL: str = get_secret("EVAL_JUDGE_MODEL")
+        self.EVAL_TOP_K: int = _int_env(get_secret("EVAL_TOP_K"))
+        self.EVAL_MAX_CONTEXT_CHARS: int = _int_env(get_secret("EVAL_MAX_CONTEXT_CHARS"))
+
+        # Fail-fast if any mandatory env var is missing. Runs LAST so every
+        # field is populated before we inspect it. Aborts process on failure.
+        self._validate_required()
+
+    def _validate_required(self) -> None:
+        """Abort process startup when mandatory env vars are missing.
+
+        Runs once per ``Settings()`` instantiation (i.e. on first import of
+        ``shared.config``) so every entry point — API pod, EE pod, ingestion
+        worker, seed scripts — enforces the same contract.
+
+        Tier A (``MANDATORY_KEYS``) is enforced in every env; Tier B
+        (``MANDATORY_PROD_KEYS``) is added when ``ENV`` is not one of
+        ``DEV_ENV_NAMES``. Values matching ``INSECURE_PLACEHOLDERS`` are
+        treated as unset.
+
+        Detection uses the RAW value tracked in ``self._raw`` (or the OS env
+        for bootstrap keys like INFISICAL_TOKEN that are not stored on the
+        Settings instance), NOT the coerced attribute — so an int knob whose
+        legitimate value is 0 doesn't get flagged as missing.
+
+        On failure: emit a single ``logger.critical`` line naming every
+        missing key (loguru → stderr → Alloy DaemonSet → Loki → Grafana),
+        then ``sys.exit(1)`` via ``SystemExit``. K8s marks the pod
+        CrashLoopBackOff and Grafana surfaces the CRITICAL line.
+        """
+        env_name = (os.getenv("ENV") or self.ENVIRONMENT or "").lower()
+        is_deployed = bool(env_name) and env_name not in DEV_ENV_NAMES
+
+        required: list[str] = list(MANDATORY_KEYS)
+        if is_deployed:
+            required.extend(MANDATORY_PROD_KEYS)
+
+        missing: list[str] = []
+        for key in required:
+            raw = self._raw.get(key, "") or os.environ.get(key, "") or ""
+            insecure = INSECURE_PLACEHOLDERS.get(key, set())
+            if not raw or raw in insecure:
+                missing.append(key)
+
+        if not missing:
+            return
+
+        keys_block = "\n".join(f"  - {k}" for k in missing)
+        logger.critical(
+            "[config] Pod startup aborted — missing {count} required env "
+            "variable(s) for ENV={env}:\n{keys}\nSee .env.example for the "
+            "full template and required set.",
+            count=len(missing),
+            env=env_name or "<unset>",
+            keys=keys_block,
+        )
+        raise SystemExit(1)
 
     def loki_read_configured(self) -> bool:
         """True only when we have enough to read a call's logs back from Loki.
@@ -330,4 +468,19 @@ class Settings:
         return bool(self.LOKI_QUERY_URL and self.LOKI_QUERY_TOKEN)
 
 
-settings = Settings()
+# Lazy module-level singleton. Construction (and therefore validation) fires
+# on first attribute access via PEP 562 __getattr__, not on module import.
+# Real callers do ``from shared.config import settings`` which triggers the
+# getattr immediately and preserves fail-fast semantics. Tests instantiate
+# ``config.Settings()`` directly (bypassing this singleton) so they can drive
+# the validator with a monkeypatched env instead of the process env.
+_settings: "Settings | None" = None
+
+
+def __getattr__(name: str):
+    global _settings
+    if name == "settings":
+        if _settings is None:
+            _settings = Settings()
+        return _settings
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
