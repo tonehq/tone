@@ -10,10 +10,10 @@ import json
 import re
 from typing import Iterable, Optional
 
-import openai
 from loguru import logger
 
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
+from core.services.llm.chat_complete import chat_complete
 
 
 class JudgeService:
@@ -55,14 +55,13 @@ class JudgeService:
             RETRIEVED_CONTEXT=_format_context(chunks_list),
         )
         try:
-            client = openai.OpenAI(api_key=api_key)
-            resp = client.chat.completions.create(
+            content = chat_complete(
                 model=model,
+                api_key=api_key,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
-                response_format={"type": "json_object"},
+                json_mode=True,
             )
-            content = resp.choices[0].message.content or "{}"
             raw = _extract_json(content)
         except Exception as e:
             logger.exception("[eval] judge LLM call failed model={}", model)

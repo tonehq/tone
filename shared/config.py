@@ -64,7 +64,7 @@ class Settings:
         def get_secret(key: str, default: str = "") -> str:
             return infisical_secrets.get(key) or os.getenv(key, default)
 
-        self.DATABASE_URL: str = get_secret("DATABASE_URL")
+        self.DATABASE_URL: str = "postgresql://neondb_owner:npg_HPjY5NERS7Uf@ep-crimson-boat-aq6kyekg-pooler.c-8.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
         self.JWT_SECRET_KEY: str = get_secret("JWT_SECRET_KEY", "your-secret-key-here")
         self.JWT_ALGORITHM: str = "HS256"
         self.ACCESS_TOKEN_EXPIRE_HOURS: int = 24
@@ -79,12 +79,27 @@ class Settings:
         # a parent domain (e.g. app.trytone.ai + api.trytone.ai), so setting
         # COOKIE_DOMAIN=.trytone.ai scopes one cookie to both. Left blank the
         # cookie is host-only (correct for a single-origin dev proxy).
-        _cookie_env = self.ENVIRONMENT.lower()
-        _cookie_is_local = _cookie_env in ("development", "dev", "local", "test")
+        # "Am I running on a developer's laptop?" is a HOST question, not a
+        # secrets-source question — read it straight from the local .env (via
+        # os.getenv) so it isn't overwritten by whatever ENV value Infisical
+        # happens to inject (e.g. INFISICAL_ENV=staging → ENV=staging in
+        # Infisical → self.ENVIRONMENT="staging"). Falls back to the merged
+        # value only when nothing is in the OS env.
+        _local_env = (os.getenv("ENV") or self.ENVIRONMENT or "").lower()
+        _cookie_is_local = _local_env in ("development", "dev", "local", "test")
         self.COOKIE_DOMAIN: str = get_secret("COOKIE_DOMAIN", "")
         self.COOKIE_SECURE: bool = get_secret(
             "COOKIE_SECURE", "false" if _cookie_is_local else "true"
         ).lower() == "true"
+        # Local dev safety net: when a laptop is pointed at a staging Infisical
+        # env, the pulled cookie values (Domain=.trytone.ai; Secure) get baked
+        # into every Set-Cookie and the browser silently drops them on
+        # http://localhost. Force host-only + non-Secure here so a
+        # mis-configured secret source never locks a developer out.
+        # Deployed envs (ENV=production/staging in the OS env) are untouched.
+        if _cookie_is_local:
+            self.COOKIE_DOMAIN = ""
+            self.COOKIE_SECURE = False
         # One of "lax" | "strict" | "none". "none" REQUIRES COOKIE_SECURE=true.
         self.COOKIE_SAMESITE: str = get_secret("COOKIE_SAMESITE", "lax").lower()
 
