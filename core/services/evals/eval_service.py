@@ -27,7 +27,7 @@ from typing import Any, Iterable, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import case, func
+from sqlalchemy import Float, case, cast, func
 from sqlalchemy.orm import Session
 
 from core.models.eval import Eval
@@ -45,6 +45,7 @@ from core.services.evals.errors import (
     EvalRunError,
 )
 from core.services.evals.judge import JudgeService
+from core.services.evals.judge_factory import build_judge_service
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
 from core.services.evals.question_generator import QuestionGeneratorService
 from core.services.evals.retrieval_hit import retrieval_hit
@@ -58,6 +59,30 @@ from core.services.rag.readers import CompositeReader
 from shared.config import settings
 
 _VERDICT_RANK = {"FAIL": 0, "PARTIAL": 1, "PASS": 2}
+
+# DeepEval metrics we surface in per-run summaries (SQL AVG over the JSONB
+# scorecard) and in the compare view's per-question deltas. ``correctness``
+# is intentionally omitted — it already flows through the mapped
+# ``correctness`` column and its avg is exposed as ``avg_correctness``.
+_DEEPEVAL_SUMMARY_METRICS: tuple[str, ...] = (
+    "faithfulness",
+    "answer_relevancy",
+    "contextual_precision",
+    "contextual_recall",
+    "contextual_relevancy",
+    "hallucination",
+)
+
+# Legacy summary keys derived from the mapped columns — the per-scorecard
+# aggregation loop skips these names so it can't overwrite them with a
+# semantically different value pulled from the DeepEval scorecard.
+_LEGACY_AVG_KEYS: frozenset[str] = frozenset({"correctness", "groundedness", "relevance"})
+
+# Metrics where a HIGHER score is WORSE (DeepEval's hallucination fraction).
+# Regression semantics for these are inverted: a positive delta (more
+# hallucination) is a regression, a negative delta (less hallucination) is
+# an improvement.
+_INVERTED_SUMMARY_METRICS: frozenset[str] = frozenset({"hallucination"})
 _RESERVED_QUESTION_KEYS = {
     "id",
     "question",
@@ -107,16 +132,31 @@ class EvalService:
         self,
         *,
         question_generator: Optional[QuestionGeneratorService] = None,
-        judge: Optional[JudgeService] = None,
+        judge: Optional[object] = None,
         prompt_loader: Optional[PromptLoader] = None,
         reader: Optional[CompositeReader] = None,
         r2_service: Optional[Any] = None,
     ):
         self._loader = prompt_loader or PromptLoader()
         self._questions = question_generator or QuestionGeneratorService(prompt_loader=self._loader)
-        self._judge = judge or JudgeService(prompt_loader=self._loader)
+        # Judge is duck-typed on ``judge(**kwargs) -> dict``. Concrete engine
+        # (DeepEval / legacy) is picked by ``build_judge_service`` from
+        # ``settings.EVAL_JUDGE_ENGINE`` — but ONLY on first access via
+        # ``self.judge`` so a FastAPI request that constructs EvalService()
+        # just to read run summaries never imports DeepEval (which triggers
+        # OTel hijack, nest_asyncio, and telemetry beacons). Tests may pass a
+        # MagicMock/instance directly, in which case no factory call happens.
+        self._injected_judge: Optional[object] = judge
         self._reader = reader or CompositeReader()
         self._r2 = r2_service
+
+    @property
+    def _judge(self) -> object:
+        """Lazily build the judge on first use so read-only routes never
+        transitively import DeepEval."""
+        if self._injected_judge is None:
+            self._injected_judge = build_judge_service(prompt_loader=self._loader)
+        return self._injected_judge
 
     # ── Question-set lifecycle ─────────────────────────────────────────
 
@@ -1128,6 +1168,7 @@ class EvalService:
                     "groundedness": _to_float(judge.get("groundedness")),
                     "relevance": _to_float(judge.get("relevance")),
                     "judge_reasoning": judge.get("reasoning"),
+                    "metric_scores": judge.get("metric_scores"),
                     "latency_ms": scored.get("latency_ms"),
                     "retrieval_error": scored.get("retrieval_error"),
                     "answer_error": scored.get("answer_error"),
@@ -1234,7 +1275,13 @@ def _build_context(chunks: Iterable[dict]) -> str:
 def _summarize_scored_rows(rows: List[dict]) -> dict:
     """Roll up the in-memory scored-row list — used at the tail of ``run_eval``
     so the returned ``EvalRunSummary`` carries the same summary payload the
-    CLI used to read off ``result.summary``."""
+    CLI used to read off ``result.summary``.
+
+    Averages ``avg_<metric>`` are emitted for every DeepEval metric that
+    appears in at least one row's ``judge.metric_scores``; legacy
+    ``avg_correctness``/``avg_groundedness``/``avg_relevance`` keep working
+    off the mapped columns so pre-DeepEval consumers see no change.
+    """
     total = len(rows)
     counts = {"PASS": 0, "PARTIAL": 0, "FAIL": 0}
     hit_count = 0
@@ -1243,6 +1290,11 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
     rel_sum = 0.0
     latency_sum = 0
     by_category: dict = {}
+    # Per-DeepEval-metric aggregates. Denominator is per-metric so a metric
+    # that only appears on some rows doesn't get diluted by rows that
+    # skipped it (legacy-judge rows carry no scorecard).
+    metric_sums: dict[str, float] = {}
+    metric_counts: dict[str, int] = {}
 
     for r in rows:
         judge = r.get("judge") or {}
@@ -1254,6 +1306,20 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
         gnd_sum += float(judge.get("groundedness", 0) or 0)
         rel_sum += float(judge.get("relevance", 0) or 0)
         latency_sum += int(r.get("latency_ms", 0) or 0)
+        for name, entry in (judge.get("metric_scores") or {}).items():
+            if not isinstance(entry, dict):
+                continue
+            # Skip names that would clobber the mapped-column averages
+            # computed above — ``avg_correctness`` etc. must stay derived
+            # from the same source as their ``EvalResult`` column to keep
+            # trends comparable across engine flips.
+            if name in _LEGACY_AVG_KEYS:
+                continue
+            score = entry.get("score")
+            if score is None:
+                continue
+            metric_sums[name] = metric_sums.get(name, 0.0) + float(score)
+            metric_counts[name] = metric_counts.get(name, 0) + 1
         cat = r.get("category") or "unknown"
         c = by_category.setdefault(
             cat, {"total": 0, "PASS": 0, "PARTIAL": 0, "FAIL": 0, "hits": 0}
@@ -1263,7 +1329,7 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
         if r.get("retrieval_hit"):
             c["hits"] += 1
 
-    return {
+    summary = {
         "total": total,
         "pass": counts["PASS"],
         "partial": counts["PARTIAL"],
@@ -1279,6 +1345,10 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
         "duration_ms": latency_sum,
         "by_category": by_category,
     }
+    for name, sum_ in metric_sums.items():
+        cnt = metric_counts.get(name, 0)
+        summary[f"avg_{name}"] = (sum_ / cnt) if cnt else 0.0
+    return summary
 
 
 def _run_grouped_query(
@@ -1302,6 +1372,22 @@ def _run_grouped_query(
     # by construction — the service writes them uniformly in ``run_eval``. So
     # they can go straight into GROUP BY instead of being aggregated. This also
     # side-steps ``MAX(uuid)`` which not every Postgres install has.
+    # Per-metric AVG over the JSONB scorecard. Rows without a scorecard
+    # (legacy-judge / pre-migration rows) contribute NULL so the AVG
+    # ignores them — a clean env-flip back to the legacy judge doesn't
+    # dilute historical DeepEval averages.
+    metric_avg_cols = [
+        func.coalesce(
+            func.avg(
+                cast(
+                    EvalResult.metric_scores[metric_name]["score"].astext,
+                    Float,
+                )
+            ),
+            0.0,
+        ).label(f"avg_{metric_name}")
+        for metric_name in _DEEPEVAL_SUMMARY_METRICS
+    ]
     q = (
         db.query(
             EvalResult.run_id.label("run_id"),
@@ -1325,6 +1411,7 @@ def _run_grouped_query(
             func.coalesce(func.avg(EvalResult.groundedness), 0.0).label("avg_groundedness"),
             func.coalesce(func.avg(EvalResult.relevance), 0.0).label("avg_relevance"),
             func.coalesce(func.sum(EvalResult.latency_ms), 0).label("duration_ms"),
+            *metric_avg_cols,
         )
         .join(Eval, Eval.id == EvalResult.eval_id)
         .group_by(
@@ -1377,6 +1464,10 @@ def _row_to_run_summary(row) -> EvalRunSummary:
         "total_questions": total,
         "duration_ms": int(row.duration_ms or 0),
     }
+    for metric_name in _DEEPEVAL_SUMMARY_METRICS:
+        summary[f"avg_{metric_name}"] = float(
+            getattr(row, f"avg_{metric_name}", 0.0) or 0.0
+        )
     status = "failed" if failed_status > 0 else "completed"
     return EvalRunSummary(
         run_id=row.run_id,
@@ -1412,6 +1503,7 @@ def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
             "groundedness": float(result.groundedness or 0.0),
             "relevance": float(result.relevance or 0.0),
             "reasoning": result.judge_reasoning,
+            "metric_scores": result.metric_scores or {},
         },
         "latency_ms": result.latency_ms,
         "retrieval_error": result.retrieval_error,
@@ -1456,6 +1548,22 @@ def _diff_scored_rows(
         d_gnd = c["judge"]["groundedness"] - b["judge"]["groundedness"]
         d_rel = c["judge"]["relevance"] - b["judge"]["relevance"]
 
+        # Per-DeepEval-metric deltas from the JSONB scorecard. Only emitted
+        # when BOTH runs actually scored the metric — comparing a real
+        # score to a missing/legacy row would coerce ``None → 0.0`` and
+        # trigger a spurious "big drop" regression on every question.
+        b_scores = (b["judge"].get("metric_scores") or {}) if isinstance(b["judge"], dict) else {}
+        c_scores = (c["judge"].get("metric_scores") or {}) if isinstance(c["judge"], dict) else {}
+        metric_deltas: dict[str, float] = {}
+        for metric_name in _DEEPEVAL_SUMMARY_METRICS:
+            b_entry = b_scores.get(metric_name)
+            c_entry = c_scores.get(metric_name)
+            b_raw = b_entry.get("score") if isinstance(b_entry, dict) else None
+            c_raw = c_entry.get("score") if isinstance(c_entry, dict) else None
+            if b_raw is None or c_raw is None:
+                continue
+            metric_deltas[metric_name] = _safe_score(c_raw) - _safe_score(b_raw)
+
         note = None
         is_regression = False
         if _VERDICT_RANK[c_v] < _VERDICT_RANK[b_v]:
@@ -1470,6 +1578,21 @@ def _diff_scored_rows(
         elif d_gnd <= -score_drop:
             note = f"groundedness drop {d_gnd:+.2f}"
             is_regression = True
+        else:
+            # A big drop on any DeepEval metric — even one not mapped to a
+            # legacy column — is still a regression the compare view should
+            # surface. Hallucination is inverted (higher = worse), so a
+            # positive delta above the threshold is the regression signal.
+            for metric_name, delta in metric_deltas.items():
+                if metric_name in _INVERTED_SUMMARY_METRICS:
+                    if delta >= score_drop:
+                        note = f"{metric_name} rose {delta:+.2f}"
+                        is_regression = True
+                        break
+                elif delta <= -score_drop:
+                    note = f"{metric_name} drop {delta:+.2f}"
+                    is_regression = True
+                    break
 
         entry = {
             "id": qid,
@@ -1483,6 +1606,8 @@ def _diff_scored_rows(
             "regression": is_regression,
             "note": note,
         }
+        for metric_name, delta in metric_deltas.items():
+            entry[f"delta_{metric_name}"] = delta
         per_question_diff.append(entry)
         if is_regression:
             regressions.append(entry)
@@ -1509,3 +1634,10 @@ def _diff_scored_rows(
 
 def _index_by_id(rows: List[dict]) -> dict:
     return {r["id"]: r for r in rows if isinstance(r, dict) and "id" in r}
+
+
+def _safe_score(v: Any) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
