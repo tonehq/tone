@@ -66,6 +66,9 @@ class EvalResult(OrgScopedModel):
     groundedness = Column(Float, nullable=True)
     relevance = Column(Float, nullable=True)
     judge_reasoning = Column(Text, nullable=True)
+    # Full per-metric scorecard from the DeepEval judge (one entry per enabled
+    # metric: {"score", "verdict", "reason"}). NULL for legacy-judge rows.
+    metric_scores = Column(JSONB, nullable=True)
     latency_ms = Column(Integer, nullable=True)
     retrieval_error = Column(Text, nullable=True)
     answer_error = Column(Text, nullable=True)
@@ -99,6 +102,7 @@ class EvalResult(OrgScopedModel):
             "groundedness": self.groundedness,
             "relevance": self.relevance,
             "judge_reasoning": self.judge_reasoning,
+            "metric_scores": self.metric_scores or {},
             "latency_ms": self.latency_ms,
             "retrieval_error": self.retrieval_error,
             "answer_error": self.answer_error,

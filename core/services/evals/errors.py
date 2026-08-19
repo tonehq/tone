@@ -13,3 +13,9 @@ class EvalRunError(EvalError):
 
 class EvalNotFoundError(EvalError):
     """Eval row does not exist for the given upload / id."""
+
+
+class EvalConfigurationError(EvalError):
+    """Bad eval configuration — unknown metric name in EVAL_METRICS_ENABLED,
+    unknown value for EVAL_JUDGE_ENGINE, etc. Raised at judge construction
+    time so misconfiguration fails loudly before any expensive work."""

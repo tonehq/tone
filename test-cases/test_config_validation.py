@@ -70,6 +70,9 @@ def _tier_a_env() -> dict[str, str]:
         "EVAL_JUDGE_MODEL": "gpt-4o",
         "EVAL_TOP_K": "8",
         "EVAL_MAX_CONTEXT_CHARS": "60000",
+        "EVAL_JUDGE_ENGINE": "deepeval",
+        "EVAL_METRIC_THRESHOLD": "0.7",
+        "EVAL_METRICS_ENABLED": "faithfulness,answer_relevancy",
     }
 
 

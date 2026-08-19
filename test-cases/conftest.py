@@ -46,6 +46,12 @@ _TEST_ENV_DEFAULTS = {
     "EVAL_JUDGE_MODEL": "gpt-4o",
     "EVAL_TOP_K": "8",
     "EVAL_MAX_CONTEXT_CHARS": "60000",
+    "EVAL_JUDGE_ENGINE": "deepeval",
+    "EVAL_METRIC_THRESHOLD": "0.7",
+    "EVAL_METRICS_ENABLED": (
+        "faithfulness,answer_relevancy,contextual_precision,"
+        "contextual_recall,contextual_relevancy,hallucination,correctness"
+    ),
 }
 for _k, _v in _TEST_ENV_DEFAULTS.items():
     os.environ.setdefault(_k, _v)

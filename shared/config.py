@@ -62,6 +62,9 @@ MANDATORY_KEYS: tuple[str, ...] = (
     "EVAL_JUDGE_MODEL",
     "EVAL_TOP_K",
     "EVAL_MAX_CONTEXT_CHARS",
+    "EVAL_JUDGE_ENGINE",
+    "EVAL_METRIC_THRESHOLD",
+    "EVAL_METRICS_ENABLED",
 )
 
 # Tier B — additionally required when ENV is not one of DEV_ENV_NAMES.
@@ -404,6 +407,27 @@ class Settings:
         self.EVAL_JUDGE_MODEL: str = get_secret("EVAL_JUDGE_MODEL")
         self.EVAL_TOP_K: int = _int_env(get_secret("EVAL_TOP_K"))
         self.EVAL_MAX_CONTEXT_CHARS: int = _int_env(get_secret("EVAL_MAX_CONTEXT_CHARS"))
+        # EVAL_JUDGE_ENGINE — "deepeval" (production) | "legacy" (custom
+        # LLM-as-judge fallback). Selection is done once in
+        # judge_factory.build_judge_service; no other file inspects this value.
+        self.EVAL_JUDGE_ENGINE: str = get_secret("EVAL_JUDGE_ENGINE")
+        # EVAL_METRIC_THRESHOLD — score at or above which one DeepEval metric
+        # is PASS. Used to derive the aggregate PASS/PARTIAL/FAIL verdict from
+        # per-metric scores. 0.7 is DeepEval's own default. No fallback: the
+        # key is in MANDATORY_KEYS so an empty value already aborts startup,
+        # and range-validity is enforced at judge build time in
+        # ``metric_registry.build_metrics`` (must be in (0.0, 1.0]).
+        _raw_threshold = get_secret("EVAL_METRIC_THRESHOLD")
+        self.EVAL_METRIC_THRESHOLD: float = float(_raw_threshold) if _raw_threshold else 0.0
+        # EVAL_METRICS_ENABLED — comma-separated DeepEval metric names to run
+        # per question. Every name must be registered in
+        # metric_registry.SUPPORTED_METRICS or the judge raises
+        # EvalConfigurationError on first use.
+        self.EVAL_METRICS_ENABLED: list[str] = [
+            m.strip()
+            for m in (get_secret("EVAL_METRICS_ENABLED") or "").split(",")
+            if m.strip()
+        ]
 
         # Fail-fast if any mandatory env var is missing. Runs LAST so every
         # field is populated before we inspect it. Aborts process on failure.
