@@ -48,6 +48,8 @@ from core.services.evals.judge import JudgeService
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
 from core.services.evals.question_generator import QuestionGeneratorService
 from core.services.evals.retrieval_hit import retrieval_hit
+from core.services.llm.chat_complete import chat_complete, resolve_provider
+from core.services.llm.errors import LLMProviderKeyMissingError
 from core.services.rag.embedder_factory import build_embedder_from_run
 from core.services.rag.errors import EmbeddingProviderUnavailableError
 from core.services.rag.factory import get_vector_store
@@ -150,7 +152,7 @@ class EvalService:
                 f"No KnowledgeBase found for upload {upload_id}"
             )
 
-        api_key = ProviderKeyService.require_key(db, org_id, "openai")
+        api_key = _require_llm_key(db, org_id, model)
 
         logger.info(
             "[eval] generate_eval start upload={} org={} content_type={} model={} max_chars={}",
@@ -623,9 +625,8 @@ class EvalService:
                 api_key = ProviderKeyService.require_key(
                     tmp, organization_id, embedding_provider_val
                 )
-                openai_key = ProviderKeyService.require_key(
-                    tmp, organization_id, "openai"
-                )
+                answer_key = _require_llm_key(tmp, organization_id, answer_model)
+                judge_key = _require_llm_key(tmp, organization_id, judge_model)
             embedder = build_embedder_from_run(run, api_key=api_key)
             store = get_vector_store(vector_store_val, **vector_store_ref_val)
             answer_template = self._loader.load("answer_from_context.md")
@@ -645,7 +646,8 @@ class EvalService:
                     answer_model=answer_model,
                     judge_model=judge_model,
                     answer_template=answer_template,
-                    openai_key=openai_key,
+                    answer_key=answer_key,
+                    judge_key=judge_key,
                 )
                 scored_rows.append(scored)
                 done = idx + 1
@@ -914,10 +916,9 @@ class EvalService:
         answer_model: str,
         judge_model: str,
         answer_template: str,
-        openai_key: str,
+        answer_key: str,
+        judge_key: str,
     ) -> dict:
-        import openai
-
         eval_id = question["eval_id"]
         qid = question.get("id", "?")
         q_text = question.get("question", "")
@@ -964,18 +965,18 @@ class EvalService:
         answer_error = None
         try:
             t_ans = time.monotonic()
-            client = openai.OpenAI(api_key=openai_key)
             prompt = render_prompt(
                 answer_template,
                 QUESTION=q_text,
                 CONTEXT=_build_context(retrieved),
             )
-            resp = client.chat.completions.create(
+            actual_answer = chat_complete(
                 model=answer_model,
+                api_key=answer_key,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.0,
+                json_mode=False,
             )
-            actual_answer = (resp.choices[0].message.content or "").strip()
             logger.debug(
                 "[eval] answer qid={} model={} chars={} elapsed_ms={}",
                 qid, answer_model, len(actual_answer),
@@ -992,7 +993,7 @@ class EvalService:
             expected_answer=expected,
             actual_answer=actual_answer,
             retrieved_chunks=retrieved,
-            api_key=openai_key,
+            api_key=judge_key,
             model=judge_model,
         )
         logger.debug(
@@ -1184,6 +1185,25 @@ def _default_r2_service():
     from core.services.r2_storage_service import R2StorageService
 
     return R2StorageService()
+
+
+def _require_llm_key(db: Session, org_id: Any, model: str) -> str:
+    """Resolve the API key for the provider implied by ``model``.
+
+    Bridges the eval flow to the shared LLM router: the router infers the
+    provider from the model prefix, ``ProviderKeyService`` fetches the org's
+    key row for that slug. Raises ``LLMProviderKeyMissingError`` (not the
+    embedding-specific error) so the eval-run row's ``error`` reads
+    "No API key configured for provider 'X' (needed by model 'Y')".
+    """
+    provider = resolve_provider(model)
+    key = ProviderKeyService.get_key(db, org_id, provider)
+    if not key:
+        raise LLMProviderKeyMissingError(
+            f"No API key configured for provider {provider!r} "
+            f"(needed by model {model!r})"
+        )
+    return key
 
 
 def _question_to_dto(row: Eval) -> dict:
