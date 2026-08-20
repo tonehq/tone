@@ -100,6 +100,12 @@ def _decode_pkce_state(state: str, provider: str) -> Optional[Dict[str, Any]]:
     return payload
 
 
+def apply_resource_indicator(config: Dict[str, Any], token_data: Dict[str, Any]) -> None:
+    resource = (config.get("extra_authorize_params") or {}).get("resource")
+    if resource:
+        token_data["resource"] = resource
+
+
 def _resolve_pkce_state(
     db: Session, state: str, provider: str
 ) -> Tuple[Optional[OAuthConnection], Optional[str]]:
@@ -392,6 +398,7 @@ def callback(
     # didn't require PKCE just ignore the extra field.
     if verifier:
         token_data["code_verifier"] = verifier
+    apply_resource_indicator(config, token_data)
     # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
     token_kwargs: Dict[str, Any] = {"data": token_data}
     if config.get("token_auth") == "basic":

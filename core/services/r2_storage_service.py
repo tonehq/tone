@@ -111,3 +111,23 @@ class R2StorageService:
             Key=object_key,
         )
         logger.info("Deleted from R2: key={}", object_key)
+
+
+def signed_url_or_none(
+    file_path: Optional[str], r2: Optional["R2StorageService"] = None
+) -> Optional[str]:
+    """Best-effort presigned GET URL for an R2 object key.
+
+    Single source of truth for turning a stored ``file_path`` into a downloadable
+    URL in serializers/payloads. Returns ``None`` (logged at debug) when there is
+    no ``file_path`` or R2 is unconfigured/signing fails, so callers can degrade
+    to reference-only without their own try/except. Pass an existing ``r2`` to
+    reuse a client across a batch of rows.
+    """
+    if not file_path:
+        return None
+    try:
+        return (r2 or R2StorageService()).generate_presigned_url(file_path)
+    except Exception as exc:  # R2 unconfigured or signing failed
+        logger.debug("Failed to generate presigned URL for {}: {}", file_path, exc)
+        return None

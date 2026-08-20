@@ -30,6 +30,7 @@ import {
   FacetFilterDrawer,
   useFacetedList,
 } from '@/components/shared';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import { knowledgeBaseListConfig } from '@/components/knowledge-base/knowledgeBaseListConfig';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -83,8 +84,7 @@ function getTypeBadge(contentType?: string | null) {
 
 /** Extract the human-readable failure reason stored on a failed upload. */
 function getErrorMessage(doc: Pick<KnowledgeBaseDocument, 'meta_data'>): string | null {
-  const error = doc.meta_data?.error;
-  return typeof error === 'string' && error.trim() ? error : null;
+  return formatIngestionError(doc.meta_data?.error);
 }
 
 function formatFileSize(bytes: number): string {

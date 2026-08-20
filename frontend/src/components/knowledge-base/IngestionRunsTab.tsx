@@ -1,14 +1,15 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock, Copy, ListChecks, Loader2, Plus, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, ListChecks, Loader2, Play, Plus, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import ManualEvalsModal from '@/components/knowledge-base/ManualEvalsModal';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
-import { useEvalSummariesByIngestion } from '@/lib/api/evals';
+import { useEvalSummariesByIngestion, useTriggerEvalRun } from '@/lib/api/evals';
 import { useActivateIngestionRun, useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type { EvalRunSummary, EvalRunSummaryTotals } from '@/types/eval';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
@@ -112,6 +113,12 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const activate = useActivateIngestionRun(uploadId);
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
+  const runEvalsMutation = useTriggerEvalRun(uploadId);
+  // Track which row is currently kicking off an eval so per-row loading state
+  // is per-row (the mutation is shared across all rows via the hook binding).
+  // Single-flight so a user doesn't stampede the eval queue by mashing buttons.
+  const [runningEvalId, setRunningEvalId] = useState<string | null>(null);
+
   const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
   const [manualEvalsOpen, setManualEvalsOpen] = useState(false);
   const [newRunOpen, setNewRunOpen] = useState(false);
@@ -144,6 +151,22 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
     }
   };
 
+  const handleRunEvals = async (run: IngestionRun) => {
+    if (runningEvalId) return;
+    setRunningEvalId(run.id);
+    try {
+      await runEvalsMutation.mutateAsync({ ingestion_run_id: run.id });
+      showToast.success(
+        'Evals queued',
+        `Scoring run #${run.run_number} — the chip will update once results land.`,
+      );
+    } catch (error) {
+      handleApiError(error);
+    } finally {
+      setRunningEvalId(null);
+    }
+  };
+
   const copyJobId = async (jobId: number) => {
     try {
       await navigator.clipboard.writeText(String(jobId));
@@ -168,6 +191,21 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         ),
       },
       {
+        key: 'ingestion_config',
+        title: 'Config',
+        width: 'w-[180px]',
+        render: (_v, r) =>
+          r.ingestion_config_name ? (
+            <CustomTooltip content={r.ingestion_config_name}>
+              <span className="line-clamp-1 max-w-[170px] text-sm text-foreground">
+                {r.ingestion_config_name}
+              </span>
+            </CustomTooltip>
+          ) : (
+            <span className="text-sm italic text-muted-foreground">Custom</span>
+          ),
+      },
+      {
         key: 'status',
         title: 'Status',
         dataIndex: 'status',
@@ -175,18 +213,35 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         width: 'w-[140px]',
         render: (_value, record) => {
           const s = statusStyle[record.status] ?? statusStyle.pending;
-          return (
+          const pill = (
             <span
               className={cn(
                 'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
                 s.className,
               )}
-              title={record.error ?? undefined}
             >
               {s.icon}
               {s.label}
             </span>
           );
+          // For error rows, show a bounded, scrollable tooltip instead of the
+          // browser's native `title` popup (which renders as a very tall,
+          // unbounded block for long stack traces).
+          const friendlyError = formatIngestionError(record.error);
+          if (friendlyError) {
+            return (
+              <CustomTooltip
+                content={
+                  <div className="max-h-40 max-w-xs overflow-auto whitespace-pre-wrap break-words text-xs leading-snug">
+                    {friendlyError}
+                  </div>
+                }
+              >
+                {pill}
+              </CustomTooltip>
+            );
+          }
+          return pill;
         },
       },
       {
@@ -310,38 +365,73 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
       {
         key: 'error',
         title: 'Error',
-        render: (_v, r) =>
-          r.error ? (
-            <CustomTooltip content={r.error}>
-              <span className="line-clamp-1 max-w-[280px] text-xs text-destructive">{r.error}</span>
+        render: (_v, r) => {
+          const friendly = formatIngestionError(r.error);
+          return friendly ? (
+            <CustomTooltip
+              content={
+                <div className="max-h-40 max-w-xs overflow-auto whitespace-pre-wrap break-words text-xs leading-snug">
+                  {friendly}
+                </div>
+              }
+            >
+              <span className="line-clamp-1 max-w-[280px] text-xs text-destructive">
+                {friendly}
+              </span>
             </CustomTooltip>
           ) : (
             <span className="text-muted-foreground">—</span>
-          ),
+          );
+        },
       },
       {
         key: 'actions',
         title: '',
         align: 'right',
-        width: 'w-[150px]',
+        width: 'w-[190px]',
         render: (_v, r) => {
           const isActive = resolvedActiveRunId === r.id;
-          const disabled = r.status !== 'ready' || isActive || !!activatingId;
+          const activateDisabled = r.status !== 'ready' || isActive || !!activatingId;
+          const runningEvals = runningEvalId === r.id;
+          // A run must be ready before it can be scored — a
+          // pending/running/failed run has nothing for retrieval to hit.
+          // Single-flight across rows via runningEvalId (see handleRunEvals).
+          const evalsDisabled = r.status !== 'ready' || !!runningEvalId;
           return (
-            <CustomButton
-              type={isActive ? 'default' : 'primary'}
-              size="sm"
-              disabled={disabled}
-              loading={activatingId === r.id}
-              onClick={() => handleActivate(r)}
-            >
-              {isActive ? 'Serving' : 'Set active'}
-            </CustomButton>
+            <div className="flex items-center justify-end gap-1">
+              <CustomTooltip
+                content={
+                  r.status === 'ready'
+                    ? 'Run evals against this run'
+                    : 'Evals available once the run is ready'
+                }
+              >
+                <CustomButton
+                  type="text"
+                  size="icon-xs"
+                  aria-label="Run evals for this run"
+                  disabled={evalsDisabled}
+                  loading={runningEvals}
+                  onClick={() => handleRunEvals(r)}
+                >
+                  {!runningEvals && <Play className="size-3.5" />}
+                </CustomButton>
+              </CustomTooltip>
+              <CustomButton
+                type={isActive ? 'default' : 'primary'}
+                size="sm"
+                disabled={activateDisabled}
+                loading={activatingId === r.id}
+                onClick={() => handleActivate(r)}
+              >
+                {isActive ? 'Serving' : 'Set active'}
+              </CustomButton>
+            </div>
           );
         },
       },
     ],
-    [resolvedActiveRunId, activatingId, evalSummariesByIngestion],
+    [resolvedActiveRunId, activatingId, runningEvalId, evalSummariesByIngestion],
   );
 
   return (

@@ -11,11 +11,12 @@ import re
 import time
 from typing import Optional
 
-import openai
 from loguru import logger
 
 from core.services.evals.errors import EvalGenerationError
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
+from core.services.llm.chat_complete import chat_complete
+from core.services.llm.errors import LLMError
 
 
 class QuestionGeneratorService:
@@ -52,18 +53,18 @@ class QuestionGeneratorService:
         )
         t_start = time.monotonic()
         try:
-            client = openai.OpenAI(api_key=api_key)
-            resp = client.chat.completions.create(
+            content = chat_complete(
                 model=model,
+                api_key=api_key,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
-                response_format={"type": "json_object"},
+                json_mode=True,
+                max_tokens=16384,
             )
-        except Exception as e:
+        except LLMError as e:
             logger.exception("[eval] question generation LLM call failed model={}", model)
             raise EvalGenerationError(f"LLM call failed: {type(e).__name__}: {e}") from e
 
-        content = resp.choices[0].message.content or "{}"
         try:
             parsed = _parse_response(content)
         except Exception as e:

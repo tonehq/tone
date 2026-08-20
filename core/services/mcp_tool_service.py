@@ -181,6 +181,58 @@ def get_mcp_servers_for_agent(agent_id: int):
         return servers
 
 
+def build_mcp_request_headers(server) -> dict:
+    from core.services.mcp_server_service import build_auth_headers, headers_from_meta
+    from core.utils.oauth_resolution import effective_of
+
+    headers = build_auth_headers(
+        server.auth_config, auth_type=getattr(server, "auth_type", None)
+    )
+    headers.update(headers_from_meta(getattr(server, "meta_data", None)))
+
+    oauth_connection_id = effective_of(server)
+    if oauth_connection_id:
+        try:
+            from core.database.session import get_db_context
+            from core.services.oauth_service import OAuthService
+
+            with get_db_context() as db:
+                svc = OAuthService(db, org_id=server.organization_id)
+                connection = svc.get_connection(oauth_connection_id)
+                if connection:
+                    scope_check = svc.validate_connection_for_provider(connection)
+                    if not scope_check["ok"]:
+                        logger.warning(
+                            "MCP server '{}' OAuth connection {} is missing scopes {} — "
+                            "some tools may be unavailable; reconnect to grant them",
+                            server.name, oauth_connection_id, scope_check["missing"],
+                        )
+                    header_name, header_value = svc.resolve_connection_auth_header(connection)
+                    headers[header_name] = header_value
+                    logger.info(
+                        "MCP server '{}' authenticated via connection {}",
+                        server.name, oauth_connection_id,
+                    )
+                else:
+                    logger.warning(
+                        "MCP server '{}' references missing OAuth connection {} — "
+                        "reconnect it in Integrations settings",
+                        server.name, oauth_connection_id,
+                    )
+        except Exception:
+            logger.exception(
+                "MCP server '{}': failed to resolve OAuth access token", server.name
+            )
+
+    if not headers:
+        logger.warning(
+            "MCP server '{}' resolved NO auth headers — if it requires auth, "
+            "tool discovery will return nothing. Check its auth_config / OAuth connection.",
+            server.name,
+        )
+    return headers
+
+
 def get_mcp_server_refs(agent_id: int) -> list:
     """`[{id, name}, ...]` for the agent's active MCP servers.
 
@@ -262,6 +314,96 @@ def _schema_has_unresolved_refs(schema) -> tuple:
     return bool(unresolved), unresolved
 
 
+_MAX_INLINE_DEPTH = 24
+_MAX_SCHEMA_BYTES = 60000
+_UNSUPPORTED_KEYS = ("$schema", "$id", "$defs", "definitions")
+
+
+def _resolve_pointer(ref: str, root: dict):
+    if not isinstance(ref, str) or not ref.startswith("#/"):
+        return None
+    cur = root
+    for token in ref[2:].split("/"):
+        token = token.replace("~1", "/").replace("~0", "~")
+        if isinstance(cur, dict) and token in cur:
+            cur = cur[token]
+        elif isinstance(cur, list):
+            try:
+                cur = cur[int(token)]
+            except (ValueError, IndexError):
+                return None
+        else:
+            return None
+    return cur
+
+
+def sanitize_json_schema(schema, root=None, depth=0, seen=None, budget=None):
+    if root is None:
+        root = schema if isinstance(schema, dict) else {}
+    if seen is None:
+        seen = set()
+    if budget is None:
+        budget = {"bytes": 0, "truncated": 0}
+
+    if isinstance(schema, list):
+        return [sanitize_json_schema(v, root, depth + 1, seen, budget) for v in schema]
+    if not isinstance(schema, dict):
+        budget["bytes"] += 8
+        return schema
+    if depth > _MAX_INLINE_DEPTH or budget["bytes"] > _MAX_SCHEMA_BYTES:
+        budget["truncated"] += 1
+        return {"type": "object"}
+
+    ref = schema.get("$ref")
+    if isinstance(ref, str):
+        if ref in seen:
+            return {"type": "object"}
+        target = _resolve_pointer(ref, root)
+        if not isinstance(target, dict):
+            return {"type": "object"}
+        merged = {k: v for k, v in schema.items() if k != "$ref"}
+        merged = {**target, **merged}
+        return sanitize_json_schema(merged, root, depth + 1, seen | {ref}, budget)
+
+    out = {}
+    for key, value in schema.items():
+        if key in _UNSUPPORTED_KEYS:
+            continue
+        budget["bytes"] += len(key) + 4
+        if key == "const":
+            out["enum"] = [value]
+            continue
+        out[key] = sanitize_json_schema(value, root, depth + 1, seen, budget)
+    return out
+
+
+def install_schema_sanitizer(mcp_client) -> None:
+    original = getattr(mcp_client, "_convert_mcp_schema_to_pipecat", None)
+    if original is None:
+        logger.debug("MCPClient has no _convert_mcp_schema_to_pipecat; skipping sanitizer")
+        return
+
+    def converting(tool_name, tool_schema, *args, **kwargs):
+        try:
+            raw = (tool_schema or {}).get("input_schema") or {}
+            budget = {"bytes": 0, "truncated": 0}
+            cleaned = sanitize_json_schema(raw, budget=budget)
+            if budget["truncated"]:
+                logger.warning(
+                    "MCP tool '{}': {} schema branch(es) collapsed to a generic object "
+                    "(depth>{} or size>{}B) — the model loses those parameter shapes",
+                    tool_name, budget["truncated"], _MAX_INLINE_DEPTH, _MAX_SCHEMA_BYTES,
+                )
+            if cleaned != raw:
+                tool_schema = {**tool_schema, "input_schema": cleaned}
+                logger.debug("Sanitized schema for MCP tool '{}'", tool_name)
+        except Exception:
+            logger.exception("Schema sanitize failed for MCP tool '{}'; using original", tool_name)
+        return original(tool_name, tool_schema, *args, **kwargs)
+
+    mcp_client._convert_mcp_schema_to_pipecat = converting
+
+
 async def _filter_invalid_mcp_tool_schemas(mcp_client) -> tuple:
     """Pre-list the MCP server's tools, validate their JSON schemas, and configure
     ``mcp_client``'s built-in ``tools_filter`` to skip ones with unresolved $refs.
@@ -333,83 +475,18 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
-    from core.services.mcp_server_service import build_auth_headers, headers_from_meta
+    from core.services.mcp_server_service import resolve_server_url
 
     all_tool_schemas = []
 
     for server in servers:
         try:
-            # Header precedence mirrors validate_mcp_connection exactly: static auth_config first,
-            # then custom meta_data headers (e.g. ClickUp's x-workspace-id) override those, then the
-            # linked-connection header (resolved below) overrides everything. Keeping the order
-            # identical here ensures a server that validates with one set of headers authenticates
-            # with the same set during a live call. ``auth_type`` selects the header shape explicitly
-            # for rows written after the migration; older rows (auth_type is None) fall back to inference.
-            headers = build_auth_headers(server.auth_config, auth_type=getattr(server, "auth_type", None))
-            headers.update(headers_from_meta(getattr(server, "meta_data", None)))
-
-            # Connector-backed servers (e.g. ClickUp, Google Calendar) authenticate via a
-            # linked connection, NOT a static header. Resolve its header so their tools
-            # actually load — without this the remote returns 0 tools (or 401) and the
-            # agent silently can't book anything. OAuth / bearer / client-credentials
-            # connections resolve to a fresh (auto-refreshed) ``Authorization: Bearer``;
-            # API-key connections resolve to their custom header (e.g. ``X-API-Key``).
-            # Prefers the agent-version override, falling back to the server default.
-            from core.utils.oauth_resolution import effective_of
-            oauth_connection_id = effective_of(server)
-            if oauth_connection_id:
-                try:
-                    from core.database.session import get_db_context
-                    from core.services.oauth_service import OAuthService
-
-                    with get_db_context() as db:
-                        svc = OAuthService(db, org_id=server.organization_id)
-                        connection = svc.get_connection(oauth_connection_id)
-                        if connection:
-                            # Non-blocking scope check: surface a clear warning if the granted
-                            # scopes don't cover what the provider needs, so a partially-authorized
-                            # connection doesn't quietly expose a subset of tools.
-                            scope_check = svc.validate_connection_for_provider(connection)
-                            if not scope_check["ok"]:
-                                logger.warning(
-                                    "MCP server '{}' OAuth connection {} is missing scopes {} — "
-                                    "some tools may be unavailable; reconnect to grant them",
-                                    server.name, oauth_connection_id, scope_check["missing"],
-                                )
-                            # Same resolver used at config/validation time, so call-time and
-                            # validation headers match for every credential kind (bearer for
-                            # OAuth/bearer/client-credentials, custom header for API keys).
-                            header_name, header_value = svc.resolve_connection_auth_header(connection)
-                            headers[header_name] = header_value
-                            logger.info(
-                                "MCP server '{}' authenticated via connection {}",
-                                server.name, oauth_connection_id,
-                            )
-                        else:
-                            logger.warning(
-                                "MCP server '{}' references missing OAuth connection {} — "
-                                "reconnect it in Integrations settings",
-                                server.name, oauth_connection_id,
-                            )
-                except Exception:
-                    logger.exception(
-                        "MCP server '{}': failed to resolve OAuth access token",
-                        server.name,
-                    )
-
-            if not headers:
-                # Surfaces the most common silent failure: a server that requires auth
-                # but whose credential isn't materialised into a request header, so the
-                # remote returns 0 tools (or 401) and booking silently no-ops.
-                logger.warning(
-                    "MCP server '{}' resolved NO auth headers — if it requires auth, "
-                    "tool discovery will return nothing. Check its auth_config / OAuth connection.",
-                    server.name,
-                )
+            headers = build_mcp_request_headers(server)
+            connect_url = resolve_server_url(server)
             if server.transport_type == "sse":
-                server_params = SseServerParameters(url=server.server_url, headers=headers)
+                server_params = SseServerParameters(url=connect_url, headers=headers)
             elif server.transport_type == "streamable_http":
-                server_params = StreamableHttpParameters(url=server.server_url, headers=headers)
+                server_params = StreamableHttpParameters(url=connect_url, headers=headers)
             else:
                 logger.warning("Unsupported transport type '{}' for MCP server '{}', skipping", server.transport_type, server.name)
                 continue
@@ -419,6 +496,7 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
+            install_schema_sanitizer(mcp_client)
             # Pipecat's newer MCPClient requires an explicit start() (or `async with`) before
             # register_tools / tool calls — without it `_ensure_connected` raises
             # "MCPClient is not connected". We use start() (not `async with`) because the

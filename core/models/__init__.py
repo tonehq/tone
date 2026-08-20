@@ -13,10 +13,12 @@ from core.models.phone_number import PhoneNumber
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
+from core.models.ingestion_config import IngestionConfig
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
 from core.models.eval import Eval
 from core.models.eval_result import EvalResult
+from core.models.agent_llm_eval_result import AgentLlmEvalResult
 
 # Agent Core
 from core.models.agent import Agent

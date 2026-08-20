@@ -1,6 +1,7 @@
 import {
   Building2,
   Cable,
+  ClipboardCheck,
   KeyRound,
   LayoutGrid,
   Plug,
@@ -87,6 +88,13 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         href: '/settings/api-keys',
         icon: KeyRound,
         description: 'Create and manage API keys for programmatic access.',
+      },
+      {
+        label: 'Evaluations',
+        href: '/settings/evaluations',
+        icon: ClipboardCheck,
+        description:
+          'Configure the models, retrieval, and pass thresholds used to score RAG answers.',
       },
     ],
   },

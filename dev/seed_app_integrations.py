@@ -54,6 +54,12 @@ from core.utils.env_resolver import resolve_env  # noqa: E402
 # used only at seed time:
 #   ``credential_env_keys`` — map of credential name → env var to source it
 #                             from (e.g. ``{"client_id": "GOOGLE_CLIENT_ID"}``).
+def _salesforce_url(endpoint: str) -> str:
+    domain = resolve_env("SALESFORCE_MY_DOMAIN")
+    host = f"{domain}.my.salesforce.com" if domain else "login.salesforce.com"
+    return f"https://{host}/services/oauth2/{endpoint}"
+
+
 DEFAULT_INTEGRATIONS = [
     {
         "slug": "google_calendar",
@@ -108,29 +114,56 @@ DEFAULT_INTEGRATIONS = [
         "description": (
             "Read and write CRM data — contacts, companies, deals, and tickets — during calls."
         ),
-        "category": "crm",
+        "category": "dev_crm",
         "icon_url": None,
         "auth_type": "oauth",
-        "auth_url": "https://app.hubspot.com/oauth/authorize",
-        "token_url": "https://api.hubapi.com/oauth/v1/token",
-        # Sensible CRM defaults; admins can edit the row to add more scopes
-        # (e.g. ``content``, ``files``) without changing the seed.
-        "scopes": [
-            "crm.objects.contacts.read",
-            "crm.objects.contacts.write",
-            "crm.objects.companies.read",
-            "crm.objects.deals.read",
-            "tickets",
-        ],
-        "extra_auth_params": {},
-        # Reuses the same MCP Auth App credentials we already plumbed through
-        # for ``mcp.hubspot.com`` — one HubSpot app, one set of env vars.
+        "auth_url": "https://mcp.hubspot.com/oauth/authorize/user",
+        "token_url": "https://mcp.hubspot.com/oauth/v3/token",
+        "scopes": [],
+        "extra_auth_params": {"resource": "https://mcp.hubspot.com"},
         "credential_env_keys": {
             "client_id": "HUBSPOT_MCP_CLIENT_ID",
             "client_secret": "HUBSPOT_MCP_CLIENT_SECRET",
         },
         "pkce_required": True,
         "sort_order": 30,
+    },
+    {
+        "slug": "salesforce",
+        "display_name": "Salesforce",
+        "description": (
+            "Read and write CRM data — accounts, contacts, opportunities, and cases — during calls."
+        ),
+        "category": "dev_crm",
+        "icon_url": None,
+        "auth_type": "oauth",
+        "auth_url": _salesforce_url("authorize"),
+        "token_url": _salesforce_url("token"),
+        "scopes": ["mcp_api", "refresh_token"],
+        "extra_auth_params": {},
+        "credential_env_keys": {
+            "client_id": "SALESFORCE_CLIENT_ID",
+            "client_secret": "SALESFORCE_CLIENT_SECRET",
+        },
+        "pkce_required": True,
+        "sort_order": 40,
+    },
+    {
+        "slug": "zoho_crm",
+        "display_name": "Zoho CRM",
+        "description": (
+            "Read and write CRM data — contacts, leads, notes, and email — during calls."
+        ),
+        "category": "dev_crm",
+        "icon_url": None,
+        "auth_type": "none",
+        "auth_url": None,
+        "token_url": None,
+        "scopes": [],
+        "extra_auth_params": {},
+        "credential_env_keys": {},
+        "pkce_required": False,
+        "sort_order": 50,
     },
 ]
 

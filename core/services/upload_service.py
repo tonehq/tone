@@ -62,6 +62,7 @@ class UploadService(BaseService):
         agent_config_id: Optional[UUID] = None,
         enqueue_ingestion: bool = True,
         request_config: Optional[dict] = None,
+        ingestion_config_id: Optional[UUID] = None,
     ) -> Tuple[Upload, KnowledgeBase, Optional[IngestionPipelineRun]]:
         """Upload bytes to R2, insert ``Upload`` + ``KnowledgeBase`` (+ optional
         AgentKnowledgeBase link and audit log) in one transaction, and — unless
@@ -189,6 +190,7 @@ class UploadService(BaseService):
             upload=upload,
             kb=kb,
             request_config=request_config,
+            ingestion_config_id=ingestion_config_id,
         )
         if enqueue_ingestion and run is not None:
             try:
@@ -214,12 +216,17 @@ class UploadService(BaseService):
         upload: Upload,
         kb: KnowledgeBase,
         request_config: Optional[dict],
+        ingestion_config_id: Optional[UUID] = None,
     ) -> IngestionPipelineRun:
         """Always create the pending run — the benchmark CLI still wants the row
         so it can pass ``run.id`` into its own ``enqueue_upload`` call after
         pre-seeding the gold eval."""
         cfg = IngestionRunService.resolve_run_config(
-            self.db, self.org_id, kb.id, request_config
+            self.db,
+            self.org_id,
+            kb.id,
+            request_config,
+            ingestion_config_id=ingestion_config_id,
         )
         return IngestionRunService.begin_pending_run(
             self.db,
@@ -227,6 +234,7 @@ class UploadService(BaseService):
             knowledge_base_id=kb.id,
             org_id=self.org_id,
             config=cfg,
+            ingestion_config_id=ingestion_config_id,
         )
 
     def _resolve_source(

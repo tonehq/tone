@@ -13,7 +13,7 @@ from core.models.upload import Upload
 from core.services.ingestion_run_service import IngestionRunService
 from core.services.r2_storage_service import R2StorageService
 from core.services.rag.embedder_factory import build_embedder_from_run
-from core.services.rag.errors import EmbeddingProviderUnavailableError
+from core.services.rag.errors import EmbeddingProviderUnavailableError, humanize_ingestion_error
 from core.services.rag.factory import get_vector_store
 from core.services.rag.parser_factory import get_parser
 from core.services.rag.pdf_router import HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, PdfRoutingService
@@ -270,6 +270,13 @@ class DocumentProcessingService:
                 "[ingestion] upload {} failed (run={}, elapsed_s={:.1f})",
                 upload_id, ingestion_run_id, time.monotonic() - t_start,
             )
+            # Sanitize before persisting — the raw provider exception (e.g.
+            # OpenAI ``NotFoundError`` for a bad model name) stringifies to
+            # a noisy `Error code: 404 - {'error': {...}}` dump that the UI
+            # would otherwise show verbatim. ``humanize_ingestion_error``
+            # returns a short, user-friendly one-liner; the full traceback
+            # is already captured above by ``logger.exception``.
+            user_error = humanize_ingestion_error(e)
             try:
                 with get_db_context() as db:
                     # Use the router-created pending run id as the fallback in
@@ -277,7 +284,7 @@ class DocumentProcessingService:
                     # and needs to be flipped to failed.
                     fail_id = run.id if run is not None else ingestion_run_id
                     try:
-                        IngestionRunService.fail_run(db, fail_id, error=str(e))
+                        IngestionRunService.fail_run(db, fail_id, error=user_error)
                     except ValueError:
                         logger.warning(
                             "[ingestion] pending run {} missing during failure handling",
@@ -286,7 +293,7 @@ class DocumentProcessingService:
                     upload = db.query(Upload).filter(Upload.id == upload_id).first()
                     if upload:
                         upload.status = "failed"
-                        upload.meta_data = {**(upload.meta_data or {}), "error": str(e)}
+                        upload.meta_data = {**(upload.meta_data or {}), "error": user_error}
                     db.query(KnowledgeBase).filter(
                         KnowledgeBase.upload_id == upload_id
                     ).update(

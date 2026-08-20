@@ -57,6 +57,9 @@ class IngestionPipelineRun(OrgScopedModel):
     embedding_model = Column(String(120), nullable=False)
     embedding_dimensions = Column(Integer, nullable=False)
     embedding_version = Column(String(50), nullable=True)
+    # Per-provider embedder kwargs snapshotted from the source
+    # ingestion_config at run creation. Consumed by build_embedder_from_run.
+    embedding_config = Column(JSONB, nullable=True)
     vector_store = Column(String(32), nullable=False)
     vector_store_ref = Column(JSONB, nullable=True)
 
@@ -76,6 +79,16 @@ class IngestionPipelineRun(OrgScopedModel):
     # ``NoReferencedTableError``. Mirrors the prior ``KnowledgeBase.procrastinate_job_id``
     # setup for the same reason.
     procrastinate_job_id = Column(BigInteger, nullable=True, index=True)
+    # Optional source recipe. Nullable so runs created before this column
+    # existed and ad-hoc "Custom" runs (no saved config) remain valid. ON
+    # DELETE SET NULL keeps the run row (and its snapshotted config columns)
+    # alive if the source ingestion_config is later removed.
+    ingestion_config_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("ingestion_configs.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     # Stable per-run id stamped onto every log line during the run so the full
     # log stream for one ingestion can be filtered by a single value (mirrors
     # ``calls.trace_id`` for voice calls). Format: "{short_uuid}-ing-{run_id}",
@@ -107,6 +120,14 @@ class IngestionPipelineRun(OrgScopedModel):
         back_populates="run",
         cascade="all, delete-orphan",
     )
+    # Read-only backref for surfacing the source config's name in listings.
+    # `ingestion_config_id` is nullable + `ON DELETE SET NULL`, so this may
+    # be None even for runs that were originally created from a saved config.
+    ingestion_config = relationship(
+        "IngestionConfig",
+        foreign_keys=[ingestion_config_id],
+        lazy="joined",
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -122,6 +143,7 @@ class IngestionPipelineRun(OrgScopedModel):
             "embedding_model": self.embedding_model,
             "embedding_dimensions": self.embedding_dimensions,
             "embedding_version": self.embedding_version,
+            "embedding_config": self.embedding_config,
             "vector_store": self.vector_store,
             "vector_store_ref": self.vector_store_ref,
             "status": self.status,
@@ -131,6 +153,12 @@ class IngestionPipelineRun(OrgScopedModel):
             "error": self.error,
             "chunk_count": self.chunk_count,
             "procrastinate_job_id": self.procrastinate_job_id,
+            "ingestion_config_id": (
+                str(self.ingestion_config_id) if self.ingestion_config_id else None
+            ),
+            "ingestion_config_name": (
+                self.ingestion_config.name if self.ingestion_config is not None else None
+            ),
             "trace_id": self.trace_id,
             "ingestion_stats": self.ingestion_stats,
             "created_at": self.created_at.isoformat() if self.created_at else None,

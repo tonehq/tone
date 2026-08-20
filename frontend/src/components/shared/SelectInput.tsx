@@ -46,6 +46,7 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
       position,
       renderOption,
       renderValue,
+      labelHint,
     },
     ref,
   ) => {
@@ -63,8 +64,12 @@ const PlainSelectInput = forwardRef<HTMLButtonElement, SelectInputBaseProps>(
     return (
       <div className={className}>
         {label && (
-          <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
+          <Label
+            htmlFor={name}
+            className={cn('mb-1.5 inline-flex items-center gap-1', labelClassName)}
+          >
             {label}
+            {labelHint}
             {isRequired && <span className="ml-0.5 text-destructive">*</span>}
           </Label>
         )}

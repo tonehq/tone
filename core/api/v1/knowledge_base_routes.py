@@ -24,6 +24,7 @@ from fastapi import (
 )
 from loguru import logger
 from pydantic import BaseModel, Field
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 
@@ -119,7 +120,12 @@ from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
-from core.services.r2_storage_service import KB_DOCUMENT, R2StorageService, build_r2_object_key
+from core.services.r2_storage_service import (
+    KB_DOCUMENT,
+    R2StorageService,
+    build_r2_object_key,
+    signed_url_or_none,
+)
 from core.services.upload_service import UploadService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
@@ -149,19 +155,9 @@ def _kb_base_query(db: Session, org_id: UUID):
     )
 
 
-def _signed_url(file_path: str | None, r2: R2StorageService | None = None) -> str | None:
-    if not file_path:
-        return None
-    try:
-        return (r2 or R2StorageService()).generate_presigned_url(file_path)
-    except Exception as exc:
-        logger.debug("Failed to generate presigned URL for {}: {}", file_path, exc)
-        return None
-
-
 def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> dict:
     payload = upload.to_dict()
-    payload["url"] = _signed_url(upload.file_path, r2)
+    payload["url"] = signed_url_or_none(upload.file_path, r2)
     return payload
 
 
@@ -215,17 +211,22 @@ async def _start_ingestion_run(
     org_id: UUID,
     request_config: dict | None,
     delete_existing: bool,
+    ingestion_config_id: UUID | None = None,
 ) -> tuple[IngestionPipelineRun, int]:
     """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
     stamp the returned job id on the run. Shared by every KB write path
     (upload / replace / reprocess / custom /runs) so the "create-run → enqueue
     → stamp" trio lives in exactly one place.
 
+    When ``ingestion_config_id`` is set, the run row's recipe columns are
+    snapshotted from that saved config (``request_config`` is ignored, per
+    product decision) and the id is stamped on the run for audit.
+
     On defer failure the pending run is marked ``failed`` (not orphaned) and
     the exception is re-raised for the caller to translate to an HTTP error.
     """
     cfg = IngestionRunService.resolve_run_config(
-        db, org_id, kb.id, request_config
+        db, org_id, kb.id, request_config, ingestion_config_id=ingestion_config_id
     )
     run = IngestionRunService.begin_pending_run(
         db,
@@ -233,6 +234,7 @@ async def _start_ingestion_run(
         knowledge_base_id=kb.id,
         org_id=org_id,
         config=cfg,
+        ingestion_config_id=ingestion_config_id,
     )
     enqueue = enqueue_reprocess if delete_existing else enqueue_upload
     try:
@@ -245,8 +247,8 @@ async def _start_ingestion_run(
         raise
     IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
     logger.info(
-        "[ingestion] enqueued upload={} run={} job_id={} reprocess={}",
-        upload.id, run.id, job_id, delete_existing,
+        "[ingestion] enqueued upload={} run={} job_id={} reprocess={} config_id={}",
+        upload.id, run.id, job_id, delete_existing, ingestion_config_id,
     )
     return run, job_id
 
@@ -347,6 +349,7 @@ def build_knowledge_base_router(
         background_tasks: BackgroundTasks,
         file: UploadFile = File(...),
         agent_id: str | None = Form(None),
+        ingestion_config_id: str | None = Form(None),
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
@@ -356,10 +359,23 @@ def build_knowledge_base_router(
         create form before the agent has been saved), the upload row is created
         standalone and the caller is expected to attach it on agent save via
         ``upload_ids`` on the create_agent payload.
+
+        ``ingestion_config_id`` is optional: when provided, the first ingestion
+        run snapshots that saved ``IngestionConfig`` instead of using the
+        env defaults. Same semantics as ``POST /runs`` — see ``resolve_run_config``.
         """
         org_id = resolve_org_id(claims)
         agent_uuid: UUID | None = None
         agent_config = None
+        ingestion_config_uuid: UUID | None = None
+        if ingestion_config_id:
+            try:
+                ingestion_config_uuid = UUID(ingestion_config_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid ingestion_config_id",
+                )
         if agent_id:
             try:
                 agent_uuid = UUID(agent_id)
@@ -413,21 +429,63 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
+        # Fast-path duplicate-name check: KnowledgeBase enforces
+        # UniqueConstraint(organization_id, name) — without this pre-check the
+        # collision becomes an opaque IntegrityError → HTTP 500 with no user
+        # message. Surface a friendly 409 here BEFORE R2 write so no orphan
+        # blob is created for the doomed insert. The IntegrityError catch
+        # below still covers the (rare) race where two concurrent uploads
+        # land the same name between this check and the service commit.
+        duplicate_name = (
+            db.query(KnowledgeBase.id)
+            .filter(
+                KnowledgeBase.organization_id == org_id,
+                KnowledgeBase.name == file_name,
+            )
+            .first()
+        )
+        if duplicate_name is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"A document named '{file_name}' already exists. "
+                    "Rename the file or delete the existing document."
+                ),
+            )
+
         logger.info(
             "[upload] received upload org={} user={} agent={} file_name={} content_type={} size={}",
             org_id, user_id, agent_uuid, file_name, content_type, size_bytes,
         )
 
-        upload, _kb, _run = await UploadService(
-            db, user_id=user_id, org_id=org_id
-        ).create_upload_from_file(
-            fileobj=file.file,
-            file_name=file_name,
-            content_type=content_type,
-            size_bytes=size_bytes,
-            agent_id=agent_uuid,
-            agent_config_id=agent_config.id if agent_config is not None else None,
-        )
+        try:
+            upload, _kb, _run = await UploadService(
+                db, user_id=user_id, org_id=org_id
+            ).create_upload_from_file(
+                fileobj=file.file,
+                file_name=file_name,
+                content_type=content_type,
+                size_bytes=size_bytes,
+                agent_id=agent_uuid,
+                agent_config_id=agent_config.id if agent_config is not None else None,
+                ingestion_config_id=ingestion_config_uuid,
+            )
+        except IntegrityError as exc:
+            # Race safety net: another concurrent upload committed the same
+            # name after our pre-check. The service has already rolled back
+            # and cleaned up the R2 blob (upload_service.py). Only translate
+            # the unique_violation (pg code 23505) — re-raise other integrity
+            # errors so we don't silently mask an unrelated schema issue.
+            pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
+            if pgcode == "23505":
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail=(
+                        f"A document named '{file_name}' already exists. "
+                        "Rename the file or delete the existing document."
+                    ),
+                ) from exc
+            raise
 
         return _upload_to_payload(upload)
 
@@ -758,12 +816,19 @@ def build_knowledge_base_router(
         pipeline configuration (parser / tokeniser / embedder / vector store).
         Previous runs are preserved so evals can compare them.
 
-        Body may contain any subset of:
+        Body may contain either:
+
+        - ``ingestion_config_id`` (UUID) — snapshot every recipe field from a
+          saved ``IngestionConfig``. When present, individual field overrides
+          in the body are ignored (a saved config is a fixed recipe).
+
+        or any subset of the individual fields:
         ``parser`` (str), ``parser_config`` (dict),
         ``tokeniser`` (str), ``tokeniser_config`` (dict),
         ``embedding_provider`` (str), ``embedding_model`` (str),
         ``embedding_dimensions`` (int), ``embedding_version`` (str),
         ``vector_store`` (str), ``vector_store_ref`` (dict).
+
         Anything omitted falls back to system defaults resolved by
         ``IngestionRunService.resolve_run_config``.
         """
@@ -775,39 +840,73 @@ def build_knowledge_base_router(
                 detail="Upload has no stored file to reprocess",
             )
 
+        raw_body = body or {}
+
+        # Parse the optional ingestion_config_id up front (backend enforces
+        # even if the frontend omits validation).
+        ingestion_config_id: UUID | None = None
+        raw_config_id = raw_body.get("ingestion_config_id")
+        if raw_config_id:
+            try:
+                ingestion_config_id = UUID(str(raw_config_id))
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid ingestion_config_id",
+                )
+
         allowed = {
             "parser", "parser_config",
             "tokeniser", "tokeniser_config",
             "embedding_provider", "embedding_model",
-            "embedding_dimensions", "embedding_version",
+            "embedding_dimensions", "embedding_version", "embedding_config",
             "vector_store", "vector_store_ref",
         }
-        run_config = {k: v for k, v in (body or {}).items() if k in allowed}
+        run_config = {k: v for k, v in raw_body.items() if k in allowed}
 
-        # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser / provider / store)
-        # so the queued job doesn't error mid-ingest.
-        if "parser" in run_config and run_config["parser"] not in PARSERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown parser {run_config['parser']!r}. Available: {sorted(PARSERS)}",
-            )
-        if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown tokeniser {run_config['tokeniser']!r}. Available: {sorted(TOKENISERS)}",
-            )
-        if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown embedding provider {run_config['embedding_provider']!r}. "
-                f"Available: {sorted(EMBEDDERS)}",
-            )
-        if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown vector store {run_config['vector_store']!r}. "
-                f"Available: {sorted(VECTOR_STORES)}",
-            )
+        # When a saved config is picked, ignore any per-field overrides in
+        # the body — the recipe is fixed by the config (product decision).
+        # Skip the slug validation too: those fields were validated when the
+        # config was created, and the snapshot happens in resolve_run_config.
+        if ingestion_config_id is None:
+            # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser
+            # / provider / store) so the queued job doesn't error mid-ingest.
+            if "parser" in run_config and run_config["parser"] not in PARSERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Unknown parser '{run_config['parser']}'. "
+                        f"Available: {', '.join(sorted(PARSERS))}."
+                    ),
+                )
+            if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Unknown tokeniser '{run_config['tokeniser']}'. "
+                        f"Available: {', '.join(sorted(TOKENISERS))}."
+                    ),
+                )
+            if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Unknown embedding provider '{run_config['embedding_provider']}'. "
+                        f"Available: {', '.join(sorted(EMBEDDERS))}."
+                    ),
+                )
+            if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail=(
+                        f"Unknown vector store '{run_config['vector_store']}'. "
+                        f"Available: {', '.join(sorted(VECTOR_STORES))}."
+                    ),
+                )
+        else:
+            # Discard any per-field entries silently when a config was chosen
+            # so the response reflects what was actually applied.
+            run_config = {}
 
         kb = _kb_for_upload(db, org_id, upload.id)
         run, job_id = await _start_ingestion_run(
@@ -817,16 +916,38 @@ def build_knowledge_base_router(
             org_id=org_id,
             request_config=run_config or None,
             delete_existing=False,
+            ingestion_config_id=ingestion_config_id,
         )
         logger.info(
-            "[ingestion] enqueued custom run for upload {} (run={}, job={}, overrides={})",
-            upload.id, run.id, job_id, sorted(run_config.keys()),
+            "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
+            "config_id={}, overrides={})",
+            upload.id, run.id, job_id, ingestion_config_id, sorted(run_config.keys()),
         )
+        # Echo the EFFECTIVE recipe snapshotted onto the run row (not the
+        # request's raw run_config, which is intentionally empty when a saved
+        # config was picked). This way the client can verify what was actually
+        # applied without a follow-up GET.
+        effective_config = {
+            "parser": run.parser,
+            "parser_config": run.parser_config,
+            "tokeniser": run.tokeniser,
+            "tokeniser_config": run.tokeniser_config,
+            "embedding_provider": run.embedding_provider,
+            "embedding_model": run.embedding_model,
+            "embedding_dimensions": run.embedding_dimensions,
+            "embedding_version": run.embedding_version,
+            "embedding_config": run.embedding_config,
+            "vector_store": run.vector_store,
+            "vector_store_ref": run.vector_store_ref,
+        }
         return {
             "upload_id": str(upload.id),
             "ingestion_run_id": str(run.id),
             "job_id": job_id,
-            "run_config": run_config,
+            "ingestion_config_id": (
+                str(ingestion_config_id) if ingestion_config_id else None
+            ),
+            "run_config": effective_config,
             "status": "queued",
         }
 
