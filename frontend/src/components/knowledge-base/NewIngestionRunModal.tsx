@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 
 import { CustomButton, CustomModal, SelectInput, TextInput } from '@/components/shared';
+import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
 import {
   EMBEDDING_MODEL_CHOICES,
   getEmbeddingModelDefaultDimensions,
@@ -84,7 +85,7 @@ export default function NewIngestionRunModal({
 
   const configOptions = useMemo(
     () => [
-      { value: CUSTOM_SENTINEL, label: 'Custom (one-off)' },
+      { value: CUSTOM_SENTINEL, label: 'Custom' },
       ...savedConfigs.map((c) => ({ value: c.id, label: c.name })),
     ],
     [savedConfigs],
@@ -225,8 +226,8 @@ export default function NewIngestionRunModal({
             disabled={createMutation.isPending || configsLoading}
             helperText={
               usingSavedConfig
-                ? 'Fields below are locked to this config. Pick "Custom (one-off)" to edit.'
-                : 'Pick a saved config to reuse a recipe, or fill the fields for a one-off run.'
+                ? 'Fields below are locked to this config. Pick "Custom" to edit.'
+                : 'Pick a saved config to reuse a recipe, or fill the fields for a custom run.'
             }
           />
 
@@ -234,6 +235,7 @@ export default function NewIngestionRunModal({
             <SelectInput
               name="parser"
               label="Parser"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.parser} />}
               isRequired
               options={parserOptions}
               value={form.parser || undefined}
@@ -244,6 +246,7 @@ export default function NewIngestionRunModal({
             <SelectInput
               name="tokeniser"
               label="Tokeniser"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.tokeniser} />}
               isRequired
               options={tokeniserOptions}
               value={form.tokeniser || undefined}
@@ -254,6 +257,7 @@ export default function NewIngestionRunModal({
             <SelectInput
               name="embedding_provider"
               label="Embedding provider"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_provider} />}
               isRequired
               options={embedderOptions}
               value={form.embedding_provider || undefined}
@@ -264,6 +268,7 @@ export default function NewIngestionRunModal({
             <SelectInput
               name="embedding_model"
               label="Embedding model"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_model} />}
               isRequired
               options={
                 form.embedding_model &&
@@ -292,6 +297,7 @@ export default function NewIngestionRunModal({
             <TextInput
               name="embedding_dimensions"
               label="Embedding dimensions"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_dimensions} />}
               isRequired
               type="number"
               min={1}
@@ -310,6 +316,7 @@ export default function NewIngestionRunModal({
             <SelectInput
               name="vector_store"
               label="Vector store"
+              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.vector_store} />}
               isRequired
               options={vectorStoreOptions}
               value={form.vector_store || undefined}

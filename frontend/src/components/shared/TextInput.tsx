@@ -39,6 +39,7 @@ const PlainTextInput = forwardRef<HTMLInputElement, TextInputBaseProps>(
       className,
       labelClassName,
       leftIcon,
+      labelHint,
       ...props
     },
     ref,
@@ -58,8 +59,12 @@ const PlainTextInput = forwardRef<HTMLInputElement, TextInputBaseProps>(
     return (
       <div>
         {label && (
-          <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
+          <Label
+            htmlFor={name}
+            className={cn('mb-1.5 inline-flex items-center gap-1', labelClassName)}
+          >
             {label}
+            {labelHint}
             {isRequired && <span className="ml-0.5 text-destructive">*</span>}
           </Label>
         )}

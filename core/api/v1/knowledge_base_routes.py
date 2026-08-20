@@ -354,6 +354,7 @@ def build_knowledge_base_router(
         background_tasks: BackgroundTasks,
         file: UploadFile = File(...),
         agent_id: str | None = Form(None),
+        ingestion_config_id: str | None = Form(None),
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
@@ -363,10 +364,23 @@ def build_knowledge_base_router(
         create form before the agent has been saved), the upload row is created
         standalone and the caller is expected to attach it on agent save via
         ``upload_ids`` on the create_agent payload.
+
+        ``ingestion_config_id`` is optional: when provided, the first ingestion
+        run snapshots that saved ``IngestionConfig`` instead of using the
+        env defaults. Same semantics as ``POST /runs`` — see ``resolve_run_config``.
         """
         org_id = resolve_org_id(claims)
         agent_uuid: UUID | None = None
         agent_config = None
+        ingestion_config_uuid: UUID | None = None
+        if ingestion_config_id:
+            try:
+                ingestion_config_uuid = UUID(ingestion_config_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid ingestion_config_id",
+                )
         if agent_id:
             try:
                 agent_uuid = UUID(agent_id)
@@ -459,6 +473,7 @@ def build_knowledge_base_router(
                 size_bytes=size_bytes,
                 agent_id=agent_uuid,
                 agent_config_id=agent_config.id if agent_config is not None else None,
+                ingestion_config_id=ingestion_config_uuid,
             )
         except IntegrityError as exc:
             # Race safety net: another concurrent upload committed the same
