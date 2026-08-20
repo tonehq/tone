@@ -25,6 +25,7 @@ from core.models.model import Model
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator
+from core.services.r2_storage_service import R2StorageService, signed_url_or_none
 from core.services.webrtc import supported_providers
 from core.utils.model_settings import SETTINGS_MODEL_KINDS, as_uuid
 from core.models.agent_tool import AgentTool
@@ -2858,10 +2859,22 @@ class AgentService(BaseService):
             )
             .all()
         )
+        # A short-lived presigned GET URL so external consumers (e.g. the ToneHQ
+        # importer in tone-test) can actually download the document — the private
+        # ``file_path`` alone is not fetchable outside this service's R2 account.
+        # Reuse one R2 client across all rows; ``signed_url_or_none`` degrades to
+        # reference-only (returns None, logs at debug) when R2 is unconfigured.
+        try:
+            _r2 = R2StorageService()
+        except Exception as exc:  # R2 not configured — degrade to reference-only
+            logger.debug("[agent] R2 unavailable, documents omit download_url: {}", exc)
+            _r2 = None
+
         result["documents"] = [
             {
                 "id": str(row.Upload.id),
                 "file_path": row.Upload.file_path,
+                "download_url": signed_url_or_none(row.Upload.file_path, _r2) if _r2 else None,
                 "file_name": row.Upload.file_name,
                 "knowledge_base_id": str(row.knowledge_base_id),
                 "active_ingestion_pipeline_run_id": (

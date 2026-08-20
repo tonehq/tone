@@ -120,7 +120,12 @@ from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
-from core.services.r2_storage_service import KB_DOCUMENT, R2StorageService, build_r2_object_key
+from core.services.r2_storage_service import (
+    KB_DOCUMENT,
+    R2StorageService,
+    build_r2_object_key,
+    signed_url_or_none,
+)
 from core.services.upload_service import UploadService
 from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
 from core.utils.list_params import resolve_sort
@@ -150,19 +155,9 @@ def _kb_base_query(db: Session, org_id: UUID):
     )
 
 
-def _signed_url(file_path: str | None, r2: R2StorageService | None = None) -> str | None:
-    if not file_path:
-        return None
-    try:
-        return (r2 or R2StorageService()).generate_presigned_url(file_path)
-    except Exception as exc:
-        logger.debug("Failed to generate presigned URL for {}: {}", file_path, exc)
-        return None
-
-
 def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> dict:
     payload = upload.to_dict()
-    payload["url"] = _signed_url(upload.file_path, r2)
+    payload["url"] = signed_url_or_none(upload.file_path, r2)
     return payload
 
 
