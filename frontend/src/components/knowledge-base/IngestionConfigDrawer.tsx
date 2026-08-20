@@ -10,6 +10,7 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
 import OptionParamsModal from '@/components/knowledge-base/OptionParamsModal';
 import {
   EMBEDDING_MODEL_CHOICES,
@@ -328,6 +329,7 @@ export default function IngestionConfigDrawer({
               <SelectInput
                 name="parser"
                 label="Parser"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.parser} />}
                 isRequired
                 options={parserOptions}
                 value={form.parser || undefined}
@@ -345,6 +347,7 @@ export default function IngestionConfigDrawer({
               <SelectInput
                 name="embedding_provider"
                 label="Embedding provider"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_provider} />}
                 isRequired
                 options={embedderOptions}
                 value={form.embedding_provider || undefined}
@@ -365,6 +368,7 @@ export default function IngestionConfigDrawer({
               <SelectInput
                 name="embedding_model"
                 label="Embedding model"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_model} />}
                 isRequired
                 // If an edited config carries a legacy model that's no longer
                 // in the curated list, keep it selectable so the drawer can
@@ -401,6 +405,7 @@ export default function IngestionConfigDrawer({
               <TextInput
                 name="embedding_dimensions"
                 label="Embedding dimensions"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_dimensions} />}
                 isRequired
                 type="number"
                 min={1}
@@ -422,6 +427,7 @@ export default function IngestionConfigDrawer({
               <SelectInput
                 name="tokeniser"
                 label="Tokeniser"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.tokeniser} />}
                 isRequired
                 options={tokeniserOptions}
                 value={form.tokeniser || undefined}
@@ -441,6 +447,7 @@ export default function IngestionConfigDrawer({
               <SelectInput
                 name="vector_store"
                 label="Vector store"
+                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.vector_store} />}
                 isRequired
                 options={vectorStoreOptions}
                 value={form.vector_store || undefined}

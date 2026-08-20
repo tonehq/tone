@@ -86,6 +86,9 @@ export interface TextInputBaseProps extends Omit<React.ComponentProps<'input'>, 
   helperText?: string;
   labelClassName?: string;
   leftIcon?: React.ReactNode;
+  /** Optional node rendered inline in the label (typically a help/tooltip
+   * icon). Sits between the label text and the required asterisk. */
+  labelHint?: React.ReactNode;
 }
 
 export interface FormTextInputProps
@@ -171,6 +174,9 @@ export interface SelectInputBaseProps {
   triggerClassName?: string;
   size?: 'sm' | 'default';
   position?: 'item-aligned' | 'popper';
+  /** Optional node rendered inline in the label (typically a help/tooltip
+   * icon). Sits between the label text and the required asterisk. */
+  labelHint?: React.ReactNode;
   /** Optional custom renderer for each option row — lets callers render rich
    * content (icons, two-line rows) in the list. Falls back to the plain string
    * `label` when omitted. The string `label` is still used as the Radix

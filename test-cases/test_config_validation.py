@@ -73,6 +73,9 @@ def _tier_a_env() -> dict[str, str]:
         "EVAL_JUDGE_ENGINE": "deepeval",
         "EVAL_METRIC_THRESHOLD": "0.7",
         "EVAL_METRICS_ENABLED": "faithfulness,answer_relevancy",
+        "AGENT_LLM_EVAL_METRICS_ENABLED": (
+            "answer_relevancy,bias,toxicity,persona_adherence,instruction_following"
+        ),
     }
 
 
