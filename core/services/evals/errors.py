@@ -21,6 +21,13 @@ class EvalConfigurationError(EvalError):
     time so misconfiguration fails loudly before any expensive work."""
 
 
+class InvalidEvalSettingsError(EvalError):
+    """PUT /organizations/eval-settings received an invalid value — out-of-range
+    threshold, non-positive top_k, unknown metric name, or malformed shape.
+    The API layer maps this to HTTP 400; the service layer never raises
+    HTTPException directly (transport-agnostic per backend coding standards)."""
+
+
 class AgentLlmEvalError(EvalError):
     """Base class for typed per-agent LLM eval errors — separates the
     agent-LLM harness failures from the RAG eval flow so callers (CLI /

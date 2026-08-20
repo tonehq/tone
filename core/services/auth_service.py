@@ -57,6 +57,161 @@ def _slugify(value: str) -> str:
     return slug[:50] or "org"
 
 
+# Typed application exceptions for org-scoped writes. Kept module-local so a
+# service method can signal "no org on this request" / "org row missing"
+# without importing HTTP concepts. The route layer translates these to the
+# appropriate HTTP status (400 / 404). See backend coding standards:
+# ``.claude/skills/code-generator/backend-code-generator.md`` (service stays
+# transport-agnostic).
+class OrganizationContextMissingError(Exception):
+    """Service method needs an org context but the caller didn't supply one."""
+
+
+class OrganizationNotFoundError(Exception):
+    """The org id resolved from context does not match a row in ``organizations``."""
+
+
+# Upper bound for ``top_k`` — DeepEval's retrieval loop is O(top_k) per
+# question, and beyond ~50 the contextual_relevancy math turns useless.
+_EVAL_TOP_K_MAX = 50
+# Cap ``max_context_chars`` to a value that fits comfortably in every model
+# we ship with (128k-token models @ ~4 chars/token → ~500k chars). Keep the
+# ceiling well below that so a typo can't OOM a worker.
+_EVAL_MAX_CONTEXT_CHARS_MAX = 400_000
+_EVAL_JUDGE_ENGINE_ALLOWED: frozenset[str] = frozenset({"deepeval", "legacy"})
+
+
+def _validate_eval_settings_patch(
+    patch: Dict[str, Any],
+    *,
+    supported_metrics: set,
+    allowed_keys: set,
+    error_cls: type,
+) -> Dict[str, Any]:
+    """Return a cleaned copy of ``patch`` with every value validated + typed.
+
+    Unknown keys are rejected (typos would otherwise silently persist to
+    JSONB). Every value must satisfy the same range/whitelist checks the
+    resolver enforces on read — surfaced BEFORE the write so a bad value
+    never lands in the DB. Raises ``error_cls`` (aliased to keep this helper
+    import-cycle-free) with a clear per-field message.
+
+    ``None`` for any field is a valid signal — the caller wants to CLEAR
+    that key so the resolver falls back to env / hardcoded default. Nulls
+    are passed through unchanged; the merge step deletes the key from the
+    stored JSONB rather than persisting ``null``.
+    """
+    if not isinstance(patch, dict):
+        raise error_cls("eval settings payload must be a JSON object")
+
+    unknown = set(patch) - allowed_keys
+    if unknown:
+        raise error_cls(
+            f"unknown eval settings key(s): {sorted(unknown)}. "
+            f"Allowed: {sorted(allowed_keys)}"
+        )
+
+    cleaned: Dict[str, Any] = {}
+
+    def _passthrough_null(key: str) -> bool:
+        """Return True if the caller explicitly cleared ``key`` (patch value is
+        ``None``); records the intent so the caller can delete-on-merge."""
+        if key in patch and patch[key] is None:
+            cleaned[key] = None
+            return True
+        return False
+
+    if not _passthrough_null("auto_run_enabled") and "auto_run_enabled" in patch:
+        value = patch["auto_run_enabled"]
+        if not isinstance(value, bool):
+            raise error_cls("auto_run_enabled must be a boolean")
+        cleaned["auto_run_enabled"] = value
+
+    for key in ("generation_model", "answer_model", "judge_model"):
+        if _passthrough_null(key):
+            continue
+        if key in patch:
+            value = patch[key]
+            if not isinstance(value, str) or not value.strip():
+                raise error_cls(f"{key} must be a non-empty string")
+            cleaned[key] = value.strip()
+
+    if not _passthrough_null("judge_engine") and "judge_engine" in patch:
+        value = patch["judge_engine"]
+        if not isinstance(value, str) or value.strip() not in _EVAL_JUDGE_ENGINE_ALLOWED:
+            raise error_cls(
+                f"judge_engine must be one of {sorted(_EVAL_JUDGE_ENGINE_ALLOWED)}"
+            )
+        cleaned["judge_engine"] = value.strip()
+
+    if not _passthrough_null("top_k") and "top_k" in patch:
+        value = patch["top_k"]
+        if isinstance(value, bool) or not isinstance(value, int) or not (
+            0 < value <= _EVAL_TOP_K_MAX
+        ):
+            raise error_cls(
+                f"top_k must be an integer in (0, {_EVAL_TOP_K_MAX}]"
+            )
+        cleaned["top_k"] = value
+
+    if not _passthrough_null("max_context_chars") and "max_context_chars" in patch:
+        value = patch["max_context_chars"]
+        if isinstance(value, bool) or not isinstance(value, int) or not (
+            0 < value <= _EVAL_MAX_CONTEXT_CHARS_MAX
+        ):
+            raise error_cls(
+                f"max_context_chars must be an integer in (0, {_EVAL_MAX_CONTEXT_CHARS_MAX}]"
+            )
+        cleaned["max_context_chars"] = value
+
+    if not _passthrough_null("metric_threshold") and "metric_threshold" in patch:
+        value = patch["metric_threshold"]
+        if isinstance(value, bool) or not isinstance(value, (int, float)) or not (
+            0.0 < float(value) <= 1.0
+        ):
+            raise error_cls("metric_threshold must be a number in (0.0, 1.0]")
+        cleaned["metric_threshold"] = float(value)
+
+    if not _passthrough_null("metrics_enabled") and "metrics_enabled" in patch:
+        value = patch["metrics_enabled"]
+        if not isinstance(value, list) or not value:
+            raise error_cls("metrics_enabled must be a non-empty list of metric names")
+        cleaned_list: list[str] = []
+        for name in value:
+            if not isinstance(name, str) or not name.strip():
+                raise error_cls("metrics_enabled entries must be non-empty strings")
+            slug = name.strip()
+            if slug not in supported_metrics:
+                raise error_cls(
+                    f"unknown metric '{slug}'. Supported: {sorted(supported_metrics)}"
+                )
+            if slug not in cleaned_list:
+                cleaned_list.append(slug)
+        cleaned["metrics_enabled"] = cleaned_list
+
+    if not _passthrough_null("metric_thresholds") and "metric_thresholds" in patch:
+        value = patch["metric_thresholds"]
+        if not isinstance(value, dict):
+            raise error_cls("metric_thresholds must be an object mapping metric name → number")
+        cleaned_map: Dict[str, float] = {}
+        for name, threshold in value.items():
+            if not isinstance(name, str) or name.strip() not in supported_metrics:
+                raise error_cls(
+                    f"metric_thresholds key '{name}' is not a supported metric. "
+                    f"Supported: {sorted(supported_metrics)}"
+                )
+            if isinstance(threshold, bool) or not isinstance(threshold, (int, float)) or not (
+                0.0 < float(threshold) <= 1.0
+            ):
+                raise error_cls(
+                    f"metric_thresholds['{name}'] must be a number in (0.0, 1.0]"
+                )
+            cleaned_map[name.strip()] = float(threshold)
+        cleaned["metric_thresholds"] = cleaned_map
+
+    return cleaned
+
+
 # Canonical enums for the onboarding wizard. Mirrored in
 # frontend/src/constants/onboarding.ts — keep the two in sync.
 OnboardingUseCase = Literal[
@@ -1348,6 +1503,78 @@ class AuthService(BaseService):
         org.settings = merged
         self.db.commit()
         return {"message": "Settings updated successfully", "settings": merged}
+
+    # ── Organization eval settings ───────────────────────────────────
+
+    def get_organization_eval_settings(self) -> Dict[str, Any]:
+        """Return the org's raw ``eval_settings`` JSONB (or ``{}``).
+
+        Returns the raw stored keys — NOT the resolved fallback chain — so
+        the UI can distinguish "not set" from "set to the default value".
+        Callers that need resolved values use
+        :func:`core.services.org_settings.get_eval_settings`.
+        """
+        target_org = _user_uuid(self.org_id)
+        if not target_org:
+            return {}
+        org = self.db.query(Organization).filter(Organization.id == target_org).first()
+        return org.eval_settings or {} if org else {}
+
+    def update_organization_eval_settings(
+        self,
+        patch: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Validate ``patch`` and merge into the org's ``eval_settings`` JSONB.
+
+        Read-modify-write semantics — a partial update never clobbers unset
+        keys. Passing an empty patch (``{}``) is a no-op that returns the
+        current settings. A key whose value is ``None`` is CLEARED (removed
+        from the stored JSONB) so the resolver falls through to env / hardcoded
+        default — that is how the UI's "revert to fallback" action is expressed.
+
+        Raises typed application exceptions (``InvalidEvalSettingsError``,
+        ``OrganizationContextMissingError``, ``OrganizationNotFoundError``)
+        — never ``HTTPException``. Per backend coding standards the service
+        stays transport-agnostic; the route layer translates to HTTP status.
+        """
+        # Local imports keep this optional path lazy — the resolver +
+        # validation code is only pulled in on write, not on every hot-path
+        # auth check that instantiates AuthService.
+        from core.services.evals.deepeval.metric_registry import SUPPORTED_METRICS
+        from core.services.evals.errors import InvalidEvalSettingsError
+        from core.services.org_settings import EVAL_SETTINGS_KEYS
+
+        target_org = _user_uuid(self.org_id)
+        if not target_org:
+            raise OrganizationContextMissingError(
+                "Organization context required to update eval settings"
+            )
+        org = self.db.query(Organization).filter(Organization.id == target_org).first()
+        if not org:
+            raise OrganizationNotFoundError(
+                f"Organization {target_org} not found"
+            )
+
+        validated = _validate_eval_settings_patch(
+            patch or {},
+            supported_metrics=set(SUPPORTED_METRICS.keys()),
+            allowed_keys=set(EVAL_SETTINGS_KEYS),
+            error_cls=InvalidEvalSettingsError,
+        )
+
+        # Merge — new dict reassignment so SQLAlchemy detects the JSONB change.
+        # Keys whose validated value is None are DELETED from the merged
+        # payload; that's the "revert this field to fallback" semantic the
+        # frontend uses when the user clears an input.
+        merged = dict(org.eval_settings or {})
+        for key, value in validated.items():
+            if value is None:
+                merged.pop(key, None)
+            else:
+                merged[key] = value
+        org.eval_settings = merged
+        self.db.commit()
+        return {"message": "Eval settings updated successfully", "eval_settings": merged}
 
     # ── Compatibility shims for older callers ────────────────────────
 
