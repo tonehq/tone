@@ -399,7 +399,25 @@ class IngestionRunService:
         # Auto-run the RAG eval against this recipe. Enqueue-only — the queue
         # worker does the real work; a queue outage or an eval failure must
         # never fail the ingestion (log + swallow).
-        if settings.EVAL_AUTO_RUN_ENABLED:
+        #
+        # Per-org toggle: an admin can turn this OFF for their org from the
+        # Settings → Evaluations page (persisted in ``organizations.eval_settings``).
+        # Env ``EVAL_AUTO_RUN_ENABLED`` stays as the fallback when the org key
+        # is unset so existing installs continue to auto-run.
+        from core.services.org_settings import load_eval_settings_for_org
+
+        if run.organization_id is None:
+            # Should be impossible — ingestion_pipeline_runs.organization_id
+            # is NOT NULL in the schema (see model + migration). Log loudly if
+            # we ever see it so an operator investigates instead of silently
+            # inheriting env-only defaults on a mystery row.
+            logger.warning(
+                "[eval] run {} has NULL organization_id — falling back to "
+                "env-only eval settings for the auto-run check",
+                run.id,
+            )
+        eval_cfg = load_eval_settings_for_org(db, run.organization_id)
+        if eval_cfg.auto_run_enabled:
             try:
                 from core.services.ingestion_queue import (
                     enqueue_eval_for_ingestion_run_sync,

@@ -185,6 +185,57 @@ def update_organization_settings(
     return EEAuthService(db, org_id=claims.org_id).update_organization_settings(settings_data)
 
 
+# ── Organization eval settings (mirrors core routes for EE mount) ────
+#
+# ``EEAuthService`` inherits ``get_organization_eval_settings`` and
+# ``update_organization_eval_settings`` from ``AuthService`` — the EE
+# router just needs its own thin wrappers so the shared route path
+# resolves under the EE mount (main.py maps EITHER core OR ee router at
+# ``/organization`` depending on ``ee_enabled``).
+
+
+@router.get("/eval-settings")
+def get_organization_eval_settings(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return EEAuthService(db, org_id=claims.org_id).get_organization_eval_settings()
+
+
+@router.put("/eval-settings")
+def update_organization_eval_settings(
+    patch: Dict[str, Any] = Body(...),
+    claims: EEJWTClaims = Depends(require_ee_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    # Local imports — the typed exceptions live in the auth + evals subtrees;
+    # avoids pulling them at module load time on every route mount. Mirrors
+    # the pattern used in ``core/api/v1/organizations.py``.
+    from core.services.auth_service import (
+        OrganizationContextMissingError,
+        OrganizationNotFoundError,
+    )
+    from core.services.evals.errors import InvalidEvalSettingsError
+
+    try:
+        return EEAuthService(db, org_id=claims.org_id).update_organization_eval_settings(patch)
+    except InvalidEvalSettingsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except OrganizationContextMissingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except OrganizationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 # ── Org access requests — not supported on v2 schema ────────────────
 
 

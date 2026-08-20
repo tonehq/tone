@@ -52,6 +52,7 @@ from core.services.evals.question_generator import QuestionGeneratorService
 from core.services.evals.retrieval_hit import retrieval_hit
 from core.services.llm.chat_complete import chat_complete, resolve_provider
 from core.services.llm.errors import LLMProviderKeyMissingError
+from core.services.org_settings import load_eval_settings_for_org
 from core.services.rag.embedder_factory import build_embedder_from_run
 from core.services.rag.errors import EmbeddingProviderUnavailableError
 from core.services.rag.factory import get_vector_store
@@ -182,8 +183,16 @@ class EvalService:
         see the exact same text the retriever will hit at run time. When
         omitted (manual CLI / tests), the original R2 + reader path is used.
         """
-        model = model or settings.EVAL_GENERATION_MODEL
-        max_chars = max_chars or settings.EVAL_MAX_CONTEXT_CHARS
+        # Per-org overrides (DB → env → hardcoded default). Callers may still
+        # pin an explicit model / max_chars via kwargs — those win, matching
+        # the pre-resolver contract used by CLI tests. Explicit ``None`` from
+        # the caller is the "no override" signal (not falsy 0 / "" — those
+        # are intentional test values a caller might pass).
+        org_eval_cfg = load_eval_settings_for_org(db, org_id)
+        if model is None:
+            model = org_eval_cfg.generation_model
+        if max_chars is None:
+            max_chars = org_eval_cfg.max_context_chars
 
         upload = db.query(Upload).filter(Upload.id == upload_id).first()
         if upload is None:
@@ -634,9 +643,6 @@ class EvalService:
             raise ValueError(
                 f"triggered_by must be one of 'auto'|'manual'|'cli'; got {triggered_by!r}"
             )
-        top_k = top_k or settings.EVAL_TOP_K
-        answer_model = answer_model or settings.EVAL_ANSWER_MODEL
-        judge_model = judge_model or settings.EVAL_JUDGE_MODEL
 
         questions = self._questions_scoped(db, upload_id=upload_id)
         if not questions:
@@ -644,6 +650,35 @@ class EvalService:
                 f"Upload {upload_id} has no eval questions — regenerate before running"
             )
         organization_id = questions[0].organization_id
+
+        # Resolve per-org overrides now that the org is known (DB → env →
+        # hardcoded default). Explicit kwargs from the caller (CLI / API
+        # override) still win — same precedence as before, just the
+        # fallback source is org-aware instead of env-only. ``None`` from
+        # the caller is the "no override" signal (not falsy 0 / "" — those
+        # are intentional test values a caller might pass).
+        org_eval_cfg = load_eval_settings_for_org(db, organization_id)
+        if top_k is None:
+            top_k = org_eval_cfg.top_k
+        if answer_model is None:
+            answer_model = org_eval_cfg.answer_model
+        if judge_model is None:
+            judge_model = org_eval_cfg.judge_model
+
+        # Build the judge for this run. Tests pin a MagicMock via
+        # ``EvalService(judge=...)`` — honor that so unit suites don't need
+        # the resolver. In production the judge is engine + threshold +
+        # metrics scoped to the resolved org config so per-org overrides
+        # take effect on the SAME run they were saved on.
+        if self._injected_judge is not None:
+            run_judge = self._injected_judge
+        else:
+            run_judge = build_judge_service(
+                prompt_loader=self._loader,
+                engine=org_eval_cfg.judge_engine,
+                metrics_enabled=org_eval_cfg.metrics_enabled,
+                metric_threshold=org_eval_cfg.metric_threshold,
+            )
 
         run = (
             db.query(IngestionPipelineRun)
@@ -730,6 +765,7 @@ class EvalService:
                     answer_template=answer_template,
                     answer_key=answer_key,
                     judge_key=judge_key,
+                    judge=run_judge,
                 )
                 scored_rows.append(scored)
                 done = idx + 1
@@ -1000,6 +1036,7 @@ class EvalService:
         answer_template: str,
         answer_key: str,
         judge_key: str,
+        judge: Optional[object] = None,
     ) -> dict:
         eval_id = question["eval_id"]
         qid = question.get("id", "?")
@@ -1070,7 +1107,11 @@ class EvalService:
             answer_error = f"{type(e).__name__}: {e}"
 
         t_judge = time.monotonic()
-        verdict = self._judge.judge(
+        # Prefer the per-run judge (built with resolved org overrides).
+        # Falls back to the lazily-built engine-from-env for direct
+        # ``_score_one_question`` callers that pre-date the org resolver.
+        active_judge = judge if judge is not None else self._judge
+        verdict = active_judge.judge(
             question=q_text,
             expected_answer=expected,
             actual_answer=actual_answer,
