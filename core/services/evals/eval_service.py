@@ -34,6 +34,7 @@ from core.models.eval import Eval
 from core.models.eval_result import EvalResult
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.upload import Upload
 from core.services.evals.csv_import import (
     EvalCsvParseError,
@@ -168,10 +169,19 @@ class EvalService:
         org_id: Any,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
+        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         """Extract source text for ``upload_id``, generate a Q&A set, replace
         any existing questions for the upload with the new batch. Returns an
-        ``EvalSetSummary``."""
+        ``EvalSetSummary``.
+
+        When ``ingestion_run_id`` is provided, source text is reconstructed by
+        concatenating the already-persisted ``knowledge_base_chunks`` for that
+        run (ordered by ``chunk_index``) — avoiding a redundant R2 download +
+        docling re-parse and, more importantly, making the question-generator
+        see the exact same text the retriever will hit at run time. When
+        omitted (manual CLI / tests), the original R2 + reader path is used.
+        """
         model = model or settings.EVAL_GENERATION_MODEL
         max_chars = max_chars or settings.EVAL_MAX_CONTEXT_CHARS
 
@@ -194,32 +204,54 @@ class EvalService:
 
         api_key = _require_llm_key(db, org_id, model)
 
+        source_mode = "chunks" if ingestion_run_id is not None else "source_file"
         logger.info(
-            "[eval] generate_eval start upload={} org={} content_type={} model={} max_chars={}",
-            upload_id, org_id, upload.file_type, model, max_chars,
+            "[eval] generate_eval start upload={} org={} content_type={} model={} max_chars={} source={}",
+            upload_id, org_id, upload.file_type, model, max_chars, source_mode,
         )
 
-        try:
-            file_bytes = self._download(upload.file_path)
-        except Exception:
-            logger.exception(
-                "[eval] R2 download failed upload={} path={}",
-                upload_id, upload.file_path,
+        if ingestion_run_id is not None:
+            chunks = (
+                db.query(KnowledgeBaseChunk)
+                .filter(
+                    KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id,
+                    KnowledgeBaseChunk.organization_id == org_id,
+                )
+                .order_by(KnowledgeBaseChunk.chunk_index.asc())
+                .all()
             )
-            raise
-        try:
-            document = self._reader.read(file_bytes, upload.file_type)
-        except Exception as e:
-            logger.exception(
-                "[eval] source extraction failed upload={} content_type={}",
-                upload_id, upload.file_type,
+            if not chunks:
+                raise EvalGenerationError(
+                    f"Ingestion run {ingestion_run_id} has no chunks — cannot generate eval"
+                )
+            document_text = "\n\n".join(c.chunk_text for c in chunks)
+            logger.info(
+                "[eval] generate_eval assembled {} chunks ({} chars) upload={} run={}",
+                len(chunks), len(document_text), upload_id, ingestion_run_id,
             )
-            raise EvalGenerationError(
-                f"Source extraction failed: {type(e).__name__}: {e}"
-            ) from e
+        else:
+            try:
+                file_bytes = self._download(upload.file_path)
+            except Exception:
+                logger.exception(
+                    "[eval] R2 download failed upload={} path={}",
+                    upload_id, upload.file_path,
+                )
+                raise
+            try:
+                document = self._reader.read(file_bytes, upload.file_type)
+            except Exception as e:
+                logger.exception(
+                    "[eval] source extraction failed upload={} content_type={}",
+                    upload_id, upload.file_type,
+                )
+                raise EvalGenerationError(
+                    f"Source extraction failed: {type(e).__name__}: {e}"
+                ) from e
+            document_text = document.text
 
         payload = self._questions.generate(
-            document_text=document.text,
+            document_text=document_text,
             api_key=api_key,
             model=model,
             max_chars=max_chars,
@@ -559,12 +591,22 @@ class EvalService:
         )
 
     def get_or_generate_eval(
-        self, db: Session, *, upload_id: Any, org_id: Any
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         existing = self.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
         if existing is not None and existing.question_count > 0:
             return existing
-        return self.generate_eval(db, upload_id=upload_id, org_id=org_id)
+        return self.generate_eval(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            ingestion_run_id=ingestion_run_id,
+        )
 
     # ── Run lifecycle ──────────────────────────────────────────────────
 

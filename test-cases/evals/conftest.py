@@ -74,6 +74,8 @@ def _install_deepeval_stubs() -> None:
     metrics_pkg.ContextualRecallMetric = _mk_metric("ContextualRecallMetric")
     metrics_pkg.ContextualRelevancyMetric = _mk_metric("ContextualRelevancyMetric")
     metrics_pkg.HallucinationMetric = _mk_metric("HallucinationMetric")
+    metrics_pkg.BiasMetric = _mk_metric("BiasMetric")
+    metrics_pkg.ToxicityMetric = _mk_metric("ToxicityMetric")
 
     class GEval(BaseMetric):
         def __init__(self, *args, name: str = "correctness", **kwargs):

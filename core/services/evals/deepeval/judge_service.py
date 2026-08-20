@@ -46,7 +46,11 @@ from deepeval.test_case import LLMTestCase  # noqa: E402
 from loguru import logger  # noqa: E402
 
 from core.services.evals.deepeval.llm_adapter import ToneDeepEvalLLM  # noqa: E402
-from core.services.evals.deepeval.metric_registry import build_metrics  # noqa: E402
+from core.services.evals.deepeval.metric_registry import (  # noqa: E402
+    AGENT_CONTEXT_METRICS,
+    build_metrics,
+)
+from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
 from shared.config import settings  # noqa: E402
 
@@ -64,14 +68,9 @@ _LEGACY_COLUMN_FROM_METRIC = {
 # summarising trends should keep in mind the inversion.
 _INVERTED_METRICS: frozenset[str] = frozenset({"hallucination"})
 
-# Aggregate verdict thresholds — ratio of PASSING metrics in the scorecard.
-_PASS_RATIO = 1.0
-_PARTIAL_RATIO = 0.5
-
-# Per-metric reason cap so one wordy metric doesn't crowd out the others
-# in the 2000-char ``judge_reasoning`` field. Chosen to fit ~6 reasons.
-_PER_METRIC_REASON_CHARS = 300
-_REASONING_TOTAL_CHARS = 2000
+# Aggregate verdict + reason clipping live in
+# ``core.services.evals.deepeval.scorecard.aggregate_scorecard`` so the RAG
+# judge and the per-agent LLM judge share ONE implementation.
 
 
 class DeepEvalJudgeService:
@@ -101,6 +100,16 @@ class DeepEvalJudgeService:
         # Configuration errors are systemic — one bad env var breaks EVERY
         # question the same way. Re-raise so the caller aborts the whole
         # run once instead of persisting N identical fake-FAIL rows.
+        # Reject metrics whose default GEval criterion references an agent
+        # system prompt — the RAG flow carries none, so the score would be
+        # noise. The per-agent LLM judge is where those belong.
+        bad = [m for m in settings.EVAL_METRICS_ENABLED if m in AGENT_CONTEXT_METRICS]
+        if bad:
+            raise EvalConfigurationError(
+                f"EVAL_METRICS_ENABLED contains agent-context metric(s) "
+                f"{bad!r}; those require a system prompt the RAG judge "
+                "does not carry. Configure them via AGENT_LLM_EVAL_METRICS_ENABLED."
+            )
         llm = ToneDeepEvalLLM(api_key=api_key, model=model)
         named_metrics: List[Tuple[str, BaseMetric]] = build_metrics(
             llm,
@@ -224,28 +233,7 @@ def _map_to_legacy(scorecard: dict) -> dict:
         if entry:
             legacy[column] = _to_float(entry.get("score"))
 
-    total = len(scorecard)
-    passes = sum(1 for e in scorecard.values() if e.get("verdict") == "pass")
-    ratio = passes / total
-    if ratio >= _PASS_RATIO:
-        verdict = "PASS"
-    elif ratio >= _PARTIAL_RATIO:
-        verdict = "PARTIAL"
-    else:
-        verdict = "FAIL"
-
-    # Cap each metric's reason BEFORE joining so a single verbose metric
-    # can't crowd out the others under the 2000-char field limit.
-    fail_reasons: list[str] = []
-    for name, entry in scorecard.items():
-        if entry.get("verdict") != "fail":
-            continue
-        raw_reason = (entry.get("reason") or "").strip()
-        if not raw_reason:
-            continue
-        clipped = raw_reason[:_PER_METRIC_REASON_CHARS]
-        fail_reasons.append(f"{name}: {clipped}")
-    reasoning = " | ".join(fail_reasons)[:_REASONING_TOTAL_CHARS] if fail_reasons else ""
+    verdict, reasoning, scores = aggregate_scorecard(scorecard)
 
     return {
         "verdict": verdict,
@@ -253,5 +241,5 @@ def _map_to_legacy(scorecard: dict) -> dict:
         "groundedness": legacy["groundedness"],
         "relevance": legacy["relevance"],
         "reasoning": reasoning,
-        "metric_scores": scorecard,
+        "metric_scores": scores,
     }

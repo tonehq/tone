@@ -65,6 +65,8 @@ MANDATORY_KEYS: tuple[str, ...] = (
     "EVAL_JUDGE_ENGINE",
     "EVAL_METRIC_THRESHOLD",
     "EVAL_METRICS_ENABLED",
+    # Agent LLM eval harness (dev/QA per-agent LLM-output scoring)
+    "AGENT_LLM_EVAL_METRICS_ENABLED",
 )
 
 # Tier B — additionally required when ENV is not one of DEV_ENV_NAMES.
@@ -426,6 +428,18 @@ class Settings:
         self.EVAL_METRICS_ENABLED: list[str] = [
             m.strip()
             for m in (get_secret("EVAL_METRICS_ENABLED") or "").split(",")
+            if m.strip()
+        ]
+
+        # ── Agent LLM eval harness ──────────────────────────────────────────
+        # AGENT_LLM_EVAL_METRICS_ENABLED — comma-separated DeepEval metric
+        # names run per scenario by ``evals/agent_llm_eval.py`` /
+        # ``AgentLlmEvalService``. Every name must be registered in
+        # ``metric_registry.SUPPORTED_METRICS``; individual scenarios may
+        # override this list via ``LLMScenario.metrics``.
+        self.AGENT_LLM_EVAL_METRICS_ENABLED: list[str] = [
+            m.strip()
+            for m in (get_secret("AGENT_LLM_EVAL_METRICS_ENABLED") or "").split(",")
             if m.strip()
         ]
 

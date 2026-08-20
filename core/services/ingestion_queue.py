@@ -281,7 +281,10 @@ def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> Non
                 ingestion_run_id, run.upload_id, run.organization_id,
             )
             eval_set = svc.get_or_generate_eval(
-                db, upload_id=run.upload_id, org_id=run.organization_id
+                db,
+                upload_id=run.upload_id,
+                org_id=run.organization_id,
+                ingestion_run_id=run.id,
             )
             logger.info(
                 "[eval] running eval ingestion_run={} upload={} questions={} triggered_by={}",

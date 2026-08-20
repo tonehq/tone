@@ -52,6 +52,9 @@ _TEST_ENV_DEFAULTS = {
         "faithfulness,answer_relevancy,contextual_precision,"
         "contextual_recall,contextual_relevancy,hallucination,correctness"
     ),
+    "AGENT_LLM_EVAL_METRICS_ENABLED": (
+        "answer_relevancy,bias,toxicity,persona_adherence,instruction_following"
+    ),
 }
 for _k, _v in _TEST_ENV_DEFAULTS.items():
     os.environ.setdefault(_k, _v)

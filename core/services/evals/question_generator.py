@@ -59,6 +59,7 @@ class QuestionGeneratorService:
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 json_mode=True,
+                max_tokens=16384,
             )
         except LLMError as e:
             logger.exception("[eval] question generation LLM call failed model={}", model)

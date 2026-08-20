@@ -1,16 +1,22 @@
 'use client';
 
 import { CloudUpload, File, FileCode, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 
 import CustomButton from '@/components/shared/CustomButton';
 import SelectInput from '@/components/shared/SelectInput';
+import { useIngestionConfigs } from '@/lib/api/ingestion-configs';
 import { useUploadKnowledgeBase } from '@/lib/api/knowledge-base';
 import type { AgentDropdownItem } from '@/types/agent';
 import type { SelectOption } from '@/types/components';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
+
+// Sentinel for the "no preset — use system defaults" option in the ingestion
+// config dropdown. Distinct wording from NewIngestionRunModal's
+// "Custom (one-off)" because upload has no per-field editor.
+const DEFAULT_CONFIG_SENTINEL = '__default__';
 
 const ACCEPTED_TYPES = [
   'application/pdf',
@@ -61,15 +67,34 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
 }) => {
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
+  const [ingestionConfigId, setIngestionConfigId] = useState<string>(DEFAULT_CONFIG_SENTINEL);
   const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadKnowledgeBase();
 
+  // Same list params as NewIngestionRunModal so the two dropdowns stay in sync
+  // and share TanStack Query's cache — do NOT introduce a second fetch hook.
+  const { data: configsPage, isLoading: configsLoading } = useIngestionConfigs({
+    page_no: 1,
+    page_size: 200,
+    is_active_only: true,
+    sort_by: 'updated_at',
+    sort_order: 'desc',
+  });
+
   const agentOptions: SelectOption[] = agents
     .filter((a) => !!a.uuid)
     .map((a) => ({ label: a.name, value: a.uuid as string }));
+
+  const configOptions: SelectOption[] = useMemo(
+    () => [
+      { value: DEFAULT_CONFIG_SENTINEL, label: 'Use default' },
+      ...(configsPage?.data ?? []).map((c) => ({ value: c.id, label: c.name })),
+    ],
+    [configsPage],
+  );
 
   const validateFile = useCallback((f: File): boolean => {
     const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
@@ -141,10 +166,17 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     let succeeded = 0;
     let lastError: unknown = null;
 
+    const configForUpload =
+      ingestionConfigId === DEFAULT_CONFIG_SENTINEL ? null : ingestionConfigId;
+
     setProgress({ done: 0, total });
     for (let i = 0; i < queue.length; i += 1) {
       try {
-        await uploadMutation.mutateAsync({ agentId: selectedAgentId, file: queue[i] });
+        await uploadMutation.mutateAsync({
+          agentId: selectedAgentId,
+          file: queue[i],
+          ingestionConfigId: configForUpload,
+        });
         succeeded += 1;
       } catch (error) {
         failed.push(queue[i]);
@@ -161,6 +193,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
       const label = total === 1 ? 'Document uploaded' : `${total} documents uploaded`;
       showToast.success(label, 'Your documents are now part of the knowledge base.');
       setSelectedAgentId('');
+      setIngestionConfigId(DEFAULT_CONFIG_SENTINEL);
       onUploadSuccess();
     } else if (succeeded === 0) {
       handleApiError(lastError);
@@ -196,6 +229,17 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         loading={agentsLoading}
         disabled={agentOptions.length === 0}
         isRequired
+      />
+
+      <SelectInput
+        name="ingestion_config"
+        label="Ingestion config"
+        placeholder="Use default"
+        options={configOptions}
+        value={ingestionConfigId}
+        onValueChange={setIngestionConfigId}
+        loading={configsLoading}
+        helperText="Optional — leave as default to use system defaults."
       />
 
       <div>
