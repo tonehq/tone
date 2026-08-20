@@ -85,7 +85,7 @@ export default function NewIngestionRunModal({
 
   const configOptions = useMemo(
     () => [
-      { value: CUSTOM_SENTINEL, label: 'Custom (one-off)' },
+      { value: CUSTOM_SENTINEL, label: 'Custom' },
       ...savedConfigs.map((c) => ({ value: c.id, label: c.name })),
     ],
     [savedConfigs],
@@ -226,8 +226,8 @@ export default function NewIngestionRunModal({
             disabled={createMutation.isPending || configsLoading}
             helperText={
               usingSavedConfig
-                ? 'Fields below are locked to this config. Pick "Custom (one-off)" to edit.'
-                : 'Pick a saved config to reuse a recipe, or fill the fields for a one-off run.'
+                ? 'Fields below are locked to this config. Pick "Custom" to edit.'
+                : 'Pick a saved config to reuse a recipe, or fill the fields for a custom run.'
             }
           />
 
