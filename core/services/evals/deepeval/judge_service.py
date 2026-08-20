@@ -74,7 +74,24 @@ _INVERTED_METRICS: frozenset[str] = frozenset({"hallucination"})
 
 
 class DeepEvalJudgeService:
-    """DeepEval-backed judge. Signature-compatible with ``JudgeService``."""
+    """DeepEval-backed judge. Signature-compatible with ``JudgeService``.
+
+    Instances may be constructed with an explicit ``metrics_enabled`` list
+    and ``metric_threshold`` (the resolved per-org overrides). When omitted
+    the judge falls back to ``settings.EVAL_METRICS_ENABLED`` /
+    ``settings.EVAL_METRIC_THRESHOLD`` so ad-hoc CLI callers keep working
+    without threading the resolver."""
+
+    def __init__(
+        self,
+        *,
+        metrics_enabled: list[str] | None = None,
+        metric_threshold: float | None = None,
+    ) -> None:
+        # None → fall through to env at judge() time (preserves the pre-org
+        # -settings behavior for callers that don't pass overrides).
+        self._metrics_enabled = metrics_enabled
+        self._metric_threshold = metric_threshold
 
     def judge(
         self,
@@ -89,32 +106,45 @@ class DeepEvalJudgeService:
         chunks_list = list(retrieved_chunks)
         retrieval_context = [c.get("text", "") for c in chunks_list]
 
+        # Resolve overrides once per question — cheap dict/list reads, no
+        # further env access after this point in the method.
+        active_metrics = (
+            self._metrics_enabled
+            if self._metrics_enabled is not None
+            else settings.EVAL_METRICS_ENABLED
+        )
+        active_threshold = (
+            self._metric_threshold
+            if self._metric_threshold is not None
+            else settings.EVAL_METRIC_THRESHOLD
+        )
+
         logger.debug(
             "[eval] deepeval judge start model={} answer_chars={} chunks={} metrics={}",
             model,
             len(actual_answer or ""),
             len(chunks_list),
-            settings.EVAL_METRICS_ENABLED,
+            active_metrics,
         )
 
-        # Configuration errors are systemic — one bad env var breaks EVERY
+        # Configuration errors are systemic — one bad setting breaks EVERY
         # question the same way. Re-raise so the caller aborts the whole
         # run once instead of persisting N identical fake-FAIL rows.
         # Reject metrics whose default GEval criterion references an agent
         # system prompt — the RAG flow carries none, so the score would be
         # noise. The per-agent LLM judge is where those belong.
-        bad = [m for m in settings.EVAL_METRICS_ENABLED if m in AGENT_CONTEXT_METRICS]
+        bad = [m for m in active_metrics if m in AGENT_CONTEXT_METRICS]
         if bad:
             raise EvalConfigurationError(
-                f"EVAL_METRICS_ENABLED contains agent-context metric(s) "
+                f"metrics_enabled contains agent-context metric(s) "
                 f"{bad!r}; those require a system prompt the RAG judge "
                 "does not carry. Configure them via AGENT_LLM_EVAL_METRICS_ENABLED."
             )
         llm = ToneDeepEvalLLM(api_key=api_key, model=model)
         named_metrics: List[Tuple[str, BaseMetric]] = build_metrics(
             llm,
-            settings.EVAL_METRICS_ENABLED,
-            settings.EVAL_METRIC_THRESHOLD,
+            active_metrics,
+            active_threshold,
         )
 
         test_case = LLMTestCase(

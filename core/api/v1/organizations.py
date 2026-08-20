@@ -162,6 +162,60 @@ def update_organization_settings(
     return AuthService(db).update_organization_settings(settings_data)
 
 
+@router.get("/eval-settings")
+def get_organization_eval_settings(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Return the raw ``organizations.eval_settings`` JSONB for the current org.
+
+    Unset keys are absent from the payload — the frontend renders those
+    fields as placeholders showing the env/default that will actually be
+    used. To see resolved values, run an eval and inspect the run row."""
+    return AuthService(db).get_organization_eval_settings()
+
+
+@router.put("/eval-settings")
+def update_organization_eval_settings(
+    patch: Dict[str, Any] = Body(...),
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    """Partial-update per-org eval settings (merged into the existing JSONB).
+
+    Validation errors from the service surface as HTTP 400 with the exact
+    per-field message so the UI can highlight the offending input. Missing
+    org context (400) and unknown org id (404) come out of the service as
+    typed exceptions — translated here per the transport-agnostic-service
+    contract in ``.claude/skills/code-generator/backend-code-generator.md``.
+    """
+    # Local import — these exceptions live in the auth subtree; avoids
+    # pulling them at module load time on every route mount.
+    from core.services.auth_service import (
+        OrganizationContextMissingError,
+        OrganizationNotFoundError,
+    )
+    from core.services.evals.errors import InvalidEvalSettingsError
+
+    try:
+        return AuthService(db).update_organization_eval_settings(patch)
+    except InvalidEvalSettingsError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except OrganizationContextMissingError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except OrganizationNotFoundError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(exc),
+        ) from exc
+
+
 @router.get("/access_requests")
 def get_access_requests(
     claims: JWTClaims = Depends(require_admin_or_owner),

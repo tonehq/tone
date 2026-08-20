@@ -29,6 +29,10 @@ class Organization(Base):
     sso_provider = Column(String(50), nullable=True)
     sso_config = Column(JSONB, nullable=True)
     settings = Column(JSONB, nullable=True, default=dict)
+    # Per-org RAG-eval knobs (auto-run flag, judge/answer/generation models,
+    # top_k, thresholds, enabled metrics). NULL / missing keys → env fallback
+    # via ``core.services.org_settings.get_eval_settings``.
+    eval_settings = Column(JSONB, nullable=True)
     metadata_ = Column("metadata", JSONB, nullable=True, default=dict)
 
     # Per-org log level (TRACE/DEBUG/INFO/…). NULL = inherit the env baseline.

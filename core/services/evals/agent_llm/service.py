@@ -138,12 +138,22 @@ class AgentLlmEvalService:
                     "AGENT_LLM_EVAL_METRICS_ENABLED or LLMScenario.metrics."
                 )
 
-        judge_model = judge_model or settings.EVAL_JUDGE_MODEL
         run_id = run_id or uuid.uuid4()
 
         # 1. Snapshot the agent's config while the session is still open,
         # then close it so nothing is held during the LLM loop.
         agent_config: AgentEvalConfig = self._loader.load_for_eval(db, agent_id)
+
+        # Resolve judge model with per-org override (DB → env → hardcoded
+        # default). Agent LLM evals share the RAG judge model setting so a
+        # single "our judge is Claude Opus" policy applies to both flows.
+        # Explicit caller kwarg still wins (CLI can pin a specific model).
+        if judge_model is None:
+            from core.services.org_settings import load_eval_settings_for_org
+
+            judge_model = load_eval_settings_for_org(
+                db, agent_config.organization_id
+            ).judge_model
         next_run_number = self._next_run_number(
             db,
             agent_id=agent_config.agent_id,
