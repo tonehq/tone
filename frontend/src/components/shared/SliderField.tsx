@@ -94,17 +94,14 @@ const SliderField = (props: SliderFieldProps) => {
         control={control}
         rules={rules}
         render={({ field, fieldState }) => (
-          <PlainSliderField
+          <ControlledSlider
             {...rest}
             name={name}
             min={min}
-            value={field.value != null ? Number(field.value) : min}
-            onValueChange={(v) => {
-              field.onChange(v);
-              onValueChange?.(v);
-            }}
-            error={error ?? !!fieldState.error}
-            helperText={fieldState.error?.message ?? helperText}
+            field={field}
+            fieldError={error ?? !!fieldState.error}
+            fieldHelperText={fieldState.error?.message ?? helperText}
+            onValueChange={onValueChange}
           />
         )}
       />
@@ -112,6 +109,54 @@ const SliderField = (props: SliderFieldProps) => {
   }
 
   return <PlainSliderField {...props} />;
+};
+
+/**
+ * Bridges RHF `Controller` and `PlainSliderField`. When the form value is
+ * null/undefined the plain slider visually falls back to `min`, but that
+ * value never gets pushed into RHF state — so submits silently ship an
+ * empty value that downstream validators reject. Seed the value with `min`
+ * on mount so the slider position and the form state stay in sync.
+ */
+type ControlledSliderProps = Omit<SliderFieldBaseProps, 'value' | 'onValueChange'> & {
+  field: {
+    value: unknown;
+    onChange: (value: number) => void;
+  };
+  fieldError: boolean;
+  fieldHelperText?: string;
+  onValueChange?: (value: number) => void;
+};
+
+const ControlledSlider = ({
+  field,
+  fieldError,
+  fieldHelperText,
+  onValueChange,
+  min = 0,
+  ...rest
+}: ControlledSliderProps) => {
+  const seededRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!seededRef.current && field.value == null) {
+      seededRef.current = true;
+      field.onChange(min);
+    }
+  }, [field, min]);
+
+  return (
+    <PlainSliderField
+      {...rest}
+      min={min}
+      value={field.value != null ? Number(field.value) : min}
+      onValueChange={(v) => {
+        field.onChange(v);
+        onValueChange?.(v);
+      }}
+      error={fieldError}
+      helperText={fieldHelperText}
+    />
+  );
 };
 
 SliderField.displayName = 'SliderField';
