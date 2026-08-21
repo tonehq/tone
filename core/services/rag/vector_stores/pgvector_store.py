@@ -13,6 +13,11 @@ from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
 from core.models.upload import Upload
 from core.services.rag.errors import EmbeddingCompatibilityError
+from core.services.rag.logging_utils import (
+    format_scores,
+    summarize_vector,
+    truncate_query_text,
+)
 from core.services.rag.types import SearchResult, VectorRecord
 from core.services.rag.vector_stores.base import VectorStore
 
@@ -119,8 +124,15 @@ class PgVectorStore(VectorStore):
         return len(chunk_rows)
 
     def query(
-        self, embedding: List[float], top_k: int = 3, *, filters: Optional[dict] = None
+        self,
+        embedding: List[float],
+        top_k: int = 3,
+        *,
+        filters: Optional[dict] = None,
+        query_text: Optional[str] = None,
     ) -> List[SearchResult]:
+        import time as _time
+
         filters = filters or {}
         dims = filters.get("embedding_dimensions") or len(embedding)
         column = KnowledgeBaseChunkEmbedding.column_for_dimension(int(dims))
@@ -133,80 +145,123 @@ class PgVectorStore(VectorStore):
         provider = filters.get("embedding_provider")
         model = filters.get("embedding_model")
 
-        with self._db() as db:
-            # Resolve which run to serve when the caller didn't pin one. The
-            # resolver enforces the (agent-KB override → KB default → legacy
-            # is_active fallback) chain — same rule in one place, so evals and
-            # future retrievers can't diverge.
-            if ingestion_run_id is None and upload_id is not None and org_id is not None:
-                from core.services.ingestion_run_service import IngestionRunService
+        vector_summary = summarize_vector(embedding)
+        query_preview = truncate_query_text(query_text)
+        t_start = _time.monotonic()
 
-                ingestion_run_id = IngestionRunService.resolve_active_run_id(
-                    db,
-                    org_id=org_id,
-                    upload_id=upload_id,
-                    agent_id=agent_id,
-                )
+        try:
+            with self._db() as db:
+                # Resolve which run to serve when the caller didn't pin one.
+                # The resolver enforces the (agent-KB override → KB default →
+                # legacy is_active fallback) chain — same rule in one place.
+                if ingestion_run_id is None and upload_id is not None and org_id is not None:
+                    from core.services.ingestion_run_service import IngestionRunService
 
-            q = (
-                db.query(
-                    KnowledgeBaseChunk.chunk_text,
-                    distance.label("distance"),
-                    KnowledgeBaseChunk.upload_id,
-                    KnowledgeBaseChunk.chunk_index,
-                    KnowledgeBaseChunk.chunk_metadata,
-                    IngestionPipelineRun.id.label("run_id"),
-                )
-                .join(
-                    KnowledgeBaseChunkEmbedding,
-                    KnowledgeBaseChunkEmbedding.chunk_id == KnowledgeBaseChunk.id,
-                )
-                .join(
-                    IngestionPipelineRun,
-                    IngestionPipelineRun.id == KnowledgeBaseChunk.ingestion_run_id,
-                )
-                .filter(IngestionPipelineRun.embedding_dimensions == int(dims))
-            )
-            if provider is not None:
-                q = q.filter(IngestionPipelineRun.embedding_provider == provider)
-            if model is not None:
-                q = q.filter(IngestionPipelineRun.embedding_model == model)
-            if ingestion_run_id is not None:
-                q = q.filter(KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id)
-            else:
-                # Resolver returned None (nothing ready) or upstream didn't
-                # pass org/upload — legacy safety net keeps behavior consistent.
-                q = q.filter(IngestionPipelineRun.is_active.is_(True))
+                    ingestion_run_id = IngestionRunService.resolve_active_run_id(
+                        db,
+                        org_id=org_id,
+                        upload_id=upload_id,
+                        agent_id=agent_id,
+                    )
+                    if ingestion_run_id is None:
+                        logger.warning(
+                            "[pgvector.query] no active ingestion_run resolved "
+                            "org={} upload={} agent={} — falling back to is_active",
+                            org_id, upload_id, agent_id,
+                        )
 
-            if agent_id is not None:
-                # Per-version KB: only chunks attached to the agent's published
-                # config should be retrievable at call-time. Otherwise a draft
-                # version's docs could leak into a live conversation.
-                from core.utils.agent_scope import published_config_subquery
-
-                published_config_sq = published_config_subquery(str(agent_id))
                 q = (
-                    q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
-                    .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+                    db.query(
+                        KnowledgeBaseChunk.id.label("chunk_id"),
+                        KnowledgeBaseChunk.chunk_text,
+                        distance.label("distance"),
+                        KnowledgeBaseChunk.upload_id,
+                        KnowledgeBaseChunk.chunk_index,
+                        KnowledgeBaseChunk.chunk_metadata,
+                        IngestionPipelineRun.id.label("run_id"),
+                    )
                     .join(
-                        AgentKnowledgeBase,
-                        AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id,
+                        KnowledgeBaseChunkEmbedding,
+                        KnowledgeBaseChunkEmbedding.chunk_id == KnowledgeBaseChunk.id,
                     )
-                    .filter(
-                        AgentKnowledgeBase.agent_id == str(agent_id),
-                        AgentKnowledgeBase.agent_config_id == published_config_sq,
-                        Upload.status == filters.get("status", "ready"),
+                    .join(
+                        IngestionPipelineRun,
+                        IngestionPipelineRun.id == KnowledgeBaseChunk.ingestion_run_id,
                     )
+                    .filter(IngestionPipelineRun.embedding_dimensions == int(dims))
                 )
-            elif upload_id is not None:
-                q = q.filter(KnowledgeBaseChunk.upload_id == str(upload_id))
+                if provider is not None:
+                    q = q.filter(IngestionPipelineRun.embedding_provider == provider)
+                if model is not None:
+                    q = q.filter(IngestionPipelineRun.embedding_model == model)
+                if ingestion_run_id is not None:
+                    q = q.filter(KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id)
+                else:
+                    # Resolver returned None (nothing ready) or upstream didn't
+                    # pass org/upload — legacy safety net keeps behavior consistent.
+                    q = q.filter(IngestionPipelineRun.is_active.is_(True))
 
-            rows = q.order_by(distance).limit(top_k).all()
+                if agent_id is not None:
+                    # Per-version KB: only chunks attached to the agent's published
+                    # config should be retrievable at call-time. Otherwise a draft
+                    # version's docs could leak into a live conversation.
+                    from core.utils.agent_scope import published_config_subquery
+
+                    published_config_sq = published_config_subquery(str(agent_id))
+                    q = (
+                        q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
+                        .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
+                        .join(
+                            AgentKnowledgeBase,
+                            AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id,
+                        )
+                        .filter(
+                            AgentKnowledgeBase.agent_id == str(agent_id),
+                            AgentKnowledgeBase.agent_config_id == published_config_sq,
+                            Upload.status == filters.get("status", "ready"),
+                        )
+                    )
+                elif upload_id is not None:
+                    q = q.filter(KnowledgeBaseChunk.upload_id == str(upload_id))
+
+                rows = q.order_by(distance).limit(top_k).all()
+        except Exception:
+            # Currently silent — one of the biggest observability gaps this
+            # method has. logger.exception preserves the traceback so the
+            # actual SQL / dimension / connectivity issue is diagnosable.
+            duration_ms = round((_time.monotonic() - t_start) * 1000)
+            logger.exception(
+                "[pgvector.query] failed query='{}' {} top_k={} provider={} "
+                "model={} agent_id={} ingestion_run_id={} duration_ms={}",
+                query_preview, vector_summary, top_k, provider, model,
+                agent_id, ingestion_run_id, duration_ms,
+            )
+            raise
+
+        duration_ms = round((_time.monotonic() - t_start) * 1000)
+        chunk_ids = [str(r.chunk_id) for r in rows]
+        run_ids = [str(r.run_id) for r in rows]
+        scores = [float(r.distance) for r in rows]
+
+        # ONE line per search — carries every field needed to debug retrieval
+        # end-to-end without opening the DB: what was asked, which embedding
+        # space the query used, which run served it, which chunks came back,
+        # how similar they were, how long it took. Vector itself is only the
+        # summary (dims + blake2b hash) so log volume stays bounded.
+        logger.info(
+            "[pgvector.query] query='{}' {} top_k={} provider={} model={} "
+            "agent_id={} ingestion_run_id={} count={} chunk_ids={} "
+            "ingestion_run_ids={} scores={} duration_ms={}",
+            query_preview, vector_summary, top_k, provider, model,
+            agent_id, ingestion_run_id, len(rows), chunk_ids,
+            run_ids, format_scores(scores), duration_ms,
+        )
 
         return [
             SearchResult(
                 text=r.chunk_text,
                 score=float(r.distance),
+                id=str(r.chunk_id),
                 metadata={
                     "upload_id": r.upload_id,
                     "chunk_index": r.chunk_index,

@@ -43,8 +43,10 @@ test.describe('Agents — create inbound', () => {
       await expect(page.getByText('New', { exact: true }).first()).toBeVisible();
     });
 
-    test('AC-002 sidebar shows the six steps without Review', async ({ page }) => {
-      for (const label of ['Basics', 'Prompt', 'AI', 'Voice', 'Tools & MCP', 'Knowledge & Phone']) {
+    test('AC-002 sidebar shows the configuration steps without Review', async ({ page }) => {
+      // Basics + AI + Overview live inside the merged Setup section, so create
+      // mode surfaces Setup, Prompt, Voice, Tools & MCP, and Knowledge & Phone.
+      for (const label of ['Setup', 'Prompt', 'Voice', 'Tools & MCP', 'Knowledge & Phone']) {
         await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
       }
       await expect(page.getByText('Review', { exact: true })).toHaveCount(0);
@@ -65,10 +67,10 @@ test.describe('Agents — create inbound', () => {
   });
 
   test.describe('Basics step', () => {
-    test('AC-005 name is required and jumps to Basics on save', async ({ page }) => {
+    test('AC-005 name is required and jumps to Setup on save', async ({ page }) => {
       // Move to a different tab, then back; clear the name; click Create.
       await page.getByText('Prompt', { exact: true }).first().click();
-      await page.getByText('Basics', { exact: true }).first().click();
+      await page.getByText('Setup', { exact: true }).first().click();
       const nameInput = page.locator('input[name="name"]').first();
       await nameInput.fill('');
       await page.getByRole('button', { name: /create agent/i }).click();

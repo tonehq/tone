@@ -1,4 +1,4 @@
-import type { EvalSettings } from '@/types/evalSettings';
+import type { EvalModelCatalog, EvalSettings } from '@/types/evalSettings';
 import axios from '@/utils/axios';
 
 // Backend routes: core/api/v1/organizations.py — GET/PUT /organization/eval-settings
@@ -24,5 +24,12 @@ export const evalSettingsApi = {
       patch,
     );
     return data;
+  },
+  // Read-only catalog of OpenAI + Gemini LLM models available as generation
+  // / answer model choices on the Evaluations settings page. Backed by
+  // ``EvalModelsService.list_llm_options`` (org-member auth).
+  listModelOptions: async (): Promise<EvalModelCatalog> => {
+    const { data } = await axios.get<EvalModelCatalog>('/organization/eval-settings/models');
+    return data ?? { providers: [], models: [] };
   },
 };

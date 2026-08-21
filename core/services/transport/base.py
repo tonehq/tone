@@ -89,7 +89,11 @@ class TelephonyTransport(CallTransport):
             from_number = call_data.get("from", "")
             to_number = call_data.get("to", "")
             if from_number or to_number:
-                logger.info(f"Call from: {from_number} to: {to_number}")
+                logger.bind(
+                    from_number=from_number,
+                    to_number=to_number,
+                    transport_type=transport_type,
+                ).info("[transport] call from={} to={}", from_number, to_number)
 
             # Outbound calls carry agent_id/direction/scheduled_call_id as TwiML
             # <Parameter> tags, which land in call_data["body"]. Promote them to the top
@@ -119,10 +123,22 @@ class TelephonyTransport(CallTransport):
             if agent:
                 start_call_trace(agent_id=agent.id, call_id=provider_call_id(call_data))
                 runner_args.body["agent"] = agent
-                logger.info(f"Resolved agent for this call: id={agent.id} name={agent.name}")
+                logger.bind(
+                    agent_id=agent.id,
+                    transport_type=transport_type,
+                ).info(
+                    "[transport] resolved agent for this call id={} name={}",
+                    agent.id, agent.name,
+                )
 
             serializer = provider.create_serializer(call_data)
-            logger.info(
+            logger.bind(
+                transport_type=transport_type,
+                serializer=type(serializer).__name__,
+                agent_id=getattr(agent, "id", None) if agent else None,
+                from_number=from_number,
+                to_number=to_number,
+            ).info(
                 "[transport] telephony transport ready transport_type={} serializer={}",
                 transport_type, type(serializer).__name__,
             )
@@ -138,9 +154,21 @@ class TelephonyTransport(CallTransport):
             )
         except ValueError:
             # Unsupported/unknown transport_type from the provider lookup.
-            logger.exception("[transport] cannot build telephony transport for transport_type={}", transport_type)
+            logger.bind(
+                transport_type=transport_type,
+                agent_id=getattr(agent, "id", None) if agent else None,
+            ).exception(
+                "[transport] cannot build telephony transport for transport_type={}",
+                transport_type,
+            )
             raise
         except Exception:
             # WebSocket parse failure, resolve_from_to error, serializer build, etc.
-            logger.exception("[transport] failed to build telephony transport (transport_type={})", transport_type)
+            logger.bind(
+                transport_type=transport_type,
+                agent_id=getattr(agent, "id", None) if agent else None,
+            ).exception(
+                "[transport] failed to build telephony transport (transport_type={})",
+                transport_type,
+            )
             raise

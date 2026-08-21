@@ -10,7 +10,11 @@ import {
   SelectInput,
   TextInput,
 } from '@/components/shared';
-import { useEvalSettings, useUpdateEvalSettings } from '@/lib/api/evalSettings';
+import {
+  useEvalModelOptions,
+  useEvalSettings,
+  useUpdateEvalSettings,
+} from '@/lib/api/evalSettings';
 import type { EvalSettings } from '@/types/evalSettings';
 import { EVAL_JUDGE_ENGINES, EVAL_METRIC_NAMES } from '@/types/evalSettings';
 import { handleApiError } from '@/utils/helpers';
@@ -151,6 +155,48 @@ export default function EvaluationSettings() {
     [],
   );
 
+  // Populate the generation / answer dropdowns from the backend catalog
+  // (OpenAI + Gemini LLM models). We ALWAYS prepend a "Use default" row so
+  // the user can revert a previously-picked model back to the env fallback —
+  // Radix Select can't hold value='' and has no clear affordance, so we use
+  // a sentinel and translate it back to '' on write. We ALSO surface the
+  // server-persisted value (not the live form value) as a "(unavailable)"
+  // row when it isn't in the catalog, so an admin-disabled model is never
+  // silently dropped from the options list when the user clicks around.
+  const USE_DEFAULT_SENTINEL = '__use_default__';
+  const { data: modelCatalog } = useEvalModelOptions();
+  const buildModelOptions = (serverValue: string | undefined) => {
+    const opts: { value: string; label: string }[] = [
+      { value: USE_DEFAULT_SENTINEL, label: 'Use default (env fallback)' },
+      ...(modelCatalog?.models ?? []).map((m) => ({
+        value: m.name,
+        label: `${m.display_name} — ${m.provider_display_name}`,
+      })),
+    ];
+    if (serverValue && !opts.some((o) => o.value === serverValue)) {
+      opts.splice(1, 0, { value: serverValue, label: `${serverValue} (unavailable)` });
+    }
+    return opts;
+  };
+  const generationModelOptions = useMemo(
+    () => buildModelOptions(serverSettings?.generation_model),
+    [modelCatalog, serverSettings?.generation_model],
+  );
+  const answerModelOptions = useMemo(
+    () => buildModelOptions(serverSettings?.answer_model),
+    [modelCatalog, serverSettings?.answer_model],
+  );
+
+  // Translate the Radix-safe sentinel back to '' on write so patchFromForm's
+  // "clear → null → env fallback" contract still applies to these dropdowns.
+  const onModelSelect = (field: 'generation_model' | 'answer_model', value: string) => {
+    const next = value === USE_DEFAULT_SENTINEL ? '' : value;
+    setForm((f) => ({ ...f, [field]: next }));
+  };
+  // Trigger-side value: mirror '' → sentinel so the selected row lights up
+  // as "Use default" instead of showing an empty trigger.
+  const modelSelectValue = (v: string) => (v ? v : USE_DEFAULT_SENTINEL);
+
   const enabledMetrics = form.metrics_enabled ?? [];
   const toggleMetric = (name: string, checked: boolean) => {
     setForm((f) => {
@@ -260,22 +306,24 @@ export default function EvaluationSettings() {
             Which LLMs generate, answer, and score. Leave blank to inherit the env default.
           </p>
           <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <TextInput
+            <SelectInput
               name="generation_model"
               label="Generation model"
               labelHint={<HintIcon text={EVAL_FIELD_HINTS.generation_model} />}
-              placeholder="e.g. gpt-4o"
-              value={form.generation_model}
-              onChange={(e) => setForm((f) => ({ ...f, generation_model: e.target.value }))}
+              placeholder="Use default"
+              options={generationModelOptions}
+              value={modelSelectValue(form.generation_model)}
+              onValueChange={(v) => onModelSelect('generation_model', v)}
               disabled={saving}
             />
-            <TextInput
+            <SelectInput
               name="answer_model"
               label="Answer model"
               labelHint={<HintIcon text={EVAL_FIELD_HINTS.answer_model} />}
-              placeholder="e.g. gpt-4o"
-              value={form.answer_model}
-              onChange={(e) => setForm((f) => ({ ...f, answer_model: e.target.value }))}
+              placeholder="Use default"
+              options={answerModelOptions}
+              value={modelSelectValue(form.answer_model)}
+              onValueChange={(v) => onModelSelect('answer_model', v)}
               disabled={saving}
             />
             <TextInput

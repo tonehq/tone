@@ -37,3 +37,18 @@ export type EvalMetricName = (typeof EVAL_METRIC_NAMES)[number];
 
 export const EVAL_JUDGE_ENGINES = ['deepeval', 'legacy'] as const;
 export type EvalJudgeEngine = (typeof EVAL_JUDGE_ENGINES)[number];
+
+// Backend catalog powering the generation / answer model dropdowns on the
+// Evaluations settings page. Filtered to OpenAI + Google (Gemini) providers
+// by ``core/services/evals/eval_models_service.py``.
+export interface EvalModelOption {
+  provider_id: string;
+  provider_display_name: string;
+  name: string;
+  display_name: string;
+}
+
+export interface EvalModelCatalog {
+  providers: { provider_id: string; display_name: string }[];
+  models: EvalModelOption[];
+}

@@ -77,20 +77,29 @@ def _build_service(kind: str, factory, spec: Any) -> Any:
     three services (or which provider) actually blew up.
     """
     if not spec:
-        logger.debug("Pipeline service {} not configured — skipping", kind)
+        logger.bind(service_kind=kind).debug(
+            "[pipeline-builder] service kind={} not configured — skipping", kind
+        )
         return None
+    provider = (spec or {}).get("provider_name")
+    model = (spec or {}).get("model_name")
     started = _time.monotonic()
     try:
         service = factory(spec)
-    except Exception as e:
-        logger.exception(
-            "Pipeline service {} FAILED to build: spec={} err={}",
-            kind, _spec_summary(spec), e,
+    except Exception:
+        logger.bind(service_kind=kind, provider=provider, model=model).exception(
+            "[pipeline-builder] service build failed kind={} provider={} model={}",
+            kind, provider, model,
         )
         raise
-    logger.info(
-        "Pipeline service {} built: {} (+{:.3f}s)",
-        kind, _spec_summary(spec), _time.monotonic() - started,
+    logger.bind(
+        service_kind=kind,
+        provider=provider,
+        model=model,
+        elapsed_ms=int((_time.monotonic() - started) * 1000),
+    ).info(
+        "[pipeline-builder] service ready kind={} provider={} model={}",
+        kind, provider, model,
     )
     return service
 
@@ -173,6 +182,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
         from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
 
+        from core.processors.llm_response_logger import LLMResponseLogger
         from core.processors.metrics_collector import MetricsCollectorProcessor
         from core.processors.stt_audio_usage_tap import STTAudioUsageTap
         from core.processors.stt_latency_tap import STTLatencyTap
@@ -183,9 +193,19 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 
         _t_build_start = _time.monotonic()
-        logger.info(
-            "Pipeline build START: agent={} s2s={} llm={} stt={} tts={}",
-            getattr(agent, "id", None), is_s2s,
+        _agent_id = getattr(agent, "id", None)
+        logger.bind(
+            agent_id=_agent_id,
+            is_s2s=is_s2s,
+            llm_provider=(params.llm or {}).get("provider_name"),
+            llm_model=(params.llm or {}).get("model_name"),
+            stt_provider=(params.stt or {}).get("provider_name"),
+            stt_model=(params.stt or {}).get("model_name"),
+            tts_provider=(params.tts or {}).get("provider_name"),
+            tts_model=(params.tts or {}).get("model_name"),
+        ).info(
+            "[pipeline-builder] build START agent={} s2s={} llm={} stt={} tts={}",
+            _agent_id, is_s2s,
             _spec_summary(params.llm), _spec_summary(params.stt), _spec_summary(params.tts),
         )
 
@@ -218,14 +238,19 @@ class PipecatPipelineBuilder(PipelineBuilder):
                     tool_request_ts=tool_request_ts,
                     current_turn=current_turn,
                 )
-                logger.info(
-                    "Document tool built for agent {}: {} tool(s), kb_configured={}",
-                    agent.id,
-                    len(doc_tools.standard_tools) if doc_tools else 0,
-                    bool(params.kb),
+                _doc_count = len(doc_tools.standard_tools) if doc_tools else 0
+                logger.bind(
+                    agent_id=agent.id,
+                    doc_tool_count=_doc_count,
+                    kb_configured=bool(params.kb),
+                ).info(
+                    "[pipeline-builder] document tool ready agent={} tools={} kb_configured={}",
+                    agent.id, _doc_count, bool(params.kb),
                 )
-            except Exception as e:
-                logger.exception("Document tool build FAILED for agent {}: {}", agent.id, e)
+            except Exception:
+                logger.bind(agent_id=agent.id).exception(
+                    "[pipeline-builder] document tool build failed agent={}", agent.id
+                )
                 raise
 
         # Custom + built-in tools, rebuilt from the cached tool dicts (no DB query).
@@ -236,7 +261,10 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 create_custom_tool_handler, sanitize_tool_name, tool_from_cache)
             custom_tools = [tool_from_cache(t) for t in params.tools]
             if custom_tools:
-                logger.info("Building {} cached tools for agent {}", len(custom_tools), agent.id)
+                logger.bind(agent_id=agent.id, tool_count=len(custom_tools)).info(
+                    "[pipeline-builder] building custom tools agent={} count={}",
+                    agent.id, len(custom_tools),
+                )
                 custom_tools_schema = build_custom_tool_schemas(custom_tools)
                 for tool in custom_tools:
                     try:
@@ -263,11 +291,23 @@ class PipecatPipelineBuilder(PipelineBuilder):
                         # model's tool call (e.g. "calender_tool") maps back to this handler.
                         fn_name = sanitize_tool_name(tool.name)
                         llm.register_function(fn_name, handler)
-                        logger.info("Registered {} tool handler: {} (fn name: {})", tool.tool_type, tool.name, fn_name)
-                    except Exception as e:
-                        logger.exception(
-                            "Tool handler registration FAILED: name={} type={} agent={} err={}",
-                            getattr(tool, "name", "?"), getattr(tool, "tool_type", "?"), agent.id, e,
+                        logger.bind(
+                            agent_id=agent.id,
+                            tool_name=tool.name,
+                            tool_type=tool.tool_type,
+                            fn_name=fn_name,
+                        ).info(
+                            "[pipeline-builder] registered tool handler type={} name={} fn={}",
+                            tool.tool_type, tool.name, fn_name,
+                        )
+                    except Exception:
+                        logger.bind(
+                            agent_id=agent.id,
+                            tool_name=getattr(tool, "name", None),
+                            tool_type=getattr(tool, "tool_type", None),
+                        ).exception(
+                            "[pipeline-builder] tool handler registration failed name={} type={} agent={}",
+                            getattr(tool, "name", "?"), getattr(tool, "tool_type", "?"), agent.id,
                         )
                         raise
 
@@ -285,18 +325,27 @@ class PipecatPipelineBuilder(PipelineBuilder):
                     current_turn=current_turn,
                     tool_dedup=tool_dedup,
                 )
-                logger.info(
-                    "MCP tools registered for agent {}: {} tool(s) (+{:.3f}s)",
+                _mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
+                logger.bind(
+                    agent_id=agent.id,
+                    mcp_tool_count=_mcp_count,
+                    elapsed_ms=int((_time.monotonic() - _t_mcp) * 1000),
+                ).info(
+                    "[pipeline-builder] MCP tools ready agent={} tools={}",
+                    agent.id, _mcp_count,
+                )
+            except Exception:
+                # Recoverable — the pipeline builds and the call still proceeds
+                # without MCP. But logged at ERROR (via .exception) with the full
+                # traceback so regressions in MCP integrations are visible in
+                # Loki without a separate lookup for the stack.
+                logger.bind(
+                    agent_id=agent.id,
+                    elapsed_ms=int((_time.monotonic() - _t_mcp) * 1000),
+                ).exception(
+                    "[pipeline-builder] MCP tools unavailable — continuing without them agent={}",
                     agent.id,
-                    len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0,
-                    _time.monotonic() - _t_mcp,
                 )
-            except Exception as e:
-                logger.warning(
-                    "MCP tools unavailable for agent {}, DISABLED after {:.3f}s: {}",
-                    agent.id, _time.monotonic() - _t_mcp, e,
-                )
-                logger.opt(exception=True).debug("MCP registration traceback for agent {}", agent.id)
 
         # Built-in end_call tool — always-on for every agent. The single,
         # canonical path for ending a call (mandatory two-step confirmation
@@ -318,7 +367,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 ),
             )
             end_call_registered = True
-            logger.info("Registered built-in end_call tool for agent {}", agent.id)
+            logger.bind(agent_id=agent.id).info(
+                "[pipeline-builder] registered built-in end_call tool agent={}", agent.id
+            )
 
         # Combine doc tools, custom tools, MCP tools, and built-in tools into one ToolsSchema
         all_tool_schemas = []
@@ -336,8 +387,15 @@ class PipecatPipelineBuilder(PipelineBuilder):
         mcp_count = len(mcp_tools_schema.standard_tools) if mcp_tools_schema else 0
         built_in_count = 1 if end_call_registered else 0
         if agent:
-            logger.info(
-                "Agent {} tool inventory: {} total (doc={}, custom={}, mcp={}, built_in={})",
+            logger.bind(
+                agent_id=getattr(agent, "id", None),
+                total_tools=len(all_tool_schemas),
+                doc_tools=doc_count,
+                custom_tools=custom_count,
+                mcp_tools=mcp_count,
+                built_in_tools=built_in_count,
+            ).info(
+                "[pipeline-builder] tool inventory agent={} total={} doc={} custom={} mcp={} built_in={}",
                 getattr(agent, "id", None), len(all_tool_schemas), doc_count, custom_count, mcp_count, built_in_count,
             )
 
@@ -365,7 +423,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).
             # System prompt is already set via session_properties.instructions (OpenAI)
             # or system_instruction (Gemini) during LLM creation.
-            logger.info("Building S2S pipeline (speech-to-speech)")
+            logger.bind(agent_id=_agent_id).info(
+                "[pipeline-builder] building S2S pipeline (speech-to-speech)"
+            )
             context = LLMContext(messages, combined_tools)
             context_aggregator = LLMContextAggregatorPair(context)
             user_aggregator = context_aggregator.user()
@@ -379,7 +439,11 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 transport.output(),
                 assistant_aggregator,
             ]
-            logger.info("[TIMING] S2S pipeline processors created (+{:.3f}s)", _time.monotonic() - _t)
+            logger.bind(
+                agent_id=_agent_id,
+                phase="s2s_processors",
+                elapsed_ms=int((_time.monotonic() - _t) * 1000),
+            ).info("[pipeline-builder] phase complete phase=s2s_processors")
         else:
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
@@ -412,12 +476,27 @@ class PipecatPipelineBuilder(PipelineBuilder):
             user_aggregator = context_aggregator.user()
             assistant_aggregator = context_aggregator.assistant()
             llm_text_processor = LLMTextProcessor()
+            # Log one INFO line per assistant response (model + turn + chars
+            # + duration + truncated text). Sits AFTER llm_text_processor so
+            # it observes the assembled text, BEFORE tts so it fires at the
+            # moment the LLM finishes — not after audio synthesis. Pairs
+            # with [pgvector.query] via the per-call trace_id for full
+            # user-query → chunks → answer correlation.
+            llm_response_logger = LLMResponseLogger(
+                llm_model=(getattr(llm, "model_name", None) or None)
+                or ((params.llm or {}).get("model_name")),
+                current_turn=current_turn,
+            )
             # Keyword-based CallEndDetectorProcessor intentionally removed.
             # All end-of-call decisions now flow through the LLM's end_call
             # tool with a mandatory two-step confirmation (see END_CALL_SYSTEM_PROMPT).
             # The agent_config.end_call_message column is preserved for
             # backwards compatibility but no longer takes effect.
-            logger.info("[TIMING] context + aggregators + processors created (+{:.3f}s)", _time.monotonic() - _t)
+            logger.bind(
+                agent_id=_agent_id,
+                phase="context_aggregators_processors",
+                elapsed_ms=int((_time.monotonic() - _t) * 1000),
+            ).info("[pipeline-builder] phase complete phase=context_aggregators_processors")
 
             # VADSpeakingTimeout caps a stuck VAD "speaking" segment (8s) so
             # segmented STTs flush and turn-stop strategies can fire; the
@@ -467,6 +546,7 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 user_aggregator,
                 llm,
                 llm_text_processor,
+                llm_response_logger,
                 tts,
                 transport.output(),
                 assistant_aggregator,
@@ -486,8 +566,11 @@ class PipecatPipelineBuilder(PipelineBuilder):
         if audio_buffer:
             pipeline_processors.append(audio_buffer)
 
-        logger.info(
-            "Pipeline processor chain ({}): {}",
+        logger.bind(
+            agent_id=_agent_id,
+            processor_count=len(pipeline_processors),
+        ).info(
+            "[pipeline-builder] processor chain ({}): {}",
             len(pipeline_processors),
             " -> ".join(getattr(p, "name", None) or type(p).__name__ for p in pipeline_processors),
         )
@@ -539,11 +622,21 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 ) if obs is not None
             ],
         )
-        logger.info("[TIMING] Pipeline + PipelineTask created (+{:.3f}s)", _time.monotonic() - _t)
-        logger.info(
-            "Pipeline build COMPLETE: agent={} s2s={} processors={} tts_sample_rate={} total={:.3f}s",
-            getattr(agent, "id", None), is_s2s, len(pipeline_processors),
-            tts_sample_rate, _time.monotonic() - _t_build_start,
+        logger.bind(
+            agent_id=_agent_id,
+            phase="pipeline_task",
+            elapsed_ms=int((_time.monotonic() - _t) * 1000),
+        ).info("[pipeline-builder] phase complete phase=pipeline_task")
+        _build_elapsed_ms = int((_time.monotonic() - _t_build_start) * 1000)
+        logger.bind(
+            agent_id=_agent_id,
+            is_s2s=is_s2s,
+            processor_count=len(pipeline_processors),
+            tts_sample_rate=tts_sample_rate,
+            elapsed_ms=_build_elapsed_ms,
+        ).info(
+            "[pipeline-builder] build COMPLETE agent={} s2s={} processors={} tts_sample_rate={} elapsed_ms={}",
+            _agent_id, is_s2s, len(pipeline_processors), tts_sample_rate, _build_elapsed_ms,
         )
 
         return BuildResult(

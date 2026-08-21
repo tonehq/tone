@@ -65,27 +65,33 @@ export async function openEditAgent(
   page: Page,
   options: { agentType: 'inbound' | 'outbound'; id: string; nameContains?: string },
 ): Promise<void> {
-  // Opening an agent lands on its Overview; step into Basics for callers that
-  // expect the editable form fields.
+  // Opening an agent lands on its Setup page (Overview + Basics + AI stacked);
+  // navigate to Setup explicitly for callers that expect the editable form fields.
   await page.goto(`/agents/edit/${options.agentType}/${options.id}`);
   if (options.nameContains) {
     await expect(page.getByText(options.nameContains).first()).toBeVisible({ timeout: 15_000 });
   } else {
-    await goToStep(page, 'basics');
+    await goToStep(page, 'setup');
     await page.locator('input[name="name"]').first().waitFor({ state: 'visible', timeout: 15_000 });
   }
 }
 
 // ── Step navigation ─────────────────────────────────────────────────────────
 
+/**
+ * `basics` and `ai` are legacy aliases for `setup` — the agent editor merged
+ * the standalone Basics/AI/Overview sections into a single Setup page. Existing
+ * callers continue to work; new specs should use `setup`.
+ */
 export async function goToStep(
   page: Page,
-  step: 'basics' | 'prompt' | 'ai' | 'voice' | 'tools' | 'knowledge',
+  step: 'setup' | 'basics' | 'prompt' | 'ai' | 'voice' | 'tools' | 'knowledge',
 ): Promise<void> {
   const labelMap: Record<typeof step, RegExp> = {
-    basics: /^basics$/i,
+    setup: /^setup$/i,
+    basics: /^setup$/i,
+    ai: /^setup$/i,
     prompt: /^prompt$/i,
-    ai: /^ai$/i,
     voice: /^voice$/i,
     tools: /^tools & mcp$/i,
     knowledge: /^knowledge & phone$/i,

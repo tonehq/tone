@@ -24,8 +24,18 @@ from core.models.agent import Agent
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
+from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.services.common.list_query import apply_search_sort_pagination
 from shared.config import settings
+
+
+class IngestionRunNotFoundError(LookupError):
+    """Typed marker raised when a callable in ``IngestionRunService`` can't
+    find a run row for the given (org, upload, id) tuple. Subclasses
+    ``LookupError`` so callers can catch a stdlib base if they don't want to
+    import this symbol, but the specific class lets the HTTP layer map to a
+    404 without also swallowing unrelated ``ValueError``s from the call chain
+    (SQLAlchemy coercion, downstream helpers, etc.)."""
 
 
 class IngestionRunService:
@@ -564,6 +574,62 @@ class IngestionRunService:
             sort_by=sort_by,
             sort_order=sort_order,
             sort_map=IngestionRunService._LIST_SORT_MAP,
+            page_no=page_no,
+            page_size=page_size,
+        )
+
+    @staticmethod
+    def list_chunks_paginated(
+        db: Session,
+        *,
+        org_id: Any,
+        upload_id: Any,
+        run_id: Any,
+        search: Optional[str] = None,
+        page_no: int = 1,
+        page_size: int = 20,
+    ) -> Tuple[List[KnowledgeBaseChunk], int]:
+        """Paginated list of chunks produced by one ingestion run, ordered by
+        ``chunk_index`` ascending so the drawer reads in the same order the
+        chunker emitted them.
+
+        Validates the run belongs to the caller's org + the supplied upload
+        (the router already resolved the upload, but re-checking on the run
+        avoids leaking chunks from another org's run that happens to share an
+        id). Raises ``ValueError`` when the run does not exist for the
+        (org, upload) pair — the router converts that into a 404.
+
+        Search matches ``chunk_text`` case-insensitively.
+        """
+        run_exists = (
+            db.query(IngestionPipelineRun.id)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.organization_id == org_id,
+                IngestionPipelineRun.upload_id == upload_id,
+            )
+            .first()
+        )
+        if run_exists is None:
+            raise IngestionRunNotFoundError(
+                f"IngestionPipelineRun {run_id} not found for upload {upload_id}"
+            )
+
+        base = (
+            db.query(KnowledgeBaseChunk)
+            .filter(
+                KnowledgeBaseChunk.organization_id == org_id,
+                KnowledgeBaseChunk.upload_id == upload_id,
+                KnowledgeBaseChunk.ingestion_run_id == run_id,
+            )
+        )
+        return apply_search_sort_pagination(
+            base,
+            search=search,
+            search_fields=[KnowledgeBaseChunk.chunk_text],
+            sort_by="chunk_index",
+            sort_order="asc",
+            sort_map={"chunk_index": KnowledgeBaseChunk.chunk_index},
             page_no=page_no,
             page_size=page_size,
         )

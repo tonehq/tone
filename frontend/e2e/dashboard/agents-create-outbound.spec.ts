@@ -35,8 +35,10 @@ test.describe('Agents — create outbound', () => {
     if (id) await deleteAgentViaUI(page, { agentType: 'outbound', id });
   });
 
-  test('ACO-003 outbound exposes the same six steps', async ({ page }) => {
-    for (const label of ['Basics', 'Prompt', 'AI', 'Voice', 'Tools & MCP', 'Knowledge & Phone']) {
+  test('ACO-003 outbound exposes the same configuration steps', async ({ page }) => {
+    // Basics + AI + Overview live inside the merged Setup section, so create
+    // mode surfaces Setup, Prompt, Voice, Tools & MCP, and Knowledge & Phone.
+    for (const label of ['Setup', 'Prompt', 'Voice', 'Tools & MCP', 'Knowledge & Phone']) {
       await expect(page.getByText(label, { exact: true }).first()).toBeVisible();
     }
     await expect(page.getByText('Review', { exact: true })).toHaveCount(0);

@@ -48,7 +48,13 @@ def build_input_params(service_class, metadata: dict):
                 if isinstance(parsed, (list, dict)):
                     filtered[k] = parsed
             except (json.JSONDecodeError, TypeError):
-                pass
+                # Expected — not every string metadata value is JSON. Debug so a
+                # config-time typo (`{unclosed`) is inspectable at DEBUG without
+                # noising the default log stream.
+                logger.debug(
+                    "[service-factory] metadata field={} raw={!r} not JSON — leaving as-is",
+                    k, v,
+                )
     if not filtered:
         return input_params_class()
     try:
@@ -68,16 +74,20 @@ def build_input_params(service_class, metadata: dict):
                 input_params_class(**trial)
                 result_kwargs = trial
             except Exception:
-                logger.warning(
-                    "Dropping invalid {}.InputParams field '{}'={!r} — rejected by Pydantic validation",
-                    service_class.__name__,
-                    key,
-                    value,
+                logger.bind(
+                    service_class=service_class.__name__,
+                    field_name=key,
+                ).warning(
+                    "[service-factory] dropping invalid {}.InputParams field '{}'={!r} — rejected by Pydantic validation",
+                    service_class.__name__, key, value,
                 )
         try:
             return input_params_class(**result_kwargs)
         except Exception:
-            logger.exception(f"Failed to build InputParams for {service_class.__name__} even after per-field retry")
+            logger.bind(service_class=service_class.__name__).exception(
+                "[service-factory] failed to build InputParams for {} even after per-field retry",
+                service_class.__name__,
+            )
             return input_params_class()
 
 
@@ -92,11 +102,15 @@ def build_llm(spec: dict) -> Optional[Any]:
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
 
-    logger.info(
-        "[LLM] building provider='{}' model='{}' base_url='{}'",
-        provider_name,
-        model,
-        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
+    _llm_base_url = (model_meta or {}).get("base_url") or (metadata or {}).get("base_url")
+    logger.bind(
+        service_kind="llm",
+        provider=provider_name,
+        model=model,
+        base_url=_llm_base_url,
+    ).info(
+        "[service-factory][LLM] building provider={} model={} base_url={}",
+        provider_name, model, _llm_base_url,
     )
 
     try:
@@ -205,13 +219,19 @@ def build_llm(spec: dict) -> Optional[Any]:
                 voice_id=voice_id,
                 system_instruction=metadata.get("system_instruction"),
             )
-        logger.warning("No matching LLM provider for '{}'", provider_name)
+        logger.bind(service_kind="llm", provider=provider_name).warning(
+            "[service-factory][LLM] no matching provider for '{}'", provider_name
+        )
         return None
     except ImportError:
-        logger.exception("LLM provider {} not available (ImportError)", provider_name)
+        logger.bind(service_kind="llm", provider=provider_name).exception(
+            "[service-factory][LLM] provider {} not available (ImportError)", provider_name
+        )
         return None
-    except Exception as e:
-        logger.exception("LLM provider {} failed to initialize: {}", provider_name, e)
+    except Exception:
+        logger.bind(service_kind="llm", provider=provider_name, model=model).exception(
+            "[service-factory][LLM] provider {} failed to initialize", provider_name
+        )
         return None
 
 
@@ -223,12 +243,17 @@ def build_stt(spec: dict) -> Optional[Any]:
     metadata = spec["metadata"]
     model_meta = spec["model_meta_data"]
 
-    logger.info(
-        "[STT] building provider='{}' model='{}' base_url='{}' sample_rate={}",
-        provider_name,
-        model,
-        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
-        (metadata or {}).get("sample_rate"),
+    _stt_base_url = (model_meta or {}).get("base_url") or (metadata or {}).get("base_url")
+    _stt_sample_rate = (metadata or {}).get("sample_rate")
+    logger.bind(
+        service_kind="stt",
+        provider=provider_name,
+        model=model,
+        base_url=_stt_base_url,
+        sample_rate=_stt_sample_rate,
+    ).info(
+        "[service-factory][STT] building provider={} model={} base_url={} sample_rate={}",
+        provider_name, model, _stt_base_url, _stt_sample_rate,
     )
 
     try:
@@ -445,13 +470,19 @@ def build_stt(spec: dict) -> Optional[Any]:
             if metadata.get("temperature") is not None:
                 sn_kwargs["temperature"] = metadata["temperature"]
             return SambaNovaSTTService(api_key=api_key, model=model or "Whisper-Large-v3", **sn_kwargs)
-        logger.warning("Unsupported STT provider: {}", provider_name)
+        logger.bind(service_kind="stt", provider=provider_name).warning(
+            "[service-factory][STT] unsupported provider: {}", provider_name
+        )
         return None
     except ImportError:
-        logger.exception("STT provider {} not available (ImportError)", provider_name)
+        logger.bind(service_kind="stt", provider=provider_name).exception(
+            "[service-factory][STT] provider {} not available (ImportError)", provider_name
+        )
         return None
-    except Exception as e:
-        logger.exception("STT provider {} failed to initialize: {}", provider_name, e)
+    except Exception:
+        logger.bind(service_kind="stt", provider=provider_name, model=model).exception(
+            "[service-factory][STT] provider {} failed to initialize", provider_name
+        )
         return None
 
 
@@ -467,7 +498,12 @@ def _close_unused_session(session) -> None:
     try:
         asyncio.get_running_loop().create_task(session.close())
     except RuntimeError:
-        pass
+        # Genuinely expected at shutdown — the loop is already closed or the
+        # cleanup ran outside a running loop context. Debug so a persistent
+        # leak (repeated failures on the same session) stays observable.
+        logger.debug(
+            "[service-factory] aiohttp session close skipped — no running loop / loop closed"
+        )
 
 
 def build_tts(spec: dict) -> Optional[Any]:
@@ -481,13 +517,17 @@ def build_tts(spec: dict) -> Optional[Any]:
     tts_voice_id = metadata.get("voice_id")
     tts_language = metadata.get("language")
 
-    logger.info(
-        "[TTS] building provider='{}' model='{}' base_url='{}' voice_id='{}' language='{}'",
-        provider_name,
-        model,
-        (model_meta or {}).get("base_url") or (metadata or {}).get("base_url"),
-        tts_voice_id,
-        tts_language,
+    _tts_base_url = (model_meta or {}).get("base_url") or (metadata or {}).get("base_url")
+    logger.bind(
+        service_kind="tts",
+        provider=provider_name,
+        model=model,
+        base_url=_tts_base_url,
+        voice_id=tts_voice_id,
+        language=tts_language,
+    ).info(
+        "[service-factory][TTS] building provider={} model={} base_url={} voice_id={} language={}",
+        provider_name, model, _tts_base_url, tts_voice_id, tts_language,
     )
 
     # HTTP-based providers create their aiohttp session lazily, in their own branch
@@ -887,13 +927,19 @@ def build_tts(spec: dict) -> Optional[Any]:
                 **cosy_kwargs,
             )
 
-        logger.warning("Unsupported TTS provider: {}", provider_name)
+        logger.bind(service_kind="tts", provider=provider_name).warning(
+            "[service-factory][TTS] unsupported provider: {}", provider_name
+        )
         return None
     except ImportError:
-        logger.exception("TTS provider {} not available (ImportError)", provider_name)
+        logger.bind(service_kind="tts", provider=provider_name).exception(
+            "[service-factory][TTS] provider {} not available (ImportError)", provider_name
+        )
         _close_unused_session(session)
         return None
-    except Exception as e:
-        logger.exception("TTS provider {} failed to initialize: {}", provider_name, e)
+    except Exception:
+        logger.bind(service_kind="tts", provider=provider_name, model=model).exception(
+            "[service-factory][TTS] provider {} failed to initialize", provider_name
+        )
         _close_unused_session(session)
         return None

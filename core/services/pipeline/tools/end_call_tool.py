@@ -346,8 +346,14 @@ def create_end_call_handler(
         }
 
         if state["fired"]:
-            logger.info(
-                "end_call invoked again — ignoring (already ending). reason={!r}", reason
+            logger.bind(
+                tool_name=END_CALL_TOOL_NAME,
+                tool_type="built_in",
+                call_id=call_id_holder.get("id") if call_id_holder else None,
+                reason=reason,
+            ).info(
+                "[end-call-tool] end_call invoked again — ignoring (already ending) reason={!r}",
+                reason,
             )
             entry["result"] = "ignored: already ending"
             entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
@@ -359,8 +365,15 @@ def create_end_call_handler(
         # the ask/reply step, refuse and instruct it to try again. Do NOT
         # mark ``state["fired"]`` so a later, valid attempt can still succeed.
         if not _confirmation_valid(transcript_entries):
-            logger.warning(
-                "end_call blocked — confirmation flow not completed. reason={!r}", reason
+            logger.bind(
+                tool_name=END_CALL_TOOL_NAME,
+                tool_type="built_in",
+                call_id=call_id_holder.get("id") if call_id_holder else None,
+                reason=reason,
+                turn=current_turn["number"] if current_turn else None,
+            ).warning(
+                "[end-call-tool] end_call blocked — confirmation flow not completed reason={!r}",
+                reason,
             )
             log_call_event(
                 EVENT_END_CALL_BLOCKED,
@@ -376,7 +389,13 @@ def create_end_call_handler(
             return
 
         state["fired"] = True
-        logger.info("LLM end_call invoked — ending pipeline. reason={!r}", reason)
+        logger.bind(
+            tool_name=END_CALL_TOOL_NAME,
+            tool_type="built_in",
+            call_id=call_id_holder.get("id") if call_id_holder else None,
+            reason=reason,
+            turn=current_turn["number"] if current_turn else None,
+        ).info("[end-call-tool] LLM end_call invoked — ending pipeline reason={!r}", reason)
         log_call_event(
             EVENT_CALL_ENDED,
             call_id=call_id_holder.get("id") if call_id_holder else None,
@@ -397,7 +416,12 @@ def create_end_call_handler(
             await params.pipeline_worker.queue_frame(EndFrame())
             entry["result"] = "ending"
         except Exception as e:
-            logger.error("Failed to queue EndFrame from end_call handler: {}", e)
+            logger.bind(
+                tool_name=END_CALL_TOOL_NAME,
+                tool_type="built_in",
+                call_id=call_id_holder.get("id") if call_id_holder else None,
+                reason=reason,
+            ).exception("[end-call-tool] failed to queue EndFrame from end_call handler")
             entry["result"] = f"error: {e}"
 
         entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)

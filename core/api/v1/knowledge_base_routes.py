@@ -19,6 +19,7 @@ from fastapi import (
     File,
     Form,
     HTTPException,
+    Query,
     UploadFile,
     status,
 )
@@ -115,7 +116,10 @@ from core.services.ingestion_queue import (
     enqueue_reprocess,
     enqueue_upload,
 )
-from core.services.ingestion_run_service import IngestionRunService
+from core.services.ingestion_run_service import (
+    IngestionRunNotFoundError,
+    IngestionRunService,
+)
 from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
@@ -988,6 +992,57 @@ def build_knowledge_base_router(
             )
         activated = IngestionRunService.activate_run(db, run.id)
         return activated.to_dict()
+
+    @router.get("/{upload_id}/runs/{run_id}/chunks")
+    def list_pipeline_run_chunks(
+        upload_id: str,
+        run_id: str,
+        page_no: int = Query(default=1, ge=1),
+        page_size: int = Query(default=20, ge=1, le=200),
+        search: Optional[str] = Query(default=None),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Paginated list of chunks produced by a single ingestion run —
+        powers the chunks drawer on the KB → Ingestion runs tab."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            rid = UUID(run_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id"
+            )
+        try:
+            rows, total = IngestionRunService.list_chunks_paginated(
+                db,
+                org_id=org_id,
+                upload_id=upload.id,
+                run_id=rid,
+                search=search,
+                page_no=page_no,
+                page_size=page_size,
+            )
+        except IngestionRunNotFoundError:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Run not found for this upload",
+            )
+        return {
+            "data": [
+                {
+                    "id": str(c.id),
+                    "chunk_index": c.chunk_index,
+                    "chunk_text": c.chunk_text,
+                    "chunk_metadata": c.chunk_metadata,
+                    "created_at": c.created_at.isoformat() if c.created_at else None,
+                }
+                for c in rows
+            ],
+            "total": total,
+            "page_no": page_no,
+            "page_size": page_size,
+        }
 
     @router.post("/{upload_id}/eval-summary/by-ingestion")
     def eval_summary_by_ingestion(

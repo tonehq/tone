@@ -7,7 +7,9 @@ import type {
 } from '@/types/pipelineOptions';
 import type {
   IngestionRun,
+  ListIngestionRunChunksParams,
   ListIngestionRunsParams,
+  PaginatedIngestionRunChunks,
   PaginatedIngestionRuns,
 } from '@/types/ingestionRun';
 
@@ -75,6 +77,22 @@ export const createCustomIngestionRun = async (
   const res = await axiosInstance.post<CreateIngestionRunResponse>(
     `/knowledge-base/${uploadId}/runs`,
     payload,
+  );
+  return res.data;
+};
+
+export const listIngestionRunChunks = async (
+  uploadId: string,
+  runId: string,
+  params: ListIngestionRunChunksParams = {},
+): Promise<PaginatedIngestionRunChunks> => {
+  const query: Record<string, string | number> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') query[k] = v as string | number;
+  }
+  const res = await axiosInstance.get<PaginatedIngestionRunChunks>(
+    `/knowledge-base/${uploadId}/runs/${runId}/chunks`,
+    { params: query },
   );
   return res.data;
 };
