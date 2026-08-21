@@ -312,7 +312,7 @@ export default function NewOutboundCallModal({
           if (schemaId) fd.append('schema_id', schemaId);
           if (scheduleColumn.trim()) fd.append('schedule_column', scheduleColumn.trim());
           if (maxConcurrency) fd.append('max_concurrency', String(maxConcurrency));
-          fd.append('provider', values.provider);
+          if (values.provider === 'websocket') fd.append('provider', values.provider);
           fd.append('file', csvFile);
           res = await createCallFromFile(fd);
         } else {
@@ -323,7 +323,7 @@ export default function NewOutboundCallModal({
             scheduled_at: scheduledAt,
             directory_id: pickedDirectoryId || undefined,
             max_concurrency: maxConcurrency ?? undefined,
-            provider: values.provider,
+            provider: values.provider === 'websocket' ? 'websocket' : undefined,
           };
           res = await createCall(payload);
         }
