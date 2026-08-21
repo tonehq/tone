@@ -1,15 +1,29 @@
-import type { EvalModelCatalog, EvalSettings } from '@/types/evalSettings';
+import type {
+  EvalModelCatalog,
+  EvalSettings,
+  LlmEvalOrgSettings,
+  RagEvalOrgSettings,
+} from '@/types/evalSettings';
 import axios from '@/utils/axios';
 
 // Backend routes: core/api/v1/organizations.py — GET/PUT /organization/eval-settings
-// GET returns the raw JSONB (missing keys stay absent — do NOT default them
-// client-side; unset means "resolved from env / hardcoded default at eval time").
-// PUT accepts a partial patch that is deep-merged into the existing row.
-// A field explicitly set to ``null`` is DELETED from the stored JSONB so the
-// resolver falls back to env / hardcoded default — that's how the UI expresses
-// "revert this field to fallback" when the user clears an input.
+// GET returns the raw JSONB — the two sub-objects ``rag_evals`` and
+// ``llm_evals``. Missing keys stay absent (do NOT default them client-side;
+// unset means "resolved from env / hardcoded default at eval time").
+// PUT accepts a partial patch shaped like the storage — each slot may be
+// present with a subset of keys OR set to ``null`` to drop the whole slot;
+// inside a slot, a field set to ``null`` is DELETED from the stored JSONB
+// so the resolver falls back to env / hardcoded default. That's how the UI
+// expresses "revert this field to fallback" when the user clears an input.
 
-export type EvalSettingsPatch = { [K in keyof EvalSettings]?: EvalSettings[K] | null };
+type SlotPatch<T> = { [K in keyof T]?: T[K] | null };
+export type RagEvalPatch = SlotPatch<RagEvalOrgSettings>;
+export type LlmEvalPatch = SlotPatch<LlmEvalOrgSettings>;
+
+export interface EvalSettingsPatch {
+  rag_evals?: RagEvalPatch | null;
+  llm_evals?: LlmEvalPatch | null;
+}
 
 export const evalSettingsApi = {
   get: async (): Promise<EvalSettings> => {

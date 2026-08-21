@@ -2,6 +2,7 @@ import {
   Book,
   CalendarClock,
   Clock,
+  Gauge,
   MessageSquare,
   Radio,
   Settings2,
@@ -38,6 +39,10 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'voice', label: 'Voice', icon: Volume2 },
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
   { key: 'knowledge', label: 'Knowledge', icon: Book },
+  // LLM Evals sits after Knowledge — Level-2 sits below Level-1 in the UX
+  // as it does in the mental model (RAG evals score retrieval; LLM evals
+  // score the agent's actual answer + system-prompt behavior).
+  { key: 'llm-evals', label: 'LLM Evals', icon: Gauge },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'schedule', label: 'Schedule', icon: CalendarClock },

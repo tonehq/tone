@@ -832,7 +832,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // Call History, Contacts and Schedule host full-width tables + toolbars — they need
   // the entire content width. The form sections (Basics, Prompt, …) stay in the
   // narrow, centered max-w-3xl column that reads better for forms.
-  const isWideSection = /\/(call-history|contacts|schedule)$/.test(pathname);
+  const isWideSection = /\/(call-history|contacts|schedule|llm-evals)$/.test(pathname);
   if (isBuilderRoute) {
     return (
       <FormProvider {...methods}>

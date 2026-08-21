@@ -93,6 +93,16 @@ class AgentLlmEvalResult(OrgScopedModel):
     )
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
+    # v2 forward-compat — reserved for the (not yet built) tool/MCP-scoring
+    # runner. ``execution_trace`` will store the ordered step-by-step trace
+    # of what the agent actually did (tool calls, arguments, results);
+    # ``tools_called`` will store the flat list for cheap ``expected vs
+    # actual`` diffs against ``AgentLlmEvalScenario.expected_tools``. Both
+    # stay ``NULL`` for every v1 row so existing writers/readers are
+    # unchanged; wired up when the tool-scoring metric ships.
+    execution_trace = Column(JSONB, nullable=True)
+    tools_called = Column(JSONB, nullable=True)
+
     def to_dict(self) -> dict:
         return {
             "id": str(self.id),
@@ -122,6 +132,8 @@ class AgentLlmEvalResult(OrgScopedModel):
             "judge_error": self.judge_error,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "execution_trace": self.execution_trace,
+            "tools_called": self.tools_called,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

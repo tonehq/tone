@@ -14,6 +14,7 @@ import ChannelsStep from '@/components/agents/agent-form/steps/ChannelsStep';
 import ContactsStep from '@/components/agents/agent-form/steps/ContactsStep';
 import ScheduleStep from '@/components/agents/agent-form/steps/ScheduleStep';
 import CallHistoryStep from '@/components/agents/agent-form/steps/CallHistoryStep';
+import LlmEvalsStep from '@/components/agents/agent-form/steps/LlmEvalsStep';
 
 // Maps a URL section segment to its body. Shared by the edit and create
 // section routes; the editor's form state + chrome live in the layout
@@ -35,9 +36,12 @@ export default function AgentSectionBody({
     section === 'voice' ||
     section === 'tools' ||
     section === 'knowledge' ||
-    section === 'channels';
+    section === 'channels' ||
+    // LLM Evals renders in both modes — an empty "save the agent first"
+    // state in create mode, real UI once agent_id is persisted.
+    section === 'llm-evals';
   // Call History, Contacts, and Schedule only exist for a saved agent
-  // (edit mode) — they need a persisted agent_id to scope/assign against.
+  // (edit mode) — they need a persisted agent_id to scope against.
   const known =
     isStep ||
     ((section === 'call-history' || section === 'contacts' || section === 'schedule') && !!agentId);
@@ -87,6 +91,8 @@ export default function AgentSectionBody({
       return <ScheduleStep agentId={agentId} />;
     case 'call-history':
       return <CallHistoryStep agentId={agentId} />;
+    case 'llm-evals':
+      return <LlmEvalsStep agentId={agentId} />;
     default:
       return null;
   }

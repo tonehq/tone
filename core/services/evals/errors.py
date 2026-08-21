@@ -45,3 +45,17 @@ class AgentLlmEvalRunError(AgentLlmEvalError):
     judge orchestrator raised, or the persistence path raised. The run's
     completed scenarios are still persisted; this signals the batch was not
     a clean completion so the CLI exits non-zero."""
+
+
+class AgentLlmScenarioNotFoundError(AgentLlmEvalError):
+    """Requested scenario row does not exist for the caller's (agent, org)
+    scope. Distinguished from a general 404 so the route layer can map it
+    to a stable ``SCENARIO_NOT_FOUND`` error code the FE can react to."""
+
+
+class AgentLlmScenarioKeyConflictError(AgentLlmEvalError):
+    """Attempted to create / update a scenario whose ``scenario_key`` collides
+    with another scenario on the SAME agent. Enforced via the
+    ``uq_agent_llm_eval_scenarios_agent_key`` DB constraint AND explicitly
+    checked at the service layer so we can surface the offending key to the
+    user before the INSERT."""
