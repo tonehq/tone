@@ -749,6 +749,12 @@ function RunEvalModal({
 
 // ── Generate scenarios modal ────────────────────────────────────────────
 
+// Bound + default match the backend's ``_MAX_COUNT`` in
+// ``scenario_generation/strategies/llm.py`` — the server clamps anyway, but
+// mirroring the bound here saves a round-trip on a mistyped input.
+const GENERATE_DEFAULT_COUNT = 10;
+const GENERATE_MAX_COUNT = 50;
+
 function GenerateScenariosModal({
   open,
   onClose,
@@ -759,33 +765,41 @@ function GenerateScenariosModal({
   agentId: string;
 }) {
   const generate = useGenerateAgentLlmEvalScenarios(agentId);
-  const [strategy, setStrategy] = useState('noop');
-  const [count, setCount] = useState('10');
+  const [count, setCount] = useState(String(GENERATE_DEFAULT_COUNT));
 
   useEffect(() => {
     if (!open) {
-      setStrategy('noop');
-      setCount('10');
+      setCount(String(GENERATE_DEFAULT_COUNT));
     }
   }, [open]);
 
   const submit = async () => {
+    const parsedCount = Math.max(
+      1,
+      Math.min(GENERATE_MAX_COUNT, Number(count) || GENERATE_DEFAULT_COUNT),
+    );
     try {
       const result = await generate.mutateAsync({
-        strategy: strategy.trim() || 'noop',
-        count: Math.max(1, Math.min(100, Number(count) || 10)),
-        dry_run: true,
+        // Only one strategy is surfaced in v1. ``noop`` stays on the backend
+        // as a safety net + test target.
+        strategy: 'llm',
+        count: parsedCount,
+        // Persist directly — the ``persisted`` list on the response drives
+        // the scenarios-table refresh via ``useGenerateAgentLlmEvalScenarios``'s
+        // shared invalidator.
+        dry_run: false,
       });
-      if (result.generated.length === 0) {
+      const added = result.persisted.length;
+      if (added === 0) {
         showToast.info(
           'Auto-generate',
           result.note ??
-            'The current strategy returned no scenarios yet. Real strategies coming soon.',
+            'The generator returned no usable scenarios. Try again, or tweak the agent’s system prompt.',
         );
       } else {
         showToast.success(
-          `${result.generated.length} scenarios previewed`,
-          'Save-all not wired yet — copy anything useful into New Scenario.',
+          `${added} scenario${added === 1 ? '' : 's'} added`,
+          'Generated from the agent’s published system prompt.',
         );
       }
       onClose();
@@ -799,7 +813,7 @@ function GenerateScenariosModal({
       open={open}
       onClose={onClose}
       title="Auto-generate scenarios"
-      description="Preview scenarios from a strategy without persisting."
+      description="Uses the org’s judge model + this agent’s system prompt to draft scenarios and save them."
       width="max-w-lg"
       footer={
         <div className="flex justify-end gap-2">
@@ -807,25 +821,21 @@ function GenerateScenariosModal({
             Cancel
           </CustomButton>
           <CustomButton type="primary" onClick={submit} loading={generate.isPending}>
-            Preview
+            Generate
           </CustomButton>
         </div>
       }
     >
       <div className="flex flex-col gap-3">
-        <SelectInput
-          name="strategy"
-          label="Strategy"
-          value={strategy}
-          onValueChange={(v) => setStrategy(v || 'noop')}
-          options={[{ value: 'noop', label: 'Noop (placeholder — coming soon)' }]}
-        />
         <TextInput
           name="count"
-          label="Count"
+          label="How many scenarios?"
           type="number"
+          min={1}
+          max={GENERATE_MAX_COUNT}
           value={count}
           onChange={(e) => setCount(e.target.value)}
+          helperText={`Between 1 and ${GENERATE_MAX_COUNT}. Existing scenarios are never overwritten — duplicates skip.`}
         />
       </div>
     </CustomModal>

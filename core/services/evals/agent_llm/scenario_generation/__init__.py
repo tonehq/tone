@@ -25,12 +25,19 @@ def _build_registry() -> dict[str, type[ScenarioGenerator]]:
     # Local import keeps the module cheap to load when only the ABC is needed.
     from core.services.evals.agent_llm.scenario_generation import strategies  # noqa: F401
 
+    from core.services.evals.agent_llm.scenario_generation.strategies.llm import (
+        LlmGenerator,
+    )
     from core.services.evals.agent_llm.scenario_generation.strategies.noop import (
         NoopGenerator,
     )
 
     registry: dict[str, type[ScenarioGenerator]] = {
+        # ``noop`` stays registered as a safety net + regression target — it
+        # returns an empty list and never touches the LLM. The FE surfaces
+        # only ``llm`` in the dropdown.
         NoopGenerator.strategy_key: NoopGenerator,
+        LlmGenerator.strategy_key: LlmGenerator,
     }
     return registry
 
