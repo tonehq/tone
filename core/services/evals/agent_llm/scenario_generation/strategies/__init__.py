@@ -8,8 +8,11 @@ Add a new strategy: create ``strategies/<name>.py`` implementing
 
 from __future__ import annotations
 
+from core.services.evals.agent_llm.scenario_generation.strategies.llm import (
+    LlmGenerator,
+)
 from core.services.evals.agent_llm.scenario_generation.strategies.noop import (
     NoopGenerator,
 )
 
-__all__ = ["NoopGenerator"]
+__all__ = ["LlmGenerator", "NoopGenerator"]
