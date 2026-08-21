@@ -4,6 +4,7 @@ import io
 import time
 from typing import TYPE_CHECKING, Callable, List, Optional
 
+from loguru import logger
 from PyPDF2 import PdfReader as _PdfReader
 
 from core.services.rag.chunkers import Chunker
@@ -182,5 +183,21 @@ class RAGPipeline:
         return total
 
     def retrieve(self, query: str, top_k: int = 3, *, filters: Optional[dict] = None) -> List[SearchResult]:
-        query_embedding = self.embedder.embed_query(query)
-        return self.store.query(query_embedding, top_k=top_k, filters=filters)
+        # Two-tier error handling mirrors the live ``read_document`` path so
+        # eval failures tell the operator which step blew up (embed vs
+        # store) from the summary line alone — no traceback dive required.
+        try:
+            query_embedding = self.embedder.embed_query(query)
+        except Exception:
+            logger.exception(
+                "[rag.retrieve] embed failed query='{}' top_k={} filters={}",
+                query, top_k, filters,
+            )
+            raise
+        # Forward the natural-language query so the underlying store's log
+        # line carries it. Used by the eval harness — same debug signal as
+        # the live read_document path. The store logs its own failures with
+        # ``[pgvector.query] failed`` so we don't wrap another try here.
+        return self.store.query(
+            query_embedding, top_k=top_k, filters=filters, query_text=query
+        )

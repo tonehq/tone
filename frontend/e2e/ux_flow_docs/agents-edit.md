@@ -9,6 +9,15 @@ back to its scenario.
 > verification steps). See [`_template.md`](_template.md) for the canonical
 > shape and ID prefixes.
 
+> **Section consolidation (2026-08-20):** The standalone `Basics`, `AI`, and
+> `Overview` sections have been merged into a single **`Setup`** section that
+> renders Overview (edit-only) + Basics + AI stacked on one page. Anywhere this
+> doc says visit `/agents/edit/…/basics`, `/agents/edit/…/ai`, or
+> `/agents/edit/…/overview`, the app now serves `/agents/edit/…/setup` — the
+> legacy URLs `router.replace` to `/setup` in `AgentSectionBody`, so old
+> bookmarks and specs keep working. Any sidebar assertion for the labels
+> `Basics`, `AI`, or `Overview` should target `Setup` instead.
+
 ## User stories
 
 - As a user, I can open `/agents/edit/{type}/{id}` and see the existing

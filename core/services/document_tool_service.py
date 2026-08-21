@@ -84,7 +84,11 @@ def create_document_handler(
         import time as _time
 
         query = params.arguments.get("query", "")
-        logger.info("read_document called: query='{}' agent_id={}", query, agent_id)
+        logger.bind(
+            tool_name="read_document",
+            tool_type="read_document",
+            agent_id=agent_id,
+        ).info("[doc-tool] read_document invoked query='{}' agent={}", query, agent_id)
         _t_start = _time.monotonic()
         timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
@@ -130,12 +134,24 @@ def create_document_handler(
                 vector_store_ref = dict(ref_tuple) if ref_tuple else {}
                 run_ids = [u["ingestion_run_id"] for u in uploads_in_group]
 
+                # Two-tier error handling: the inner try isolates embedding
+                # failures (bad key, rate limit, model dropped) from store
+                # failures (bad SQL, dead connection). Each raises its own
+                # tagged log line so the operator can tell which step blew
+                # up from the summary alone, without opening the traceback.
+                # The outer try is the safety net for anything unclassified
+                # (get_embedder / get_vector_store / DB session errors).
                 try:
                     with get_db_context() as db:
                         api_key = ProviderKeyService.get_key(db, org_id, provider)
                     if not api_key:
-                        logger.warning(
-                            "read_document: no {!r} API key for org {}, skipping group",
+                        logger.bind(
+                            tool_name="read_document",
+                            agent_id=agent_id,
+                            organization_id=org_id,
+                            embedding_provider=provider,
+                        ).warning(
+                            "[doc-tool] no {!r} API key for org {} — skipping group",
                             provider, org_id,
                         )
                         failures += 1
@@ -144,10 +160,27 @@ def create_document_handler(
                         provider, model=model, api_key=api_key, dimensions=dims
                     )
                     store = get_vector_store(vector_store, **vector_store_ref)
-                    query_embedding = embedder.embed_query(query)
+
+                    try:
+                        query_embedding = embedder.embed_query(query)
+                    except Exception:
+                        logger.bind(
+                            tool_name="read_document",
+                            agent_id=agent_id,
+                            embedding_provider=provider,
+                            embedding_model=model,
+                            embedding_dimensions=dims,
+                        ).exception(
+                            "[doc-tool] embed failed provider={} model={} dims={} query='{}' "
+                            "(skipping group)",
+                            provider, model, dims, query,
+                        )
+                        failures += 1
+                        continue
+
                     # Per-agent published-config filter still applies inside store.query;
                     # we additionally pin the exact ingestion_run_ids from this group so
-                    # a stale row from another run can't leak in.
+                    # a stale run row can't leak in.
                     for run_id in run_ids:
                         results = store.query(
                             query_embedding,
@@ -159,11 +192,24 @@ def create_document_handler(
                                 "embedding_model": model,
                                 "embedding_dimensions": dims,
                             },
+                            # Forward the natural-language query so the
+                            # pgvector log line captures it alongside the
+                            # embedding hash — one grep gives you the whole
+                            # retrieval story for a call.
+                            query_text=query,
                         )
                         merged.extend(results)
                 except Exception:
-                    logger.exception(
-                        "read_document: group ({}, {}, {}, {}D) failed", vector_store, provider, model, dims
+                    logger.bind(
+                        tool_name="read_document",
+                        agent_id=agent_id,
+                        vector_store=vector_store,
+                        embedding_provider=provider,
+                        embedding_model=model,
+                        embedding_dimensions=dims,
+                    ).exception(
+                        "[doc-tool] group failed vector_store={} provider={} model={} dims={} query='{}'",
+                        vector_store, provider, model, dims, query,
                     )
                     failures += 1
 
@@ -190,7 +236,14 @@ def create_document_handler(
             top = merged[:top_k]
             chunks_text = "\n\n---\n\n".join(r.text for r in top)
             result = f"Here is the relevant content from the documents:\n\n{chunks_text}"
-            logger.info("read_document returning {} chunks for query='{}'", len(top), query)
+            logger.bind(
+                tool_name="read_document",
+                agent_id=agent_id,
+                chunks_returned=len(top),
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).info(
+                "[doc-tool] read_document returning {} chunks for query='{}'", len(top), query
+            )
 
             tool_call_entry["result"] = "success"
             tool_call_entry["chunks_returned"] = len(top)
@@ -201,7 +254,11 @@ def create_document_handler(
             await params.result_callback(result)
 
         except Exception as e:
-            logger.exception("read_document failed")
+            logger.bind(
+                tool_name="read_document",
+                agent_id=agent_id,
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).exception("[doc-tool] read_document failed")
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["status_code"] = 500
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)

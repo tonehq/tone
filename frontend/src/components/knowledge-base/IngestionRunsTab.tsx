@@ -1,12 +1,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock, Copy, ListChecks, Loader2, Play, Plus, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
+import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDrawer';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
-import ManualEvalsModal from '@/components/knowledge-base/ManualEvalsModal';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
 import { useEvalSummariesByIngestion, useTriggerEvalRun } from '@/lib/api/evals';
@@ -120,17 +120,22 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const [runningEvalId, setRunningEvalId] = useState<string | null>(null);
 
   const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
-  const [manualEvalsOpen, setManualEvalsOpen] = useState(false);
+  const [chunksDrawerRun, setChunksDrawerRun] = useState<IngestionRun | null>(null);
   const [newRunOpen, setNewRunOpen] = useState(false);
 
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
 
   // Batch-fetch the latest eval-batch summary for every visible ingestion run
-  // so the "Evals" column paints in one query instead of N.
+  // so the "Evals" column paints in one query instead of N. Memo the derived
+  // map so its identity is stable across renders — otherwise the {} fallback
+  // on the loading tick invalidates the columns useMemo on every render.
   const visibleRunIds = useMemo(() => runs.map((r) => r.id), [runs]);
   const { data: evalSummariesResp } = useEvalSummariesByIngestion(uploadId, visibleRunIds);
-  const evalSummariesByIngestion = evalSummariesResp?.items ?? {};
+  const evalSummariesByIngestion = useMemo(
+    () => evalSummariesResp?.items ?? {},
+    [evalSummariesResp],
+  );
 
   // When the parent doesn't pass the KB's active run id (e.g. the KB payload
   // isn't reachable in that view), derive it from the runs list so the
@@ -186,7 +191,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         width: 'w-[80px]',
         render: (value) => (
           <span className="text-sm font-medium tabular-nums text-foreground">
-            {value as number}
+            #{value as number}
           </span>
         ),
       },
@@ -197,7 +202,10 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         render: (_v, r) =>
           r.ingestion_config_name ? (
             <CustomTooltip content={r.ingestion_config_name}>
-              <span className="line-clamp-1 max-w-[170px] text-sm text-foreground">
+              <span
+                onClick={(e) => e.stopPropagation()}
+                className="line-clamp-1 max-w-[170px] text-sm text-foreground"
+              >
                 {r.ingestion_config_name}
               </span>
             </CustomTooltip>
@@ -213,21 +221,14 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         width: 'w-[140px]',
         render: (_value, record) => {
           const s = statusStyle[record.status] ?? statusStyle.pending;
-          const pill = (
-            <span
-              className={cn(
-                'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
-                s.className,
-              )}
-            >
-              {s.icon}
-              {s.label}
-            </span>
-          );
-          // For error rows, show a bounded, scrollable tooltip instead of the
-          // browser's native `title` popup (which renders as a very tall,
-          // unbounded block for long stack traces).
+          // For error rows the pill is a tooltip trigger — the user is clicking
+          // to inspect the error, not to open the chunks drawer. Non-error
+          // pills stay inert (no stopPropagation) so the row-click still fires.
           const friendlyError = formatIngestionError(record.error);
+          const pillClass = cn(
+            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+            s.className,
+          );
           if (friendlyError) {
             return (
               <CustomTooltip
@@ -237,11 +238,19 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
                   </div>
                 }
               >
-                {pill}
+                <span onClick={(e) => e.stopPropagation()} className={pillClass}>
+                  {s.icon}
+                  {s.label}
+                </span>
               </CustomTooltip>
             );
           }
-          return pill;
+          return (
+            <span className={pillClass}>
+              {s.icon}
+              {s.label}
+            </span>
+          );
         },
       },
       {
@@ -316,7 +325,10 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
             <CustomTooltip content={tooltip}>
               <button
                 type="button"
-                onClick={() => setDrawerRun(r)}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setDrawerRun(r);
+                }}
                 className={cn(
                   'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:brightness-110',
                   chip.className,
@@ -351,7 +363,10 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
           r.procrastinate_job_id != null ? (
             <button
               type="button"
-              onClick={() => copyJobId(r.procrastinate_job_id as number)}
+              onClick={(e) => {
+                e.stopPropagation();
+                copyJobId(r.procrastinate_job_id as number);
+              }}
               className="inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground hover:text-foreground"
               title="Copy job id"
             >
@@ -375,7 +390,10 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
                 </div>
               }
             >
-              <span className="line-clamp-1 max-w-[280px] text-xs text-destructive">
+              <span
+                onClick={(e) => e.stopPropagation()}
+                className="line-clamp-1 max-w-[280px] text-xs text-destructive"
+              >
                 {friendly}
               </span>
             </CustomTooltip>
@@ -398,7 +416,13 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
           // Single-flight across rows via runningEvalId (see handleRunEvals).
           const evalsDisabled = r.status !== 'ready' || !!runningEvalId;
           return (
-            <div className="flex items-center justify-end gap-1">
+            // Fill the whole cell so clicks on the surrounding <td> padding
+            // are also absorbed — otherwise clicking just off-target inside
+            // the actions column bubbles to the row and opens the drawer.
+            <div
+              className="-mx-4 -my-3.5 flex items-center justify-end gap-1 px-4 py-3.5"
+              onClick={(e) => e.stopPropagation()}
+            >
               <CustomTooltip
                 content={
                   r.status === 'ready'
@@ -438,18 +462,20 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
     <div className="flex min-h-0 flex-1 flex-col gap-4 py-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-foreground">Ingestion runs</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Ingestion runs</h2>
+            {total > 0 && (
+              <Badge variant="secondary" className="text-xs tabular-nums">
+                {total}
+              </Badge>
+            )}
+          </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             Every ingestion attempt — parser, tokeniser, embedder, and store. The active run is what
             live retrieval reads.
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {total > 0 && (
-            <Badge variant="secondary" className="text-xs tabular-nums">
-              {total}
-            </Badge>
-          )}
           <CustomButton
             type="primary"
             size="sm"
@@ -458,15 +484,6 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
           >
             <Plus className="mr-1 size-4" />
             New run
-          </CustomButton>
-          <CustomButton
-            type="default"
-            size="sm"
-            onClick={() => setManualEvalsOpen(true)}
-            aria-label="Manage eval questions"
-          >
-            <ListChecks className="mr-1 size-4" />
-            Manage evals
           </CustomButton>
         </div>
       </div>
@@ -484,6 +501,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
             setSearch(v);
             setPage(1);
           }}
+          onRowClick={(row) => setChunksDrawerRun(row)}
           onSortChange={(next) => {
             if (next) setSort(next);
           }}
@@ -513,10 +531,11 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         ingestionRun={drawerRun}
       />
 
-      <ManualEvalsModal
-        open={manualEvalsOpen}
-        onClose={() => setManualEvalsOpen(false)}
+      <IngestionChunksDrawer
+        open={chunksDrawerRun !== null}
+        onClose={() => setChunksDrawerRun(null)}
         uploadId={uploadId}
+        ingestionRun={chunksDrawerRun}
       />
 
       <NewIngestionRunModal

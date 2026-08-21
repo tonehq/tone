@@ -5,13 +5,16 @@ import {
   activateIngestionRun,
   createCustomIngestionRun,
   getPipelineOptions,
+  listIngestionRunChunks,
   listIngestionRuns,
   setAgentKbActiveRun,
   type AgentKnowledgeBaseRow,
 } from '@/services/ingestionRunService';
 import type {
   IngestionRun,
+  ListIngestionRunChunksParams,
   ListIngestionRunsParams,
+  PaginatedIngestionRunChunks,
   PaginatedIngestionRuns,
 } from '@/types/ingestionRun';
 import type {
@@ -21,6 +24,7 @@ import type {
 } from '@/types/pipelineOptions';
 
 export const INGESTION_RUNS_QUERY_KEY = 'ingestion-runs';
+export const INGESTION_RUN_CHUNKS_QUERY_KEY = 'ingestion-run-chunks';
 export const PIPELINE_OPTIONS_QUERY_KEY = 'pipeline-options';
 
 // Poll while any row is still processing so status flips arrive without a
@@ -74,6 +78,22 @@ export function useCreateCustomIngestionRun(uploadId: string) {
       // then follows its pending → running → ready transitions.
       qc.invalidateQueries({ queryKey: [INGESTION_RUNS_QUERY_KEY, uploadId] });
     },
+  });
+}
+
+// Paginated chunks for one ingestion run — powers the chunks drawer opened
+// from the runs table. Only fetches when both ids are set AND the caller
+// signals the drawer is open, so closed rows never hit the backend.
+export function useIngestionRunChunks(
+  uploadId: string | null,
+  runId: string | null,
+  params: ListIngestionRunChunksParams = {},
+) {
+  return useQuery<PaginatedIngestionRunChunks>({
+    queryKey: [INGESTION_RUN_CHUNKS_QUERY_KEY, uploadId, runId, params],
+    queryFn: () => listIngestionRunChunks(uploadId as string, runId as string, params),
+    enabled: !!uploadId && !!runId,
+    placeholderData: (prev) => prev,
   });
 }
 

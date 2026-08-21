@@ -233,7 +233,17 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
         import time as _time
 
         arguments = params.arguments
-        logger.info("Custom tool '{}' called with args: {}", tool.name, arguments)
+        # Args go to debug not info: they may contain caller PII (phone
+        # numbers, names) or free-form user input we should not persist to
+        # the default INFO log stream. Tool NAME still logs at info below.
+        logger.bind(tool_name=tool.name, tool_type=tool.tool_type).debug(
+            "[custom-tool] '{}' called with args: {}", tool.name, arguments
+        )
+        logger.bind(
+            tool_name=tool.name,
+            tool_type=tool.tool_type,
+            tool_id=str(tool.id) if tool.id else None,
+        ).info("[custom-tool] '{}' invoked", tool.name)
         _t_start = _time.monotonic()
         timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
@@ -330,8 +340,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             if response.status_code >= 400:
                 result_text = f"(HTTP {response.status_code}) {result_text}"
 
-            logger.info(
-                "🔧 Custom tool result ← tool='{}' status={} args={} output={}",
+            logger.bind(
+                tool_name=tool.name,
+                tool_type=tool.tool_type,
+                http_status=response.status_code,
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).info(
+                "[custom-tool] result tool='{}' status={} args={} output={}",
                 tool.name,
                 response.status_code,
                 truncate_for_log(arguments),
@@ -346,13 +361,21 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             await params.result_callback(result_text)
 
         except httpx.TimeoutException:
-            logger.warning("Custom tool '{}' timed out", tool.name)
+            logger.bind(
+                tool_name=tool.name,
+                tool_type=tool.tool_type,
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).warning("[custom-tool] '{}' timed out", tool.name)
             tool_call_entry["result"] = "error: timeout"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
             await params.result_callback("The request timed out. Please tell the caller and continue.")
         except Exception as e:
-            logger.exception("Custom tool '{}' failed", tool.name)
+            logger.bind(
+                tool_name=tool.name,
+                tool_type=tool.tool_type,
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).exception("[custom-tool] '{}' failed", tool.name)
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
@@ -385,7 +408,9 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
 
         arguments = params.arguments
         message = arguments.get("message", "")
-        logger.info("Built-in tool 'send_sms' called (caller_number={})", caller_number)
+        logger.bind(tool_name="send_sms", tool_type="send_sms").info(
+            "[builtin-tool] send_sms invoked (caller_number={})", caller_number
+        )
         _t_start = _time.monotonic()
         timer = ToolCallTimer.start(params, tool_request_ts)
         meta = tool.meta_data or {}
@@ -414,7 +439,14 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
         from_number = meta.get("from_number")
 
         if not all([account_sid, auth_token, from_number]):
-            logger.error("send_sms tool missing Twilio credentials in auth_config or from_number in meta_data")
+            logger.bind(
+                tool_name="send_sms",
+                has_account_sid=bool(account_sid),
+                has_auth_token=bool(auth_token),
+                has_from_number=bool(from_number),
+            ).error(
+                "[builtin-tool] send_sms missing Twilio credentials in auth_config or from_number in meta_data"
+            )
             tool_call_entry["result"] = "error: missing Twilio credentials"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
@@ -422,7 +454,9 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
             return
 
         if not recipient:
-            logger.error("send_sms tool: no recipient phone number available")
+            logger.bind(tool_name="send_sms").error(
+                "[builtin-tool] send_sms: no recipient phone number available"
+            )
             tool_call_entry["result"] = "error: no recipient number"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
@@ -443,7 +477,11 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 )
 
             if response.status_code == 201:
-                logger.info("SMS sent successfully to {}", recipient)
+                logger.bind(
+                    tool_name="send_sms",
+                    http_status=response.status_code,
+                    elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+                ).info("[builtin-tool] send_sms sent successfully to {}", recipient)
                 tool_call_entry["result"] = "success"
                 tool_call_entry["status_code"] = response.status_code
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
@@ -451,7 +489,14 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 await params.result_callback("SMS sent successfully.")
             else:
                 error_detail = response.text
-                logger.error("SMS sending failed: status={} body={}", response.status_code, error_detail)
+                logger.bind(
+                    tool_name="send_sms",
+                    http_status=response.status_code,
+                    elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+                ).error(
+                    "[builtin-tool] send_sms failed status={} body={}",
+                    response.status_code, error_detail,
+                )
                 tool_call_entry["result"] = f"error: status {response.status_code}"
                 tool_call_entry["status_code"] = response.status_code
                 tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
@@ -459,7 +504,10 @@ def _create_send_sms_handler(tool: Tool, caller_number: str, tool_call_entries: 
                 await params.result_callback(f"Failed to send SMS: {error_detail}")
 
         except Exception as e:
-            logger.exception("send_sms tool failed")
+            logger.bind(
+                tool_name="send_sms",
+                elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
+            ).exception("[builtin-tool] send_sms failed")
             tool_call_entry["result"] = f"error: {str(e)}"
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
@@ -477,7 +525,14 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
         arguments = params.arguments
         action = arguments.get("action", "create_event")
-        logger.info("Built-in tool 'google_calendar' called with action='{}', args={}", action, arguments)
+        # Args at debug — booking args (event summary, attendees) may include
+        # caller PII we should not persist to the default INFO stream.
+        logger.bind(tool_name="google_calendar", tool_action=action).debug(
+            "[builtin-tool] google_calendar invoked action='{}' args={}", action, arguments
+        )
+        logger.bind(tool_name="google_calendar", tool_action=action).info(
+            "[builtin-tool] google_calendar invoked action={}", action
+        )
         _t_start = _time.monotonic()
         timer = ToolCallTimer.start(params, tool_request_ts)
         tool_call_entry = {
@@ -527,7 +582,13 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
             resolved_oauth_id = effective_of(tool)
             if not resolved_oauth_id:
-                logger.error("google_calendar: tool '{}' has no oauth_connection_id set", tool.name)
+                logger.bind(
+                    tool_name="google_calendar",
+                    tool_id=str(tool.id) if tool.id else None,
+                ).error(
+                    "[builtin-tool] google_calendar: tool '{}' has no oauth_connection_id set",
+                    tool.name,
+                )
                 _log_tool_call("error: no oauth_connection_id")
                 await params.result_callback(
                     "Google Calendar tool is not linked to an OAuth connection. Please configure it in tool settings."
@@ -538,7 +599,14 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
                 svc = OAuthService(db, org_id=effective_org_id)
                 connection = svc.get_connection(resolved_oauth_id)
                 if not connection:
-                    logger.error("google_calendar: OAuth connection {} not found for org {}", resolved_oauth_id, effective_org_id)
+                    logger.bind(
+                        tool_name="google_calendar",
+                        oauth_connection_id=str(resolved_oauth_id),
+                        organization_id=effective_org_id,
+                    ).error(
+                        "[builtin-tool] google_calendar: OAuth connection {} not found for org {}",
+                        resolved_oauth_id, effective_org_id,
+                    )
                     _log_tool_call("error: OAuth connection not found")
                     await params.result_callback(
                         "Google Calendar connection not found. Please reconnect Google Calendar in the Integrations settings."
@@ -546,7 +614,9 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
                     return
                 access_token = svc.get_valid_access_token_for_connection(connection)
         except HTTPException as e:
-            logger.error("google_calendar: OAuth error: {}", e.detail)
+            logger.bind(tool_name="google_calendar", http_status=e.status_code).error(
+                "[builtin-tool] google_calendar OAuth error: {}", e.detail
+            )
             _log_tool_call(f"error: OAuth - {e.detail}")
             if "reconnect" in str(e.detail).lower():
                 await params.result_callback(
@@ -555,8 +625,11 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             else:
                 await params.result_callback(f"Google Calendar is not available right now. Reason: {e.detail}")
             return
-        except Exception as e:
-            logger.exception("google_calendar: unexpected error getting access token")
+        except Exception:
+            logger.bind(
+                tool_name="google_calendar",
+                organization_id=effective_org_id,
+            ).exception("[builtin-tool] google_calendar unexpected error getting access token")
             _log_tool_call(f"error: {str(e)}")
             await params.result_callback("Google Calendar is temporarily unavailable. Please try again later.")
             return
@@ -680,17 +753,44 @@ async def _calendar_create_event(base_url: str, headers: dict, arguments: dict, 
     if attendee_email:
         event_body["attendees"] = [{"email": attendee_email}]
 
-    logger.info("google_calendar create_event request url={}/events body={}", base_url, event_body)
+    # Full request body (title + attendee emails) at debug only — PII.
+    logger.bind(tool_name="google_calendar", tool_action="create_event").debug(
+        "[builtin-tool] google_calendar create_event request url={}/events body={}",
+        base_url, event_body,
+    )
     async with httpx.AsyncClient(timeout=30.0) as client:
         response = await client.post(f"{base_url}/events", headers=headers, json=event_body)
 
-    logger.info("google_calendar create_event response status={} body={}", response.status_code, response.text)
+    # Full response body at debug — the Google API echoes attendee emails.
+    logger.bind(
+        tool_name="google_calendar",
+        tool_action="create_event",
+        http_status=response.status_code,
+    ).debug(
+        "[builtin-tool] google_calendar create_event response status={} body={}",
+        response.status_code, response.text,
+    )
     if response.status_code in (200, 201):
         event = response.json()
-        logger.info("google_calendar create_event SUCCESS: event_id={} status={} htmlLink={}", event.get("id"), event.get("status"), event.get("htmlLink"))
+        logger.bind(
+            tool_name="google_calendar",
+            tool_action="create_event",
+            http_status=response.status_code,
+            event_id=event.get("id"),
+        ).info(
+            "[builtin-tool] google_calendar create_event success event_id={} status={} link={}",
+            event.get("id"), event.get("status"), event.get("htmlLink"),
+        )
         return f"Event '{title}' created successfully ({when_desc}). Event link: {event.get('htmlLink', 'N/A')}"
     else:
-        logger.error("google_calendar create_event FAILED: status={} body={}", response.status_code, response.text)
+        logger.bind(
+            tool_name="google_calendar",
+            tool_action="create_event",
+            http_status=response.status_code,
+        ).error(
+            "[builtin-tool] google_calendar create_event failed status={} body={}",
+            response.status_code, response.text,
+        )
         return f"Failed to create event: {response.text}"
 
 

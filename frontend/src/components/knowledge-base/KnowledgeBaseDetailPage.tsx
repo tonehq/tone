@@ -3,13 +3,14 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
-import { ArrowLeft, FileText, ListChecks, Settings2 } from 'lucide-react';
+import { ArrowLeft, ClipboardCheck, FileText, ListChecks, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 
 import agentsAtom from '@/atoms/AgentsAtom';
 import IngestionConfigsTab from '@/components/knowledge-base/IngestionConfigsTab';
 import IngestionRunsTab from '@/components/knowledge-base/IngestionRunsTab';
 import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
+import ManageEvalsTab from '@/components/knowledge-base/ManageEvalsTab';
 import { CustomButton, CustomTab, type TabItem } from '@/components/shared';
 import { knowledgeBaseApi, KNOWLEDGE_BASE_QUERY_KEY } from '@/lib/api/knowledge-base';
 import type { AgentDropdownItem } from '@/types/agent';
@@ -67,6 +68,12 @@ export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetai
         // The runs tab derives the active-run id from the runs list itself
         // (via `is_active`), so no prop is required here.
         children: <IngestionRunsTab uploadId={uploadId} />,
+      },
+      {
+        key: 'manage-evals',
+        label: 'Manage evals',
+        icon: <ClipboardCheck className="size-4" />,
+        children: <ManageEvalsTab uploadId={uploadId} />,
       },
       {
         key: 'ingestion-configs',

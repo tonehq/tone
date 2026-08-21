@@ -29,8 +29,17 @@ class InMemoryVectorStore(VectorStore):
         return len(records)
 
     def query(
-        self, embedding: List[float], top_k: int = 3, *, filters: Optional[dict] = None
+        self,
+        embedding: List[float],
+        top_k: int = 3,
+        *,
+        filters: Optional[dict] = None,
+        query_text: Optional[str] = None,
     ) -> List[SearchResult]:
+        # ``query_text`` accepted for protocol parity; the in-memory store is
+        # test-only and doesn't emit search logs (the pgvector path owns the
+        # canonical [pgvector.query] line).
+        del query_text
         candidates = [r for r in self._records if self._matches(r.metadata, filters)]
         scored = sorted(
             ((_cosine_distance(embedding, r.embedding), r) for r in candidates),

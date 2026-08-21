@@ -212,6 +212,44 @@ def _validate_eval_settings_patch(
     return cleaned
 
 
+def _merge_slot(
+    merged: Dict[str, Any],
+    slot: str,
+    present: bool,
+    raw_value: Any,
+    validated: Optional[Dict[str, Any]],
+) -> None:
+    """Apply one slot's patch to the merged ``eval_settings`` dict in place.
+
+    Mirrors the three-state contract used by every field:
+      * ``present=False`` — slot omitted from the patch → leave existing
+        stored value untouched.
+      * ``present=True, raw_value is None`` — explicit ``{slot: null}`` →
+        drop the whole sub-object so the resolver falls fully through to
+        env/defaults.
+      * ``present=True, validated=dict`` — merge each validated key into
+        the stored sub-object; keys with ``None`` values are DELETED from
+        the sub-object (revert-to-fallback). If the merged sub-object ends
+        up empty, drop it entirely so we don't leave stale ``{}`` containers.
+    """
+    if not present:
+        return
+    if raw_value is None:
+        merged.pop(slot, None)
+        return
+    current = merged.get(slot)
+    sub_merged = dict(current) if isinstance(current, dict) else {}
+    for key, value in (validated or {}).items():
+        if value is None:
+            sub_merged.pop(key, None)
+        else:
+            sub_merged[key] = value
+    if sub_merged:
+        merged[slot] = sub_merged
+    else:
+        merged.pop(slot, None)
+
+
 # Canonical enums for the onboarding wizard. Mirrored in
 # frontend/src/constants/onboarding.ts — keep the two in sync.
 OnboardingUseCase = Literal[
@@ -1528,9 +1566,24 @@ class AuthService(BaseService):
 
         Read-modify-write semantics — a partial update never clobbers unset
         keys. Passing an empty patch (``{}``) is a no-op that returns the
-        current settings. A key whose value is ``None`` is CLEARED (removed
-        from the stored JSONB) so the resolver falls through to env / hardcoded
-        default — that is how the UI's "revert to fallback" action is expressed.
+        current settings.
+
+        Two eval flavors are stored as sibling sub-objects:
+          * ``rag_evals`` — Level-1 RAG eval knobs
+            (``judge_model``, ``top_k``, ``auto_run_enabled``, …)
+          * ``llm_evals`` — Level-2 agent-LLM eval knobs
+            (``judge_model``, ``metrics_enabled``, ``auto_run_enabled``, …)
+
+        Patch shape mirrors the storage:
+          * ``{"rag_evals": {"judge_model": "gpt-4o"}}`` — set one RAG field.
+          * ``{"rag_evals": {"judge_model": null}}`` — clear that RAG field
+            (resolver falls back to env / hardcoded default).
+          * ``{"rag_evals": null}`` — clear the ENTIRE RAG sub-object.
+          * Same shape for ``llm_evals``. Both slots may be sent in one PUT.
+
+        Uses the SAME ``_validate_eval_settings_patch`` helper for both slots
+        — dispatched by ``allowed_keys`` — so range / whitelist / null-clear
+        semantics stay in one place.
 
         Raises typed application exceptions (``InvalidEvalSettingsError``,
         ``OrganizationContextMissingError``, ``OrganizationNotFoundError``)
@@ -1542,7 +1595,12 @@ class AuthService(BaseService):
         # auth check that instantiates AuthService.
         from core.services.evals.deepeval.metric_registry import SUPPORTED_METRICS
         from core.services.evals.errors import InvalidEvalSettingsError
-        from core.services.org_settings import EVAL_SETTINGS_KEYS
+        from core.services.org_settings import (
+            AGENT_LLM_EVAL_SETTINGS_KEYS,
+            EVAL_SETTINGS_KEYS,
+            LLM_EVAL_SLOT,
+            RAG_EVAL_SLOT,
+        )
 
         target_org = _user_uuid(self.org_id)
         if not target_org:
@@ -1555,23 +1613,70 @@ class AuthService(BaseService):
                 f"Organization {target_org} not found"
             )
 
-        validated = _validate_eval_settings_patch(
-            patch or {},
-            supported_metrics=set(SUPPORTED_METRICS.keys()),
-            allowed_keys=set(EVAL_SETTINGS_KEYS),
-            error_cls=InvalidEvalSettingsError,
+        if patch is not None and not isinstance(patch, dict):
+            raise InvalidEvalSettingsError(
+                "eval settings payload must be a JSON object"
+            )
+
+        raw = patch or {}
+        # Only the two top-level slots are legal. Any other key at the root
+        # is a caller mistake we surface early (typos would otherwise silently
+        # persist as unread JSONB).
+        allowed_root_keys = {RAG_EVAL_SLOT, LLM_EVAL_SLOT}
+        unknown_root = set(raw) - allowed_root_keys
+        if unknown_root:
+            raise InvalidEvalSettingsError(
+                f"unknown eval settings key(s) at root: {sorted(unknown_root)}. "
+                f"Allowed: {sorted(allowed_root_keys)}"
+            )
+
+        supported = set(SUPPORTED_METRICS.keys())
+
+        # Validate each slot's inner patch (if present) via the SAME helper —
+        # different ``allowed_keys`` tuple, identical range/null-clear logic.
+        def _validate_slot(
+            slot_name: str,
+            sub_raw: Any,
+            allowed_keys: set[str],
+        ) -> Optional[Dict[str, Any]]:
+            if sub_raw is None:
+                return None  # explicit clear; handled at merge time
+            if not isinstance(sub_raw, dict):
+                raise InvalidEvalSettingsError(
+                    f"{slot_name} must be a JSON object or null"
+                )
+            return _validate_eval_settings_patch(
+                sub_raw,
+                supported_metrics=supported,
+                allowed_keys=allowed_keys,
+                error_cls=InvalidEvalSettingsError,
+            )
+
+        rag_present = RAG_EVAL_SLOT in raw
+        llm_present = LLM_EVAL_SLOT in raw
+        rag_raw = raw.get(RAG_EVAL_SLOT) if rag_present else None
+        llm_raw = raw.get(LLM_EVAL_SLOT) if llm_present else None
+
+        validated_rag = (
+            _validate_slot(RAG_EVAL_SLOT, rag_raw, set(EVAL_SETTINGS_KEYS))
+            if rag_present
+            else None
+        )
+        validated_llm = (
+            _validate_slot(LLM_EVAL_SLOT, llm_raw, set(AGENT_LLM_EVAL_SETTINGS_KEYS))
+            if llm_present
+            else None
         )
 
         # Merge — new dict reassignment so SQLAlchemy detects the JSONB change.
-        # Keys whose validated value is None are DELETED from the merged
-        # payload; that's the "revert this field to fallback" semantic the
-        # frontend uses when the user clears an input.
+        # Keys whose validated value is None are DELETED from the sub-object;
+        # that's the "revert this field to fallback" semantic the frontend
+        # uses when the user clears an input. A whole sub-object cleared
+        # (top-level null) drops the container entirely.
         merged = dict(org.eval_settings or {})
-        for key, value in validated.items():
-            if value is None:
-                merged.pop(key, None)
-            else:
-                merged[key] = value
+        _merge_slot(merged, RAG_EVAL_SLOT, rag_present, rag_raw, validated_rag)
+        _merge_slot(merged, LLM_EVAL_SLOT, llm_present, llm_raw, validated_llm)
+
         org.eval_settings = merged
         self.db.commit()
         return {"message": "Eval settings updated successfully", "eval_settings": merged}

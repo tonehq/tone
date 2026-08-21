@@ -1,12 +1,11 @@
 import {
   Book,
-  Bot,
   CalendarClock,
   Clock,
-  Cpu,
-  LayoutGrid,
+  Gauge,
   MessageSquare,
   Radio,
+  Settings2,
   Users,
   Volume2,
   Wrench,
@@ -30,13 +29,20 @@ export interface AgentSection {
 // section pages follow. The "Prompt" section hosts both the system prompt and
 // the agent's workflows behind a Prompt/Workflow toggle (they're two ways to
 // drive the same conversation), so there is no separate Workflow entry.
+//
+// "Setup" bundles the read-only Overview (edit mode only), Basics, and AI
+// sections into a single page — they're all the "who is this agent + which
+// brain drives it" concerns and read cleanly stacked.
 export const AGENT_SECTIONS: AgentSection[] = [
-  { key: 'basics', label: 'Basics', icon: Bot },
+  { key: 'setup', label: 'Setup', icon: Settings2 },
   { key: 'prompt', label: 'Prompt', icon: MessageSquare },
-  { key: 'ai', label: 'AI', icon: Cpu },
   { key: 'voice', label: 'Voice', icon: Volume2 },
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
   { key: 'knowledge', label: 'Knowledge', icon: Book },
+  // LLM Evals sits after Knowledge — Level-2 sits below Level-1 in the UX
+  // as it does in the mental model (RAG evals score retrieval; LLM evals
+  // score the agent's actual answer + system-prompt behavior).
+  { key: 'llm-evals', label: 'LLM Evals', icon: Gauge },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'schedule', label: 'Schedule', icon: CalendarClock },
@@ -65,15 +71,13 @@ function handlesOutbound(callMode: AgentDirection): boolean {
 export const AGENT_SECTION_KEYS = AGENT_SECTIONS.map((s) => s.key);
 
 /** Default landing section for each editor mode. */
-export const DEFAULT_SECTION = { edit: 'overview', create: 'basics' } as const;
+export const DEFAULT_SECTION = { edit: 'setup', create: 'setup' } as const;
 
 /**
- * Build the rail nav for the agent editor. `edit` mode prepends an "Overview"
- * entry (a saved agent has something to summarise); `create` mode omits it.
- *
- * `callMode` is the agent's current call direction (live form value in the
- * editor). Sections in `OUTBOUND_ONLY_SECTION_KEYS` (e.g. `contacts`) are shown
- * only when the agent handles outbound calls (`outbound`/`both`).
+ * Build the rail nav for the agent editor. `callMode` is the agent's current
+ * call direction (live form value in the editor); sections in
+ * `OUTBOUND_ONLY_SECTION_KEYS` (e.g. `contacts`) are shown only when the agent
+ * handles outbound calls (`outbound`/`both`).
  */
 export function buildAgentNav(
   basePath: string,
@@ -81,9 +85,6 @@ export function buildAgentNav(
   callMode: AgentDirection,
 ): SidebarNavGroup[] {
   const items = [];
-  if (mode === 'edit') {
-    items.push({ label: 'Overview', href: `${basePath}/overview`, icon: LayoutGrid });
-  }
   for (const s of AGENT_SECTIONS) {
     if (mode === 'create' && EDIT_ONLY_SECTION_KEYS.has(s.key)) continue;
     if (OUTBOUND_ONLY_SECTION_KEYS.has(s.key) && !handlesOutbound(callMode)) continue;

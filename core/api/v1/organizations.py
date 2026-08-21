@@ -216,6 +216,23 @@ def update_organization_eval_settings(
         ) from exc
 
 
+@router.get("/eval-settings/models")
+def list_eval_settings_llm_models(
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """LLM models offered as generation / answer model options on the
+    Evaluations settings page. Filtered to OpenAI and Google (Gemini)
+    providers — see ``EvalModelsService.list_llm_options`` for the exact
+    contract and the reason for the allowlist."""
+    # Local import — keeps this router's module load path unchanged for
+    # every existing route and mirrors the pattern used for the eval
+    # settings PUT below (see ``update_organization_eval_settings``).
+    from core.services.evals.eval_models_service import EvalModelsService
+
+    return EvalModelsService(db).list_llm_options()
+
+
 @router.get("/access_requests")
 def get_access_requests(
     claims: JWTClaims = Depends(require_admin_or_owner),

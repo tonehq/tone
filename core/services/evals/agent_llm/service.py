@@ -46,6 +46,13 @@ from shared.config import settings
 
 _JUDGE_ENGINE = "deepeval"
 
+# Every ``triggered_by`` value the audit surface will accept — enforced both
+# at ``run_eval`` and inside the Procrastinate task. ``'manual'`` covers the
+# user-clicked "Run Eval" button in the FE (matches the RAG task's use of
+# ``'manual'`` for the same UX pattern); ``'api'`` covers programmatic
+# integrations; ``'cli'`` is the historical fixture-driven CLI.
+TRIGGERED_BY_VALUES: frozenset[str] = frozenset({"cli", "api", "manual"})
+
 
 @dataclass
 class AgentLlmRunSummary:
@@ -113,9 +120,10 @@ class AgentLlmEvalService:
         config, bad metric name, …) DO re-raise so the CLI exits with an
         actionable message instead of writing garbage rows.
         """
-        if triggered_by not in {"cli", "api"}:
+        if triggered_by not in TRIGGERED_BY_VALUES:
             raise ValueError(
-                f"triggered_by must be one of 'cli'|'api'; got {triggered_by!r}"
+                f"triggered_by must be one of {sorted(TRIGGERED_BY_VALUES)}; "
+                f"got {triggered_by!r}"
             )
         if not scenarios:
             raise AgentLlmEvalConfigError(
@@ -145,13 +153,17 @@ class AgentLlmEvalService:
         agent_config: AgentEvalConfig = self._loader.load_for_eval(db, agent_id)
 
         # Resolve judge model with per-org override (DB → env → hardcoded
-        # default). Agent LLM evals share the RAG judge model setting so a
-        # single "our judge is Claude Opus" policy applies to both flows.
-        # Explicit caller kwarg still wins (CLI can pin a specific model).
+        # default). Uses the AGENT-LLM resolver (``llm_evals.judge_model``,
+        # AGENT_LLM_EVAL_JUDGE_MODEL env, hardcoded fallback) so this CLI /
+        # fixture path stays in lock-step with ``run_eval_for_agent`` — one
+        # judge policy for agent-LLM evals regardless of transport. Explicit
+        # caller kwarg still wins so the CLI can pin a specific model.
         if judge_model is None:
-            from core.services.org_settings import load_eval_settings_for_org
+            from core.services.org_settings import (
+                load_agent_llm_eval_settings_for_org,
+            )
 
-            judge_model = load_eval_settings_for_org(
+            judge_model = load_agent_llm_eval_settings_for_org(
                 db, agent_config.organization_id
             ).judge_model
         next_run_number = self._next_run_number(
@@ -249,6 +261,120 @@ class AgentLlmEvalService:
             )
 
         return run_summary
+
+    def run_eval_for_agent(
+        self,
+        db: Session,
+        *,
+        agent_id: UUID,
+        triggered_by: str = "manual",
+        judge_model: Optional[str] = None,
+        scenario_ids: Optional[List[UUID]] = None,
+        tags: Optional[List[str]] = None,
+        run_id: Optional[UUID] = None,
+        organization_id: Optional[UUID] = None,
+    ) -> AgentLlmRunSummary:
+        """DB-backed entry point — loads scenarios from
+        ``agent_llm_eval_scenarios`` and delegates to :meth:`run_eval`.
+
+        This is what the API routes, the Procrastinate task, and future
+        cron jobs call; the CLI fixture path stays on the in-memory
+        :meth:`run_eval` so tests / one-off fixture runs work unchanged.
+        Existing behavior is 100% preserved — the delegate signature is not
+        touched.
+
+        Scenario filter precedence: ``scenario_ids`` narrows first (exact
+        set); ``tags`` narrows via JSONB has-any-of match; no filters =
+        every scenario for the agent.
+        """
+        from core.services.evals.agent_llm.scenario_service import (
+            AgentLlmScenarioService,
+            scenario_row_to_llm_scenario,
+        )
+        from core.services.org_settings import (
+            load_agent_llm_eval_settings_for_org,
+        )
+
+        # Resolve the agent's organization_id BEFORE calling into the
+        # scenario service — the caller may not know it yet (Procrastinate
+        # task only receives ``agent_id``).
+        if organization_id is None:
+            from core.models.agent import Agent
+
+            org_row = (
+                db.query(Agent.organization_id)
+                .filter(Agent.id == agent_id)
+                .first()
+            )
+            if org_row is None:
+                raise AgentLlmEvalConfigError(
+                    f"Agent {agent_id} not found — cannot resolve org for eval"
+                )
+            organization_id = org_row[0]
+
+        scenarios_service = AgentLlmScenarioService(db, org_id=organization_id)
+        rows = scenarios_service.load_all_for_run(
+            agent_id,
+            scenario_ids=scenario_ids,
+            tags=tags,
+        )
+        if not rows:
+            raise AgentLlmEvalConfigError(
+                f"No scenarios found for agent {agent_id} — create scenarios "
+                "under the LLM Evals tab before running an eval."
+            )
+        llm_scenarios = [scenario_row_to_llm_scenario(r) for r in rows]
+
+        # Resolve judge_model with the AGENT-LLM resolver (falls back through
+        # ``agent_llm.judge_model`` → env → hardcoded default). Explicit
+        # caller kwarg still wins so the FE Run modal's per-run override
+        # threads through unchanged.
+        if judge_model is None:
+            judge_model = load_agent_llm_eval_settings_for_org(
+                db, organization_id
+            ).judge_model
+
+        return self.run_eval(
+            db,
+            agent_id=agent_id,
+            scenarios=llm_scenarios,
+            triggered_by=triggered_by,
+            judge_model=judge_model,
+            run_id=run_id,
+        )
+
+    def compare_runs(
+        self,
+        db: Session,
+        *,
+        org_id: UUID,
+        baseline_run_id: UUID,
+        candidate_run_id: UUID,
+        score_drop: float = 0.15,
+    ) -> dict:
+        """Diff two agent-LLM eval runs. Same output shape as
+        :meth:`EvalService.compare_results` (baseline / candidate summary,
+        per-scenario diff, regression list) so the FE compare view uses
+        one component across both eval flavors.
+
+        Org-scoped: both runs must belong to ``org_id`` — a cross-tenant
+        run id raises ``EvalConfigurationError`` rather than silently
+        producing a nonsensical diff.
+        """
+        baseline = self.get_run_detail(db, org_id=org_id, run_id=baseline_run_id)
+        candidate = self.get_run_detail(db, org_id=org_id, run_id=candidate_run_id)
+        if baseline is None or candidate is None:
+            raise EvalConfigurationError(
+                f"compare_runs: missing run (baseline={baseline_run_id}, "
+                f"candidate={candidate_run_id})"
+            )
+        return _diff_agent_llm_runs(
+            baseline_summary=baseline["summary"],
+            candidate_summary=candidate["summary"],
+            baseline_rows=baseline["scenarios"],
+            candidate_rows=candidate["scenarios"],
+            score_drop=score_drop,
+        )
 
     def list_runs(
         self,
@@ -701,6 +827,121 @@ def _row_to_run_summary(row) -> AgentLlmRunSummary:
     )
 
 
+_VERDICT_RANK = {"FAIL": 0, "PARTIAL": 1, "PASS": 2}
+
+
+def _safe_score(v: Any) -> float:
+    try:
+        return float(v)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _diff_agent_llm_runs(
+    *,
+    baseline_summary: AgentLlmRunSummary,
+    candidate_summary: AgentLlmRunSummary,
+    baseline_rows: List[dict],
+    candidate_rows: List[dict],
+    score_drop: float,
+) -> dict:
+    """Compare two agent-LLM runs' per-scenario rows. Simpler than
+    :func:`core.services.evals.eval_service._diff_scored_rows` — agent-LLM
+    rows have no retrieval hit and no mapped legacy correctness column —
+    but the output shape mirrors it (baseline / candidate / regressions /
+    per-question) so the FE renders one compare component for both flavors.
+
+    Regression heuristic per scenario (in order):
+    1. Verdict downgrade (``PASS→PARTIAL``, ``PARTIAL→FAIL``, or ``PASS→FAIL``).
+    2. Any per-DeepEval-metric score drop ≥ ``score_drop``.
+    Both flavors count as regressions; the ``note`` reports the first
+    matched signal.
+    """
+    b_rows = {r["scenario_key"]: r for r in baseline_rows if isinstance(r, dict)}
+    c_rows = {r["scenario_key"]: r for r in candidate_rows if isinstance(r, dict)}
+    all_keys = sorted(set(b_rows) | set(c_rows))
+
+    per_scenario: List[dict] = []
+    regressions: List[dict] = []
+
+    for key in all_keys:
+        b = b_rows.get(key)
+        c = c_rows.get(key)
+        if b is None:
+            per_scenario.append(
+                {"scenario_key": key, "kind": "new", "candidate_verdict": (c or {}).get("verdict")}
+            )
+            continue
+        if c is None:
+            entry = {
+                "scenario_key": key,
+                "kind": "missing",
+                "baseline_verdict": b.get("verdict"),
+                "regression": True,
+                "note": "scenario removed",
+            }
+            per_scenario.append(entry)
+            regressions.append(entry)
+            continue
+
+        b_v = b.get("verdict") or "FAIL"
+        c_v = c.get("verdict") or "FAIL"
+
+        b_scores = b.get("metric_scores") or {}
+        c_scores = c.get("metric_scores") or {}
+        metric_deltas: dict[str, float] = {}
+        for metric_name in sorted(set(b_scores) | set(c_scores)):
+            b_entry = b_scores.get(metric_name)
+            c_entry = c_scores.get(metric_name)
+            b_raw = b_entry.get("score") if isinstance(b_entry, dict) else None
+            c_raw = c_entry.get("score") if isinstance(c_entry, dict) else None
+            if b_raw is None or c_raw is None:
+                continue
+            metric_deltas[metric_name] = _safe_score(c_raw) - _safe_score(b_raw)
+
+        note: Optional[str] = None
+        is_regression = False
+        if _VERDICT_RANK.get(c_v, 0) < _VERDICT_RANK.get(b_v, 0):
+            note = f"verdict regression {b_v}→{c_v}"
+            is_regression = True
+        else:
+            for metric_name, delta in metric_deltas.items():
+                if delta <= -score_drop:
+                    note = f"{metric_name} drop {delta:+.2f}"
+                    is_regression = True
+                    break
+
+        entry = {
+            "scenario_key": key,
+            "baseline_verdict": b_v,
+            "candidate_verdict": c_v,
+            "regression": is_regression,
+            "note": note,
+        }
+        for metric_name, delta in metric_deltas.items():
+            entry[f"delta_{metric_name}"] = delta
+        per_scenario.append(entry)
+        if is_regression:
+            regressions.append(entry)
+
+    def _pack(summary: AgentLlmRunSummary) -> dict:
+        return {
+            "id": str(summary.run_id),
+            "run_number": summary.run_number,
+            "started_at": summary.started_at.isoformat() if summary.started_at else None,
+            "summary": summary.summary or {},
+        }
+
+    return {
+        "baseline": _pack(baseline_summary),
+        "candidate": _pack(candidate_summary),
+        "score_drop_threshold": score_drop,
+        "regressions": regressions,
+        "regression_count": len(regressions),
+        "per_scenario": per_scenario,
+    }
+
+
 # NOTE: ``AgentLlmEvalRunError`` is intentionally NOT re-exported here — the
 # service is fail-soft on scenario errors (they surface as a
 # ``AgentLlmRunSummary`` with ``status='failed'``), and only re-raises the
@@ -710,4 +951,5 @@ def _row_to_run_summary(row) -> AgentLlmRunSummary:
 __all__ = [
     "AgentLlmEvalService",
     "AgentLlmRunSummary",
+    "TRIGGERED_BY_VALUES",
 ]
