@@ -28,6 +28,50 @@ from pydantic import BaseModel, Field
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from core.api.v1.faceted_schemas import FacetsRequest
+from core.database.session import get_db
+from core.models.agent import Agent
+from core.models.agent_config import AgentConfig
+from core.models.agent_knowledge_base import AgentKnowledgeBase
+from core.models.ingestion_pipeline_run import IngestionPipelineRun
+from core.models.knowledge_base import KnowledgeBase
+from core.models.upload import Upload
+from core.services.evals.eval_service import EvalRunSummary, EvalService
+from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
+from core.services.ingestion_errors import (
+    AgentHasNoPublishedConfigError,
+    AgentKnowledgeBaseNotFoundError,
+    IngestionConfigInactiveError,
+    IngestionConfigNotFoundError,
+    IngestionRunKbMismatchError,
+    IngestionRunNotFoundError,
+    IngestionRunNotReadyError,
+    IngestionValidationError,
+    UnknownRagComponentError,
+    is_unique_violation,
+)
+from core.services.ingestion_queue import (
+    enqueue_eval_for_ingestion_run,
+    enqueue_reprocess,
+    enqueue_upload,
+)
+from core.services.ingestion_run_service import IngestionRunService
+from core.services.rag.component_registry import ensure_rag_component
+from core.services.rag.embedder_factory import EMBEDDERS
+from core.services.rag.factory import VECTOR_STORES
+from core.services.rag.parser_factory import PARSERS
+from core.services.rag.tokeniser_factory import TOKENISERS
+from core.services.r2_storage_service import (
+    KB_DOCUMENT,
+    R2StorageService,
+    build_r2_object_key,
+    signed_url_or_none,
+)
+from core.services.upload_service import UploadService
+from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
+from core.utils.list_params import resolve_sort
+from shared.config import settings
+
 
 class ListPipelineRunsRequest(BaseModel):
     """Pagination + search + filter body for ``POST /{upload_id}/runs/list``."""
@@ -101,42 +145,44 @@ class TriggerEvalRunRequest(BaseModel):
 
     ingestion_run_id: Optional[UUID] = None
 
-from core.api.v1.faceted_schemas import FacetsRequest
-from core.database.session import get_db
-from core.models.agent import Agent
-from core.models.agent_knowledge_base import AgentKnowledgeBase
-from core.models.knowledge_base import KnowledgeBase
-from core.models.upload import Upload
-from core.models.ingestion_pipeline_run import IngestionPipelineRun
-from core.services.document_processing_service import DocumentProcessingService
-from core.services.evals.eval_service import EvalRunSummary, EvalService
-from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
-from core.services.ingestion_queue import (
-    enqueue_eval_for_ingestion_run,
-    enqueue_reprocess,
-    enqueue_upload,
-)
-from core.services.ingestion_run_service import (
-    IngestionRunNotFoundError,
-    IngestionRunService,
-)
-from core.services.rag.embedder_factory import EMBEDDERS
-from core.services.rag.factory import VECTOR_STORES
-from core.services.rag.parser_factory import PARSERS
-from core.services.rag.tokeniser_factory import TOKENISERS
-from core.services.r2_storage_service import (
-    KB_DOCUMENT,
-    R2StorageService,
-    build_r2_object_key,
-    signed_url_or_none,
-)
-from core.services.upload_service import UploadService
-from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
-from core.utils.list_params import resolve_sort
-from shared.config import settings
-
 # Knowledge-base documents are ``Upload`` rows scoped to the kb_document purpose.
 KB_FACET_FIELDS = ["status"]
+
+
+# ── Typed-error → HTTP mapping ─────────────────────────────────────────────
+# The ingestion services raise typed exceptions from
+# ``core.services.ingestion_errors`` (transport-agnostic per backend
+# standards). Every KB endpoint that can hit those errors funnels them
+# through this helper so 400/404 statuses stay consistent across handlers.
+
+_INGESTION_ERROR_HTTP_MAP: tuple[tuple[type, int], ...] = (
+    (IngestionRunNotFoundError, status.HTTP_404_NOT_FOUND),
+    (IngestionConfigNotFoundError, status.HTTP_404_NOT_FOUND),
+    (AgentHasNoPublishedConfigError, status.HTTP_404_NOT_FOUND),
+    (AgentKnowledgeBaseNotFoundError, status.HTTP_404_NOT_FOUND),
+    (IngestionRunNotReadyError, status.HTTP_400_BAD_REQUEST),
+    (IngestionRunKbMismatchError, status.HTTP_400_BAD_REQUEST),
+    (IngestionConfigInactiveError, status.HTTP_400_BAD_REQUEST),
+    (UnknownRagComponentError, status.HTTP_400_BAD_REQUEST),
+    (IngestionValidationError, status.HTTP_400_BAD_REQUEST),
+)
+
+
+def _http_status_for_ingestion_error(exc: Exception) -> Optional[int]:
+    """Return the mapped HTTP status for a typed ingestion error, or None
+    if the exception is not something this router owns (let it propagate)."""
+    for exc_type, code in _INGESTION_ERROR_HTTP_MAP:
+        if isinstance(exc, exc_type):
+            return code
+    return None
+
+
+def _raise_http_for_ingestion_error(exc: Exception) -> None:
+    """Convert a typed ingestion error into an HTTPException. No-op when the
+    exception isn't a mapped type — callers should let it propagate."""
+    code = _http_status_for_ingestion_error(exc)
+    if code is not None:
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
 
 
 def _kb_column_map() -> dict:
@@ -318,11 +364,16 @@ def build_knowledge_base_router(
         items = query.offset(offset).limit(page_size).all()
         r2 = R2StorageService()
 
-        # Map each upload to its linked agent (if any) so the UI can show the
-        # owning agent. Uploads created from the agent form before save are
-        # standalone and have no link yet.
+        # Map each upload to its linked agents (if any) so the UI can show
+        # every owning agent. Uploads created from the agent form before
+        # save are standalone and have no link yet.
+        #
+        # ``agent_id`` (first-attached, historic single-value field) is kept
+        # for backwards compatibility with any FE code that still reads it.
+        # ``agent_ids`` is the full list — new consumers should prefer it.
         upload_ids = [i.id for i in items]
-        agent_by_upload: dict[UUID, str] = {}
+        agents_by_upload: dict[UUID, list[str]] = {}
+        seen_pairs: set[tuple[UUID, str]] = set()
         if upload_ids:
             links = (
                 db.query(KnowledgeBase.upload_id, AgentKnowledgeBase.agent_id)
@@ -334,11 +385,18 @@ def build_knowledge_base_router(
                 .all()
             )
             for link_upload_id, link_agent_id in links:
-                agent_by_upload.setdefault(link_upload_id, str(link_agent_id))
+                agent_str = str(link_agent_id)
+                key = (link_upload_id, agent_str)
+                if key in seen_pairs:
+                    continue
+                seen_pairs.add(key)
+                agents_by_upload.setdefault(link_upload_id, []).append(agent_str)
 
         def _payload_with_agent(upload: Upload) -> dict:
             payload = _upload_to_payload(upload, r2)
-            payload["agent_id"] = agent_by_upload.get(upload.id)
+            agents = agents_by_upload.get(upload.id, [])
+            payload["agent_id"] = agents[0] if agents else None
+            payload["agent_ids"] = agents
             return payload
 
         return {
@@ -405,8 +463,6 @@ def build_knowledge_base_router(
             # only applies to the editor flow, where saves clone the chosen
             # source version. Resolving up-front here (before touching R2)
             # also means a missing-publication 409 doesn't orphan the blob.
-            from core.models.agent_config import AgentConfig
-
             agent_config = None
             if agent.published_config_id:
                 agent_config = (
@@ -478,10 +534,9 @@ def build_knowledge_base_router(
             # Race safety net: another concurrent upload committed the same
             # name after our pre-check. The service has already rolled back
             # and cleaned up the R2 blob (upload_service.py). Only translate
-            # the unique_violation (pg code 23505) — re-raise other integrity
-            # errors so we don't silently mask an unrelated schema issue.
-            pgcode = getattr(getattr(exc, "orig", None), "pgcode", None)
-            if pgcode == "23505":
+            # the unique_violation — re-raise other integrity errors so we
+            # don't silently mask an unrelated schema issue.
+            if is_unique_violation(exc):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
@@ -490,6 +545,16 @@ def build_knowledge_base_router(
                     ),
                 ) from exc
             raise
+        except (
+            IngestionConfigNotFoundError,
+            IngestionConfigInactiveError,
+            UnknownRagComponentError,
+            IngestionValidationError,
+        ) as exc:
+            # Bad ingestion_config_id (missing / inactive / references a
+            # slug that's since been removed). UploadService has already
+            # rolled back the DB write and cleaned the R2 blob.
+            _raise_http_for_ingestion_error(exc)
 
         return _upload_to_payload(upload)
 
@@ -875,53 +940,40 @@ def build_knowledge_base_router(
         if ingestion_config_id is None:
             # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser
             # / provider / store) so the queued job doesn't error mid-ingest.
-            if "parser" in run_config and run_config["parser"] not in PARSERS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Unknown parser '{run_config['parser']}'. "
-                        f"Available: {', '.join(sorted(PARSERS))}."
-                    ),
-                )
-            if "tokeniser" in run_config and run_config["tokeniser"] not in TOKENISERS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Unknown tokeniser '{run_config['tokeniser']}'. "
-                        f"Available: {', '.join(sorted(TOKENISERS))}."
-                    ),
-                )
-            if "embedding_provider" in run_config and run_config["embedding_provider"] not in EMBEDDERS:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Unknown embedding provider '{run_config['embedding_provider']}'. "
-                        f"Available: {', '.join(sorted(EMBEDDERS))}."
-                    ),
-                )
-            if "vector_store" in run_config and run_config["vector_store"] not in VECTOR_STORES:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Unknown vector store '{run_config['vector_store']}'. "
-                        f"Available: {', '.join(sorted(VECTOR_STORES))}."
-                    ),
-                )
+            # ``ensure_rag_component`` raises ``UnknownRagComponentError`` —
+            # the router-level ``_raise_http_for_ingestion_error`` maps it to
+            # a 400 with the same "Available: [...]" hint as before.
+            try:
+                for kind in (
+                    "parser", "tokeniser", "embedding_provider", "vector_store",
+                ):
+                    if kind in run_config:
+                        ensure_rag_component(kind, run_config[kind])
+            except UnknownRagComponentError as exc:
+                _raise_http_for_ingestion_error(exc)
         else:
             # Discard any per-field entries silently when a config was chosen
             # so the response reflects what was actually applied.
             run_config = {}
 
         kb = _kb_for_upload(db, org_id, upload.id)
-        run, job_id = await _start_ingestion_run(
-            db,
-            upload=upload,
-            kb=kb,
-            org_id=org_id,
-            request_config=run_config or None,
-            delete_existing=False,
-            ingestion_config_id=ingestion_config_id,
-        )
+        try:
+            run, job_id = await _start_ingestion_run(
+                db,
+                upload=upload,
+                kb=kb,
+                org_id=org_id,
+                request_config=run_config or None,
+                delete_existing=False,
+                ingestion_config_id=ingestion_config_id,
+            )
+        except (
+            IngestionConfigNotFoundError,
+            IngestionConfigInactiveError,
+            UnknownRagComponentError,
+            IngestionValidationError,
+        ) as exc:
+            _raise_http_for_ingestion_error(exc)
         logger.info(
             "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
             "config_id={}, overrides={})",
@@ -1395,13 +1447,16 @@ def build_knowledge_base_router(
         try:
             job_id = await enqueue_eval_for_ingestion_run(run.id, triggered_by="manual")
         except Exception as exc:
+            # Full traceback is captured by logger.exception; the frontend
+            # gets a generic message — never leak the raw exception str
+            # (per backend coding standards §"Never expose raw exceptions").
             logger.exception(
                 "[eval] manual run enqueue failed upload={} run={}",
                 upload.id, run.id,
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to enqueue eval run: {exc}",
+                detail="Failed to enqueue eval run. Please try again later.",
             ) from exc
 
         logger.info(
@@ -1440,13 +1495,22 @@ def build_knowledge_base_router(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid agent_id or kb_id",
             )
-        akb = IngestionRunService.set_agent_kb_active_run(
-            db,
-            org_id=org_id,
-            agent_id=aid,
-            knowledge_base_id=kid,
-            run_id=body.active_ingestion_pipeline_run_id,
-        )
+        try:
+            akb = IngestionRunService.set_agent_kb_active_run(
+                db,
+                org_id=org_id,
+                agent_id=aid,
+                knowledge_base_id=kid,
+                run_id=body.active_ingestion_pipeline_run_id,
+            )
+        except (
+            AgentHasNoPublishedConfigError,
+            AgentKnowledgeBaseNotFoundError,
+            IngestionRunNotFoundError,
+            IngestionRunKbMismatchError,
+            IngestionRunNotReadyError,
+        ) as exc:
+            _raise_http_for_ingestion_error(exc)
         return akb.to_dict()
 
     return router
