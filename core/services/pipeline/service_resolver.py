@@ -83,6 +83,10 @@ def _to_uuid(v: Any) -> Optional[UUID]:
     try:
         return UUID(str(v))
     except (ValueError, TypeError, AttributeError):
+        # Callers legitimately probe non-UUID values (voice_id can be a UUID
+        # or a legacy provider slug like "alloy"); debug so a malformed id
+        # buried in settings is inspectable without noising every call.
+        logger.debug("[resolver] value not a UUID: {!r} — returning None", v)
         return None
 
 
@@ -93,6 +97,8 @@ def _looks_like_uuid(value: Any) -> bool:
         UUID(str(value))
         return True
     except (ValueError, AttributeError, TypeError):
+        # Same reason as _to_uuid — this is a probe, not a strict check.
+        logger.debug("[resolver] UUID probe: value not a UUID: {!r}", value)
         return False
 
 
@@ -201,14 +207,33 @@ def _build_service_specs(
             # Fallback: a key with NULL service_type covers all services for the provider.
             ak = key_by_provider_service.get((pid, None))
         if not ak:
+            # Silent-None here was the top build-time debugging gap: an agent
+            # was configured for provider X but the org has no active key for
+            # X → the spec becomes None → the builder skipped the service with
+            # a bland "not configured" line. Warn (structured) so a dev + ops
+            # can see exactly which org+provider+service_type is missing a key.
+            logger.bind(
+                agent_id=getattr(config, "agent_id", None),
+                organization_id=org_id,
+                provider_id=str(pid) if pid else None,
+                service_type=service_type,
+            ).warning(
+                "[resolver] no active API key for provider — agent will start without this service "
+                "agent={} org={} provider_id={} service_type={}",
+                getattr(config, "agent_id", None), org_id, pid, service_type,
+            )
             return None
         try:
             return decrypt(ak.encrypted_key)
         except InvalidToken:
-            logger.exception("[resolver] decrypt failed (invalid token/rotated key) for api_key {}", ak.id)
+            logger.bind(api_key_id=str(ak.id), provider_id=str(pid) if pid else None).exception(
+                "[resolver] decrypt failed (invalid token/rotated key) for api_key {}", ak.id
+            )
             return None
         except Exception:
-            logger.exception("[resolver] decrypt failed for api_key {}", ak.id)
+            logger.bind(api_key_id=str(ak.id), provider_id=str(pid) if pid else None).exception(
+                "[resolver] decrypt failed for api_key {}", ak.id
+            )
             return None
 
     # Filter settings to only the params the chosen model actually supports, so stale
@@ -246,7 +271,13 @@ def _build_service_specs(
             if m and m.base_url:
                 spec_pid = _to_uuid(settings.get("provider_id"))
                 if spec_pid and m.provider_id != spec_pid:
-                    logger.warning(
+                    logger.bind(
+                        agent_id=config.agent_id,
+                        model_id=m.id,
+                        model_name=m.name,
+                        model_provider_id=m.provider_id,
+                        settings_provider_id=spec_pid,
+                    ).warning(
                         "[resolver] provider/model_id mismatch for agent_id={}: "
                         "model {} ({!r}) belongs to provider {} but settings.provider_id={} "
                         "— skipping base_url injection",
@@ -283,6 +314,21 @@ def _build_service_specs(
     resolved_voice = (voice_row.voice_id if voice_row else None) or (
         voice_id_raw if (voice_id_raw and not _looks_like_uuid(voice_id_raw)) else None
     )
+    # A voice_id that looks like a UUID but has no matching ModelVoice row is a
+    # sign the row was deleted or belongs to another org — the TTS service will
+    # get voice_id=None and either fail or fall back to its default voice, both
+    # of which are silent to the caller. Warn with agent + org context so the
+    # dashboard doesn't just show "wrong voice on the call".
+    if voice_id_raw and _looks_like_uuid(voice_id_raw) and not voice_row:
+        logger.bind(
+            agent_id=getattr(config, "agent_id", None),
+            organization_id=org_id,
+            voice_id_raw=str(voice_id_raw),
+        ).warning(
+            "[resolver] voice_id looks like a UUID but no ModelVoice row found — "
+            "TTS will use its default voice agent={} voice_id={}",
+            getattr(config, "agent_id", None), voice_id_raw,
+        )
     tts_metadata = _build_metadata(voice_settings, tts_mid)
     tts_metadata["voice_id"] = resolved_voice
     # Human-readable voice name for the call-history snapshot (falls back to the
@@ -789,6 +835,10 @@ def load_agent_service_config(
 
     version, config = compute_agent_cache_version(db, agent, org_id=org_id)
     if config is None:
+        logger.bind(agent_id=agent_id, organization_id=org_id).warning(
+            "[resolver] no active agent config found — agent will not start agent={}",
+            agent_id,
+        )
         return None
     # A runnable agent needs either a system prompt or an assigned workflow (workflow mode
     # can drive the call with no standalone prompt). Cheap signal check — the workflow graph
@@ -797,6 +847,15 @@ def load_agent_service_config(
         getattr(config, "mode", "prompt") == "workflow" and getattr(config, "workflow_id", None)
     )
     if not config.system_prompt_template and not _in_workflow_mode:
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            config_id=str(config.id),
+            mode=getattr(config, "mode", "prompt"),
+        ).warning(
+            "[resolver] agent has no system prompt and no assigned workflow — cannot start agent={}",
+            agent_id,
+        )
         return None
 
     cache_key = f"agent_pipeline_config:{agent_id}"
@@ -808,8 +867,32 @@ def load_agent_service_config(
     org_id = org_id or getattr(config, "organization_id", None) or getattr(agent, "organization_id", None)
     llm_spec, stt_spec, tts_spec, is_s2s = _build_service_specs(db, org_id, config)
     if not llm_spec:
+        # Reached when either the LLM provider/model isn't configured on the
+        # agent config, or `_key()` returned None (no active API key). `_key()`
+        # already warns above with the exact provider — this line adds the
+        # top-level "agent cannot start" signal.
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            config_id=str(config.id),
+            is_s2s=is_s2s,
+        ).warning(
+            "[resolver] LLM spec missing — agent cannot start (check provider config + API key) agent={}",
+            agent_id,
+        )
         return None
     if not is_s2s and (not stt_spec or not tts_spec):
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            config_id=str(config.id),
+            has_stt=bool(stt_spec),
+            has_tts=bool(tts_spec),
+        ).warning(
+            "[resolver] non-S2S pipeline requires both STT and TTS — agent cannot start "
+            "agent={} has_stt={} has_tts={}",
+            agent_id, bool(stt_spec), bool(tts_spec),
+        )
         return None
 
     real_tools = serialize_agent_tools(agent_id)
@@ -863,6 +946,20 @@ def load_agent_service_config(
             getattr(config, "system_prompt_template", None), workflow_prompt
         )
     if not system_content:
+        # Both the persona prompt AND the workflow serializer produced empty
+        # content — the LLM would have nothing to condition on. Warn (with
+        # agent context) so this doesn't surface later as a bland "call
+        # never started".
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            config_id=str(config.id),
+            in_workflow_mode=_in_workflow_mode,
+            has_workflow_prompt=bool(workflow_prompt),
+        ).warning(
+            "[resolver] resolved system prompt is empty — agent cannot start agent={}",
+            agent_id,
+        )
         return None
 
     # Append the shared voice-agent rules (brevity + no Markdown + tool-usage guardrails)

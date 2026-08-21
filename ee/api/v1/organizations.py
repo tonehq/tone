@@ -236,6 +236,20 @@ def update_organization_eval_settings(
         ) from exc
 
 
+@router.get("/eval-settings/models")
+def list_eval_settings_llm_models(
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    """EE mirror of ``core/api/v1/organizations.py::list_eval_settings_llm_models``
+    — same read-only catalog of OpenAI + Google (Gemini) LLM models, exposed
+    under the EE mount so the Evaluations settings page works on both
+    editions."""
+    from core.services.evals.eval_models_service import EvalModelsService
+
+    return EvalModelsService(db).list_llm_options()
+
+
 # ── Org access requests — not supported on v2 schema ────────────────
 
 

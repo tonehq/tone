@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, MinusCircle, XCircle } from 'lucide-react';
 
 import { CustomDrawer, SelectInput } from '@/components/shared';
@@ -175,6 +175,48 @@ function SummaryStrip({
   );
 }
 
+function ChunkRow({
+  index,
+  score,
+  text,
+}: {
+  index: number;
+  score: number | null | undefined;
+  text: string | null | undefined;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const panelId = useId();
+  return (
+    <div className="rounded bg-muted/40">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-2 py-1.5 text-left font-sans text-[11px] text-muted-foreground"
+        aria-expanded={expanded}
+        aria-controls={panelId}
+      >
+        {expanded ? (
+          <ChevronDown className="size-3.5 shrink-0" />
+        ) : (
+          <ChevronRight className="size-3.5 shrink-0" />
+        )}
+        <span>chunk {index + 1}</span>
+        {typeof score === 'number' && (
+          <span className="tabular-nums">score {score.toFixed(3)}</span>
+        )}
+      </button>
+      {expanded && (
+        <div
+          id={panelId}
+          className="whitespace-pre-wrap border-t border-border/60 px-2 py-2 font-mono text-[12px] text-foreground"
+        >
+          {text ?? '—'}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function QuestionRow({ q }: { q: EvalScoredQuestion }) {
   const [expanded, setExpanded] = useState(false);
   const chunks = q.retrieved_chunks ?? [];
@@ -268,18 +310,12 @@ function QuestionRow({ q }: { q: EvalScoredQuestion }) {
               <div className="mt-1 space-y-2">
                 {chunks.length === 0 && <div className="text-muted-foreground">None</div>}
                 {chunks.map((c, i) => (
-                  <div
+                  <ChunkRow
                     key={i}
-                    className="rounded bg-muted/40 p-2 font-mono text-[12px] text-foreground"
-                  >
-                    <div className="mb-1 flex items-center gap-2 font-sans text-[11px] text-muted-foreground">
-                      <span>chunk {i + 1}</span>
-                      {typeof c.score === 'number' && (
-                        <span className="tabular-nums">score {c.score.toFixed(3)}</span>
-                      )}
-                    </div>
-                    <div className="whitespace-pre-wrap">{(c.text as string) ?? '—'}</div>
-                  </div>
+                    index={i}
+                    score={c.score}
+                    text={c.text as string | null | undefined}
+                  />
                 ))}
               </div>
             </div>

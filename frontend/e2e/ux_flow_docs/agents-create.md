@@ -9,6 +9,15 @@ Companion to `frontend/e2e/dashboard/agents-create-inbound.spec.ts` and
 > verification steps). See [`_template.md`](_template.md) for the canonical
 > shape and ID prefixes.
 
+> **Section consolidation (2026-08-20):** The standalone `Basics` and `AI`
+> sections have been merged into a single **`Setup`** section that renders
+> Basics + AI stacked on one page (in edit mode, Overview is also included).
+> Anywhere this doc says visit `/agents/create/…/basics` or
+> `/agents/create/…/ai`, the app now serves `/agents/create/…/setup` — the
+> legacy URLs `router.replace` to `/setup` in `AgentSectionBody`, so old
+> bookmarks and specs keep working. Any sidebar assertion for the labels
+> `Basics` or `AI` should target `Setup` instead.
+
 ## User stories
 
 - As a user, I can create a new **inbound** agent from `/agents/create/inbound`

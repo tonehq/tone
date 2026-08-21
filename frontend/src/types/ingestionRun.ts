@@ -55,3 +55,27 @@ export interface ListIngestionRunsParams {
   status_filter?: IngestionRunStatus[];
   is_active_only?: boolean;
 }
+
+// Mirrors backend `KnowledgeBaseChunk` — one chunk row produced by an
+// ingestion run. `chunk_metadata` is parser-provided (page numbers, section
+// hints, etc.) and is intentionally loose (JSONB in the DB).
+export interface IngestionRunChunk {
+  id: string;
+  chunk_index: number;
+  chunk_text: string;
+  chunk_metadata: Record<string, unknown> | null;
+  created_at: string | null;
+}
+
+export interface PaginatedIngestionRunChunks {
+  data: IngestionRunChunk[];
+  total: number;
+  page_no: number;
+  page_size: number;
+}
+
+export interface ListIngestionRunChunksParams {
+  page_no?: number;
+  page_size?: number;
+  search?: string;
+}

@@ -69,11 +69,35 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
 
     builder = engine.builder_cls(params)
     runner = engine.runner_cls(params, builder, transport, agent=agent, runner_args=runner_args)
-    logger.info("[bot] pipeline built — starting runner for agent id={}", agent.id)
+    logger.bind(
+        agent_id=agent.id,
+        organization_id=agent.organization_id,
+        direction=body.get("direction"),
+        transport_type=body.get("transport_type"),
+    ).info("[bot] pipeline runner instantiated — starting run")
     try:
         await runner.run()
+    except asyncio.CancelledError:
+        # Normal teardown when the transport closes / caller hangs up —
+        # never swallow it, but do NOT log as an error either.
+        raise
+    except Exception:
+        # Attaches agent + org + direction as structured fields so build- or
+        # runtime-time failures are queryable in Loki without walking back up
+        # to the outer bot() handler (which has no `agent` in scope). The
+        # builder itself already emits per-service failure context — this line
+        # adds the top-level "which call died" tie-in.
+        logger.bind(
+            agent_id=agent.id,
+            organization_id=agent.organization_id,
+            direction=body.get("direction"),
+            transport_type=body.get("transport_type"),
+        ).exception("[bot] pipeline run failed")
+        raise
     finally:
-        logger.info("[bot] pipeline runner finished for agent id={}", agent.id)
+        logger.bind(agent_id=agent.id).info(
+            "[bot] pipeline runner finished agent={}", agent.id
+        )
 
 
 async def bot(runner_args: RunnerArguments):

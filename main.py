@@ -35,7 +35,7 @@ from core.api.v1 import webrtc
 if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
-        agents, agent_readiness, benchmarks, mcp_servers, services, tools, dashboard,
+        agents, agent_readiness, agent_llm_evals, benchmarks, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
@@ -145,6 +145,9 @@ if ee_enabled:
         api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(ee_agents.router, prefix="/agent", tags=["agent"])
         api_v1.include_router(ee_agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
+        # Agent LLM (Level-2) evals — no EE variant; router paths include the
+        # /agents/{agent_id}/llm-evals prefix so no include_router prefix is set.
+        api_v1.include_router(agent_llm_evals.router, tags=["agent-llm-evals"])
         api_v1.include_router(benchmarks.router, prefix="/agent", tags=["benchmarks"])
         api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
@@ -189,6 +192,9 @@ else:
         api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
         api_v1.include_router(agent_readiness.router, prefix="/agent", tags=["agent-readiness"])
+        # Agent LLM (Level-2) evals — router paths already include the
+        # /agents/{agent_id}/llm-evals prefix so no include_router prefix.
+        api_v1.include_router(agent_llm_evals.router, tags=["agent-llm-evals"])
         api_v1.include_router(benchmarks.router, prefix="/agent", tags=["benchmarks"])
         api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])

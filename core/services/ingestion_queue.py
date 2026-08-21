@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from typing import Optional
 from uuid import UUID
 
 from loguru import logger
@@ -313,6 +314,162 @@ async def enqueue_eval_for_ingestion_run(
         return await eval_ingestion_run.defer_async(
             ingestion_run_id=str(ingestion_run_id),
             triggered_by=triggered_by,
+        )
+
+
+# Every ``triggered_by`` value the agent-LLM task will accept. Mirrors
+# ``AgentLlmEvalService.TRIGGERED_BY_VALUES`` — kept as a local set so this
+# worker module stays import-safe even before ``run_eval_for_agent`` is
+# available on an older deploy.
+_AGENT_LLM_EVAL_TRIGGERS = {"cli", "api", "manual"}
+
+
+@app.task(name="run_agent_llm_eval", queue="agent_eval")
+def run_agent_llm_eval(
+    agent_id: str,
+    triggered_by: str = "manual",
+    scenario_ids: Optional[list[str]] = None,
+    tags: Optional[list[str]] = None,
+    judge_model: Optional[str] = None,
+    run_id: Optional[str] = None,
+) -> None:
+    """Run one Level-2 (agent-LLM) eval batch asynchronously.
+
+    Kept on its OWN queue (``agent_eval``, not ``eval``) so:
+    (1) an older worker deployment that doesn't yet know this task can't
+    grab the job and fail it as ``TaskNotFound``, and
+    (2) slow LLM-heavy judge calls don't compete with the RAG eval queue.
+    Workers must include ``agent_eval`` in their ``--queues`` list to
+    consume — until then jobs enqueue but nothing runs.
+
+    Failures are logged with a full traceback but NEVER re-raised —
+    ``AgentLlmEvalService.run_eval`` already persists per-scenario failures
+    (``status='failed'``) so the FE run history shows the failure without
+    the worker crash-looping the task.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.agent_llm.service import AgentLlmEvalService
+
+    if triggered_by not in _AGENT_LLM_EVAL_TRIGGERS:
+        logger.warning(
+            "[agent-llm-eval] unknown triggered_by={!r} for agent={}; defaulting to 'manual'",
+            triggered_by, agent_id,
+        )
+        triggered_by = "manual"
+
+    logger.info(
+        "[agent-llm-eval] worker picked job agent={} triggered_by={} scenarios={} tags={}",
+        agent_id, triggered_by,
+        len(scenario_ids) if scenario_ids else "all",
+        tags or "-",
+    )
+    # Split error handling by phase so transient failures BEFORE ``run_eval``
+    # starts (DB unreachable, missing agent, unresolvable config) don't
+    # silently succeed — they retry via Procrastinate. Once ``run_eval``
+    # begins scoring, per-scenario failures are already persisted onto
+    # ``agent_llm_eval_results`` (fail-soft rows), so swallow-and-log at
+    # THAT phase to avoid double-writing.
+    try:
+        with get_db_context() as db:
+            svc = AgentLlmEvalService()
+            try:
+                svc.run_eval_for_agent(
+                    db,
+                    agent_id=_UUID(agent_id),
+                    triggered_by=triggered_by,
+                    judge_model=judge_model,
+                    scenario_ids=(
+                        [_UUID(s) for s in scenario_ids] if scenario_ids else None
+                    ),
+                    tags=tags,
+                    run_id=_UUID(run_id) if run_id else None,
+                )
+            except Exception:  # noqa: BLE001
+                # Scoring-phase failure — per-scenario failures were already
+                # persisted by ``run_eval`` (or its ``_mark_failed`` path),
+                # so the FE run history shows the failure without needing a
+                # worker retry.
+                logger.exception(
+                    "[agent-llm-eval] run failed mid-scoring agent={} triggered_by={} "
+                    "(swallowed — per-scenario failures are persisted)",
+                    agent_id, triggered_by,
+                )
+    except Exception:  # noqa: BLE001
+        # Pre-``run_eval`` failure — DB connect, agent lookup, config
+        # resolution. Nothing persisted; re-raise so Procrastinate retries
+        # the job. Without this, a 5-second DB blip silently drops the run
+        # and the FE user sees no signal.
+        logger.exception(
+            "[agent-llm-eval] pre-run failure agent={} triggered_by={} (re-raising for retry)",
+            agent_id, triggered_by,
+        )
+        raise
+
+    logger.info(
+        "[agent-llm-eval] worker task done agent={} triggered_by={}",
+        agent_id, triggered_by,
+    )
+
+
+async def enqueue_agent_llm_eval(
+    agent_id,
+    *,
+    triggered_by: str = "manual",
+    scenario_ids: Optional[list] = None,
+    tags: Optional[list[str]] = None,
+    judge_model: Optional[str] = None,
+    run_id=None,
+) -> int:
+    async with app.open_async():
+        return await run_agent_llm_eval.defer_async(
+            agent_id=str(agent_id),
+            triggered_by=triggered_by,
+            scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
+            tags=list(tags) if tags else None,
+            judge_model=judge_model,
+            run_id=str(run_id) if run_id else None,
+        )
+
+
+def enqueue_agent_llm_eval_sync(
+    agent_id,
+    *,
+    triggered_by: str = "manual",
+    scenario_ids: Optional[list] = None,
+    tags: Optional[list[str]] = None,
+    judge_model: Optional[str] = None,
+    run_id=None,
+) -> int:
+    """Sync counterpart for callers inside a sync request handler (FastAPI
+    routes registered with ``def`` — not ``async def`` — run in the
+    threadpool and cannot ``await``).
+
+    Uses the same one-shot ``SyncPsycopgConnector``-backed ephemeral app
+    pattern as :func:`enqueue_eval_for_ingestion_run_sync` — never opens the
+    module-level async ``app`` from a threadpool thread (that would create
+    cross-loop futures and close the shared psycopg pool).
+    """
+    from procrastinate import App as _App
+    from procrastinate import SyncPsycopgConnector
+
+    ephemeral = _App(
+        connector=SyncPsycopgConnector(
+            conninfo=_conninfo(), min_size=1, max_size=1
+        )
+    )
+    with ephemeral.open():
+        return ephemeral.configure_task(
+            name="run_agent_llm_eval",
+            queue="agent_eval",
+        ).defer(
+            agent_id=str(agent_id),
+            triggered_by=triggered_by,
+            scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
+            tags=list(tags) if tags else None,
+            judge_model=judge_model,
+            run_id=str(run_id) if run_id else None,
         )
 
 

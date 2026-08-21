@@ -442,6 +442,37 @@ class Settings:
             for m in (get_secret("AGENT_LLM_EVAL_METRICS_ENABLED") or "").split(",")
             if m.strip()
         ]
+        # AGENT_LLM_EVAL_JUDGE_MODEL / _METRIC_THRESHOLD / _AUTO_RUN_ENABLED —
+        # optional per-flavor overrides read by
+        # ``core.services.org_settings.get_agent_llm_eval_settings`` when the
+        # org's ``eval_settings.llm_evals.*`` JSONB doesn't override them.
+        # NOT in ``MANDATORY_KEYS`` — the resolver falls through to a
+        # hardcoded default if the env is unset, so existing deployments boot
+        # unchanged. Ops can set these per-env to override the shipped default
+        # without touching per-org DB rows.
+        self.AGENT_LLM_EVAL_JUDGE_MODEL: str = get_secret("AGENT_LLM_EVAL_JUDGE_MODEL")
+        # Non-mandatory numeric env — a fat-fingered value must not crash
+        # every process at import. Log a critical warning and fall back to
+        # 0.0 (the resolver treats that as unset and drops to the hardcoded
+        # default, matching the "env not set" behavior).
+        _raw_agent_llm_threshold = get_secret("AGENT_LLM_EVAL_METRIC_THRESHOLD")
+        if _raw_agent_llm_threshold:
+            try:
+                self.AGENT_LLM_EVAL_METRIC_THRESHOLD: float = float(
+                    _raw_agent_llm_threshold
+                )
+            except ValueError:
+                logger.critical(
+                    "AGENT_LLM_EVAL_METRIC_THRESHOLD is not a number: {!r} — "
+                    "falling back to org / hardcoded default (0.7)",
+                    _raw_agent_llm_threshold,
+                )
+                self.AGENT_LLM_EVAL_METRIC_THRESHOLD = 0.0
+        else:
+            self.AGENT_LLM_EVAL_METRIC_THRESHOLD = 0.0
+        self.AGENT_LLM_EVAL_AUTO_RUN_ENABLED: bool = _bool_env(
+            get_secret("AGENT_LLM_EVAL_AUTO_RUN_ENABLED")
+        )
 
         # Fail-fast if any mandatory env var is missing. Runs LAST so every
         # field is populated before we inspect it. Aborts process on failure.

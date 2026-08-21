@@ -370,7 +370,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           methods.setError(path, { type: 'server', message: messages[0] });
         }
         if (!navigated) {
-          if (settingsKey === 'llm_settings') router.push(`${basePath}/ai`);
+          if (settingsKey === 'llm_settings') router.push(`${basePath}/setup`);
           else if (settingsKey === 'voice_settings' || settingsKey === 'stt_settings')
             router.push(`${basePath}/voice`);
           navigated = true;
@@ -472,7 +472,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         const created = await createAgent(formStateToCreatePayload(values));
         showToast.success('Agent created');
         methods.reset(values);
-        router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
+        router.push(`/agents/edit/${created.agent_type}/${created.id}/setup`);
         return;
       }
 
@@ -832,7 +832,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   // Call History, Contacts and Schedule host full-width tables + toolbars — they need
   // the entire content width. The form sections (Basics, Prompt, …) stay in the
   // narrow, centered max-w-3xl column that reads better for forms.
-  const isWideSection = /\/(call-history|contacts|schedule)$/.test(pathname);
+  const isWideSection = /\/(call-history|contacts|schedule|llm-evals)$/.test(pathname);
   if (isBuilderRoute) {
     return (
       <FormProvider {...methods}>

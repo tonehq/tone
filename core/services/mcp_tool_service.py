@@ -52,8 +52,13 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
             arguments = getattr(params, "arguments", {})
             started = time.monotonic()
             timer = ToolCallTimer.start(params, tool_request_ts)
-            logger.info(
-                "🔧 MCP tool call → server='{}' tool='{}' args={}",
+            logger.bind(
+                tool_name=fn,
+                tool_type="mcp",
+                mcp_server_id=str(server_id) if server_id else None,
+                mcp_server_name=server_name,
+            ).info(
+                "[mcp-tool] tool call server='{}' tool='{}' args={}",
                 server_name, fn, truncate_for_log(arguments),
             )
 
@@ -88,9 +93,14 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
             if sig is not None and sig in tool_dedup:
                 cached = tool_dedup[sig]
                 dur = round((time.monotonic() - started) * 1000)
-                logger.warning(
-                    "⏭️ Duplicate MCP tool call suppressed → server='{}' tool='{}' "
-                    "(already created this call); returning cached result",
+                logger.bind(
+                    tool_name=fn,
+                    tool_type="mcp",
+                    mcp_server_id=str(server_id) if server_id else None,
+                    mcp_server_name=server_name,
+                ).warning(
+                    "[mcp-tool] duplicate call suppressed server='{}' tool='{}' "
+                    "— returning cached result",
                     server_name, fn,
                 )
                 entry["result"] = cached
@@ -105,8 +115,14 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
             if original_cb is not None:
                 async def logging_cb(result, *cb_args, **cb_kwargs):
                     dur = round((time.monotonic() - started) * 1000)
-                    logger.info(
-                        "✅ MCP tool result ← server='{}' tool='{}' ({}ms) output={}",
+                    logger.bind(
+                        tool_name=fn,
+                        tool_type="mcp",
+                        mcp_server_id=str(server_id) if server_id else None,
+                        mcp_server_name=server_name,
+                        elapsed_ms=dur,
+                    ).info(
+                        "[mcp-tool] result server='{}' tool='{}' ({}ms) output={}",
                         server_name, fn, dur, truncate_for_log(result),
                     )
                     entry["result"] = result
@@ -129,8 +145,14 @@ def _install_mcp_call_logging(llm, server_name: str, server_id=None, tool_call_e
                 return await handler(params)
             except Exception as exc:
                 dur = round((time.monotonic() - started) * 1000)
-                logger.exception(
-                    "❌ MCP tool error ✕ server='{}' tool='{}' ({}ms)",
+                logger.bind(
+                    tool_name=fn,
+                    tool_type="mcp",
+                    mcp_server_id=str(server_id) if server_id else None,
+                    mcp_server_name=server_name,
+                    elapsed_ms=dur,
+                ).exception(
+                    "[mcp-tool] error server='{}' tool='{}' ({}ms)",
                     server_name, fn, dur,
                 )
                 entry["status"] = "error"
@@ -468,10 +490,16 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
     """
     servers = get_mcp_servers_for_agent(agent_id)
     if not servers:
-        logger.info("Agent {} has no active linked MCP servers; no MCP tools registered", agent_id)
+        logger.bind(agent_id=agent_id).info(
+            "[mcp-tool] agent {} has no active linked MCP servers — no MCP tools registered",
+            agent_id,
+        )
         return None
 
-    logger.info("Agent {} has {} active MCP server(s); registering tools", agent_id, len(servers))
+    logger.bind(agent_id=agent_id, server_count=len(servers)).info(
+        "[mcp-tool] agent {} has {} active MCP server(s) — registering tools",
+        agent_id, len(servers),
+    )
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
@@ -488,11 +516,25 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
             elif server.transport_type == "streamable_http":
                 server_params = StreamableHttpParameters(url=connect_url, headers=headers)
             else:
-                logger.warning("Unsupported transport type '{}' for MCP server '{}', skipping", server.transport_type, server.name)
+                logger.bind(
+                    agent_id=agent_id,
+                    mcp_server_id=str(server.id) if server.id else None,
+                    mcp_server_name=server.name,
+                    transport_type=server.transport_type,
+                ).warning(
+                    "[mcp-tool] unsupported transport type '{}' for MCP server '{}' — skipping",
+                    server.transport_type, server.name,
+                )
                 continue
 
-            logger.info(
-                "Connecting to MCP server '{}' ({}, {} auth header(s))",
+            logger.bind(
+                agent_id=agent_id,
+                mcp_server_id=str(server.id) if server.id else None,
+                mcp_server_name=server.name,
+                transport_type=server.transport_type,
+                auth_header_count=len(headers),
+            ).info(
+                "[mcp-tool] connecting to MCP server '{}' ({}, {} auth header(s))",
                 server.name, server.transport_type, len(headers),
             )
             mcp_client = MCPClient(server_params=server_params)
@@ -516,14 +558,25 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                     timeout=MCP_REGISTER_TIMEOUT_S,
                 )
             except asyncio.TimeoutError:
-                logger.warning(
-                    "Schema pre-validation timed out for MCP server '{}'; continuing without filtering",
+                logger.bind(
+                    agent_id=agent_id,
+                    mcp_server_id=str(server.id) if server.id else None,
+                    mcp_server_name=server.name,
+                    timeout_seconds=MCP_REGISTER_TIMEOUT_S,
+                ).warning(
+                    "[mcp-tool] schema pre-validation timed out for MCP server '{}' — "
+                    "continuing without filtering",
                     server.name,
                 )
                 _kept, _dropped = None, []
             if _dropped:
-                logger.warning(
-                    "MCP server '{}': dropped {} tool(s) with invalid JSON schemas: {}",
+                logger.bind(
+                    agent_id=agent_id,
+                    mcp_server_id=str(server.id) if server.id else None,
+                    mcp_server_name=server.name,
+                    dropped_count=len(_dropped),
+                ).warning(
+                    "[mcp-tool] MCP server '{}' dropped {} tool(s) with invalid JSON schemas: {}",
                     server.name, len(_dropped),
                     [name for name, _ in _dropped],
                 )
@@ -552,25 +605,46 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
             if tools_schema and tools_schema.standard_tools:
                 tool_names = [getattr(t, "name", "?") for t in tools_schema.standard_tools]
                 all_tool_schemas.extend(tools_schema.standard_tools)
-                logger.info(
-                    "Registered {} MCP tools from server '{}': {}",
+                logger.bind(
+                    agent_id=agent_id,
+                    mcp_server_id=str(server.id) if server.id else None,
+                    mcp_server_name=server.name,
+                    tool_count=len(tools_schema.standard_tools),
+                ).info(
+                    "[mcp-tool] registered {} MCP tools from server '{}': {}",
                     len(tools_schema.standard_tools), server.name, tool_names,
                 )
             else:
-                logger.warning(
-                    "MCP server '{}' connected but exposed NO tools — the agent will not "
-                    "be able to act on it (e.g. create ClickUp task / calendar event)",
+                logger.bind(
+                    agent_id=agent_id,
+                    mcp_server_id=str(server.id) if server.id else None,
+                    mcp_server_name=server.name,
+                ).warning(
+                    "[mcp-tool] MCP server '{}' connected but exposed NO tools — the agent "
+                    "will not be able to act on it (e.g. create ClickUp task / calendar event)",
                     server.name,
                 )
 
         except asyncio.TimeoutError:
-            logger.error(
-                "Timed out after {}s discovering tools from MCP server '{}' ({})",
+            logger.bind(
+                agent_id=agent_id,
+                mcp_server_id=str(server.id) if server.id else None,
+                mcp_server_name=server.name,
+                timeout_seconds=MCP_REGISTER_TIMEOUT_S,
+            ).error(
+                "[mcp-tool] timed out after {}s discovering tools from MCP server '{}' ({})",
                 MCP_REGISTER_TIMEOUT_S, server.name, server.server_url,
             )
             continue
         except Exception:
-            logger.exception("Failed to connect to MCP server '{}'", server.name)
+            logger.bind(
+                agent_id=agent_id,
+                mcp_server_id=str(server.id) if server.id else None,
+                mcp_server_name=server.name,
+                server_url=server.server_url,
+            ).exception(
+                "[mcp-tool] failed to connect to MCP server '{}'", server.name
+            )
             continue
 
     if all_tool_schemas:

@@ -232,11 +232,25 @@ class PipecatPipelineRunner(PipelineRunner):
                         if call_log:
                             call_log_state["id"] = call_log.id
                             call_id_holder["id"] = str(call_log.id)
-                            logger.info("[TIMING] create_call_log thread (+{:.3f}s)", _time.monotonic() - _t)
+                            logger.bind(
+                                agent_id=getattr(agent, "id", None),
+                                call_id=str(call_log.id),
+                                elapsed_ms=int((_time.monotonic() - _t) * 1000),
+                            ).info("[runner] call log created")
                         else:
-                            logger.warning("create_call_log returned None (no channel resolved) — no call record created")
-                except Exception as e:
-                    logger.exception("Failed to create call log")
+                            logger.bind(
+                                agent_id=getattr(agent, "id", None),
+                                provider_call_id=provider_call_id,
+                                transport_type=transport_type,
+                            ).warning(
+                                "[runner] create_call_log returned None — no channel resolved, no call record created"
+                            )
+                except Exception:
+                    logger.bind(
+                        agent_id=getattr(agent, "id", None),
+                        provider_call_id=provider_call_id,
+                        transport_type=transport_type,
+                    ).exception("[runner] failed to create call log")
                 finally:
                     loop.call_soon_threadsafe(call_log_ready.set)
 
@@ -384,9 +398,20 @@ class PipecatPipelineRunner(PipelineRunner):
                     audio_bytes = mp3_buffer.getvalue()
                     recording_seconds_exact = len(audio_segment) / 1000.0
                     recording_seconds = int(recording_seconds_exact)
-                    logger.info("Encoded call recording: {} ({:.1f}s, {} bytes)", file_name, recording_seconds_exact, len(audio_bytes))
-                except Exception as e:
-                    logger.exception("Failed to encode call recording")
+                    logger.bind(
+                        call_id=str(call_log_id) if call_log_id else None,
+                        file_name=file_name,
+                        duration_seconds=recording_seconds_exact,
+                        bytes=len(audio_bytes),
+                    ).info(
+                        "[runner] encoded call recording {} ({:.1f}s, {} bytes)",
+                        file_name, recording_seconds_exact, len(audio_bytes),
+                    )
+                except Exception:
+                    logger.bind(
+                        call_id=str(call_log_id) if call_log_id else None,
+                        agent_id=getattr(agent, "id", None),
+                    ).exception("[runner] failed to encode call recording")
 
                 # Upload to Cloudflare R2 and update DB
                 if call_log_id:
@@ -418,9 +443,20 @@ class PipecatPipelineRunner(PipelineRunner):
                                     file_size_bytes=len(audio_bytes),
                                 )
                                 upload_id = upload.id
-                            logger.info("Audio uploaded to R2: key={} upload_id={}", r2_object_key, upload_id)
-                        except Exception as e:
-                            logger.exception("Failed to upload audio to R2")
+                            logger.bind(
+                                call_id=str(call_log_id) if call_log_id else None,
+                                r2_object_key=r2_object_key,
+                                upload_id=str(upload_id) if upload_id else None,
+                            ).info(
+                                "[runner] audio uploaded to R2 key={} upload_id={}",
+                                r2_object_key, upload_id,
+                            )
+                        except Exception:
+                            logger.bind(
+                                call_id=str(call_log_id) if call_log_id else None,
+                                r2_object_key=r2_object_key,
+                                agent_id=getattr(agent, "id", None),
+                            ).exception("[runner] failed to upload audio to R2")
 
                     try:
                         transcript_data = transcript_entries if transcript_entries else None
@@ -442,8 +478,13 @@ class PipecatPipelineRunner(PipelineRunner):
                                 ended_reason_detail=end_reason_holder.get("detail"),
                             )
                         call_log_updated["done"] = True
-                        logger.info(
-                            "Call log completed: id={} r2_key={} transcript_entries={} metrics_collected={} ended_reason={}",
+                        logger.bind(
+                            call_id=str(call_log_id) if call_log_id else None,
+                            r2_key=r2_object_key,
+                            transcript_entries=len(transcript_data) if transcript_data else 0,
+                            ended_reason=end_reason_holder.get("reason"),
+                        ).info(
+                            "[runner] call log completed id={} r2_key={} transcript_entries={} metrics={} ended_reason={}",
                             call_log_id,
                             r2_object_key,
                             len(transcript_data) if transcript_data else 0,
@@ -451,7 +492,11 @@ class PipecatPipelineRunner(PipelineRunner):
                             end_reason_holder.get("reason"),
                         )
                     except Exception as e:
-                        logger.exception("Failed to complete call log in on_audio_data")
+                        logger.bind(
+                            call_id=str(call_log_id) if call_log_id else None,
+                            agent_id=getattr(agent, "id", None),
+                            ended_reason=end_reason_holder.get("reason"),
+                        ).exception("[runner] failed to complete call log in on_audio_data")
                         log_call_event(
                             EVENT_CALL_ENDED_ERROR,
                             call_id=str(call_log_id) if call_log_id else None,
@@ -516,7 +561,10 @@ class PipecatPipelineRunner(PipelineRunner):
                     error_type=type(e).__name__,
                     error=str(e),
                 )
-                logger.exception("task.cancel() failed during client disconnect")
+                logger.bind(
+                    call_id=call_id_holder.get("id"),
+                    agent_id=getattr(agent, "id", None),
+                ).exception("[runner] task.cancel() failed during client disconnect")
 
         @rtvi.event_handler("on_client_ready")
         async def on_client_ready(rtvi):
@@ -541,14 +589,24 @@ class PipecatPipelineRunner(PipelineRunner):
             # The pipeline itself died (STT/LLM/TTS failure, transport error, …).
             # Log the full traceback and mark the call failed so it isn't left
             # dangling as "in progress", then re-raise for the caller's cleanup.
-            logger.exception("[runner] pipeline run failed — marking call failed")
-            call_log_id = await _get_call_log_id()
-            if call_log_id:
+            _fail_call_id = await _get_call_log_id()
+            logger.bind(
+                agent_id=getattr(agent, "id", None),
+                call_id=str(_fail_call_id) if _fail_call_id else None,
+                direction=direction,
+                transport_type=transport_type,
+            ).exception("[runner] pipeline run failed — marking call failed")
+            if _fail_call_id:
                 try:
                     with get_db_context() as db:
-                        CallLogService(db).fail_call(call_log_id)
+                        CallLogService(db).fail_call(_fail_call_id)
                 except Exception:
-                    logger.exception("[runner] fail_call failed for call_log_id={}", call_log_id)
+                    logger.bind(
+                        call_id=str(_fail_call_id),
+                        agent_id=getattr(agent, "id", None),
+                    ).exception(
+                        "[runner] fail_call failed for call_log_id={}", _fail_call_id
+                    )
             raise
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
@@ -560,12 +618,20 @@ class PipecatPipelineRunner(PipelineRunner):
             # transcript, it was a failed/retried connection — delete to avoid duplicates.
             # Real telephony calls (Twilio/Telnyx/Plivo via /ws) always keep their log.
             if transport_type == "test" and call_duration_secs < 10 and not transcript_entries:
-                logger.info("Short-lived test connection ({:.1f}s, no transcript) — deleting call_log id={}", call_duration_secs, call_log_id)
+                logger.bind(
+                    call_id=str(call_log_id),
+                    duration_seconds=call_duration_secs,
+                ).info(
+                    "[runner] short-lived test connection ({:.1f}s, no transcript) — deleting call_log id={}",
+                    call_duration_secs, call_log_id,
+                )
                 try:
                     with get_db_context() as db:
                         CallLogService(db).delete_call(call_log_id)
-                except Exception as e:
-                    logger.exception("Failed to delete short call_log id={}", call_log_id)
+                except Exception:
+                    logger.bind(call_id=str(call_log_id)).exception(
+                        "[runner] failed to delete short call_log id={}", call_log_id
+                    )
             else:
                 logger.info("on_audio_data did not complete DB update, running fallback for call_log_id={}", call_log_id)
                 try:
@@ -585,12 +651,21 @@ class PipecatPipelineRunner(PipelineRunner):
                             ended_reason=end_reason_holder.get("reason"),
                             ended_reason_detail=end_reason_holder.get("detail"),
                         )
-                    logger.info(
-                        "Call log completed (fallback): id={} ended_reason={}",
+                    logger.bind(
+                        call_id=str(call_log_id),
+                        ended_reason=end_reason_holder.get("reason"),
+                    ).info(
+                        "[runner] call log completed (fallback) id={} ended_reason={}",
                         call_log_id, end_reason_holder.get("reason"),
                     )
                 except Exception as e:
-                    logger.exception("Failed to complete call log id={}", call_log_id)
+                    logger.bind(
+                        call_id=str(call_log_id),
+                        agent_id=getattr(agent, "id", None),
+                        ended_reason=end_reason_holder.get("reason"),
+                    ).exception(
+                        "[runner] failed to complete call log (fallback) id={}", call_log_id
+                    )
                     log_call_event(
                         EVENT_CALL_ENDED_ERROR,
                         call_id=str(call_log_id) if call_log_id else None,

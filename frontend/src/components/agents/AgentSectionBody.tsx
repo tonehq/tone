@@ -14,6 +14,7 @@ import ChannelsStep from '@/components/agents/agent-form/steps/ChannelsStep';
 import ContactsStep from '@/components/agents/agent-form/steps/ContactsStep';
 import ScheduleStep from '@/components/agents/agent-form/steps/ScheduleStep';
 import CallHistoryStep from '@/components/agents/agent-form/steps/CallHistoryStep';
+import LlmEvalsStep from '@/components/agents/agent-form/steps/LlmEvalsStep';
 
 // Maps a URL section segment to its body. Shared by the edit and create
 // section routes; the editor's form state + chrome live in the layout
@@ -30,41 +31,52 @@ export default function AgentSectionBody({
   const router = useRouter();
 
   const isStep =
-    section === 'basics' ||
+    section === 'setup' ||
     section === 'prompt' ||
-    section === 'ai' ||
     section === 'voice' ||
     section === 'tools' ||
     section === 'knowledge' ||
-    section === 'channels';
-  // Overview, Call History, Contacts, and Schedule only exist for a saved agent
-  // (edit mode) — they need a persisted agent_id to scope/assign against.
+    section === 'channels' ||
+    // LLM Evals renders in both modes — an empty "save the agent first"
+    // state in create mode, real UI once agent_id is persisted.
+    section === 'llm-evals';
+  // Call History, Contacts, and Schedule only exist for a saved agent
+  // (edit mode) — they need a persisted agent_id to scope against.
   const known =
     isStep ||
-    ((section === 'overview' ||
-      section === 'call-history' ||
-      section === 'contacts' ||
-      section === 'schedule') &&
-      !!agentId);
+    ((section === 'call-history' || section === 'contacts' || section === 'schedule') && !!agentId);
 
-  // Bad/unknown section in the URL → bounce to a sensible default.
+  // Legacy URLs (`/basics`, `/ai`, `/overview`) still land users on the merged
+  // Setup page instead of 404-bouncing to the default.
+  const legacySetupSection = section === 'basics' || section === 'ai' || section === 'overview';
+
+  // Bad/unknown section in the URL → bounce to a sensible default; legacy
+  // sections → redirect to `/setup` so bookmarks and in-app links keep working.
   useEffect(() => {
-    if (!known) {
-      router.replace(`${basePath}/${agentId ? 'overview' : 'basics'}`);
+    if (legacySetupSection) {
+      router.replace(`${basePath}/setup`);
+      return;
     }
-  }, [known, router, basePath, agentId]);
+    if (!known) {
+      router.replace(`${basePath}/setup`);
+    }
+  }, [known, legacySetupSection, router, basePath]);
 
   if (!known) return null;
 
   switch (section) {
-    case 'overview':
-      return <AgentOverview />;
-    case 'basics':
-      return <BasicsStep />;
+    case 'setup':
+      // Overview is a saved-agent read-only summary — only render it in edit
+      // mode. Basics and AI are the write inputs and render in both modes.
+      return (
+        <div className="flex flex-col gap-6">
+          {agentId && <AgentOverview />}
+          <BasicsStep />
+          <AiStep />
+        </div>
+      );
     case 'prompt':
       return <PromptStep />;
-    case 'ai':
-      return <AiStep />;
     case 'voice':
       return <VoiceStep />;
     case 'tools':
@@ -79,6 +91,8 @@ export default function AgentSectionBody({
       return <ScheduleStep agentId={agentId} />;
     case 'call-history':
       return <CallHistoryStep agentId={agentId} />;
+    case 'llm-evals':
+      return <LlmEvalsStep agentId={agentId} />;
     default:
       return null;
   }

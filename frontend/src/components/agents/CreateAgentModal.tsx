@@ -164,7 +164,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
     try {
       const created = await createFromTemplate({ sourceConfigId: selected, name: payloadName });
       onClose();
-      router.push(`/agents/edit/${created.agent_type}/${created.id}/overview`);
+      router.push(`/agents/edit/${created.agent_type}/${created.id}/setup`);
     } catch (err) {
       handleApiError(err);
     } finally {
