@@ -453,3 +453,160 @@ def load_agent_llm_eval_settings_for_org(db, org_id: Any) -> AgentLlmEvalSetting
         .first()
     )
     return get_agent_llm_eval_settings(row[0] if row is not None else None)
+
+
+# ── Call-transcript eval settings (Level 3 — post-call transcript scoring) ──
+# Stored under ``eval_settings["call_evals"]`` — sibling to
+# ``eval_settings["rag_evals"]`` and ``eval_settings["llm_evals"]``. Owns
+# its own ``auto_run_enabled`` toggle so post-call scoring can be turned on
+# without touching the RAG or agent-LLM flows. Resolver falls back DB → env
+# → hardcoded default per field, mirroring the sibling resolvers so downstream
+# code never guards for missing values.
+
+CALL_EVAL_SLOT = "call_evals"
+
+CALL_EVAL_SETTINGS_KEYS: tuple[str, ...] = (
+    "auto_run_enabled",
+    "judge_model",
+    "judge_engine",
+    "metric_threshold",
+    "metrics_enabled",
+    "metric_thresholds",
+)
+
+_DEFAULT_CALL_EVAL_AUTO_RUN_ENABLED = False
+_DEFAULT_CALL_EVAL_JUDGE_MODEL = "gpt-4o"
+_DEFAULT_CALL_EVAL_JUDGE_ENGINE = "deepeval"
+_DEFAULT_CALL_EVAL_METRIC_THRESHOLD = 0.7
+# Locked v1 metric set: 3 conversation-native + 2 single-turn safety
+# (toxicity/bias) + 2 GEval system-prompt checks (instruction / persona).
+# ``knowledge_retention`` is registered in the metric registry but stays
+# OFF by default — it's a v2 candidate.
+_DEFAULT_CALL_EVAL_METRICS_ENABLED: tuple[str, ...] = (
+    "role_adherence",
+    "conversation_completeness",
+    "conversation_relevancy",
+    "toxicity",
+    "bias",
+    "instruction_following",
+    "persona_adherence",
+)
+
+
+@dataclass(frozen=True)
+class CallEvalSettings:
+    """Resolved per-org post-call transcript eval configuration. Immutable
+    so callers can't mutate it accidentally when threading it through the
+    eval pipeline.
+
+    Every field has a value at construction time — the resolver
+    (:func:`get_call_eval_settings`) walks the DB → env → hardcoded default
+    chain per field, so ``CallTranscriptEvalService`` and the score-call
+    Procrastinate task never need ``or DEFAULT`` fallbacks at the call site.
+    """
+
+    auto_run_enabled: bool
+    judge_model: str
+    judge_engine: str
+    metric_threshold: float
+    metrics_enabled: list[str] = field(default_factory=list)
+    metric_thresholds: dict[str, float] = field(default_factory=dict)
+
+
+def get_call_eval_settings(
+    org_eval_settings: Optional[Mapping[str, Any]],
+) -> CallEvalSettings:
+    """Resolve the org's post-call transcript eval configuration with
+    DB → env → hardcoded fallback.
+
+    ``org_eval_settings`` is the raw ``organizations.eval_settings`` JSONB
+    (or ``None``). Post-call knobs live under the ``call_evals`` sub-object;
+    an org with no ``call_evals`` slot still resolves via env → hardcoded
+    default per field, so no explicit setup is needed for the eval flow to
+    work — except that ``auto_run_enabled`` defaults to False, so the FIRST
+    thing an admin does to opt in is flip that toggle.
+
+    This is the ONE resolver — every caller that needs a post-call transcript
+    eval knob goes through it.
+    """
+    root: Mapping[str, Any] = org_eval_settings or {}
+    sub_raw = root.get(CALL_EVAL_SLOT)
+    sub: Mapping[str, Any] = sub_raw if isinstance(sub_raw, Mapping) else {}
+
+    # bool — DB overrides env when the key is explicitly a bool; otherwise
+    # falls to env (which defaults to False when unset).
+    if "auto_run_enabled" in sub and isinstance(sub["auto_run_enabled"], bool):
+        auto_run_enabled = sub["auto_run_enabled"]
+    else:
+        auto_run_enabled = bool(
+            getattr(env_settings, "CALL_EVAL_AUTO_RUN_ENABLED", False)
+        )
+
+    judge_model = (
+        _first_non_empty_str(
+            sub.get("judge_model"),
+            getattr(env_settings, "CALL_EVAL_JUDGE_MODEL", None),
+        )
+        or _DEFAULT_CALL_EVAL_JUDGE_MODEL
+    )
+    judge_engine = (
+        _first_non_empty_str(
+            sub.get("judge_engine"),
+            env_settings.EVAL_JUDGE_ENGINE,
+        )
+        or _DEFAULT_CALL_EVAL_JUDGE_ENGINE
+    )
+    metric_threshold = (
+        _first_valid_ratio(
+            sub.get("metric_threshold"),
+            getattr(env_settings, "CALL_EVAL_METRIC_THRESHOLD", None),
+        )
+        or _DEFAULT_CALL_EVAL_METRIC_THRESHOLD
+    )
+    metrics_enabled = (
+        _first_non_empty_list(
+            sub.get("metrics_enabled"),
+            getattr(env_settings, "CALL_EVAL_METRICS_ENABLED", None),
+        )
+        or list(_DEFAULT_CALL_EVAL_METRICS_ENABLED)
+    )
+
+    raw_overrides = sub.get("metric_thresholds")
+    metric_thresholds: dict[str, float] = {}
+    if isinstance(raw_overrides, Mapping):
+        for name, value in raw_overrides.items():
+            if not isinstance(name, str) or not name.strip():
+                continue
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, (int, float)) and 0.0 < float(value) <= 1.0:
+                metric_thresholds[name.strip()] = float(value)
+
+    return CallEvalSettings(
+        auto_run_enabled=auto_run_enabled,
+        judge_model=judge_model,
+        judge_engine=judge_engine,
+        metric_threshold=metric_threshold,
+        metrics_enabled=metrics_enabled,
+        metric_thresholds=metric_thresholds,
+    )
+
+
+def load_call_eval_settings_for_org(db, org_id: Any) -> CallEvalSettings:
+    """Convenience: fetch ``organizations.eval_settings`` for ``org_id`` and
+    resolve the ``call_evals`` sub-object via :func:`get_call_eval_settings`.
+
+    Same one-liner shape as :func:`load_eval_settings_for_org` /
+    :func:`load_agent_llm_eval_settings_for_org` so services, workers, and
+    CLIs all read the same way.
+    """
+    from core.models.organization import Organization
+
+    if org_id is None:
+        return get_call_eval_settings(None)
+    row = (
+        db.query(Organization.eval_settings)
+        .filter(Organization.id == org_id)
+        .first()
+    )
+    return get_call_eval_settings(row[0] if row is not None else None)

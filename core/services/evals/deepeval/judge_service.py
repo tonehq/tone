@@ -48,6 +48,7 @@ from loguru import logger  # noqa: E402
 from core.services.evals.deepeval.llm_adapter import ToneDeepEvalLLM  # noqa: E402
 from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     AGENT_CONTEXT_METRICS,
+    CONVERSATION_METRICS,
     build_metrics,
 )
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
@@ -139,6 +140,24 @@ class DeepEvalJudgeService:
                 f"metrics_enabled contains agent-context metric(s) "
                 f"{bad!r}; those require a system prompt the RAG judge "
                 "does not carry. Configure them via AGENT_LLM_EVAL_METRICS_ENABLED."
+            )
+        # Reject conversation-native metrics — they need a
+        # ``ConversationalTestCase`` (turns + chatbot_role) which the RAG
+        # judge never has. Without this guard, ``build_metrics`` would
+        # happily construct e.g. ``RoleAdherenceMetric`` and the a_measure
+        # call would raise ``MissingTestCaseParamsError`` per-question,
+        # fake-FAILing every row instead of aborting cleanly.
+        # Configure these via ``CALL_EVAL_METRICS_ENABLED`` /
+        # ``organizations.eval_settings.call_evals`` — that's the flavor
+        # that owns them.
+        bad_conv = [m for m in active_metrics if m in CONVERSATION_METRICS]
+        if bad_conv:
+            raise EvalConfigurationError(
+                f"metrics_enabled contains conversation-native metric(s) "
+                f"{bad_conv!r}; those require a ConversationalTestCase the "
+                "RAG judge does not build. Configure them via "
+                "CALL_EVAL_METRICS_ENABLED or the org's ``call_evals`` "
+                "settings slot."
             )
         llm = ToneDeepEvalLLM(api_key=api_key, model=model)
         named_metrics: List[Tuple[str, BaseMetric]] = build_metrics(

@@ -6,6 +6,7 @@ from core.models.call import Call
 from core.services.post_call.actions import (
     ComputeCallAggregatesAction,
     ConsolidateTranscriptAction,
+    EvalCallTranscriptAction,
     OverlapDetectionAction,
     PostCallAction,
     SyncLokiLogsAction,
@@ -24,9 +25,19 @@ class PostCallHandler:
 
     @staticmethod
     def _default_actions() -> List[PostCallAction]:
+        # Order matters only where an action reads state written by a
+        # prior one. ``EvalCallTranscriptAction`` runs AFTER
+        # ``ConsolidateTranscriptAction`` because it reads
+        # ``call.consolidated_transcript``, but each action enqueues its
+        # own Procrastinate job on its own queue — so the eval job may
+        # actually execute before consolidation finishes. The eval
+        # service handles that race by skipping with
+        # ``skip_reason='no_transcript'``; ordering here is best-effort
+        # scheduling hint, not a hard sync.
         return [
             OverlapDetectionAction(),
             ConsolidateTranscriptAction(),
+            EvalCallTranscriptAction(),
             ComputeCallAggregatesAction(),
             SyncLokiLogsAction(),
         ]

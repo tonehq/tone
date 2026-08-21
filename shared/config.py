@@ -474,6 +474,44 @@ class Settings:
             get_secret("AGENT_LLM_EVAL_AUTO_RUN_ENABLED")
         )
 
+        # ── Call-transcript (post-call) eval harness ────────────────────────
+        # Optional per-flavor overrides read by
+        # ``core.services.org_settings.get_call_eval_settings`` when the org's
+        # ``eval_settings.call_evals.*`` JSONB doesn't override them. NOT in
+        # ``MANDATORY_KEYS`` — the resolver falls through to a hardcoded
+        # default if the env is unset, so existing deployments boot unchanged.
+        # Ops can set these per-env to override the shipped default without
+        # touching per-org DB rows.
+        self.CALL_EVAL_METRICS_ENABLED: list[str] = [
+            m.strip()
+            for m in (get_secret("CALL_EVAL_METRICS_ENABLED") or "").split(",")
+            if m.strip()
+        ]
+        self.CALL_EVAL_JUDGE_MODEL: str = get_secret("CALL_EVAL_JUDGE_MODEL")
+        # Non-mandatory numeric env — a fat-fingered value must not crash
+        # every process at import. Log a critical warning and fall back to
+        # 0.0 (the resolver treats that as unset and drops to the hardcoded
+        # default, matching the "env not set" behavior). Mirrors the
+        # ``AGENT_LLM_EVAL_METRIC_THRESHOLD`` shape.
+        _raw_call_eval_threshold = get_secret("CALL_EVAL_METRIC_THRESHOLD")
+        if _raw_call_eval_threshold:
+            try:
+                self.CALL_EVAL_METRIC_THRESHOLD: float = float(
+                    _raw_call_eval_threshold
+                )
+            except ValueError:
+                logger.critical(
+                    "CALL_EVAL_METRIC_THRESHOLD is not a number: {!r} — "
+                    "falling back to org / hardcoded default (0.7)",
+                    _raw_call_eval_threshold,
+                )
+                self.CALL_EVAL_METRIC_THRESHOLD = 0.0
+        else:
+            self.CALL_EVAL_METRIC_THRESHOLD = 0.0
+        self.CALL_EVAL_AUTO_RUN_ENABLED: bool = _bool_env(
+            get_secret("CALL_EVAL_AUTO_RUN_ENABLED")
+        )
+
         # Fail-fast if any mandatory env var is missing. Runs LAST so every
         # field is populated before we inspect it. Aborts process on failure.
         self._validate_required()

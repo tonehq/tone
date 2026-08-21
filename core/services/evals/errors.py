@@ -59,3 +59,16 @@ class AgentLlmScenarioKeyConflictError(AgentLlmEvalError):
     ``uq_agent_llm_eval_scenarios_agent_key`` DB constraint AND explicitly
     checked at the service layer so we can surface the offending key to the
     user before the INSERT."""
+
+
+class CallTranscriptEvalError(EvalError):
+    """Base class for typed post-call transcript eval errors — separates the
+    Level-3 (real-call) harness from the RAG and agent-LLM flows so callers
+    (API adapter, worker task) can distinguish them cleanly."""
+
+
+class CallTranscriptEvalConfigError(CallTranscriptEvalError):
+    """Pre-run configuration error for a post-call transcript eval — missing
+    ``agent_config`` on the call, missing provider key for the judge model,
+    invalid metric name, etc. Raised BEFORE any LLM call so the Procrastinate
+    task retries cleanly without persisting fake-FAIL rows."""

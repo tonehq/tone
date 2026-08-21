@@ -16,6 +16,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import SectionCard from '@/components/agents/agent-form/SectionCard';
+import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import {
   CustomButton,
   CustomDrawer,
@@ -129,6 +130,10 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [openRun, setOpenRun] = useState(false);
   const [openGenerate, setOpenGenerate] = useState(false);
   const [openRunId, setOpenRunId] = useState<string | null>(null);
+  // Delete confirm is routed through the shared ``ConfirmDeleteModal``
+  // (Radix-based) so it matches the rest of the app's destructive-action
+  // dialogs — instead of a browser-native ``window.confirm``.
+  const [pendingDelete, setPendingDelete] = useState<AgentLlmEvalScenario | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
@@ -156,15 +161,20 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     }
   };
 
-  const handleDelete = async (scenario: AgentLlmEvalScenario) => {
-    if (!window.confirm(`Delete scenario "${scenario.scenario_key}"? This cannot be undone.`)) {
-      return;
-    }
+  const handleDelete = (scenario: AgentLlmEvalScenario) => {
+    setPendingDelete(scenario);
+  };
+
+  const confirmDelete = async () => {
+    if (!pendingDelete) return;
     try {
-      await deleteScenario.mutateAsync(scenario.id);
+      await deleteScenario.mutateAsync(pendingDelete.id);
       showToast.success('Scenario deleted');
+      setPendingDelete(null);
     } catch (error) {
       handleApiError(error);
+      // Keep the modal open on failure so the user can see the error toast
+      // and retry without losing their selection.
     }
   };
 
@@ -281,6 +291,24 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         runId={openRunId}
         open={!!openRunId}
         onClose={() => setOpenRunId(null)}
+      />
+      <ConfirmDeleteModal
+        open={!!pendingDelete}
+        onClose={() => {
+          if (!deleteScenario.isPending) setPendingDelete(null);
+        }}
+        onConfirm={confirmDelete}
+        title="Delete scenario"
+        description="This can’t be undone. Historical eval results for this scenario keep their own snapshot and are not removed."
+        impact={
+          pendingDelete ? (
+            <p className="text-sm text-foreground">
+              You’re about to delete{' '}
+              <span className="font-medium">{pendingDelete.scenario_key}</span>.
+            </p>
+          ) : null
+        }
+        loading={deleteScenario.isPending}
       />
     </div>
   );
