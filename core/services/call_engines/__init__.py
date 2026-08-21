@@ -6,6 +6,7 @@ philosophy of ``core/services/transport/registry.py``.
 """
 
 from core.services.call_engines.base import CallEngine, CallInfo
+from core.services.call_engines.telnyx_engine import TelnyxCallEngine
 from core.services.call_engines.twilio_engine import TwilioCallEngine
 from core.services.call_engines.websocket_engine import WebSocketCallEngine
 
@@ -14,6 +15,8 @@ def get_call_engine(provider: str = "twilio", org_id=None) -> CallEngine:
     """Return the ``CallEngine`` for a provider slug, or raise on unknown."""
     if provider == "twilio":
         return TwilioCallEngine(org_id=org_id)
+    if provider == "telnyx":
+        return TelnyxCallEngine(org_id=org_id)
     if provider == "websocket":
         return WebSocketCallEngine(org_id=org_id)
     raise ValueError(f"Unknown call engine provider: {provider}")
@@ -22,6 +25,7 @@ def get_call_engine(provider: str = "twilio", org_id=None) -> CallEngine:
 __all__ = [
     "CallEngine",
     "CallInfo",
+    "TelnyxCallEngine",
     "TwilioCallEngine",
     "WebSocketCallEngine",
     "get_call_engine",

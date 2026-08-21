@@ -128,54 +128,49 @@ async def telnyx_texml(request: Request) -> Response:
 _HANGUP_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>'
 
 
-@router.post("/twiml/outbound")
-@router.get("/twiml/outbound")
-async def twiml_outbound(request: Request) -> Response:
-    """Answer TwiML for an outbound call. Twilio fetches this when the callee answers.
-    All routing context is supplied by the caller in the query string (no DB row needed),
-    so this works for both immediate calls and dispatched scheduled calls."""
+async def _outbound_answer_xml(request: Request, provider: str, tag: str) -> Response:
     from core.services.call_engines import get_call_engine
 
     qp = request.query_params
     agent_id = (qp.get("agent_id") or "").strip()
-    from_number = (qp.get("from") or "").strip()
     to_number = (qp.get("to") or "").strip()
     scheduled_call_id = (qp.get("scheduled_call_id") or "").strip()
     if not agent_id:
-        logger.warning("[/twiml/outbound] missing agent_id")
+        logger.warning("[{}] missing agent_id", tag)
         return Response(content=_HANGUP_TWIML, media_type="application/xml")
 
     default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
-    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, "/twiml/outbound")
+    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, tag)
     params = {
-        "from": from_number,
+        "from": (qp.get("from") or "").strip(),
         "to": to_number,
         "agent_id": agent_id,
         "direction": "outbound",
     }
     if scheduled_call_id:
         params["scheduled_call_id"] = scheduled_call_id
-    xml = get_call_engine("twilio").generate_twiml(ws_url, params)
+    xml = get_call_engine(provider).generate_twiml(ws_url, params)
 
     logger.info(
-        "[/twiml/outbound] RESPONSE agent={} to={} scheduled_call_id={} pod={} node={} handshake_url={}",
-        agent_id, to_number, scheduled_call_id, pod_name, node_name, ws_url,
+        "[{}] RESPONSE agent={} to={} scheduled_call_id={} pod={} node={} handshake_url={}",
+        tag, agent_id, to_number, scheduled_call_id, pod_name, node_name, ws_url,
     )
     return Response(content=xml, media_type="application/xml")
 
 
-@router.post("/twilio/outbound-status")
-async def twilio_outbound_status(request: Request) -> Response:
-    """Twilio status callback for a SCHEDULED outbound call (immediate calls carry no
-    scheduled_call_id and set no callback). Advances the scheduled_calls row's status.
-    Always returns 204 so Twilio doesn't retry-storm on our internal errors.
+@router.post("/twiml/outbound")
+@router.get("/twiml/outbound")
+async def twiml_outbound(request: Request) -> Response:
+    return await _outbound_answer_xml(request, "twilio", "/twiml/outbound")
 
-    Auth: deliberately unauthenticated, consistent with the inbound /twiml webhook and
-    the rest of the telephony callbacks (no X-Twilio-Signature validation anywhere yet).
-    Abuse surface is bounded: handle_status_callback cross-checks the posted CallSid
-    against the row's stored provider_call_sid and only advances status monotonically, so
-    a spoofed callback can neither regress a call nor act without knowing the real SID.
-    If we adopt signature validation, do it uniformly across all telephony webhooks."""
+
+@router.post("/telnyx/texml/outbound")
+@router.get("/telnyx/texml/outbound")
+async def telnyx_texml_outbound(request: Request) -> Response:
+    return await _outbound_answer_xml(request, "telnyx", "/telnyx/texml/outbound")
+
+
+async def _outbound_status_callback(request: Request, tag: str) -> Response:
     from core.models.scheduled_call import ScheduledCall
     from core.services.outbound_call_service import OutboundCallService
 
@@ -184,8 +179,8 @@ async def twilio_outbound_status(request: Request) -> Response:
         form = await request.form()
         form_dict = {k: form.get(k) for k in ("CallSid", "CallStatus", "CallDuration", "To", "From")}
         logger.info(
-            "[/twilio/outbound-status] scheduled_call_id={} sid={} status={}",
-            scheduled_call_id, form_dict.get("CallSid"), form_dict.get("CallStatus"),
+            "[{}] scheduled_call_id={} sid={} status={}",
+            tag, scheduled_call_id, form_dict.get("CallSid"), form_dict.get("CallStatus"),
         )
         if scheduled_call_id:
             with get_db_context() as db:
@@ -194,7 +189,17 @@ async def twilio_outbound_status(request: Request) -> Response:
                     OutboundCallService(db, org_id=sc.organization_id).handle_status_callback(
                         scheduled_call_id, form_dict
                     )
-    except Exception:  # noqa: BLE001 — never surface errors to Twilio
-        logger.exception("[/twilio/outbound-status] error scheduled_call_id={}", scheduled_call_id)
+    except Exception:  # noqa: BLE001 — never surface errors to the provider
+        logger.exception("[{}] error scheduled_call_id={}", tag, scheduled_call_id)
 
     return Response(status_code=204)
+
+
+@router.post("/twilio/outbound-status")
+async def twilio_outbound_status(request: Request) -> Response:
+    return await _outbound_status_callback(request, "/twilio/outbound-status")
+
+
+@router.post("/telnyx/outbound-status")
+async def telnyx_outbound_status(request: Request) -> Response:
+    return await _outbound_status_callback(request, "/telnyx/outbound-status")

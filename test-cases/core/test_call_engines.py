@@ -8,7 +8,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.services.call_engines import CallEngine, TwilioCallEngine, get_call_engine
+from core.services.call_engines import (CallEngine, TelnyxCallEngine, TwilioCallEngine,
+                                        get_call_engine)
 
 
 class TestFactory:
@@ -83,6 +84,103 @@ class TestInitiateAndEnd:
         assert engine.end_call("CA123") is True
         inst.calls.assert_called_with("CA123")
         inst.calls.return_value.update.assert_called_with(status="completed")
+
+
+_TELNYX_CREDS = {"api_key": "KEY", "account_sid": "acct-1", "application_sid": "app-1"}
+
+
+class TestTelnyxFactory:
+    def test_returns_telnyx_engine(self):
+        engine = get_call_engine("telnyx", org_id="org-1")
+        assert isinstance(engine, TelnyxCallEngine)
+        assert isinstance(engine, CallEngine)
+        assert engine.provider_name == "telnyx"
+
+
+class TestTelnyxGenerateTexml:
+    def test_params_ride_the_stream_url(self):
+        engine = get_call_engine("telnyx")
+        xml = engine.generate_twiml(
+            "wss://pod-1.example/ws",
+            {"agent_id": "a1", "direction": "outbound", "from": "+15551111111", "to": ""},
+        )
+        assert xml.startswith("<?xml")
+        assert 'bidirectionalMode="rtp"' in xml
+        assert "agent_id=a1" in xml and "direction=outbound" in xml
+        assert "to=" not in xml
+        assert "<Parameter" not in xml
+
+    def test_merges_into_an_existing_query_string(self):
+        engine = get_call_engine("telnyx")
+        xml = engine.generate_twiml("wss://pod-1.example/ws?pod=2", {"agent_id": "a1"})
+        assert "wss://pod-1.example/ws?pod=2&amp;agent_id=a1" in xml
+
+    def test_bare_url_when_no_params(self):
+        engine = get_call_engine("telnyx")
+        assert 'url="wss://x/ws"' in get_call_engine("telnyx").generate_twiml("wss://x/ws", {})
+
+
+@patch("core.services.call_engines.telnyx_engine.get_telnyx_credentials", return_value=_TELNYX_CREDS)
+@patch("core.services.call_engines.telnyx_engine.requests")
+class TestTelnyxInitiateAndEnd:
+    def test_immediate_has_no_status_callback(self, mock_requests, _creds):
+        mock_requests.post.return_value = MagicMock(
+            json=MagicMock(return_value={"sid": "v3:abc", "status": "queued"})
+        )
+        engine = get_call_engine("telnyx", org_id="org-1")
+        info = engine.initiate_call("+15550000000", "+15551111111", agent_id="ag-1",
+                                    callback_base_url="https://api.example/")
+
+        url = mock_requests.post.call_args.args[0]
+        kwargs = mock_requests.post.call_args.kwargs
+        assert url == "https://api.telnyx.com/v2/texml/Accounts/acct-1/Calls"
+        assert kwargs["headers"]["Authorization"] == "Bearer KEY"
+        data = kwargs["data"]
+        assert data["To"] == "+15550000000" and data["From"] == "+15551111111"
+        assert data["ApplicationSid"] == "app-1"
+        assert "/telnyx/texml/outbound?" in data["Url"]
+        assert "agent_id=ag-1" in data["Url"] and "direction=outbound" in data["Url"]
+        assert "scheduled_call_id" not in data["Url"]
+        assert "StatusCallback" not in data
+        assert data["Timeout"] == 45
+        assert info.call_id == "v3:abc" and info.provider == "telnyx"
+
+    def test_scheduled_sets_status_callback(self, mock_requests, _creds):
+        mock_requests.post.return_value = MagicMock(
+            json=MagicMock(return_value={"sid": "v3:xyz", "status": "queued"})
+        )
+        engine = get_call_engine("telnyx", org_id="org-1")
+        engine.initiate_call("+15550000000", "+15551111111", agent_id="ag-1",
+                             callback_base_url="https://api.example", scheduled_call_id="sc-1")
+
+        data = mock_requests.post.call_args.kwargs["data"]
+        assert data["StatusCallback"] == (
+            "https://api.example/telnyx/outbound-status?scheduled_call_id=sc-1"
+        )
+        assert data["StatusCallbackMethod"] == "POST"
+        assert "completed" in data["StatusCallbackEvent"]
+        assert "scheduled_call_id=sc-1" in data["Url"]
+
+    def test_initiate_requires_public_base(self, mock_requests, _creds):
+        engine = get_call_engine("telnyx", org_id="org-1")
+        with pytest.raises(ValueError):
+            engine.initiate_call("+1555", "+1555", agent_id="ag-1", callback_base_url="")
+        mock_requests.post.assert_not_called()
+
+    def test_end_call_posts_completed(self, mock_requests, _creds):
+        engine = get_call_engine("telnyx", org_id="org-1")
+        assert engine.end_call("v3:abc") is True
+        url = mock_requests.post.call_args.args[0]
+        assert url == "https://api.telnyx.com/v2/texml/Accounts/acct-1/Calls/v3%3Aabc"
+        assert mock_requests.post.call_args.kwargs["data"] == {"Status": "completed"}
+
+
+@patch("core.services.call_engines.telnyx_engine.get_telnyx_credentials", return_value={})
+def test_telnyx_missing_credentials_raises(_creds):
+    engine = get_call_engine("telnyx", org_id="org-1")
+    with pytest.raises(ValueError):
+        engine.initiate_call("+15550000000", "+15551111111", agent_id="ag-1",
+                             callback_base_url="https://api.example")
 
 
 @patch("core.services.call_engines.twilio_engine.get_twilio_credentials", return_value={})
