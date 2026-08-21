@@ -4,7 +4,8 @@ there is exactly one place that stamps the run identity, flips ``is_active``,
 records terminal status, and keeps the parent KB's active-run pointer in sync.
 
 Transport-agnostic: methods take a SQLAlchemy session + plain args and return
-ORM objects. Raises are typed subclasses of ``RagError`` — no HTTPException.
+ORM objects. Raises are typed exceptions from ``core.services.ingestion_errors``
+— never ``HTTPException``. The router layer converts them to HTTP responses.
 """
 
 from __future__ import annotations
@@ -13,9 +14,9 @@ from datetime import datetime, timezone
 from typing import Any, List, Optional, Sequence, Tuple
 from uuid import UUID
 
-from fastapi import HTTPException, status as http_status
 from loguru import logger
 from sqlalchemy import cast, func
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from sqlalchemy.types import String
 
@@ -26,16 +27,50 @@ from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.services.common.list_query import apply_search_sort_pagination
+from core.services.ingestion_errors import (
+    AgentHasNoPublishedConfigError,
+    AgentKnowledgeBaseNotFoundError,
+    IngestionConfigInactiveError,
+    IngestionRunKbMismatchError,
+    IngestionRunNotFoundError,
+    IngestionRunNotReadyError,
+    UnknownRagComponentError,
+)
+from core.services.rag.component_registry import ensure_rag_component
+from core.services.rag.embedder_factory import EMBEDDERS
+from core.services.rag.factory import VECTOR_STORES
+from core.services.rag.parser_factory import PARSERS
+from core.services.rag.tokeniser_factory import TOKENISERS
 from shared.config import settings
 
 
-class IngestionRunNotFoundError(LookupError):
-    """Typed marker raised when a callable in ``IngestionRunService`` can't
-    find a run row for the given (org, upload, id) tuple. Subclasses
-    ``LookupError`` so callers can catch a stdlib base if they don't want to
-    import this symbol, but the specific class lets the HTTP layer map to a
-    404 without also swallowing unrelated ``ValueError``s from the call chain
-    (SQLAlchemy coercion, downstream helpers, etc.)."""
+def _ensure_saved_config_slug_still_registered(
+    kind_display: str, slug: str, registry: dict
+) -> None:
+    """The saved-config path (``resolve_run_config`` when
+    ``ingestion_config_id`` is passed) uses a different message than the
+    write-time ``ensure_rag_component`` check — "no longer available"
+    signals to the user that the config WAS valid when saved but the
+    referenced parser/tokeniser/embedder/store has since been removed. The
+    message is kept byte-for-byte identical to the previous inline
+    HTTPException wording so any FE code that string-matches keeps working."""
+    if slug not in registry:
+        exc = UnknownRagComponentError(kind_display, slug, list(registry.keys()))
+        # Replace the auto-built message with the exact "no longer available"
+        # wording. Router does ``detail=str(exc)`` so this is what the FE sees.
+        exc.args = (
+            f"Config {kind_display} '{slug}' is no longer available. "
+            f"Available: {', '.join(sorted(registry.keys()))}.",
+        )
+        raise exc
+
+
+# BC re-export: prior consumers imported ``IngestionRunNotFoundError`` from
+# this module. The typed exception now lives in ``ingestion_errors`` so the
+# router can catch every ingestion error uniformly, but the alias here keeps
+# ``from core.services.ingestion_run_service import IngestionRunNotFoundError``
+# working without touching call sites.
+__all__ = ["IngestionRunService", "IngestionRunNotFoundError"]
 
 
 class IngestionRunService:
@@ -75,59 +110,36 @@ class IngestionRunService:
             "vector_store_ref": None,
         }
         if ingestion_config_id is not None:
-            # Local imports — avoid an import cycle between
-            # IngestionRunService and IngestionConfigService, and defer the
-            # heavier RAG registry imports to the snapshot path only.
+            # Local import — avoid an import cycle between
+            # IngestionRunService and IngestionConfigService.
             from core.services.ingestion_config_service import IngestionConfigService
-            from core.services.rag.embedder_factory import EMBEDDERS
-            from core.services.rag.factory import VECTOR_STORES
-            from core.services.rag.parser_factory import PARSERS
-            from core.services.rag.tokeniser_factory import TOKENISERS
 
             ic = IngestionConfigService(db, org_id=org_id).get_config(ingestion_config_id)
             # is_active=false configs are user-hidden — refuse at run time so
             # a stale UI / script can't dial a retired recipe.
             if not ic.is_active:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="Ingestion config is inactive and cannot be used for new runs.",
+                raise IngestionConfigInactiveError(
+                    "Ingestion config is inactive and cannot be used for new runs."
                 )
             # Re-validate slugs against the LIVE registries: a config saved
             # months ago may reference a parser/tokeniser/embedder/store
             # that has since been removed. Surface a 400 at the endpoint
-            # instead of enqueuing a run that crashes mid-ingest.
-            if ic.parser not in PARSERS:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Config parser '{ic.parser}' is no longer available. "
-                        f"Available: {', '.join(sorted(PARSERS))}."
-                    ),
-                )
-            if ic.tokeniser not in TOKENISERS:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Config tokeniser '{ic.tokeniser}' is no longer available. "
-                        f"Available: {', '.join(sorted(TOKENISERS))}."
-                    ),
-                )
-            if ic.embedding_provider not in EMBEDDERS:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Config embedding provider '{ic.embedding_provider}' is no longer "
-                        f"available. Available: {', '.join(sorted(EMBEDDERS))}."
-                    ),
-                )
-            if ic.vector_store not in VECTOR_STORES:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Config vector store '{ic.vector_store}' is no longer available. "
-                        f"Available: {', '.join(sorted(VECTOR_STORES))}."
-                    ),
-                )
+            # instead of enqueuing a run that crashes mid-ingest. Message
+            # says "no longer available" (not "unknown") to signal to the
+            # user that the config was valid when saved — preserved
+            # byte-for-byte for FE compatibility.
+            _ensure_saved_config_slug_still_registered(
+                "parser", ic.parser, PARSERS,
+            )
+            _ensure_saved_config_slug_still_registered(
+                "tokeniser", ic.tokeniser, TOKENISERS,
+            )
+            _ensure_saved_config_slug_still_registered(
+                "embedding provider", ic.embedding_provider, EMBEDDERS,
+            )
+            _ensure_saved_config_slug_still_registered(
+                "vector store", ic.vector_store, VECTOR_STORES,
+            )
             cfg.update({
                 "parser": ic.parser,
                 "parser_config": ic.parser_config,
@@ -175,8 +187,6 @@ class IngestionRunService:
         Auto-retries the INSERT once on a ``(upload_id, run_number)`` unique
         violation so two concurrent ``POST /runs`` for the same upload don't
         both crash with a 500."""
-        from sqlalchemy.exc import IntegrityError
-
         last_exc: Optional[Exception] = None
         for attempt in (1, 2):
             next_run_number = (
@@ -226,8 +236,6 @@ class IngestionRunService:
                     "tried={} — retrying once",
                     upload_id, next_run_number,
                 )
-        else:  # pragma: no cover — retry loop always returns or raises
-            raise last_exc  # type: ignore[misc]
 
         logger.info(
             "[ingestion] pending run {} (upload={}, run_number={}, parser={}, "
@@ -721,7 +729,9 @@ class IngestionRunService:
         * the run belongs to the SAME KB (no cross-KB pinning),
         * the run status is ``ready`` (pending / failed runs are unpinnable).
 
-        Router callers surface 400/404s from the raised HTTPExceptions here so
+        Raises typed exceptions from ``core.services.ingestion_errors`` on
+        every business-rule failure (missing published config, unattached
+        KB, cross-KB pin, unready run). The router maps them to 400/404 so
         a CLI script gets the same guardrails.
         """
         published_config_id = (
@@ -730,9 +740,8 @@ class IngestionRunService:
             .scalar()
         )
         if published_config_id is None:
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
-                detail="Agent has no published configuration.",
+            raise AgentHasNoPublishedConfigError(
+                "Agent has no published configuration."
             )
 
         akb = (
@@ -746,9 +755,8 @@ class IngestionRunService:
             .first()
         )
         if akb is None:
-            raise HTTPException(
-                status_code=http_status.HTTP_404_NOT_FOUND,
-                detail="Knowledge base is not attached to this agent.",
+            raise AgentKnowledgeBaseNotFoundError(
+                "Knowledge base is not attached to this agent."
             )
 
         if run_id is not None:
@@ -761,23 +769,24 @@ class IngestionRunService:
                 .first()
             )
             if run is None:
-                raise HTTPException(
-                    status_code=http_status.HTTP_404_NOT_FOUND,
-                    detail="Ingestion run not found.",
-                )
+                raise IngestionRunNotFoundError("Ingestion run not found.")
             if run.knowledge_base_id != akb.knowledge_base_id:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="Ingestion run does not belong to this knowledge base.",
+                raise IngestionRunKbMismatchError(
+                    "Ingestion run does not belong to this knowledge base."
                 )
             if run.status != "ready":
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        f"Cannot pin a run with status={run.status!r}; "
-                        "only 'ready' runs are pinnable."
-                    ),
+                # Preserve the exact original wording so any FE code that
+                # string-matches on the detail keeps working. The
+                # ``IngestionRunNotReadyError`` default message is generic
+                # ("only 'ready' is allowed"); the pin path historically
+                # said "only 'ready' runs are pinnable" — so we override
+                # the args to that verbatim.
+                exc = IngestionRunNotReadyError(run.status, action="pin")
+                exc.args = (
+                    f"Cannot pin a run with status={run.status!r}; "
+                    "only 'ready' runs are pinnable.",
                 )
+                raise exc
 
         akb.active_ingestion_pipeline_run_id = run_id
         db.commit()

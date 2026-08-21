@@ -8,18 +8,28 @@ soft-deleted without affecting historical runs.
 Guards: writes = admin/owner (``require_admin_or_owner``),
 reads = member (``require_org_member``). Every handler is org-scoped inside
 the service.
+
+Error translation: the service raises typed exceptions from
+``core.services.ingestion_errors``. This router is the single translation
+point — see ``_raise_http_for_ingestion_error`` — so no other caller
+(CLI / worker) needs to import ``HTTPException``.
 """
 
 from typing import Any, Dict, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_admin_or_owner, require_org_member
 from core.services.ingestion_config_service import IngestionConfigService
+from core.services.ingestion_errors import (
+    IngestionConfigNameConflictError,
+    IngestionConfigNotFoundError,
+    IngestionValidationError,
+)
 from shared.config import settings
 
 router = APIRouter(prefix="/ingestion-configs", tags=["ingestion-config"])
@@ -80,7 +90,7 @@ class ListIngestionConfigsRequest(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Service helper
+# Service helper + error translator
 # ---------------------------------------------------------------------------
 
 
@@ -88,6 +98,22 @@ def _get_service(claims: JWTClaims, db: Session) -> IngestionConfigService:
     org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
     user_id = UUID(str(claims.user_id)) if getattr(claims, "user_id", None) else None
     return IngestionConfigService(db, user_id=user_id, org_id=org_id)
+
+
+def _raise_http_for_ingestion_error(exc: Exception) -> None:
+    """Translate typed ingestion-config service errors into HTTP responses.
+    Kept as a helper so every handler in this router routes through the
+    same mapping and the response contract stays consistent."""
+    if isinstance(exc, IngestionConfigNotFoundError):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+        ) from exc
+    if isinstance(
+        exc, (IngestionConfigNameConflictError, IngestionValidationError)
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -102,7 +128,13 @@ def create_ingestion_config(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    row = svc.create_config(**body.model_dump())
+    try:
+        row = svc.create_config(**body.model_dump())
+    except (
+        IngestionValidationError,
+        IngestionConfigNameConflictError,
+    ) as exc:
+        _raise_http_for_ingestion_error(exc)
     return svc.config_response(row)
 
 
@@ -114,7 +146,14 @@ def update_ingestion_config(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    row = svc.update_config(config_id, **body.model_dump(exclude_unset=True))
+    try:
+        row = svc.update_config(config_id, **body.model_dump(exclude_unset=True))
+    except (
+        IngestionConfigNotFoundError,
+        IngestionValidationError,
+        IngestionConfigNameConflictError,
+    ) as exc:
+        _raise_http_for_ingestion_error(exc)
     return svc.config_response(row)
 
 
@@ -141,7 +180,11 @@ def get_ingestion_config(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    return svc.config_response(svc.get_config(config_id))
+    try:
+        row = svc.get_config(config_id)
+    except IngestionConfigNotFoundError as exc:
+        _raise_http_for_ingestion_error(exc)
+    return svc.config_response(row)
 
 
 @router.delete("/{config_id}")
@@ -150,4 +193,13 @@ def delete_ingestion_config(
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
-    return _get_service(claims, db).delete_config(config_id)
+    svc = _get_service(claims, db)
+    try:
+        row = svc.delete_config(config_id)
+    except IngestionConfigNotFoundError as exc:
+        _raise_http_for_ingestion_error(exc)
+    # Preserve the historic response shape (``{"id": ..., "deleted": True}``)
+    # so any FE code still keying off it keeps working. The row itself is
+    # available via ``config_response(row)`` if a caller needs the full
+    # snapshot — kept the service returning the row for that reason.
+    return {"id": str(row.id), "deleted": True}

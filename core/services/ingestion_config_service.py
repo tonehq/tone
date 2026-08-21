@@ -2,14 +2,14 @@
 
 Transport-agnostic per project backend standards: every method takes plain
 args + the session inherited from ``BaseService`` and returns ORM objects or
-plain dicts. Never raises HTTP-specific concepts other than ``HTTPException``
-for the same validation surface already used elsewhere (name uniqueness,
-unknown slugs, org-scoped 404).
+plain dicts. Business-rule failures raise typed exceptions from
+``core.services.ingestion_errors`` — never ``HTTPException``. The router
+layer converts them to HTTP responses.
 
 The service is the single source of truth for:
 - validation of parser / tokeniser / embedding_provider / vector_store slugs
-  against the live RAG registries (so a config that survives creation is
-  guaranteed to instantiate at run time),
+  against the live RAG registries (via ``ensure_rag_recipe``) so a config
+  that survives creation is guaranteed to instantiate at run time,
 - org-scoped fetches used by BOTH the CRUD router AND
   ``IngestionRunService.resolve_run_config`` (snapshot-from-config path).
 """
@@ -19,27 +19,19 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from typing import Any, Optional
 
-from fastapi import HTTPException, status as http_status
 from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
 from core.models.ingestion_config import IngestionConfig
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
-from core.services.rag.embedder_factory import EMBEDDERS
-from core.services.rag.factory import VECTOR_STORES
-from core.services.rag.parser_factory import PARSERS
-from core.services.rag.tokeniser_factory import TOKENISERS
-
-
-def _is_unique_violation(exc: IntegrityError) -> bool:
-    """True when the IntegrityError was raised by a Postgres unique-constraint
-    violation (SQLSTATE ``23505``). Other IntegrityErrors (NOT NULL, CHECK,
-    FK) must NOT be mapped to a friendly 'name already exists' 400 — they
-    signal real bugs and should surface a 500 after logger.exception."""
-    orig = getattr(exc, "orig", None)
-    pgcode = getattr(orig, "pgcode", None)
-    return pgcode == "23505"
+from core.services.ingestion_errors import (
+    IngestionConfigNameConflictError,
+    IngestionConfigNotFoundError,
+    IngestionValidationError,
+    is_unique_violation,
+)
+from core.services.rag.component_registry import ensure_rag_recipe
 
 
 class IngestionConfigService(BaseService):
@@ -79,42 +71,26 @@ class IngestionConfigService(BaseService):
 
     # ── helpers ─────────────────────────────────────────────────────────
 
-    @staticmethod
-    def _validate_slugs(
-        *,
-        parser: Optional[str] = None,
-        tokeniser: Optional[str] = None,
-        embedding_provider: Optional[str] = None,
-        vector_store: Optional[str] = None,
+    @classmethod
+    def _validate_embedding_dimensions(
+        cls, dims: Optional[int], *, positive_msg: Optional[str] = None,
     ) -> None:
-        """Fail-fast on obvious mis-typed slugs so a bad recipe never makes it
-        into the DB. Enforced at write time regardless of the caller (backend
-        validation per project rules)."""
-        if parser is not None and parser not in PARSERS:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown parser '{parser}'. Available: {', '.join(sorted(PARSERS))}.",
+        """embedding_dimensions must be a positive integer and one of the
+        supported dedicated columns on ``knowledge_base_chunk_embeddings``.
+        Kept as one method so create + update share the invalid-dims text,
+        but the "positive integer" message differs by call site
+        (``create_config`` used lowercase ``embedding_dimensions``; the
+        historic ``update_config`` said "Embedding dimensions" with a
+        capital E) — preserved byte-for-byte via ``positive_msg`` so any
+        FE code that string-matches keeps working."""
+        if dims is None or dims <= 0:
+            raise IngestionValidationError(
+                positive_msg or "embedding_dimensions must be a positive integer."
             )
-        if tokeniser is not None and tokeniser not in TOKENISERS:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"Unknown tokeniser '{tokeniser}'. Available: {', '.join(sorted(TOKENISERS))}.",
-            )
-        if embedding_provider is not None and embedding_provider not in EMBEDDERS:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unknown embedding provider '{embedding_provider}'. "
-                    f"Available: {', '.join(sorted(EMBEDDERS))}."
-                ),
-            )
-        if vector_store is not None and vector_store not in VECTOR_STORES:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    f"Unknown vector store '{vector_store}'. "
-                    f"Available: {', '.join(sorted(VECTOR_STORES))}."
-                ),
+        if dims not in cls._ALLOWED_EMBEDDING_DIMENSIONS:
+            raise IngestionValidationError(
+                "Invalid embedding dimensions. Allowed: "
+                f"{', '.join(str(d) for d in sorted(cls._ALLOWED_EMBEDDING_DIMENSIONS))}."
             )
 
     def _name_taken(self, name: str, *, exclude_id: Optional[Any] = None) -> bool:
@@ -128,6 +104,22 @@ class IngestionConfigService(BaseService):
         if exclude_id is not None:
             q = q.filter(IngestionConfig.id != exclude_id)
         return q.first() is not None
+
+    def _get_config_or_404(self, config_id: Any) -> IngestionConfig:
+        """Local get-or-404 that raises the typed
+        :class:`IngestionConfigNotFoundError` (not FastAPI's HTTPException).
+        Kept private so the router-facing get_config path stays a thin alias."""
+        row = (
+            self.query(IngestionConfig)
+            .filter(
+                IngestionConfig.id == config_id,
+                IngestionConfig.deleted_at.is_(None),
+            )
+            .first()
+        )
+        if row is None:
+            raise IngestionConfigNotFoundError("Ingestion config not found.")
+        return row
 
     # ── CRUD ────────────────────────────────────────────────────────────
 
@@ -150,33 +142,17 @@ class IngestionConfigService(BaseService):
         is_active: bool = True,
     ) -> IngestionConfig:
         if not name or not name.strip():
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail="Name is required.",
-            )
-        if embedding_dimensions is None or embedding_dimensions <= 0:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail="embedding_dimensions must be a positive integer.",
-            )
-        if embedding_dimensions not in self._ALLOWED_EMBEDDING_DIMENSIONS:
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=(
-                    "Invalid embedding dimensions. Allowed: "
-                    f"{', '.join(str(d) for d in sorted(self._ALLOWED_EMBEDDING_DIMENSIONS))}."
-                ),
-            )
-        self._validate_slugs(
+            raise IngestionValidationError("Name is required.")
+        self._validate_embedding_dimensions(embedding_dimensions)
+        ensure_rag_recipe(
             parser=parser,
             tokeniser=tokeniser,
             embedding_provider=embedding_provider,
             vector_store=vector_store,
         )
         if self._name_taken(name.strip()):
-            raise HTTPException(
-                status_code=http_status.HTTP_400_BAD_REQUEST,
-                detail=f"An ingestion config named {name!r} already exists.",
+            raise IngestionConfigNameConflictError(
+                f"An ingestion config named {name!r} already exists."
             )
 
         row = IngestionConfig(
@@ -201,17 +177,16 @@ class IngestionConfigService(BaseService):
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
-            if _is_unique_violation(exc):
+            if is_unique_violation(exc):
                 # Race: two concurrent creates on the same (org, name). Log
                 # at info — this is expected under contention.
                 logger.info(
                     "[ingestion-config] create race on (org, name)=({}, {}) — "
                     "converted to 400", self.org_id, name,
                 )
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=f"An ingestion config named {name!r} already exists.",
-                )
+                raise IngestionConfigNameConflictError(
+                    f"An ingestion config named {name!r} already exists."
+                ) from exc
             # Any other constraint violation is a real bug — log full
             # traceback + re-raise so operators can diagnose (project rule:
             # every except captures via logger.exception).
@@ -231,12 +206,10 @@ class IngestionConfigService(BaseService):
         return row
 
     def update_config(self, config_id: Any, **partial_fields) -> IngestionConfig:
-        row = self.get_or_404(
-            IngestionConfig, config_id, name="Ingestion config"
-        )
+        row = self._get_config_or_404(config_id)
 
         # Slug re-validation applies only to changed enum fields.
-        self._validate_slugs(
+        ensure_rag_recipe(
             parser=partial_fields.get("parser"),
             tokeniser=partial_fields.get("tokeniser"),
             embedding_provider=partial_fields.get("embedding_provider"),
@@ -244,32 +217,18 @@ class IngestionConfigService(BaseService):
         )
 
         if "embedding_dimensions" in partial_fields:
-            dims = partial_fields["embedding_dimensions"]
-            if dims is None or dims <= 0:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="Embedding dimensions must be a positive integer.",
-                )
-            if dims not in self._ALLOWED_EMBEDDING_DIMENSIONS:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=(
-                        "Invalid embedding dimensions. Allowed: "
-                        f"{', '.join(str(d) for d in sorted(self._ALLOWED_EMBEDDING_DIMENSIONS))}."
-                    ),
-                )
+            self._validate_embedding_dimensions(
+                partial_fields["embedding_dimensions"],
+                positive_msg="Embedding dimensions must be a positive integer.",
+            )
 
         if "name" in partial_fields:
             new_name = (partial_fields["name"] or "").strip()
             if not new_name:
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="Name cannot be blank.",
-                )
+                raise IngestionValidationError("Name cannot be blank.")
             if new_name != row.name and self._name_taken(new_name, exclude_id=row.id):
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail=f"An ingestion config named {new_name!r} already exists.",
+                raise IngestionConfigNameConflictError(
+                    f"An ingestion config named {new_name!r} already exists."
                 )
             partial_fields["name"] = new_name
 
@@ -292,15 +251,14 @@ class IngestionConfigService(BaseService):
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
-            if _is_unique_violation(exc):
+            if is_unique_violation(exc):
                 logger.info(
                     "[ingestion-config] update race on (org, name) for config={} — "
                     "converted to 400", config_id,
                 )
-                raise HTTPException(
-                    status_code=http_status.HTTP_400_BAD_REQUEST,
-                    detail="Name conflict updating ingestion config.",
-                )
+                raise IngestionConfigNameConflictError(
+                    "Name conflict updating ingestion config."
+                ) from exc
             logger.exception(
                 "[ingestion-config] unexpected IntegrityError updating config={}",
                 config_id,
@@ -316,23 +274,20 @@ class IngestionConfigService(BaseService):
     def get_config(self, config_id: Any) -> IngestionConfig:
         """Org-scoped, excludes soft-deleted. Used by the CRUD endpoint AND
         by ``IngestionRunService.resolve_run_config`` (snapshot path)."""
-        return self.get_or_404(
-            IngestionConfig, config_id, name="Ingestion config"
-        )
+        return self._get_config_or_404(config_id)
 
-    def delete_config(self, config_id: Any) -> dict:
+    def delete_config(self, config_id: Any) -> IngestionConfig:
         """Soft-delete. The FK on ``ingestion_pipeline_runs.ingestion_config_id``
         is ``SET NULL`` at the DB level, but soft-delete keeps the row so audit
         lookups from historical runs still resolve — list/select queries filter
-        it out."""
-        row = self.get_or_404(
-            IngestionConfig, config_id, name="Ingestion config"
-        )
+        it out. Returns the soft-deleted row so the router can shape the
+        response via ``config_response``."""
+        row = self._get_config_or_404(config_id)
         row.deleted_at = datetime.now(timezone.utc)
         row.is_active = False
         self.db.commit()
         logger.info("[ingestion-config] soft-deleted id={}", config_id)
-        return {"id": str(row.id), "deleted": True}
+        return row
 
     def list_configs(
         self,
