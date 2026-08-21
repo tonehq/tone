@@ -12,6 +12,8 @@ interface ChannelField {
   label: string;
   type?: string;
   placeholder?: string;
+  optional?: boolean;
+  helperText?: string;
 }
 
 const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
@@ -19,7 +21,23 @@ const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
     { name: 'account_sid', label: 'Account SID', placeholder: 'Enter account SID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
   ],
-  telnyx: [{ name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' }],
+  telnyx: [
+    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' },
+    {
+      name: 'account_sid',
+      label: 'Account SID',
+      placeholder: 'Enter account SID',
+      optional: true,
+      helperText: 'Required to place outbound calls.',
+    },
+    {
+      name: 'application_sid',
+      label: 'TeXML Application SID',
+      placeholder: 'Enter TeXML application SID',
+      optional: true,
+      helperText: 'Required to place outbound calls.',
+    },
+  ],
   plivo: [
     { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
@@ -43,6 +61,7 @@ const CHANNEL_TYPE_OPTIONS = [
 const ALL_FIELD_NAMES = [
   'name',
   'account_sid',
+  'application_sid',
   'auth_token',
   'auth_id',
   'url',
@@ -105,7 +124,7 @@ export default function ChannelFormModal({
   const values = useWatch({ control });
   const canSave =
     (values?.name ?? '').trim().length > 0 &&
-    fields.every((f) => (values?.[f.name] ?? '').trim().length > 0);
+    fields.every((f) => f.optional || (values?.[f.name] ?? '').trim().length > 0);
 
   const onFormSubmit = async (data: ChannelFormData) => {
     setSaving(true);
@@ -179,8 +198,9 @@ export default function ChannelFormModal({
               label={f.label}
               type={f.type}
               placeholder={f.placeholder}
-              rules={{ required: `${f.label} is required` }}
-              isRequired
+              helperText={f.helperText}
+              rules={f.optional ? undefined : { required: `${f.label} is required` }}
+              isRequired={!f.optional}
               disabled={saving}
             />
           ))}

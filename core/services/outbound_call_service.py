@@ -31,7 +31,7 @@ from core.services.base import BaseService
 from core.services.call_engines import get_call_engine
 from core.services.call_engines.websocket_engine import NoOutboundCapacity
 from core.services.outbound_capacity import get_env_outbound_ceiling, resolve_batch_concurrency
-from core.services.transport.telephony_credentials import get_twilio_credentials
+from core.services.transport.telephony_credentials import get_provider_credentials
 from shared.config import settings
 
 _E164_RE = re.compile(r"^\+[1-9]\d{6,14}$")
@@ -250,28 +250,29 @@ class OutboundCallService(BaseService):
             )
         return normalized
 
-    def select_from_number(self, agent, explicit: Optional[str] = None) -> str:
+    def select_from_number(self, agent, explicit: Optional[str] = None, provider: Optional[str] = None) -> str:
         """Resolve the outbound caller-id — the SINGLE place outbound number choice lives.
 
         Explicit selection always wins (validated E.164). When omitted, auto-select from
-        the org's configured Twilio numbers: prefer numbers assigned to ``agent``, else any
-        org Twilio number; a single number is used directly, multiple numbers round-robin
+        the org's configured telephony numbers: prefer numbers assigned to ``agent``, else any
+        org number; a single number is used directly, multiple numbers round-robin
         by least-recently-used (from recent ``scheduled_calls`` usage — no extra state).
         Every outbound path calls this so number choice is never re-implemented.
         """
         if explicit and str(explicit).strip():
             return self._normalize_e164(explicit, "from_number")
 
-        candidates = (
+        query = (
             self.db.query(PhoneNumber)
             .join(Channel, Channel.id == PhoneNumber.channel_id)
-            .filter(
-                PhoneNumber.organization_id == self.org_id,
-                Channel.channel_type == "twilio",
-            )
-            .all()
+            .filter(PhoneNumber.organization_id == self.org_id)
         )
-        # Prefer this agent's assigned numbers; otherwise any org Twilio number.
+        if provider:
+            query = query.filter(Channel.channel_type == provider)
+        else:
+            query = query.filter(Channel.channel_type.in_(self._PSTN_PROVIDERS))
+        candidates = query.all()
+        # Prefer this agent's assigned numbers; otherwise any org number.
         agent_numbers = [pn.number for pn in candidates if pn.agent_id == agent.id]
         pool = agent_numbers or [pn.number for pn in candidates]
 
@@ -287,7 +288,7 @@ class OutboundCallService(BaseService):
             raise HTTPException(
                 status_code=400,
                 detail="No outbound phone number is configured for this organization. "
-                       "Add a Twilio number or pick one explicitly.",
+                       "Add a Twilio or Telnyx number, or pick one explicitly.",
             )
         if len(numbers) == 1:
             return numbers[0]
@@ -311,13 +312,17 @@ class OutboundCallService(BaseService):
         # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
         return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
 
-    _SUPPORTED_PROVIDERS = ("twilio", "websocket")
+    _PSTN_PROVIDERS = ("twilio", "telnyx")
+    _SUPPORTED_PROVIDERS = ("twilio", "telnyx", "websocket")
 
     def _validate_provider(self, provider: Optional[str]) -> str:
-        """Normalize + validate the trigger provider. ``websocket`` additionally requires
+        """Normalize + validate the trigger provider. Empty means auto — the engine is
+        resolved from the from-number's channel. ``websocket`` additionally requires
         the remote /ws/test target to be configured, checked here so the user gets an
         immediate 400 instead of a silent worker failure at dispatch time."""
-        provider = (provider or "twilio").strip().lower()
+        provider = (provider or "").strip().lower()
+        if not provider:
+            return ""
         if provider not in self._SUPPORTED_PROVIDERS:
             raise HTTPException(
                 status_code=400,
@@ -334,16 +339,18 @@ class OutboundCallService(BaseService):
             )
         return provider
 
-    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = "twilio"):
+    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = ""):
         """Validate the agent and resolve the from-number once (shared across a bulk
         batch). ``from_number`` may be None/blank — it is then auto-selected via
-        ``select_from_number``. Returns (agent, channel_id, from_number).
+        ``select_from_number``. Returns (agent, channel_id, from_number, provider), where
+        ``provider`` is the resolved call engine — the from-number's channel type when the
+        caller passed no explicit trigger.
 
         The ``websocket`` trigger places no PSTN call (it bridges to a remote /ws/test and
-        routes by ``to_number``), so it requires NO Twilio number/channel/credentials: only the
+        routes by ``to_number``), so it requires NO telephony number/channel/credentials: only the
         agent is validated, there is no channel, and any explicit ``from_number`` is passed
         through solely as a display label. This keeps the telephony-free /ws/test bridge usable
-        in dev/staging orgs that have no Twilio set up."""
+        in dev/staging orgs that have no telephony set up."""
         org_id = self.org_id
 
         agent = self.query(Agent).filter(Agent.id == agent_id).first()
@@ -357,13 +364,13 @@ class OutboundCallService(BaseService):
         if getattr(agent, "is_active", True) is False:
             raise HTTPException(status_code=400, detail="Agent is inactive.")
 
-        # WebSocket bridge: no telephony, so skip the Twilio from-number/channel/credentials gate.
+        # WebSocket bridge: no telephony, so skip the from-number/channel/credentials gate.
         # There is no channel; keep any explicit from_number purely as a label (the engine ignores it).
         if provider == "websocket":
-            return agent, None, (from_number or "").strip()
+            return agent, None, (from_number or "").strip(), provider
 
-        # Explicit number wins; otherwise auto-select (single → that one; many → rotate).
-        from_number = self.select_from_number(agent, explicit=from_number)
+        requested = provider if provider in self._PSTN_PROVIDERS else None
+        from_number = self.select_from_number(agent, explicit=from_number, provider=requested)
 
         pn = (
             self.db.query(PhoneNumber)
@@ -376,15 +383,24 @@ class OutboundCallService(BaseService):
                 detail="from_number is not a phone number owned by this organization.",
             )
         channel = self.db.query(Channel).filter(Channel.id == pn.channel_id).first()
-        if not channel or channel.channel_type != "twilio":
-            raise HTTPException(status_code=400, detail="from_number must belong to a Twilio channel.")
-
-        if not get_twilio_credentials(org_id=org_id):
+        channel_type = ((channel.channel_type if channel else "") or "").strip().lower()
+        if channel_type not in self._PSTN_PROVIDERS:
             raise HTTPException(
                 status_code=400,
-                detail="No Twilio credentials configured for this organization.",
+                detail="from_number must belong to a Twilio or Telnyx channel.",
             )
-        return agent, channel.id, from_number
+        if requested and channel_type != requested:
+            raise HTTPException(
+                status_code=400,
+                detail=f"from_number does not belong to a {requested} channel.",
+            )
+
+        if not get_provider_credentials(channel_type, org_id=org_id):
+            raise HTTPException(
+                status_code=400,
+                detail=f"No {channel_type} credentials configured for this organization.",
+            )
+        return agent, channel.id, from_number, channel_type
 
     # ------------------------------------------------------------------ create
 
@@ -397,7 +413,7 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         directory_id=None,
         max_concurrency: Optional[int] = None,
-        provider: str = "twilio",
+        provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Place one or many outbound calls. A single immediate number dials right away;
         multiple numbers (or a scheduled time) are queued as ``scheduled_calls`` rows that
@@ -408,7 +424,7 @@ class OutboundCallService(BaseService):
             raise HTTPException(status_code=400, detail="Provide at least one destination number.")
 
         provider = self._validate_provider(provider)
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
+        agent, _channel_id, from_number, provider = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         # Per-number validation: collect invalid ones instead of failing the whole batch.
         valid: List[str] = []
@@ -467,7 +483,7 @@ class OutboundCallService(BaseService):
         created_by_user_id=None,
         invalid: Optional[List[Dict[str, str]]] = None,
         max_concurrency: Optional[int] = None,
-        provider: str = "twilio",
+        provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Create contacts from parsed ``rows`` (e.g. an uploaded CSV/Excel), assign them to
         the agent, and schedule outbound calls — the file-upload counterpart of
@@ -477,7 +493,7 @@ class OutboundCallService(BaseService):
         if not rows:
             raise HTTPException(status_code=400, detail="No contacts were found in the file.")
         provider = self._validate_provider(provider)
-        agent, _channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
+        agent, _channel_id, from_number, provider = self._validate_agent_and_from(agent_id, from_number, provider=provider)
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)
         if scheduled_at is not None and scheduled_at <= datetime.now(timezone.utc) - timedelta(seconds=60):
@@ -489,7 +505,7 @@ class OutboundCallService(BaseService):
 
     def _schedule_via_contacts(
         self, agent, from_number, rows, invalid, scheduled_at, created_by_user_id,
-        directory_id=None, max_concurrency=None, provider="twilio",
+        directory_id=None, max_concurrency=None, provider="",
     ) -> Dict[str, Any]:
         """Create each ``rows`` entry as a contact in ``directory_id`` (default the org's
         "Global" directory) AND assign it to ``agent`` (reusing
@@ -757,7 +773,7 @@ class OutboundCallService(BaseService):
         scheduled_at: Optional[datetime] = None,
         created_by_user_id=None,
         max_concurrency: Optional[int] = None,
-        provider: str = "twilio",
+        provider: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Schedule outbound calls to the given org-owned contacts.
 
@@ -776,7 +792,7 @@ class OutboundCallService(BaseService):
             raise HTTPException(status_code=400, detail="Provide at least one contact.")
 
         provider = self._validate_provider(provider)
-        agent, channel_id, from_number = self._validate_agent_and_from(agent_id, from_number, provider=provider)
+        agent, channel_id, from_number, provider = self._validate_agent_and_from(agent_id, from_number, provider=provider)
 
         if scheduled_at is not None and scheduled_at.tzinfo is None:
             scheduled_at = scheduled_at.replace(tzinfo=timezone.utc)

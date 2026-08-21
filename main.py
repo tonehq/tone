@@ -337,7 +337,12 @@ app.include_router(monitoring_router)
 async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("[inbound] /ws connection accepted from {}", getattr(websocket.client, "host", "?"))
-    runner_args = WebSocketRunnerArguments(websocket=websocket, body={})
+    body = {
+        key: value
+        for key in ("agent_id", "direction", "scheduled_call_id")
+        if (value := (websocket.query_params.get(key) or "").strip())
+    }
+    runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     try:
         active_calls_inc()
     except Exception:

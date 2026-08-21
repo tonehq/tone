@@ -72,3 +72,28 @@ def get_plivo_credentials(org_id=None) -> dict:
 def get_telnyx_api_key(org_id=None) -> str:
     """Fetch the Telnyx API key from the org's Telnyx channel."""
     return channel_config("telnyx", org_id).get("api_key") or ""
+
+
+def get_telnyx_credentials(org_id=None) -> dict:
+    cfg = channel_config("telnyx", org_id)
+    api_key = cfg.get("api_key")
+    account_sid = cfg.get("account_sid")
+    if api_key and account_sid:
+        return {
+            "api_key": api_key,
+            "account_sid": account_sid,
+            "application_sid": cfg.get("application_sid") or "",
+        }
+    return {}
+
+
+_CREDENTIAL_LOADERS = {
+    "twilio": get_twilio_credentials,
+    "telnyx": get_telnyx_credentials,
+    "plivo": get_plivo_credentials,
+}
+
+
+def get_provider_credentials(provider: str, org_id=None) -> dict:
+    loader = _CREDENTIAL_LOADERS.get((provider or "").strip().lower())
+    return loader(org_id=org_id) if loader else {}

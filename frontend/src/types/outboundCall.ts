@@ -9,12 +9,13 @@ export interface CreateOutboundCallPayload {
   directory_id?: string;
   /** How many of this batch's calls dial at once. Omit → the backend applies the env default. */
   max_concurrency?: number;
-  /** Trigger engine: 'twilio' places a real PSTN call; 'websocket' bridges to a remote /ws/test. */
+  /** Trigger engine: 'twilio'/'telnyx' place a real PSTN call; 'websocket' bridges to a remote
+   * /ws/test. Omit to let the from-number's channel pick the telephony engine. */
   provider?: OutboundTriggerProvider;
 }
 
 /** How an outbound call is triggered. */
-export type OutboundTriggerProvider = 'twilio' | 'websocket';
+export type OutboundTriggerProvider = 'twilio' | 'telnyx' | 'websocket';
 
 /** Response from POST /outbound-call/create. `mode` says whether it dialed now or queued.
  * `parallel_websocket` is an immediate WebSocket (test-bridge) fan-out — it dials right away. */
