@@ -85,6 +85,11 @@ export interface AgentLlmEvalRunSummary {
   run_number: number;
   triggered_by: string;
   judge_model: string | null;
+  // Answer model — the agent's LLM at the time of the run (snapshotted).
+  // All rows in a run share the same value, so it collapses cleanly in the
+  // grouped summary query.
+  llm_model: string | null;
+  llm_provider: string | null;
   status: AgentLlmEvalBatchStatus;
   error: string | null;
   started_at: string | null;

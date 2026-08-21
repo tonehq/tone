@@ -65,6 +65,12 @@ class AgentLlmRunSummary:
     run_number: int
     triggered_by: str
     judge_model: Optional[str]
+    # Answer model — the LLM the agent used to answer each scenario. All
+    # rows in one run share the same value (config is snapshotted once at
+    # run start), so it's safe to include in the grouped summary via a
+    # single-value GROUP BY.
+    llm_model: Optional[str] = None
+    llm_provider: Optional[str] = None
     status: str  # 'completed' | 'failed'
     error: Optional[str]
     started_at: Optional[datetime]
@@ -760,6 +766,12 @@ def _run_grouped_query(
             AgentLlmEvalResult.run_number.label("run_number"),
             AgentLlmEvalResult.triggered_by.label("triggered_by"),
             AgentLlmEvalResult.judge_model.label("judge_model"),
+            # Answer model — snapshotted identically on every row of a run,
+            # so it groups to a single value per run_id. Surfaces on the FE
+            # Run history table so users see which agent model produced the
+            # answers being scored.
+            AgentLlmEvalResult.llm_model.label("llm_model"),
+            AgentLlmEvalResult.llm_provider.label("llm_provider"),
             AgentLlmEvalResult.started_at.label("started_at"),
             AgentLlmEvalResult.completed_at.label("completed_at"),
             func.count(AgentLlmEvalResult.id).label("total"),
@@ -776,6 +788,8 @@ def _run_grouped_query(
             AgentLlmEvalResult.run_number,
             AgentLlmEvalResult.triggered_by,
             AgentLlmEvalResult.judge_model,
+            AgentLlmEvalResult.llm_model,
+            AgentLlmEvalResult.llm_provider,
             AgentLlmEvalResult.started_at,
             AgentLlmEvalResult.completed_at,
         )
@@ -819,6 +833,8 @@ def _row_to_run_summary(row) -> AgentLlmRunSummary:
         run_number=int(row.run_number or 0),
         triggered_by=row.triggered_by,
         judge_model=row.judge_model,
+        llm_model=getattr(row, "llm_model", None),
+        llm_provider=getattr(row, "llm_provider", None),
         status=status,
         error=None,
         started_at=row.started_at,

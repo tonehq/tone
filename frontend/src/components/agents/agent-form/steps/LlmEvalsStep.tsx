@@ -348,9 +348,12 @@ function ScenariosTable({
           <tr>
             <th className="px-3 py-2 text-left">Scenario</th>
             <th className="px-3 py-2 text-left">Prompt</th>
-            <th className="px-3 py-2 text-left">Tags</th>
-            <th className="px-3 py-2 text-left">Source</th>
-            <th className="px-3 py-2" />
+            {/* Fixed-width tags + source columns so the Prompt column can
+                grow into the leftover space without squeezing them to a
+                sliver (which caused tag chips to wrap vertically). */}
+            <th className="w-[220px] px-3 py-2 text-left">Tags</th>
+            <th className="w-[100px] px-3 py-2 text-left">Source</th>
+            <th className="w-[80px] px-3 py-2" />
           </tr>
         </thead>
         <tbody>
@@ -365,12 +368,13 @@ function ScenariosTable({
                   {s.prompt}
                 </span>
               </td>
-              <td className="px-3 py-2 align-top">
+              <td className="w-[220px] px-3 py-2 align-top">
                 <div className="flex flex-wrap gap-1">
                   {(s.tags ?? []).map((t) => (
                     <span
                       key={t}
-                      className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                      title={t}
+                      className="max-w-[200px] truncate rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
                     >
                       {t}
                     </span>
@@ -443,6 +447,7 @@ function RunsTable({
             <th className="px-3 py-2 text-left">Run</th>
             <th className="px-3 py-2 text-left">Started</th>
             <th className="px-3 py-2 text-left">Judge</th>
+            <th className="px-3 py-2 text-left">Answer Model</th>
             <th className="px-3 py-2 text-left">Triggered</th>
             <th className="px-3 py-2 text-left">Result</th>
             <th className="px-3 py-2" />
@@ -467,6 +472,14 @@ function RunsTable({
                   {r.started_at ? formatDate(r.started_at) : '—'}
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">{r.judge_model ?? '—'}</td>
+                <td className="px-3 py-2 text-muted-foreground">
+                  {r.llm_model ?? '—'}
+                  {r.llm_provider && (
+                    <span className="ml-1 text-[11px] text-muted-foreground/70">
+                      · {r.llm_provider}
+                    </span>
+                  )}
+                </td>
                 <td className="px-3 py-2 text-muted-foreground">{r.triggered_by}</td>
                 <td className="px-3 py-2">
                   <div className="flex items-center gap-2">
@@ -887,6 +900,14 @@ function AgentLlmEvalResultsDrawer({
   const summary = detailQuery.data?.summary;
   const totals = summary?.summary as Record<string, number> | undefined;
 
+  // Every scenario in a run scores against the SAME snapshotted agent
+  // config, so the system prompt is identical row-to-row. Pull it once from
+  // the first scored scenario and render it in a single collapsible panel
+  // at the top of the drawer — the per-row "System prompt at run time"
+  // section is removed to avoid duplicating the same text N times.
+  const scenarios = detailQuery.data?.scenarios ?? [];
+  const sharedSystemPrompt = scenarios.find((s) => s.system_prompt)?.system_prompt ?? null;
+
   return (
     <CustomDrawer
       open={open}
@@ -915,6 +936,7 @@ function AgentLlmEvalResultsDrawer({
             </div>
           </section>
         )}
+        {sharedSystemPrompt && <AgentPromptPanel prompt={sharedSystemPrompt} />}
         {detailQuery.data?.scenarios.map((s) => (
           <ScoredScenarioRow key={s.id} scored={s} />
         ))}
@@ -925,6 +947,40 @@ function AgentLlmEvalResultsDrawer({
         )}
       </div>
     </CustomDrawer>
+  );
+}
+
+function AgentPromptPanel({ prompt }: { prompt: string }) {
+  // Expanded by default so users see the full prompt as they enter — it's
+  // the most-referenced context in the drawer. Collapsible so long prompts
+  // don't push scored scenarios off-screen.
+  const [expanded, setExpanded] = useState(true);
+  return (
+    <section className="rounded-lg border border-border/60 bg-card">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        aria-expanded={expanded}
+      >
+        {expanded ? (
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+        )}
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Agent system prompt at run time
+        </span>
+        <span className="ml-auto text-[10px] text-muted-foreground/70">
+          {expanded ? 'Hide' : 'Show'}
+        </span>
+      </button>
+      {expanded && (
+        <div className="max-h-72 overflow-auto whitespace-pre-wrap border-t border-border/60 px-3 py-3 font-mono text-[12px] text-foreground">
+          {prompt}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -939,7 +995,9 @@ function SummaryCell({ label, value }: { label: string; value: React.ReactNode }
 
 function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
   const [expanded, setExpanded] = useState(false);
-  const [promptExpanded, setPromptExpanded] = useState(false);
+  // Per-scenario "system prompt at run time" section was removed — the
+  // prompt is identical across every scored row in a run, so it lives once
+  // at the top of the drawer (see ``AgentPromptPanel``).
   return (
     <div className="rounded-md border border-border/60 bg-card">
       <button
@@ -1009,31 +1067,6 @@ function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
                   </div>
                 ))}
               </div>
-            </div>
-          )}
-          {scored.system_prompt && (
-            <div className="md:col-span-2">
-              <button
-                type="button"
-                onClick={() => setPromptExpanded((v) => !v)}
-                className="flex w-full items-center gap-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
-                aria-expanded={promptExpanded}
-              >
-                {promptExpanded ? (
-                  <ChevronDown className="size-3.5 shrink-0" />
-                ) : (
-                  <ChevronRight className="size-3.5 shrink-0" />
-                )}
-                <span>System prompt at run time</span>
-                <span className="ml-auto text-[10px] normal-case tracking-normal text-muted-foreground/70">
-                  {promptExpanded ? 'Hide' : 'Show'}
-                </span>
-              </button>
-              {promptExpanded && (
-                <div className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[12px] text-foreground">
-                  {scored.system_prompt}
-                </div>
-              )}
             </div>
           )}
           {(scored.answer_error || scored.judge_error) && (
