@@ -2,6 +2,7 @@
 
 import {
   CheckCircle2,
+  ChevronDown,
   ChevronRight,
   Gauge,
   MinusCircle,
@@ -900,13 +901,20 @@ function SummaryCell({ label, value }: { label: string; value: React.ReactNode }
 
 function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
   const [expanded, setExpanded] = useState(false);
+  const [promptExpanded, setPromptExpanded] = useState(false);
   return (
     <div className="rounded-md border border-border/60 bg-card">
       <button
         type="button"
         onClick={() => setExpanded((v) => !v)}
         className="flex w-full items-start gap-2 px-3 py-2 text-left"
+        aria-expanded={expanded}
       >
+        {expanded ? (
+          <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        ) : (
+          <ChevronRight className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
+        )}
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <VerdictChip verdict={scored.verdict} />
@@ -967,12 +975,27 @@ function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
           )}
           {scored.system_prompt && (
             <div className="md:col-span-2">
-              <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                System prompt at run time
-              </div>
-              <div className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[12px] text-foreground">
-                {scored.system_prompt}
-              </div>
+              <button
+                type="button"
+                onClick={() => setPromptExpanded((v) => !v)}
+                className="flex w-full items-center gap-1 text-left text-[11px] uppercase tracking-wide text-muted-foreground hover:text-foreground"
+                aria-expanded={promptExpanded}
+              >
+                {promptExpanded ? (
+                  <ChevronDown className="size-3.5 shrink-0" />
+                ) : (
+                  <ChevronRight className="size-3.5 shrink-0" />
+                )}
+                <span>System prompt at run time</span>
+                <span className="ml-auto text-[10px] normal-case tracking-normal text-muted-foreground/70">
+                  {promptExpanded ? 'Hide' : 'Show'}
+                </span>
+              </button>
+              {promptExpanded && (
+                <div className="mt-1 whitespace-pre-wrap rounded bg-muted/40 p-2 font-mono text-[12px] text-foreground">
+                  {scored.system_prompt}
+                </div>
+              )}
             </div>
           )}
           {(scored.answer_error || scored.judge_error) && (

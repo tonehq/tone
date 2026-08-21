@@ -21,10 +21,6 @@ from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.provider_keys import ProviderKeyService
 from core.services.rag.tokeniser_factory import get_tokeniser
 
-DIRECT_PDF_DOCLING = False
-DIRECT_PDF_OCR = False
-DIRECT_PDF_MAX_PAGES = 0
-
 
 _CONTENT_TYPE_DOC_TYPE = {
     "application/pdf": "pdf",
@@ -125,15 +121,6 @@ class DocumentProcessingService:
                 )
 
                 parser_cfg = dict(run.parser_config or {})
-                if run.parser == "docling" and DIRECT_PDF_DOCLING and file_type == PDF_CONTENT_TYPE:
-                    # Local dev toggle: run docling directly on the PDF (with OCR) instead of
-                    # routing through PdfRoutingService. Kept behind flags at module top.
-                    page_range = (1, DIRECT_PDF_MAX_PAGES) if DIRECT_PDF_MAX_PAGES else None
-                    parser_cfg.setdefault("ocr", DIRECT_PDF_OCR)
-                    parser_cfg.setdefault("tables", DIRECT_PDF_OCR)
-                    if page_range:
-                        parser_cfg.setdefault("page_range", page_range)
-
                 parser = get_parser(run.parser, config=parser_cfg)
                 chunker = get_tokeniser(run.tokeniser, config=run.tokeniser_config)
                 embedder = build_embedder_from_run(run, api_key=api_key)
@@ -162,14 +149,13 @@ class DocumentProcessingService:
             pdf_path = None
             html_path = None
             build = None
-            direct = file_type == PDF_CONTENT_TYPE and DIRECT_PDF_DOCLING
             # PdfRoutingService converts PDF → HTML so docling can pick up tables /
             # images via its HTML pipeline. Only the docling parser benefits from
             # this — every other parser (pypdf, docx, text, composite) expects the
             # ORIGINAL PDF bytes, so we skip the route for them and stream the raw
             # PDF straight through ``ingest_file_paged``.
             uses_pdf_html_route = (
-                file_type == PDF_CONTENT_TYPE and not direct and run.parser == "docling"
+                file_type == PDF_CONTENT_TYPE and run.parser == "docling"
             )
             if uses_pdf_html_route:
                 logger.info(
@@ -199,15 +185,7 @@ class DocumentProcessingService:
 
             try:
                 t_ingest = time.monotonic()
-                if direct:
-                    logger.info(
-                        "[direct-pdf] docling parsing PDF directly (ocr={}, tables={}, max_pages={})",
-                        DIRECT_PDF_OCR, DIRECT_PDF_OCR, DIRECT_PDF_MAX_PAGES,
-                    )
-                    num_chunks = pipeline.ingest_file_streaming(
-                        file_bytes, file_type
-                    )
-                elif build is not None:
+                if build is not None:
                     num_chunks = pipeline.ingest_path(
                         build.html_path, HTML_CONTENT_TYPE
                     )
