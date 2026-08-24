@@ -271,9 +271,6 @@ class Settings:
 
         self.SIP_TERMINATION_FQDN: str = get_secret("SIP_TERMINATION_FQDN")
         self.SIP_TERMINATION_PORT: int = _int_env(get_secret("SIP_TERMINATION_PORT"))
-        self.SIP_SBC_CONTROL_URL: str = get_secret("SIP_SBC_CONTROL_URL").rstrip("/")
-        self.SIP_SBC_API_KEY: str = get_secret("SIP_SBC_API_KEY")
-        self.SIP_SBC_WEBHOOK_TOKEN: str = get_secret("SIP_SBC_WEBHOOK_TOKEN")
 
         self.APPLICATION_URL: str = get_secret("APPLICATION_URL")
         self.RESEND_API_KEY: str = get_secret("RESEND_API_KEY")

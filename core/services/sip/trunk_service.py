@@ -10,9 +10,10 @@ from core.models.phone_number import PhoneNumber
 from core.models.sip_trunk import SipTrunk
 from core.services.base import BaseService
 from core.services.sip import validation
-from core.services.sip.base import SipCarrierError
+from core.services.sip.base import (SipCarrierError, SipTerminationError,
+                                    TerminationEndpoint)
+from core.services.sip.livekit_termination import LiveKitTermination
 from core.services.sip.registry import get_carrier, supported_carriers
-from core.services.sip.sbc_client import SbcClient, SbcError
 from core.services.transport.telephony_credentials import channel_config
 from core.utils.auth_helpers import coerce_uuid
 from core.utils.encryption import decrypt_json, encrypt_json
@@ -30,9 +31,20 @@ STATUS_ERROR = "error"
 
 
 class SipTrunkService(BaseService):
-    def __init__(self, db, user_id=None, org_id=None, sbc: Optional[SbcClient] = None):
+    def __init__(self, db, user_id=None, org_id=None):
         super().__init__(db, user_id=user_id, org_id=org_id)
-        self._sbc = sbc or SbcClient()
+        self._termination_client: Optional[LiveKitTermination] = None
+
+    def _termination(self) -> LiveKitTermination:
+        if self._termination_client is None:
+            self._termination_client = LiveKitTermination(
+                channel_config("livekit", org_id=self.org_id, db=self.db)
+            )
+        return self._termination_client
+
+    def termination_endpoint(self) -> TerminationEndpoint:
+        host = (settings.SIP_TERMINATION_FQDN or "").strip() or self._termination().sip_host
+        return TerminationEndpoint(host=host, port=settings.SIP_TERMINATION_PORT or 0)
 
     def list_trunks(self) -> List[Dict[str, Any]]:
         rows = self.query(SipTrunk).order_by(SipTrunk.updated_at.desc()).all()
@@ -43,12 +55,12 @@ class SipTrunkService(BaseService):
     ) -> Dict[str, Any]:
         return self._response(self._get_record(trunk_id), include_auth=include_auth)
 
-    @staticmethod
-    def _response(record: SipTrunk, include_auth: bool = False) -> Dict[str, Any]:
+    def _response(self, record: SipTrunk, include_auth: bool = False) -> Dict[str, Any]:
+        host = self.termination_endpoint().host
         payload = {
             **record.to_dict(),
-            "termination_host": validation.termination_host(record.id),
-            "inbound_uri_template": validation.inbound_uri_template(record.id),
+            "termination_host": host,
+            "inbound_uri_template": f"sip:{{number}}@{host}" if host else "",
         }
         if include_auth:
             auth = trunk_auth(record)
@@ -133,11 +145,10 @@ class SipTrunkService(BaseService):
         except SipCarrierError:
             logger.exception("[sip] carrier deprovision failed trunk={}", record.id)
 
-        if self._sbc.configured:
-            try:
-                self._sbc.remove_trunk(str(record.id))
-            except SbcError:
-                logger.exception("[sip] sbc trunk removal failed trunk={}", record.id)
+        try:
+            self._termination().remove_trunk(record.carrier_config or {})
+        except SipTerminationError:
+            logger.exception("[sip] livekit trunk removal failed trunk={}", record.id)
 
         channel_id = record.channel_id
         self.db.delete(record)
@@ -152,12 +163,23 @@ class SipTrunkService(BaseService):
         record = self._get_record(trunk_id)
         credentials = self._carrier_credentials(record)
         try:
-            result = get_carrier(record.carrier).provision_trunk(record, credentials)
+            result = get_carrier(record.carrier).provision_trunk(
+                record, credentials, self.termination_endpoint()
+            )
             record.carrier_config = {**(record.carrier_config or {}), **result.carrier_ids}
-            self._sync_to_sbc(record)
+            termination_payload = self.termination_payload(record)
+            livekit_ids = self._termination().sync_trunk(termination_payload)
+            record.carrier_config = {**record.carrier_config, **livekit_ids}
             record.status = STATUS_PROVISIONED
-            record.status_detail = result.detail or None
-        except (SipCarrierError, SbcError) as exc:
+
+            notes = [result.detail] if result.detail else []
+            if not termination_payload["numbers"]:
+                notes.append(
+                    "Attach a phone number to this trunk to activate SIP routing — "
+                    "LiveKit trunks are created once the trunk has at least one number."
+                )
+            record.status_detail = " | ".join(notes) or None
+        except (SipCarrierError, SipTerminationError) as exc:
             record.status = STATUS_ERROR
             record.status_detail = str(exc)[:500]
             self.db.commit()
@@ -182,11 +204,12 @@ class SipTrunkService(BaseService):
         existing = (
             self.query(PhoneNumber).filter(PhoneNumber.number == normalized).first()
         )
+        moved_from = None
         if existing is not None and existing.channel_id != record.channel_id:
-            raise HTTPException(
-                status_code=409,
-                detail="This number is already attached to another channel in this organization.",
+            previous = (
+                self.db.query(Channel).filter(Channel.id == existing.channel_id).first()
             )
+            moved_from = previous.name if previous is not None else str(existing.channel_id)
 
         try:
             get_carrier(record.carrier).attach_number(
@@ -204,19 +227,37 @@ class SipTrunkService(BaseService):
                 label=label,
             )
             self.db.add(existing)
-        elif label:
-            existing.label = label
+        else:
+            existing.channel_id = record.channel_id
+            if label:
+                existing.label = label
         self.db.commit()
         self.db.refresh(existing)
 
-        logger.info("[sip] number attached trunk={} number={}", record.id, normalized)
+        self._invalidate_number_cache(normalized)
+        self._resync_termination(record)
+        logger.info(
+            "[sip] number attached trunk={} number={} moved_from={}",
+            record.id, normalized, moved_from,
+        )
         return {
             "id": str(existing.id),
             "number": existing.number,
             "label": existing.label,
             "channel_id": str(existing.channel_id),
             "sip_trunk_id": str(record.id),
+            "agent_id": str(existing.agent_id) if existing.agent_id else None,
+            "moved_from": moved_from,
         }
+
+    @staticmethod
+    def _invalidate_number_cache(number: str) -> None:
+        from core.services.redis_service import cache_delete
+
+        try:
+            cache_delete(f"phone_to_agent:{number}")
+        except Exception:
+            logger.debug("[sip] phone_to_agent cache invalidation skipped for {}", number)
 
     def detach_number(self, trunk_id: Union[str, UUID], number: str) -> Dict[str, str]:
         record = self._get_record(trunk_id)
@@ -241,6 +282,7 @@ class SipTrunkService(BaseService):
 
         self.db.delete(row)
         self.db.commit()
+        self._resync_termination(record)
         logger.info("[sip] number detached trunk={} number={}", record.id, normalized)
         return {"message": "Number detached from trunk"}
 
@@ -306,49 +348,51 @@ class SipTrunkService(BaseService):
         except validation.SipConfigError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 
-    def _sync_to_sbc(self, record: SipTrunk) -> None:
-        if not self._sbc.configured:
-            raise SbcError(
-                "SIP_SBC_CONTROL_URL is not set — provision the SBC before activating a trunk."
-            )
-        self._sbc.sync_trunk(self.sbc_payload(record))
+    def _resync_termination(self, record: SipTrunk) -> None:
+        if record.status not in (STATUS_PROVISIONED, STATUS_ERROR):
+            return
+        try:
+            livekit_ids = self._termination().sync_trunk(self.termination_payload(record))
+        except SipTerminationError as exc:
+            logger.exception("[sip] livekit resync failed trunk={}", record.id)
+            record.status = STATUS_ERROR
+            record.status_detail = str(exc)[:500]
+            self.db.commit()
+            return
+        record.carrier_config = {**(record.carrier_config or {}), **livekit_ids}
+        record.status = STATUS_PROVISIONED
+        record.status_detail = None
+        self.db.commit()
 
-    def sbc_payload(self, record: SipTrunk) -> Dict[str, Any]:
+    def termination_payload(self, record: SipTrunk) -> Dict[str, Any]:
         auth = trunk_auth(record)
-        base_url = (settings.BASE_CALL_URL or "").rstrip("/")
+        numbers = [
+            row.number
+            for row in self.query(PhoneNumber)
+            .filter(PhoneNumber.channel_id == record.channel_id)
+            .all()
+        ]
         return {
             "trunk_id": str(record.id),
             "organization_id": str(record.organization_id),
             "name": record.name,
             "carrier": record.carrier,
-            "active": bool(record.is_active),
+            "numbers": numbers,
+            "livekit_ids": record.carrier_config or {},
             "inbound": {
-                "enabled": bool(record.inbound_enabled),
+                "enabled": bool(record.inbound_enabled and record.is_active),
                 "auth_mode": record.auth_mode,
                 "auth_username": auth.get("auth_username") or "",
                 "auth_password": auth.get("auth_password") or "",
                 "allowed_hosts": validation.inbound_source_hosts(record.gateways),
-                "termination_host": validation.termination_host(record.id),
             },
             "outbound": {
-                "enabled": bool(record.outbound_enabled),
+                "enabled": bool(record.outbound_enabled and record.is_active),
                 "gateways": validation.outbound_gateways(record.gateways),
-                "tech_prefix": record.tech_prefix or "",
-                "leading_plus_enabled": bool(record.outbound_leading_plus_enabled),
-                "diversion_header_enabled": bool(record.sip_diversion_header),
-                "register_enabled": bool(record.register_enabled),
-                "register_server": auth.get("register_server") or "",
+                "auth_username": auth.get("auth_username") or "",
+                "auth_password": auth.get("auth_password") or "",
             },
-            "media": {
-                "encryption": record.media_encryption,
-                "sample_rate": validation.DEFAULT_SIP_SAMPLE_RATE,
-            },
-            "transfer_enabled": bool(record.transfer_enabled),
-            "control": {
-                "route_url": f"{base_url}/sip/inbound" if base_url else "",
-                "status_url": f"{base_url}/sip/status" if base_url else "",
-                "token": settings.SIP_SBC_WEBHOOK_TOKEN or "",
-            },
+            "media_encryption": record.media_encryption,
         }
 
     def _carrier_credentials(self, record: SipTrunk) -> Dict[str, Any]:

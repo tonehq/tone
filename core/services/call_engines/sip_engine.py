@@ -1,27 +1,36 @@
-from typing import Any, Dict, List, Optional
+import uuid
+from typing import Any, Dict, Optional
 
 from loguru import logger
+from pipecat.runner.types import LiveKitRunnerArguments
 
 from core.services.call_engines.base import CallEngine, CallInfo
-from core.services.sip.sbc_client import SbcClient, SbcError
-from core.services.sip.validation import (SipConfigError, format_outbound_number,
-                                          outbound_gateways, sip_uri)
-from core.utils.telephony import default_media_ws_url, pinned_ws_url
-from shared.config import settings
+from core.services.sip.base import SipTerminationError
+from core.services.sip.livekit_termination import SIP_ROOM_PREFIX, LiveKitTermination
+from core.services.sip.validation import SipConfigError, format_outbound_number
 
 DEFAULT_RING_TIMEOUT = 45
 
 
 class SipCallEngine(CallEngine):
-    def __init__(self, org_id=None, sbc: Optional[SbcClient] = None):
+    def __init__(self, org_id=None, termination: Optional[LiveKitTermination] = None):
         self._org_id = org_id
-        self._sbc = sbc or SbcClient()
+        self._termination_client = termination
 
     @property
     def provider_name(self) -> str:
         return "sip"
 
-    def _trunk_for_number(self, from_number: str):
+    def _termination(self) -> LiveKitTermination:
+        if self._termination_client is None:
+            from core.services.transport.telephony_credentials import channel_config
+
+            self._termination_client = LiveKitTermination(
+                channel_config("livekit", org_id=self._org_id)
+            )
+        return self._termination_client
+
+    def _trunk_for_number(self, from_number: str) -> Dict[str, Any]:
         from core.database.session import get_db_context
         from core.models.channel import Channel
         from core.models.phone_number import PhoneNumber
@@ -43,24 +52,21 @@ class SipCallEngine(CallEngine):
                 )
             if not trunk.is_active or not trunk.outbound_enabled:
                 raise ValueError(f"SIP trunk '{trunk.name}' is not enabled for outbound calls.")
+
+            outbound_trunk_id = (trunk.carrier_config or {}).get("outbound_trunk_id")
+            if not outbound_trunk_id:
+                raise ValueError(
+                    f"SIP trunk '{trunk.name}' has no LiveKit outbound trunk — provision it first."
+                )
             return {
                 "id": str(trunk.id),
                 "name": trunk.name,
-                "gateways": trunk.gateways or [],
-                "media_encryption": trunk.media_encryption,
+                "outbound_trunk_id": outbound_trunk_id,
                 "tech_prefix": trunk.tech_prefix,
                 "outbound_leading_plus_enabled": trunk.outbound_leading_plus_enabled,
                 "number_e164_check_enabled": trunk.number_e164_check_enabled,
-                "sip_diversion_header": trunk.sip_diversion_header,
                 "transfer_enabled": trunk.transfer_enabled,
             }
-
-    @staticmethod
-    def _destination_uris(trunk: Dict[str, Any], to_number: str) -> List[str]:
-        gateways = outbound_gateways(trunk["gateways"])
-        if not gateways:
-            raise ValueError(f"SIP trunk '{trunk['name']}' has no outbound-enabled gateway.")
-        return [sip_uri(to_number, gateway) for gateway in gateways]
 
     def initiate_call(
         self,
@@ -81,62 +87,85 @@ class SipCallEngine(CallEngine):
         except SipConfigError as exc:
             raise ValueError(str(exc))
 
-        base = (callback_base_url or settings.BASE_CALL_URL or "").rstrip("/")
-        default_ws_url = default_media_ws_url(base)
-        if not default_ws_url:
-            raise ValueError(
-                "BASE_CALL_URL is not set — a SIP call needs a public media WebSocket URL."
-            )
-        ws_url, pod_name, _, node_name = pinned_ws_url(default_ws_url, "[sip]")
-
-        params: Dict[str, Any] = {
+        room_name = f"{SIP_ROOM_PREFIX}out-{uuid.uuid4().hex[:12]}"
+        attributes = {
             "agent_id": str(agent_id),
             "direction": "outbound",
-            "from": from_number,
-            "to": to_number,
-            "trunk_id": trunk["id"],
+            "sip.phoneNumber": from_number,
+            "sip.trunkPhoneNumber": to_number,
         }
         if scheduled_call_id:
-            params["scheduled_call_id"] = str(scheduled_call_id)
+            attributes["scheduled_call_id"] = str(scheduled_call_id)
 
         logger.info(
-            "[outbound] sip dialing agent={} trunk={} from={} to={} pod={} node={} ws_url={}",
-            agent_id, trunk["id"], from_number, dialed, pod_name, node_name, ws_url,
+            "[outbound] sip dialing agent={} trunk={} from={} to={} room={}",
+            agent_id, trunk["id"], from_number, dialed, room_name,
         )
+
+        self._dispatch_bot(room_name, str(agent_id), from_number, to_number, scheduled_call_id)
+
         try:
-            data = self._sbc.originate(
-                trunk_id=trunk["id"],
+            data = self._termination().originate(
+                outbound_trunk_id=trunk["outbound_trunk_id"],
+                to_number=dialed,
                 from_number=from_number,
-                to_uris=self._destination_uris(trunk, dialed),
-                media_ws_url=ws_url,
-                params=params,
-                media_encryption=trunk["media_encryption"],
-                diversion_header=from_number if trunk["sip_diversion_header"] else None,
-                timeout_seconds=DEFAULT_RING_TIMEOUT,
+                room_name=room_name,
+                attributes=attributes,
+                ringing_timeout=DEFAULT_RING_TIMEOUT,
             )
-        except SbcError:
+        except SipTerminationError:
             logger.exception(
                 "[outbound] sip originate failed agent={} to={} scheduled_call_id={}",
                 agent_id, to_number, scheduled_call_id,
             )
             raise
 
-        call_id = data.get("call_id") or data.get("id") or ""
-        status = data.get("status") or "queued"
         logger.info(
-            "[outbound] sip call created call_id={} status={} trunk={} scheduled_call_id={}",
-            call_id, status, trunk["id"], scheduled_call_id,
+            "[outbound] sip call created call_id={} room={} trunk={} scheduled_call_id={}",
+            data.get("call_id"), room_name, trunk["id"], scheduled_call_id,
         )
         return CallInfo(
-            call_id=call_id,
+            call_id=data.get("call_id") or room_name,
             session_id=str(scheduled_call_id or agent_id),
-            status=status,
+            status=data.get("status") or "ringing",
             provider="sip",
         )
 
+    def _dispatch_bot(
+        self,
+        room_name: str,
+        agent_id: str,
+        from_number: str,
+        to_number: str,
+        scheduled_call_id: Optional[str],
+    ) -> None:
+        import asyncio
+
+        from core.api.sip_routes import _dispatcher
+
+        grant = self._termination().bot_grant(room_name)
+        body: Dict[str, Any] = {
+            "agent_id": agent_id,
+            "transport_type": "livekit",
+            "direction": "outbound",
+            "call_data": {
+                "from": from_number,
+                "to": to_number,
+                "call_id": room_name,
+                "stream_id": room_name,
+            },
+        }
+        if scheduled_call_id:
+            body["scheduled_call_id"] = str(scheduled_call_id)
+
+        runner_args = LiveKitRunnerArguments(
+            room_name=room_name, url=grant["url"], token=grant["token"], body=body
+        )
+        asyncio.run(_dispatcher.dispatch(room_name, runner_args))
+
     def end_call(self, call_id: str) -> bool:
         try:
-            self._sbc.hangup(call_id)
+            self._termination().hangup(call_id, f"caller-{call_id}")
             logger.info("[outbound] sip end_call hung up call_id={}", call_id)
             return True
         except Exception:
@@ -144,26 +173,20 @@ class SipCallEngine(CallEngine):
             return False
 
     def get_call_status(self, call_id: str) -> Dict[str, Any]:
-        data = self._sbc.call_status(call_id)
-        return {
-            "status": data.get("status"),
-            "duration": data.get("duration"),
-            "price": None,
-            "answered_by": data.get("answered_by"),
-        }
+        return {"status": None, "duration": None, "price": None, "answered_by": None}
 
     def generate_twiml(self, ws_url: str, params: Dict[str, str]) -> str:
         raise NotImplementedError(
-            "SIP trunk calls are bridged by the SBC and never fetch TeXML/TwiML."
+            "SIP trunk calls are bridged by LiveKit SIP and never fetch TeXML/TwiML."
         )
 
     def transfer_call(
         self, call_id: str, sip_address: str, headers: Optional[Dict[str, str]] = None
     ) -> bool:
         try:
-            self._sbc.refer(call_id, sip_address, headers)
-            logger.info("[sip] REFER sent call_id={} to={}", call_id, sip_address)
+            self._termination().transfer(call_id, f"caller-{call_id}", sip_address, headers)
+            logger.info("[sip] REFER sent room={} to={}", call_id, sip_address)
             return True
         except Exception:
-            logger.exception("[sip] REFER failed call_id={} to={}", call_id, sip_address)
+            logger.exception("[sip] REFER failed room={} to={}", call_id, sip_address)
             return False

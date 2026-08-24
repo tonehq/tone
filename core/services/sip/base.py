@@ -7,6 +7,16 @@ class SipCarrierError(RuntimeError):
     pass
 
 
+class SipTerminationError(RuntimeError):
+    pass
+
+
+@dataclass
+class TerminationEndpoint:
+    host: str = ""
+    port: int = 0
+
+
 @dataclass
 class CarrierProvisionResult:
     carrier_ids: Dict[str, Any] = field(default_factory=dict)
@@ -17,7 +27,9 @@ class SipCarrier(ABC):
     carrier_type: str = ""
 
     @abstractmethod
-    def provision_trunk(self, trunk, credentials: Dict[str, Any]) -> CarrierProvisionResult:
+    def provision_trunk(
+        self, trunk, credentials: Dict[str, Any], termination: TerminationEndpoint
+    ) -> CarrierProvisionResult:
         ...
 
     @abstractmethod
