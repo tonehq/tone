@@ -2,20 +2,24 @@
 
 Two resource families carry a linked ``OAuthConnection`` today: MCP servers
 and Tools (custom HTTP + built-ins like google_calendar / hubspot). Both
-suffer the same failure mode — a linked OAuth token quietly reaches
-``token_expiry`` and the Deep probe that would refresh it is either
-rate-limited or served from a stale snapshot. Both categories therefore
-want a **cheap, DB-only shallow check** that surfaces the expiry the
-moment shallow readiness runs (including the agent-list badge).
+share the same failure mode — a linked OAuth token quietly reaches
+``token_expiry``. Both categories want a **cheap, DB-only shallow check**
+that surfaces the expiry the moment shallow readiness runs (including the
+agent-list badge).
 
 This module implements the check body once — expiry inspection, formatting,
 skip logic — so ``mcp_servers.py`` and ``tools.py`` only declare a 6-line
 subclass pinning their category, resource-type label, and context lookup.
 
-Refresh / revocation *behavior* (does refresh work? did the provider revoke
-scopes?) is out of scope here — those questions require a network call and
-belong to the Deep checks. This check only asserts "the local expiry
-timestamp says the token is still usable".
+**Strictly DB-only.** Refresh / revocation behavior belongs to the Deep
+checks: they call ``resolve_connection_auth_header`` which internally
+triggers a refresh via ``OAuthService.get_valid_access_token_for_connection``.
+That means the shallow warning fired here is a **heads-up** — runtime will
+attempt to refresh the token on the next real call, and the user can click
+**Run Deep Test** in the drawer to confirm whether the refresh actually
+works. Keeping the shallow path free of network calls preserves the
+"fast + free on every render" contract that the badge, editor header, and
+agent-list page rely on.
 """
 
 from __future__ import annotations
@@ -131,16 +135,27 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
                 f"No time-based OAuth {self.resource_display} connections attached."
             )
         if expired:
+            # Message format matches the user-requested phrasing: quote the
+            # affected connection(s) verbatim so users can find them in the
+            # provider dashboard, and point to "Run Deep Test" so anyone
+            # unsure whether the runtime refresh will succeed can confirm
+            # in-place without clicking through to the provider first.
             joined = "; ".join(
-                f"'{name}' ({label}): {reason}"
-                for name, label, reason in expired[:2]
+                f"'{label}' ({name})"
+                for name, label, _reason in expired[:2]
             )
             more = f"; +{len(expired) - 2} more" if len(expired) > 2 else ""
             return self._fail(
-                f"OAuth token expired for {self.resource_display}(s) — {joined}{more}",
+                (
+                    f"OAuth token for {joined}{more} has expired. Runtime will "
+                    f"attempt to refresh on the next call — click 'Run Deep "
+                    f"Test' to verify now."
+                ),
                 remediation=(
-                    f"Reconnect the OAuth account(s) for the affected "
-                    f"{self.resource_display}(s)."
+                    f"Click 'Run Deep Test' in the drawer to trigger a refresh "
+                    f"and confirm the token is still usable. If the deep test "
+                    f"reports 'reconnect required', open the {self.resource_display} "
+                    f"and reconnect the OAuth account."
                 ),
                 resource_ref=ResourceRef(
                     type=self.resource_type_ref, id=first_failed_id
