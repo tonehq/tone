@@ -1,7 +1,7 @@
 import uuid
 from typing import Any, Optional
 
-from core.services.webrtc.dispatcher import BotDispatcher, LocalBotDispatcher
+from core.services.webrtc.dispatcher import BotDispatcher, get_bot_dispatcher
 from core.services.webrtc.registry import build_provider
 from core.services.webrtc.session import WebRTCSession
 
@@ -11,7 +11,7 @@ _GUEST_IDENTITY = "guest"
 
 class WebRTCSessionService:
     def __init__(self, dispatcher: Optional[BotDispatcher] = None):
-        self._dispatcher = dispatcher or LocalBotDispatcher()
+        self._dispatcher = dispatcher or get_bot_dispatcher()
 
     async def start(self, agent: Any, channel_type: str, config: dict) -> WebRTCSession:
         engine = build_provider(channel_type, config)
