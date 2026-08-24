@@ -1,14 +1,16 @@
 import asyncio
+import json
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, BackgroundTasks, Request
 from livekit import api
 from loguru import logger
 from pipecat.runner.types import LiveKitRunnerArguments
 
 from core.database.session import get_db_context
 from core.services.agent_runner_service import AgentRunnerService
-from core.services.sip.livekit_termination import LiveKitTermination
+from core.services.sip.livekit_termination import (BOT_IDENTITY, SIP_ROOM_PREFIX,
+                                                   LiveKitTermination)
 from core.services.transport.telephony_credentials import channel_config
 from core.services.webrtc.dispatcher import LocalBotDispatcher
 from shared.config import settings
@@ -66,6 +68,28 @@ def _verify(body: bytes, auth_header: str) -> Optional[tuple]:
     return None
 
 
+def _numbers_from_room_meta(room) -> Dict[str, str]:
+    metadata = (getattr(room, "metadata", "") or "").strip()
+    if metadata:
+        try:
+            parsed = json.loads(metadata)
+            if isinstance(parsed, dict) and parsed.get("to"):
+                return {
+                    "to": str(parsed["to"]),
+                    "from": "",
+                    "trunk_id": str(parsed.get("trunk_id") or ""),
+                }
+        except ValueError:
+            logger.debug("[sip] room metadata is not json: {}", metadata[:120])
+
+    name = getattr(room, "name", "") or ""
+    if name.startswith(SIP_ROOM_PREFIX):
+        candidate = name[len(SIP_ROOM_PREFIX):].split("_")[0].strip()
+        if candidate.startswith("+") and candidate[1:].isdigit():
+            return {"to": candidate, "from": "", "trunk_id": ""}
+    return {}
+
+
 async def _numbers_from_room(config: Dict[str, Any], room_name: str) -> Dict[str, str]:
     client = api.LiveKitAPI(
         (config.get("url") or "").replace("wss://", "https://").replace("ws://", "http://"),
@@ -89,6 +113,14 @@ async def _numbers_from_room(config: Dict[str, Any], room_name: str) -> Dict[str
     return {"to": "", "from": "", "trunk_id": ""}
 
 
+async def _dispatch_bot(room_name: str, runner_args) -> None:
+    try:
+        await _dispatcher.dispatch_reserved(room_name, runner_args)
+    except Exception:
+        logger.exception("[sip] bot dispatch failed room={}", room_name)
+        _dispatcher.release(room_name)
+
+
 def _participant_numbers(participant) -> Dict[str, str]:
     attributes = dict(getattr(participant, "attributes", {}) or {})
     return {
@@ -99,7 +131,9 @@ def _participant_numbers(participant) -> Dict[str, str]:
 
 
 @router.post("/sip/livekit-webhook")
-async def livekit_webhook(request: Request) -> Dict[str, Any]:
+async def livekit_webhook(
+    request: Request, background: BackgroundTasks
+) -> Dict[str, Any]:
     raw = await request.body()
     verified = _verify(raw, request.headers.get("authorization", ""))
     if verified is None:
@@ -111,21 +145,24 @@ async def livekit_webhook(request: Request) -> Dict[str, Any]:
     logger.info("[sip] livekit webhook event={} room={}", event_name, room_name)
     if event_name not in ("participant_joined", "room_started"):
         return {"ok": True}
-    if not room_name:
+    if not room_name or _dispatcher.is_active(room_name):
+        return {"ok": True}
+
+    participant_identity = getattr(getattr(event, "participant", None), "identity", "")
+    if participant_identity == BOT_IDENTITY:
         return {"ok": True}
 
     participant = getattr(event, "participant", None)
     numbers = _participant_numbers(participant) if participant is not None else {}
     if not numbers.get("to"):
+        numbers = _numbers_from_room_meta(getattr(event, "room", None)) or {}
+    if not numbers.get("to"):
         numbers = await _numbers_from_room(config, room_name)
     if not numbers.get("to"):
         logger.warning(
-            "[sip] participant_joined without a dialled number room={} attributes={}",
-            room_name, dict(getattr(participant, "attributes", {}) or {}),
+            "[sip] {} without a dialled number room={} attributes={}",
+            event_name, room_name, dict(getattr(participant, "attributes", {}) or {}),
         )
-        return {"ok": True}
-
-    if _dispatcher.is_active(room_name):
         return {"ok": True}
 
     with get_db_context() as db:
@@ -160,7 +197,9 @@ async def livekit_webhook(request: Request) -> Dict[str, Any]:
         "[sip] inbound routed room={} from={} to={} agent={}",
         room_name, numbers["from"], numbers["to"], agent.id,
     )
-    await _dispatcher.dispatch(room_name, runner_args)
+    if not _dispatcher.reserve(room_name):
+        return {"ok": True}
+    background.add_task(_dispatch_bot, room_name, runner_args)
     return {"ok": True, "agent_id": str(agent.id), "room": room_name}
 
 

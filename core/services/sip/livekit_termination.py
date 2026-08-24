@@ -1,5 +1,6 @@
 import asyncio
 import ipaddress
+import json
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -109,6 +110,7 @@ class LiveKitTermination:
                 "inbound_trunk_id": "",
                 "outbound_trunk_id": "",
                 "dispatch_rule_id": "",
+                "dispatch_rule_ids": [],
             }
 
             await self._purge_existing(client, payload["trunk_id"], name, existing)
@@ -139,19 +141,26 @@ class LiveKitTermination:
                 )
                 ids["inbound_trunk_id"] = created.sip_trunk_id
 
-                rule = await client.sip.create_sip_dispatch_rule(
-                    api.CreateSIPDispatchRuleRequest(
-                        name=name,
-                        metadata=payload["trunk_id"],
-                        trunk_ids=[created.sip_trunk_id],
-                        rule=api.SIPDispatchRule(
-                            dispatch_rule_individual=api.SIPDispatchRuleIndividual(
-                                room_prefix=SIP_ROOM_PREFIX
-                            )
-                        ),
+                rule_ids = []
+                for number in numbers:
+                    rule = await client.sip.create_sip_dispatch_rule(
+                        api.CreateSIPDispatchRuleRequest(
+                            name=f"{name} {number}",
+                            metadata=json.dumps(
+                                {"trunk_id": payload["trunk_id"], "to": number}
+                            ),
+                            trunk_ids=[created.sip_trunk_id],
+                            inbound_numbers=[number],
+                            rule=api.SIPDispatchRule(
+                                dispatch_rule_individual=api.SIPDispatchRuleIndividual(
+                                    room_prefix=f"{SIP_ROOM_PREFIX}{number}"
+                                )
+                            ),
+                        )
                     )
-                )
-                ids["dispatch_rule_id"] = rule.sip_dispatch_rule_id
+                    rule_ids.append(rule.sip_dispatch_rule_id)
+                ids["dispatch_rule_id"] = rule_ids[0] if rule_ids else ""
+                ids["dispatch_rule_ids"] = rule_ids
 
             if outbound.get("enabled") and outbound.get("gateways"):
                 gateway = outbound["gateways"][0]
@@ -181,12 +190,17 @@ class LiveKitTermination:
         client, trunk_id: str, name: str, existing: Dict[str, Any]
     ) -> None:
         def owned(item) -> bool:
-            return getattr(item, "metadata", "") == trunk_id or getattr(item, "name", "") == name
+            metadata = getattr(item, "metadata", "") or ""
+            item_name = getattr(item, "name", "") or ""
+            return trunk_id in metadata or item_name == name or item_name.startswith(f"{name} ")
 
+        tracked_rules = set(existing.get("dispatch_rule_ids") or [])
+        if existing.get("dispatch_rule_id"):
+            tracked_rules.add(existing["dispatch_rule_id"])
         try:
             rules = await client.sip.list_sip_dispatch_rule(api.ListSIPDispatchRuleRequest())
             for rule in rules.items:
-                if owned(rule) or rule.sip_dispatch_rule_id == existing.get("dispatch_rule_id"):
+                if owned(rule) or rule.sip_dispatch_rule_id in tracked_rules:
                     await client.sip.delete_sip_dispatch_rule(
                         api.DeleteSIPDispatchRuleRequest(
                             sip_dispatch_rule_id=rule.sip_dispatch_rule_id
