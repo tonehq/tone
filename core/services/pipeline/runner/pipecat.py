@@ -36,6 +36,13 @@ _SESSION_EVENT_PAIRS = (
     ("on_connected", "on_disconnected", False),                          # outbound WS bridge (WebsocketClientTransport)
 )
 
+# Cap the transcript text logged per turn. The full text is still persisted
+# to the ``calls`` row via ``CallLogService.complete_call(transcript_data=...)``;
+# this bound only clips the LIVE log preview so a long user monologue can't
+# balloon Loki storage / hit line-length limits. Tune here — single source
+# of truth for both user and assistant transcript log lines.
+_TRANSCRIPT_LOG_MAX_CHARS = 300
+
 
 def _wire_session_events(transport, on_start, on_end) -> None:
     """Wire a transport's connect/disconnect events to ``on_start``/``on_end``.
@@ -308,10 +315,19 @@ class PipecatPipelineRunner(PipelineRunner):
             from pipecat.processors.aggregators.llm_response_universal import (
                 AssistantTurnStoppedMessage, UserTurnStoppedMessage)
 
+            # Log the full user+assistant transcript live at INFO. Previously
+            # only the assistant response was logged (via LLMResponseLogger)
+            # and user turns were silent in the log stream — devs had to open
+            # the DB to see what the caller actually said. One line per turn
+            # (clipped to _TRANSCRIPT_LOG_MAX_CHARS to bound log volume) keeps
+            # both sides of the conversation in Loki for real-time debugging.
+            # trace_id is auto-stamped by the loguru patcher so lines are
+            # already filterable per call.
             @build.user_aggregator.event_handler("on_user_turn_stopped")
             async def on_user_turn_stopped(aggregator, strategy, message: UserTurnStoppedMessage):
                 if not (message.content or "").strip():
                     return
+                turn_number = current_turn.get("number")
                 transcript_entries.append({
                     "role": "user",
                     "text": message.content,
@@ -319,19 +335,44 @@ class PipecatPipelineRunner(PipelineRunner):
                     # Snapshot the live turn number so downstream consolidation can
                     # join transcript rows to tool_executions and turn_metrics on
                     # the same key (see ConsolidatedTranscriptService).
-                    "turn_number": current_turn.get("number"),
+                    "turn_number": turn_number,
                 })
+                _preview = message.content[:_TRANSCRIPT_LOG_MAX_CHARS]
+                _truncated = len(message.content) > _TRANSCRIPT_LOG_MAX_CHARS
+                logger.bind(
+                    role="user",
+                    turn=turn_number,
+                    chars=len(message.content),
+                    truncated=_truncated,
+                ).info(
+                    "[transcript] user turn={} chars={} text={!r}{}",
+                    turn_number, len(message.content), _preview,
+                    "…" if _truncated else "",
+                )
 
             @build.assistant_aggregator.event_handler("on_assistant_turn_stopped")
             async def on_assistant_turn_stopped(aggregator, message: AssistantTurnStoppedMessage):
                 if not (message.content or "").strip():
                     return
+                turn_number = current_turn.get("number")
                 transcript_entries.append({
                     "role": "assistant",
                     "text": message.content,
                     "timestamp": message.timestamp,
-                    "turn_number": current_turn.get("number"),
+                    "turn_number": turn_number,
                 })
+                _preview = message.content[:_TRANSCRIPT_LOG_MAX_CHARS]
+                _truncated = len(message.content) > _TRANSCRIPT_LOG_MAX_CHARS
+                logger.bind(
+                    role="assistant",
+                    turn=turn_number,
+                    chars=len(message.content),
+                    truncated=_truncated,
+                ).info(
+                    "[transcript] assistant turn={} chars={} text={!r}{}",
+                    turn_number, len(message.content), _preview,
+                    "…" if _truncated else "",
+                )
 
         # Turn tracking — the same events drive (a) the simple ``turns``
         # log persisted alongside legacy metrics and (b) the per-turn

@@ -98,8 +98,9 @@ class STTLanguageConfiguredCheck(_STTMixin, ShallowCheck):
         if lang:
             return self._pass(f"STT language configured: {lang}.")
         return self._fail(
-            "STT language not configured — provider will default to English. "
-            "Non-English calls will be mistranscribed.",
+            "No STT language selected — if your agent handles non-English "
+            "calls, set the language on the Language tab to avoid "
+            "mistranscription.",
             remediation=(
                 "Pick a language on the agent (Language tab) or set "
                 "'language' in the STT settings."
