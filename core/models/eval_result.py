@@ -11,7 +11,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -37,7 +36,7 @@ class EvalResult(OrgScopedModel):
         Index("ix_eval_results_run_id", "run_id"),
         Index("ix_eval_results_ingestion_run_number", "ingestion_run_id", "run_number"),
         Index("ix_eval_results_ingestion_run_verdict", "ingestion_run_id", "verdict"),
-        Index("ix_eval_results_eval_run_desc", "eval_id", text("run_number DESC")),
+        Index("ix_eval_results_eval_run_desc", "eval_id", "run_number"),
     )
 
     eval_id = Column(

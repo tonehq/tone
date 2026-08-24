@@ -9,7 +9,6 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
-    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
@@ -39,7 +38,7 @@ class AgentLlmEvalResult(OrgScopedModel):
         Index(
             "ix_agent_llm_eval_results_agent_run_desc",
             "agent_id",
-            text("run_number DESC"),
+            "run_number",
         ),
         Index("ix_agent_llm_eval_results_run_id", "run_id"),
         Index("ix_agent_llm_eval_results_agent_verdict", "agent_id", "verdict"),
