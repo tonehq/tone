@@ -20,6 +20,7 @@ import { useCallback, useImperativeHandle, useState } from 'react';
 import ChannelGridSkeleton from './channel-grid-skeleton';
 import SipTrunkCard, { sipCardVariants } from './sip-trunk-card';
 import SipTrunkFormModal from './sip-trunk-form-modal';
+import SipTrunkNumbersModal from './sip-trunk-numbers-modal';
 
 export interface SipTrunkGridHandle {
   openAdd: () => void;
@@ -44,6 +45,7 @@ export default function SipTrunkGrid({
   const [modalOpen, setModalOpen] = useState(false);
   const [editTrunk, setEditTrunk] = useState<SipTrunk | null>(null);
   const [provisioningId, setProvisioningId] = useState<string | null>(null);
+  const [numbersTrunk, setNumbersTrunk] = useState<SipTrunk | null>(null);
 
   const openAdd = useCallback(() => {
     setEditTrunk(null);
@@ -51,6 +53,10 @@ export default function SipTrunkGrid({
   }, []);
 
   useImperativeHandle(controlRef, () => ({ openAdd }), [openAdd]);
+
+  const handleManageNumbers = useCallback((trunk: SipTrunk) => {
+    setNumbersTrunk(trunk);
+  }, []);
 
   const handleEdit = useCallback((trunk: SipTrunk) => {
     setEditTrunk(trunk);
@@ -113,7 +119,7 @@ export default function SipTrunkGrid({
       fullWidth
       onClick={openAdd}
       className={cn(
-        '!h-auto group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
+        'h-auto! group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
         'hover:border-foreground/30 hover:bg-background hover:text-foreground hover:shadow-sm',
       )}
     >
@@ -154,6 +160,7 @@ export default function SipTrunkGrid({
                 onEdit={handleEdit}
                 onDelete={handleDelete}
                 onProvision={handleProvision}
+                onManageNumbers={handleManageNumbers}
               />
             </motion.div>
           ))}
@@ -173,6 +180,11 @@ export default function SipTrunkGrid({
         onSubmit={handleSubmit}
         editTrunk={editTrunk}
         carriers={carriers ?? ['telnyx', 'generic']}
+      />
+      <SipTrunkNumbersModal
+        open={numbersTrunk !== null}
+        onClose={() => setNumbersTrunk(null)}
+        trunk={numbersTrunk}
       />
     </>
   );

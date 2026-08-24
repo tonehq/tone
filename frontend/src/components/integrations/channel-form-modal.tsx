@@ -46,6 +46,13 @@ const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
     { name: 'url', label: 'Server URL', placeholder: 'wss://your-project.livekit.cloud' },
     { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
     { name: 'api_secret', label: 'API Secret', type: 'password', placeholder: 'Enter API secret' },
+    {
+      name: 'sip_uri',
+      label: 'SIP URI',
+      placeholder: 'sip:xxxxxxxx.sip.livekit.cloud',
+      optional: true,
+      helperText: 'From LiveKit → Telephony → SIP trunks. Required for SIP trunking.',
+    },
   ],
   daily: [{ name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' }],
 };
@@ -67,6 +74,7 @@ const ALL_FIELD_NAMES = [
   'url',
   'api_key',
   'api_secret',
+  'sip_uri',
 ];
 
 type ChannelFormData = Record<string, string>;
@@ -163,7 +171,7 @@ export default function ChannelFormModal({
       confirmDisabled={!canSave || hydrating}
     >
       {hydrating ? (
-        <AppLoader className="min-h-[260px]" />
+        <AppLoader className="min-h-65" />
       ) : (
         <div className="space-y-4">
           <TextInput

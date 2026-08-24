@@ -5,7 +5,7 @@ import type { SipTrunk } from '@/types/sipTrunk';
 import { cn } from '@/utils/cn';
 import { formatRelative } from '@/utils/date';
 import { motion, type Variants } from 'framer-motion';
-import { Clock, Network, RefreshCw } from 'lucide-react';
+import { Clock, Network, Phone, RefreshCw } from 'lucide-react';
 
 export const sipCardVariants: Variants = {
   hidden: { opacity: 0, y: 8 },
@@ -25,6 +25,7 @@ interface SipTrunkCardProps {
   onEdit: (trunk: SipTrunk) => void;
   onDelete: (trunk: SipTrunk) => Promise<void>;
   onProvision: (trunk: SipTrunk) => void;
+  onManageNumbers: (trunk: SipTrunk) => void;
 }
 
 export default function SipTrunkCard({
@@ -33,6 +34,7 @@ export default function SipTrunkCard({
   onEdit,
   onDelete,
   onProvision,
+  onManageNumbers,
 }: SipTrunkCardProps) {
   const gatewaySummary =
     trunk.gateways.length === 0
@@ -102,6 +104,11 @@ export default function SipTrunkCard({
         </div>
 
         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+          <CustomButton type="text" onClick={() => onManageNumbers(trunk)} className="gap-1.5">
+            <Phone className="size-3.5" />
+            Numbers
+          </CustomButton>
+
           <CustomButton
             type="text"
             onClick={() => onProvision(trunk)}
