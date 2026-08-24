@@ -1,92 +1,117 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Request
+from livekit import api
 from loguru import logger
+from pipecat.runner.types import LiveKitRunnerArguments
 
 from core.database.session import get_db_context
-from core.services.sip.inbound import digest_credentials, resolve_inbound_call
-from core.utils.telephony import default_media_ws_url, pinned_ws_url
+from core.services.agent_runner_service import AgentRunnerService
+from core.services.sip.livekit_termination import LiveKitTermination
+from core.services.transport.telephony_credentials import channel_config
+from core.services.webrtc.dispatcher import LocalBotDispatcher
 from shared.config import settings
 
 router = APIRouter()
 
+_dispatcher = LocalBotDispatcher()
 
-def _authorize(request: Request) -> None:
-    expected = (settings.SIP_SBC_WEBHOOK_TOKEN or "").strip()
-    if not expected:
-        return
-    presented = (request.headers.get("authorization") or "").strip()
-    if presented.lower().startswith("bearer "):
-        presented = presented[7:].strip()
-    if presented != expected:
-        logger.warning("[sip] control-plane request rejected — bad token")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
+SIP_ATTR_CALLED_NUMBER = "sip.trunkPhoneNumber"
+SIP_ATTR_CALLER_NUMBER = "sip.phoneNumber"
+SIP_ATTR_TRUNK_ID = "sip.trunkID"
 
 
-def _source_ip(request: Request, payload: Dict[str, Any]) -> str:
-    return (
-        (payload.get("source_ip") or "").strip()
-        or (request.headers.get("x-forwarded-for") or "").split(",")[0].strip()
-        or (request.client.host if request.client else "")
-    )
+def _livekit_config(org_id=None) -> Dict[str, Any]:
+    return channel_config("livekit", org_id=org_id)
 
 
-@router.post("/sip/inbound")
-async def sip_inbound(request: Request) -> Dict[str, Any]:
-    _authorize(request)
+def _verify(body: bytes, auth_header: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    api_key = (config.get("api_key") or "").strip()
+    api_secret = (config.get("api_secret") or "").strip()
+    if not api_key or not api_secret:
+        logger.warning("[sip] livekit webhook rejected — no livekit channel configured")
+        return None
     try:
-        payload = await request.json()
+        receiver = api.WebhookReceiver(api_key, api_secret)
+        event = receiver.receive(body.decode("utf-8"), auth_header)
+        return event
     except Exception:
-        logger.exception("[sip] /sip/inbound received a malformed body")
-        return {"allowed": False, "reason": "bad_request"}
+        logger.exception("[sip] livekit webhook signature verification failed")
+        return None
 
-    to_number = (payload.get("to") or "").strip()
-    from_number = (payload.get("from") or "").strip()
-    source_ip = _source_ip(request, payload)
-    auth_username = (payload.get("auth_username") or "").strip()
-    trunk_id = (payload.get("trunk_id") or "").strip()
 
-    default_ws_url = default_media_ws_url(settings.BASE_CALL_URL) or (
-        f"wss://{request.url.hostname or 'localhost'}/ws"
+def _participant_numbers(participant) -> Dict[str, str]:
+    attributes = dict(getattr(participant, "attributes", {}) or {})
+    return {
+        "to": attributes.get(SIP_ATTR_CALLED_NUMBER, ""),
+        "from": attributes.get(SIP_ATTR_CALLER_NUMBER, ""),
+        "trunk_id": attributes.get(SIP_ATTR_TRUNK_ID, ""),
+    }
+
+
+@router.post("/sip/livekit-webhook")
+async def livekit_webhook(request: Request) -> Dict[str, Any]:
+    raw = await request.body()
+    config = _livekit_config()
+    event = _verify(raw, request.headers.get("authorization", ""), config)
+    if event is None:
+        return {"ok": False}
+
+    event_name = getattr(event, "event", "")
+    if event_name != "participant_joined":
+        return {"ok": True}
+
+    participant = getattr(event, "participant", None)
+    room = getattr(event, "room", None)
+    if participant is None or room is None:
+        return {"ok": True}
+
+    numbers = _participant_numbers(participant)
+    if not numbers["to"]:
+        return {"ok": True}
+
+    room_name = room.name
+    if _dispatcher.is_active(room_name):
+        return {"ok": True}
+
+    with get_db_context() as db:
+        agent = AgentRunnerService(db).get_agent_by_phone_number(numbers["to"])
+
+    if agent is None:
+        logger.warning(
+            "[sip] inbound rejected — no agent assigned to {} (room={})", numbers["to"], room_name
+        )
+        return {"ok": False, "reason": "no_agent_for_number"}
+
+    grant = LiveKitTermination(config).bot_grant(room_name)
+    runner_args = LiveKitRunnerArguments(
+        room_name=room_name,
+        url=grant["url"],
+        token=grant["token"],
+        body={
+            "agent_id": str(agent.id),
+            "transport_type": "livekit",
+            "direction": "inbound",
+            "call_data": {
+                "from": numbers["from"],
+                "to": numbers["to"],
+                "call_id": room_name,
+                "stream_id": room_name,
+                "sip_trunk_id": numbers["trunk_id"],
+            },
+        },
     )
-    ws_url, pod_name, _, node_name = pinned_ws_url(default_ws_url, "/sip/inbound")
 
     logger.info(
-        "[sip] /sip/inbound from={} to={} source_ip={} pod={} node={}",
-        from_number, to_number, source_ip, pod_name, node_name,
+        "[sip] inbound routed room={} from={} to={} agent={}",
+        room_name, numbers["from"], numbers["to"], agent.id,
     )
-    with get_db_context() as db:
-        decision = resolve_inbound_call(
-            db,
-            to_number=to_number,
-            source_ip=source_ip,
-            auth_username=auth_username,
-            trunk_id=trunk_id,
-            media_ws_url=ws_url,
-        )
-    return decision
-
-
-@router.post("/sip/credentials")
-async def sip_credentials(request: Request) -> Dict[str, Any]:
-    _authorize(request)
-    try:
-        payload = await request.json()
-    except Exception:
-        logger.exception("[sip] /sip/credentials received a malformed body")
-        return {}
-
-    auth_username = (payload.get("auth_username") or "").strip()
-    with get_db_context() as db:
-        credentials = digest_credentials(db, auth_username)
-    if not credentials:
-        logger.warning("[sip] no digest credentials for username={}", auth_username)
-    return credentials
+    await _dispatcher.dispatch(room_name, runner_args)
+    return {"ok": True, "agent_id": str(agent.id), "room": room_name}
 
 
 @router.post("/sip/status")
 async def sip_status(request: Request) -> Dict[str, Any]:
-    _authorize(request)
     from core.models.scheduled_call import ScheduledCall
     from core.services.outbound_call_service import OutboundCallService
 
@@ -107,11 +132,7 @@ async def sip_status(request: Request) -> Dict[str, Any]:
 
     try:
         with get_db_context() as db:
-            sc = (
-                db.query(ScheduledCall)
-                .filter(ScheduledCall.id == scheduled_call_id)
-                .first()
-            )
+            sc = db.query(ScheduledCall).filter(ScheduledCall.id == scheduled_call_id).first()
             if sc is not None:
                 OutboundCallService(db, org_id=sc.organization_id).handle_status_callback(
                     scheduled_call_id,

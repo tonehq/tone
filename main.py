@@ -14,7 +14,6 @@ from fastapi.responses import JSONResponse
 from pipecat.runner.types import WebSocketRunnerArguments
 
 from core.bot import bot
-from core.services.transport import build_sip_call_body
 from shared.config import settings
 from core.internal.machine import generate_fingerprint
 from core.internal.license import init_license_validator, get_license_info
@@ -363,9 +362,6 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         for key in ("agent_id", "direction", "scheduled_call_id")
         if (value := (websocket.query_params.get(key) or "").strip())
     }
-    sip_body = build_sip_call_body(websocket.query_params)
-    if sip_body:
-        body.update(sip_body)
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     try:
         active_calls_inc()

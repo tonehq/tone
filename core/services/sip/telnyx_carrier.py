@@ -3,9 +3,9 @@ from typing import Any, Dict, List, Optional
 import requests
 from loguru import logger
 
-from core.services.sip.base import CarrierProvisionResult, SipCarrier, SipCarrierError
+from core.services.sip.base import (CarrierProvisionResult, SipCarrier, SipCarrierError,
+                                    TerminationEndpoint)
 from core.services.sip.validation import default_port, inbound_source_hosts
-from shared.config import settings
 
 TELNYX_API_BASE = "https://api.telnyx.com/v2"
 HTTP_TIMEOUT = 20
@@ -68,8 +68,30 @@ class TelnyxSipCarrier(SipCarrier):
                 return str(gateway.get("transport") or "udp").upper()
         return "UDP"
 
+    @staticmethod
+    def _resource_name(trunk) -> str:
+        return f"tone-{trunk.name}-{str(trunk.id)[:8]}"
+
+    def _find_by_name(
+        self, path: str, credentials: Dict[str, Any], name_field: str, name: str
+    ) -> str:
+        try:
+            data = self._request(
+                "GET", path, credentials, params={f"filter[{name_field}][contains]": name}
+            )
+        except SipCarrierError:
+            return ""
+        for row in data.get("data") or []:
+            if row.get(name_field) == name:
+                return row.get("id", "")
+        return ""
+
     def _ensure_outbound_voice_profile(self, trunk, credentials: Dict[str, Any]) -> str:
-        existing = (trunk.carrier_config or {}).get("outbound_voice_profile_id")
+        existing = (trunk.carrier_config or {}).get(
+            "outbound_voice_profile_id"
+        ) or self._find_by_name(
+            "/outbound_voice_profiles", credentials, "name", self._resource_name(trunk)
+        )
         if existing:
             return existing
         data = self._request(
@@ -77,7 +99,7 @@ class TelnyxSipCarrier(SipCarrier):
             "/outbound_voice_profiles",
             credentials,
             payload={
-                "name": f"tone-{trunk.name}-{str(trunk.id)[:8]}",
+                "name": self._resource_name(trunk),
                 "traffic_type": "conversational",
                 "service_plan": "global",
                 "enabled": True,
@@ -85,35 +107,47 @@ class TelnyxSipCarrier(SipCarrier):
         )
         return data.get("data", {}).get("id", "")
 
-    def _ensure_connection(
-        self, trunk, credentials: Dict[str, Any], outbound_voice_profile_id: str
-    ) -> str:
+    def _ensure_connection(self, trunk, credentials: Dict[str, Any]) -> str:
         payload: Dict[str, Any] = {
-            "connection_name": f"tone-{trunk.name}-{str(trunk.id)[:8]}",
+            "connection_name": self._resource_name(trunk),
             "transport_protocol": self._connection_transport(trunk),
             "active": bool(trunk.is_active),
             "inbound": {"ani_number_format": "+E.164", "dnis_number_format": "+e164"},
-            "outbound": {"outbound_voice_profile_id": outbound_voice_profile_id},
         }
         if trunk.media_encryption == "srtp":
             payload["encrypted_media"] = "SRTP"
 
-        connection_id = (trunk.carrier_config or {}).get("connection_id")
+        connection_id = (trunk.carrier_config or {}).get("connection_id") or self._find_by_name(
+            "/fqdn_connections", credentials, "connection_name", self._resource_name(trunk)
+        )
         if connection_id:
             self._request("PATCH", f"/fqdn_connections/{connection_id}", credentials, payload=payload)
             return connection_id
         data = self._request("POST", "/fqdn_connections", credentials, payload=payload)
         return data.get("data", {}).get("id", "")
 
-    def _ensure_fqdn(self, trunk, credentials: Dict[str, Any], connection_id: str) -> str:
-        termination_fqdn = (settings.SIP_TERMINATION_FQDN or "").strip()
+    def _assign_outbound_profile(
+        self, credentials: Dict[str, Any], connection_id: str, outbound_voice_profile_id: str
+    ) -> None:
+        self._request(
+            "PATCH",
+            f"/fqdn_connections/{connection_id}",
+            credentials,
+            payload={"outbound": {"outbound_voice_profile_id": outbound_voice_profile_id}},
+        )
+
+    def _ensure_fqdn(
+        self, trunk, credentials: Dict[str, Any], connection_id: str,
+        termination: TerminationEndpoint,
+    ) -> str:
+        termination_fqdn = (termination.host or "").strip()
         if not termination_fqdn:
             raise SipCarrierError(
-                "SIP_TERMINATION_FQDN is not set — Telnyx needs the public FQDN of the "
-                "SBC to route inbound calls to."
+                "No SIP termination host resolved — configure a LiveKit channel "
+                "(url + api_key + api_secret) or set SIP_TERMINATION_FQDN."
             )
         transport = self._connection_transport(trunk).lower()
-        port = settings.SIP_TERMINATION_PORT or default_port(transport)
+        port = termination.port or default_port(transport)
         fqdn_id = (trunk.carrier_config or {}).get("fqdn_id")
         payload = {
             "connection_id": connection_id,
@@ -127,17 +161,37 @@ class TelnyxSipCarrier(SipCarrier):
         data = self._request("POST", "/fqdns", credentials, payload=payload)
         return data.get("data", {}).get("id", "")
 
-    def provision_trunk(self, trunk, credentials: Dict[str, Any]) -> CarrierProvisionResult:
+    def provision_trunk(
+        self, trunk, credentials: Dict[str, Any], termination: TerminationEndpoint
+    ) -> CarrierProvisionResult:
+        connection_id = self._ensure_connection(trunk, credentials)
+        fqdn_id = self._ensure_fqdn(trunk, credentials, connection_id, termination)
         outbound_voice_profile_id = self._ensure_outbound_voice_profile(trunk, credentials)
-        connection_id = self._ensure_connection(trunk, credentials, outbound_voice_profile_id)
-        fqdn_id = self._ensure_fqdn(trunk, credentials, connection_id)
 
-        detail = ""
+        outbound_profile_attached = True
+        try:
+            self._assign_outbound_profile(credentials, connection_id, outbound_voice_profile_id)
+        except SipCarrierError as exc:
+            outbound_profile_attached = False
+            logger.warning(
+                "[sip] telnyx outbound profile attach deferred trunk={} connection={}: {}",
+                trunk.id, connection_id, exc,
+            )
+            attach_warning = (
+                f"Outbound profile not attached yet: {exc} "
+                f"(the termination host {termination.host} must resolve publicly before "
+                f"Telnyx will attach the profile — re-provision once it does)"
+            )
+
+        notes = []
+        if not outbound_profile_attached:
+            notes.append(attach_warning)
         if trunk.auth_mode == "digest":
-            detail = (
+            notes.append(
                 "Telnyx FQDN connections authenticate by FQDN/IP; the digest credentials "
                 "are enforced by the SBC on inbound INVITEs only."
             )
+        detail = " | ".join(notes)
         logger.info(
             "[sip] telnyx trunk provisioned trunk={} connection={} fqdn={} ovp={}",
             trunk.id, connection_id, fqdn_id, outbound_voice_profile_id,
@@ -200,11 +254,9 @@ class TelnyxSipCarrier(SipCarrier):
         logger.info("[sip] telnyx number detached trunk={} number={}", trunk.id, number)
 
     def list_numbers(self, trunk, credentials: Dict[str, Any]) -> List[Dict[str, Any]]:
-        connection_id = (trunk.carrier_config or {}).get("connection_id")
-        params: Dict[str, Any] = {"page[size]": 250}
-        if connection_id:
-            params["filter[connection_id]"] = connection_id
-        data = self._request("GET", "/phone_numbers", credentials, params=params)
+        data = self._request(
+            "GET", "/phone_numbers", credentials, params={"page[size]": 250}
+        )
         return [
             {
                 "id": row.get("id"),

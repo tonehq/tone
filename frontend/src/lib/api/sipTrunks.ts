@@ -114,6 +114,15 @@ export function useSipTrunkPhoneNumbers(trunkId: string | null | undefined) {
   });
 }
 
+export function useSipCarrierNumbers(trunkId: string | null | undefined) {
+  return useQuery({
+    queryKey: sipTrunkKeys.carrierNumbers(trunkId ?? ''),
+    queryFn: () => sipTrunksApi.carrierPhoneNumbers(trunkId as string),
+    enabled: !!trunkId,
+    retry: false,
+  });
+}
+
 export function useCreateSipTrunk() {
   const qc = useQueryClient();
   return useMutation({
