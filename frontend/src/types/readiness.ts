@@ -15,10 +15,12 @@ export type ReadinessSeverity = 'blocker' | 'warning' | 'info';
 export type ReadinessCheckStatus = 'pass' | 'fail' | 'skipped';
 
 export type ReadinessCategory =
+  | 'agent'
   | 'llm'
   | 'stt'
   | 'tts'
   | 'phone'
+  | 'transport'
   | 'tools'
   | 'knowledge_bases'
   | 'mcp_servers';

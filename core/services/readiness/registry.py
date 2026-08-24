@@ -16,6 +16,7 @@ from typing import List
 
 from core.services.readiness.base import BaseCheck
 from core.services.readiness.checks import (
+    agent,
     llm,
     mcp_servers,
     phone,
@@ -29,6 +30,17 @@ from core.services.readiness.schemas import Depth
 
 def _build_registry() -> List[BaseCheck]:
     return [
+        # ── Agent-level content (prompt or workflow) ─────────────────────
+        # First in the list so a completely un-configured agent surfaces
+        # this specific blocker before the LLM/STT/TTS chain complains
+        # about missing providers/keys.
+        agent.AgentPromptOrWorkflowPresentCheck(),
+        # Workflow validity — only applies in workflow mode; reads the
+        # ``is_valid`` flag the workflow layer already computed on save.
+        agent.AgentWorkflowValidCheck(),
+        # Outbound-only / both agents warn when there's nothing to dial.
+        agent.AgentOutboundHasWorkCheck(),
+
         # ── LLM ────────────────────────────────────────────────────────────
         llm.LLMProviderConfiguredCheck(),
         llm.LLMModelConfiguredCheck(),
@@ -40,14 +52,24 @@ def _build_registry() -> List[BaseCheck]:
         stt.STTModelConfiguredCheck(),
         stt.STTApiKeyPresentCheck(),
         stt.STTApiKeyDecryptsCheck(),
+        stt.STTLanguageConfiguredCheck(),
+        # Model ↔ language consistency — SKIPs when the model has no
+        # seeded ModelLanguage rows so legacy models don't regress.
+        stt.STTModelLanguageMatchCheck(),
 
         # ── TTS (skipped if S2S) ──────────────────────────────────────────
         tts.TTSProviderConfiguredCheck(),
         tts.TTSModelConfiguredCheck(),
         tts.TTSApiKeyPresentCheck(),
         tts.TTSApiKeyDecryptsCheck(),
+        tts.TTSLanguageConfiguredCheck(),
+        # Model ↔ language consistency — SKIPs when metadata not seeded.
+        tts.TTSModelLanguageMatchCheck(),
         tts.TTSVoiceSelectedCheck(),
         tts.TTSVoiceModelMatchCheck(),
+        # Voice ↔ language consistency — SKIPs when the voice row has no
+        # ``language_list`` metadata so legacy voices don't regress.
+        tts.TTSVoiceLanguageMatchCheck(),
 
         # ── Phone & channel routing (severity depends on agent_type) ─────
         phone.PhoneAssignedIfInboundCheck(),
@@ -60,6 +82,14 @@ def _build_registry() -> List[BaseCheck]:
         # badge; complements the reachable-deep checks that would otherwise
         # be the only place expiry surfaces.
         tools.ToolOAuthTokenValidCheck(),
+        # KB embedding checks first, then the per-KB structural chain — a
+        # missing embedding model is the root cause of "no retrieval at all",
+        # so surfacing that before per-KB details keeps the drawer readable.
+        knowledge_bases.KnowledgeBaseEmbeddingModelConfiguredCheck(),
+        knowledge_bases.KnowledgeBaseEmbeddingKeyUsableCheck(),
+        # Vector-space consistency: agent's embedding model must match the
+        # one used at ingestion time or retrieval returns garbage.
+        knowledge_bases.KnowledgeBaseEmbeddingMatchCheck(),
         knowledge_bases.KnowledgeBasesReadyCheck(),
         mcp_servers.McpServersConfiguredCheck(),
         mcp_servers.McpServerOAuthTokenValidCheck(),
@@ -72,6 +102,11 @@ def _build_registry() -> List[BaseCheck]:
         # account/balance endpoint to catch revoked credentials + credit
         # exhaustion — the two failure modes the shallow phone check misses.
         phone.TransportCreditsReachableCheck(),
+        # Per-number verification: exists at provider + voice-capable +
+        # (Twilio/Telnyx) inbound webhook points to Tone. Sits after the
+        # transport-credits check so a broken account attributes to the
+        # right layer.
+        phone.PhoneNumberVerifiedAtProviderCheck(),
         # MCP: order matters — L4 HTTP probe first so an unreachable server
         # attributes to `http_reachable`, not to a confusing handshake failure.
         mcp_servers.McpServerHttpReachableCheck(),

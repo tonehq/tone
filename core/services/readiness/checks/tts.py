@@ -68,6 +68,41 @@ class TTSApiKeyDecryptsCheck(_TTSMixin, ApiKeyDecryptsCheck):
     service_label: ClassVar[str] = "TTS"
 
 
+class TTSLanguageConfiguredCheck(_TTSMixin, ShallowCheck):
+    """Warn when no language is selected — TTS falls back to the provider's
+    default (usually English), which is fine for English deployments but
+    silently synthesises non-English content with the wrong accent/phonemes.
+
+    ``WARNING`` severity, not blocker: pipecat TTS services default to English
+    voices when no language is passed, so a missing language never breaks the
+    call. English-only agents work as-is; non-English deployments need the
+    drawer hint to catch the misconfiguration. Two sources are accepted
+    (matches how ``service_resolver._build_service_specs`` reads language today):
+    the AgentConfig FK ``language_id`` OR the JSONB
+    ``voice_settings.language`` / ``.language_code`` key.
+    """
+
+    id: ClassVar[str] = "tts.language_configured"
+    category: ClassVar[Category] = Category.TTS
+    severity: ClassVar[Severity] = Severity.WARNING
+
+    async def run(self, ctx: CheckContext) -> CheckResult:
+        if ctx.config is not None and getattr(ctx.config, "language_id", None):
+            return self._pass("TTS language selected on agent.")
+        settings = ctx.tts.settings or {}
+        lang = settings.get("language_code") or settings.get("language")
+        if lang:
+            return self._pass(f"TTS language configured: {lang}.")
+        return self._fail(
+            "TTS language not configured — voice will default to English. "
+            "Non-English content will sound wrong.",
+            remediation=(
+                "Pick a language on the agent (Language tab) or set "
+                "'language' in the voice settings."
+            ),
+        )
+
+
 class TTSVoiceSelectedCheck(_TTSMixin, ShallowCheck):
     """A voice must be selected. Accepts either a UUID (row lookup) or a
     raw provider-native string (e.g. ElevenLabs voice id)."""
@@ -92,6 +127,119 @@ class TTSVoiceSelectedCheck(_TTSMixin, ShallowCheck):
             )
         voice_name = getattr(ctx.voice, "name", None) if ctx.voice else str(voice_id_raw)
         return self._pass(f"Voice selected: {voice_name}.")
+
+
+class TTSVoiceLanguageMatchCheck(_TTSMixin, ShallowCheck):
+    """Warn when the selected voice doesn't declare support for the agent's
+    language.
+
+    ``ModelVoice.language_list`` is a JSONB array of provider-specific codes
+    (e.g. ``["en", "hi", "es"]``). If the code isn't in the list, the voice
+    still "works" — the wrong-accent / wrong-phonemes failure is a quality
+    problem, not a hard failure — so this is a WARNING that surfaces in the
+    drawer without blocking publish. Skipped for legacy voices whose
+    ``language_list`` is empty/null (metadata not seeded) so the check never
+    false-flags an agent that was passing yesterday.
+    """
+
+    id: ClassVar[str] = "tts.voice_language_match"
+    category: ClassVar[Category] = Category.TTS
+    severity: ClassVar[Severity] = Severity.WARNING
+
+    def applies(self, ctx: CheckContext) -> bool:
+        return not ctx.is_s2s and ctx.voice is not None
+
+    def skip_reason(self, ctx: CheckContext) -> str:
+        if ctx.is_s2s:
+            return _S2S_SKIP_REASON
+        return "No voice selected."
+
+    async def run(self, ctx: CheckContext) -> CheckResult:
+        from core.services.readiness.checks._language import resolve_language_code
+
+        supported = getattr(ctx.voice, "language_list", None) or []
+        if not supported:
+            return self._skip(
+                "Voice does not declare supported languages (metadata not seeded)."
+            )
+        code = resolve_language_code(ctx, "tts")
+        if not code:
+            return self._skip("Language not configured (see language check).")
+        # Case-insensitive comparison — providers mix "en" / "en-US" / "EN".
+        normalised = {str(c).strip().lower() for c in supported if c}
+        if code.lower() not in normalised:
+            preview = ", ".join(str(c) for c in supported[:6])
+            more = f" +{len(supported) - 6} more" if len(supported) > 6 else ""
+            return self._fail(
+                f"Selected voice does not support language '{code}'. "
+                f"Voice supports: {preview}{more}.",
+                remediation=(
+                    "Pick a voice that supports the agent's language, or "
+                    "switch the language."
+                ),
+                resource_ref=ResourceRef(type="voice", id=str(ctx.voice.id)),
+            )
+        return self._pass(f"Voice supports language '{code}'.")
+
+
+class TTSModelLanguageMatchCheck(_TTSMixin, ShallowCheck):
+    """Warn when the selected TTS model doesn't declare support for the agent's
+    language.
+
+    ``WARNING`` severity: TTS providers with a mismatched language usually
+    fall back to their default language or a degraded voice rather than
+    hard-failing. The check surfaces the mismatch so users can pick a
+    language-supporting model, but doesn't block publish. Empty
+    ``ModelLanguage`` result set means metadata isn't seeded — SKIP rather
+    than fail, so older models don't regress passing agents.
+    """
+
+    id: ClassVar[str] = "tts.model_language_match"
+    category: ClassVar[Category] = Category.TTS
+    severity: ClassVar[Severity] = Severity.WARNING
+
+    def applies(self, ctx: CheckContext) -> bool:
+        return not ctx.is_s2s and ctx.tts.model is not None
+
+    def skip_reason(self, ctx: CheckContext) -> str:
+        if ctx.is_s2s:
+            return _S2S_SKIP_REASON
+        return "TTS model not resolved."
+
+    async def run(self, ctx: CheckContext) -> CheckResult:
+        from core.models.model_language import ModelLanguage
+        from core.services.readiness.checks._language import resolve_language_code
+
+        code = resolve_language_code(ctx, "tts")
+        if not code:
+            return self._skip("Language not configured (see language check).")
+
+        rows = (
+            ctx.db.query(ModelLanguage.name)
+            .filter(
+                ModelLanguage.model_id == ctx.tts.model.id,
+                ModelLanguage.is_active.is_(True),
+            )
+            .all()
+        )
+        if not rows:
+            return self._skip(
+                "TTS model does not declare supported languages (metadata not seeded)."
+            )
+        supported = {str(r[0]).strip().lower() for r in rows if r[0]}
+        if code.lower() not in supported:
+            return self._fail(
+                f"TTS model '{ctx.tts.model.name}' does not support language "
+                f"'{code}'.",
+                remediation=(
+                    "Pick a TTS model that supports the language, or switch "
+                    "the language."
+                ),
+                resource_ref=ResourceRef(type="model", id=str(ctx.tts.model.id)),
+            )
+        return self._pass(
+            f"TTS model '{ctx.tts.model.name}' supports language '{code}'."
+        )
 
 
 class TTSVoiceModelMatchCheck(_TTSMixin, ShallowCheck):

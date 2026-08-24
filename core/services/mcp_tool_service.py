@@ -488,18 +488,28 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
     Returns:
         A ToolsSchema containing all MCP tools, or None if no MCP servers are linked.
     """
+    _t_start = time.monotonic()
     servers = get_mcp_servers_for_agent(agent_id)
+    # Shadow the module-level logger for the whole call so every line — including
+    # nested ``.bind()``/``.exception()`` blocks inside the per-server loop —
+    # automatically carries ``agent_id`` and (when at least one server exists)
+    # ``organization_id`` for multi-tenant Grafana / Loki filtering.
+    _org_id = getattr(servers[0], "organization_id", None) if servers else None
+    logger = globals()["logger"].bind(agent_id=agent_id, organization_id=_org_id)
+
     if not servers:
-        logger.bind(agent_id=agent_id).info(
+        logger.info(
             "[mcp-tool] agent {} has no active linked MCP servers — no MCP tools registered",
             agent_id,
         )
         return None
 
-    logger.bind(agent_id=agent_id, server_count=len(servers)).info(
+    logger.bind(server_count=len(servers)).info(
         "[mcp-tool] agent {} has {} active MCP server(s) — registering tools",
         agent_id, len(servers),
     )
+    succeeded_count = 0
+    failed_count = 0
 
     from pipecat.services.mcp_service import MCPClient
     from mcp.client.session_group import SseServerParameters, StreamableHttpParameters
@@ -605,8 +615,8 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
             if tools_schema and tools_schema.standard_tools:
                 tool_names = [getattr(t, "name", "?") for t in tools_schema.standard_tools]
                 all_tool_schemas.extend(tools_schema.standard_tools)
+                succeeded_count += 1
                 logger.bind(
-                    agent_id=agent_id,
                     mcp_server_id=str(server.id) if server.id else None,
                     mcp_server_name=server.name,
                     tool_count=len(tools_schema.standard_tools),
@@ -615,8 +625,10 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                     len(tools_schema.standard_tools), server.name, tool_names,
                 )
             else:
+                # Connected but zero tools — surfaced but NOT counted as a
+                # failure (the server responded; it just had nothing useful).
+                succeeded_count += 1
                 logger.bind(
-                    agent_id=agent_id,
                     mcp_server_id=str(server.id) if server.id else None,
                     mcp_server_name=server.name,
                 ).warning(
@@ -626,19 +638,22 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                 )
 
         except asyncio.TimeoutError:
+            # Use ``.exception`` (not ``.error``) so the full traceback lands
+            # in Loki — matches the project-wide rule that every ``except``
+            # captures a stack, not just a message. See CLAUDE.md logging rules.
+            failed_count += 1
             logger.bind(
-                agent_id=agent_id,
                 mcp_server_id=str(server.id) if server.id else None,
                 mcp_server_name=server.name,
                 timeout_seconds=MCP_REGISTER_TIMEOUT_S,
-            ).error(
+            ).exception(
                 "[mcp-tool] timed out after {}s discovering tools from MCP server '{}' ({})",
                 MCP_REGISTER_TIMEOUT_S, server.name, server.server_url,
             )
             continue
         except Exception:
+            failed_count += 1
             logger.bind(
-                agent_id=agent_id,
                 mcp_server_id=str(server.id) if server.id else None,
                 mcp_server_name=server.name,
                 server_url=server.server_url,
@@ -646,6 +661,20 @@ async def register_mcp_tools(llm, agent_id: int, tool_call_entries=None, tool_re
                 "[mcp-tool] failed to connect to MCP server '{}'", server.name
             )
             continue
+
+    _elapsed_ms = int((time.monotonic() - _t_start) * 1000)
+    logger.bind(
+        server_count=len(servers),
+        succeeded_count=succeeded_count,
+        failed_count=failed_count,
+        total_tool_count=len(all_tool_schemas),
+        elapsed_ms=_elapsed_ms,
+    ).info(
+        "[mcp-tool] registration COMPLETE agent={} servers={} succeeded={} failed={} "
+        "total_tools={} elapsed_ms={}",
+        agent_id, len(servers), succeeded_count, failed_count,
+        len(all_tool_schemas), _elapsed_ms,
+    )
 
     if all_tool_schemas:
         return ToolsSchema(standard_tools=all_tool_schemas)
