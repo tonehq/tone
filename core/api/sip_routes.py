@@ -1,3 +1,4 @@
+import asyncio
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Request
@@ -65,6 +66,29 @@ def _verify(body: bytes, auth_header: str) -> Optional[tuple]:
     return None
 
 
+async def _numbers_from_room(config: Dict[str, Any], room_name: str) -> Dict[str, str]:
+    client = api.LiveKitAPI(
+        (config.get("url") or "").replace("wss://", "https://").replace("ws://", "http://"),
+        config.get("api_key"),
+        config.get("api_secret"),
+    )
+    try:
+        for _attempt in range(6):
+            found = await client.room.list_participants(
+                api.ListParticipantsRequest(room=room_name)
+            )
+            for participant in found.participants:
+                numbers = _participant_numbers(participant)
+                if numbers["to"]:
+                    return numbers
+            await asyncio.sleep(0.5)
+    except Exception:
+        logger.exception("[sip] could not list participants for room {}", room_name)
+    finally:
+        await client.aclose()
+    return {"to": "", "from": "", "trunk_id": ""}
+
+
 def _participant_numbers(participant) -> Dict[str, str]:
     attributes = dict(getattr(participant, "attributes", {}) or {})
     return {
@@ -85,16 +109,16 @@ async def livekit_webhook(request: Request) -> Dict[str, Any]:
     event_name = getattr(event, "event", "")
     room_name = getattr(getattr(event, "room", None), "name", "")
     logger.info("[sip] livekit webhook event={} room={}", event_name, room_name)
-    if event_name != "participant_joined":
+    if event_name not in ("participant_joined", "room_started"):
+        return {"ok": True}
+    if not room_name:
         return {"ok": True}
 
     participant = getattr(event, "participant", None)
-    room = getattr(event, "room", None)
-    if participant is None or room is None:
-        return {"ok": True}
-
-    numbers = _participant_numbers(participant)
-    if not numbers["to"]:
+    numbers = _participant_numbers(participant) if participant is not None else {}
+    if not numbers.get("to"):
+        numbers = await _numbers_from_room(config, room_name)
+    if not numbers.get("to"):
         logger.warning(
             "[sip] participant_joined without a dialled number room={} attributes={}",
             room_name, dict(getattr(participant, "attributes", {}) or {}),
