@@ -65,16 +65,16 @@ class AgentLlmRunSummary:
     run_number: int
     triggered_by: str
     judge_model: Optional[str]
+    status: str  # 'completed' | 'failed'
+    error: Optional[str]
+    started_at: Optional[datetime]
+    completed_at: Optional[datetime]
     # Answer model — the LLM the agent used to answer each scenario. All
     # rows in one run share the same value (config is snapshotted once at
     # run start), so it's safe to include in the grouped summary via a
     # single-value GROUP BY.
     llm_model: Optional[str] = None
     llm_provider: Optional[str] = None
-    status: str  # 'completed' | 'failed'
-    error: Optional[str]
-    started_at: Optional[datetime]
-    completed_at: Optional[datetime]
     summary: dict = field(default_factory=dict)
 
 

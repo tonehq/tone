@@ -1,11 +1,15 @@
 """Unit tests for shared.config env-var validation.
 
-Covers the fail-fast contract in `Settings._validate_required`:
+Covers the two-mode contract in `Settings._validate_required`:
   - Tier A (MANDATORY_KEYS) is enforced in every env.
   - Tier B (MANDATORY_PROD_KEYS) is added when ENV is not in DEV_ENV_NAMES.
   - INSECURE_PLACEHOLDERS are treated as unset.
-  - Missing keys emit a CRITICAL loguru line naming each one and raise
-    SystemExit(1) so the pod never binds.
+  - Deployed envs (ENV=staging/production/…): missing keys emit a CRITICAL
+    loguru line naming each one and raise SystemExit(1) so the pod never
+    binds.
+  - Local/dev envs (ENV in DEV_ENV_NAMES, or unset): missing keys emit a
+    WARNING loguru line naming each one and startup continues, so a
+    developer can iterate without a fully-populated .env.
 
 Tests instantiate a fresh `Settings()` per case (bypassing the module-level
 singleton) with monkeypatched env vars. `get_infisical_secrets` is stubbed so
@@ -114,6 +118,17 @@ def capture_stderr():
         logger.remove(sink_id)
 
 
+@pytest.fixture
+def capture_warnings():
+    """In-memory sink so we can assert on the WARNING line (dev-mode path)."""
+    buf = io.StringIO()
+    sink_id = logger.add(buf, level="WARNING", format="{level}|{message}")
+    try:
+        yield buf
+    finally:
+        logger.remove(sink_id)
+
+
 # --- Happy paths -------------------------------------------------------------
 
 def test_dev_env_boots_with_full_tier_a(monkeypatch):
@@ -130,11 +145,20 @@ def test_production_env_boots_with_tier_a_plus_tier_b(monkeypatch):
     assert settings.BASE_CALL_URL == "https://api.example.com"
 
 
-# --- Tier A: every key individually required in dev --------------------------
+# --- Tier A: every key individually required in deployed envs ----------------
 
-@pytest.mark.parametrize("dropped", list(config.MANDATORY_KEYS))
-def test_dropping_any_tier_a_key_aborts(monkeypatch, capture_stderr, dropped):
-    env = _tier_a_env()
+# ENV itself is excluded from this parametrization: dropping ENV leaves the
+# process with no way to distinguish deployed vs. dev, and the validator
+# intentionally falls back to dev-mode (warn) in that ambiguous case — see
+# `test_unset_env_warns_but_does_not_abort` below.
+_TIER_A_KEYS_EXCLUDING_ENV = [k for k in config.MANDATORY_KEYS if k != "ENV"]
+
+
+@pytest.mark.parametrize("dropped", _TIER_A_KEYS_EXCLUDING_ENV)
+def test_dropping_any_tier_a_key_aborts_in_deployed_env(monkeypatch, capture_stderr, dropped):
+    """Deployed env (ENV=production) still hard-aborts on any missing Tier A key."""
+    env = _tier_a_env() | _tier_b_env()
+    env["ENV"] = "production"
     env.pop(dropped)
     with pytest.raises(SystemExit) as exc:
         _fresh_settings(monkeypatch, env)
@@ -164,7 +188,8 @@ def test_production_env_flags_every_missing_tier_b_key(monkeypatch, capture_stde
 # --- INSECURE_PLACEHOLDERS ---------------------------------------------------
 
 def test_insecure_jwt_placeholder_rejected(monkeypatch, capture_stderr):
-    env = _tier_a_env()
+    env = _tier_a_env() | _tier_b_env()
+    env["ENV"] = "production"
     env["JWT_SECRET_KEY"] = "your-secret-key-here"
     with pytest.raises(SystemExit):
         _fresh_settings(monkeypatch, env)
@@ -192,6 +217,32 @@ def test_error_line_names_env_and_count(monkeypatch, capture_stderr):
     assert match, f"missing-count phrase not found in: {log!r}"
     expected = (len(config.MANDATORY_KEYS) - 1) + len(config.MANDATORY_PROD_KEYS)
     assert int(match.group(1)) == expected
+
+
+# --- Dev-mode: missing keys warn but do NOT abort ---------------------------
+
+def test_dev_env_warns_but_does_not_abort_when_tier_a_missing(monkeypatch, capture_warnings):
+    """ENV=dev with a missing Tier A key: warn and keep booting."""
+    env = _tier_a_env()
+    env.pop("JWT_SECRET_KEY")
+    settings = _fresh_settings(monkeypatch, env)
+    # Startup completed — no SystemExit — and the env-driven key is empty on the instance.
+    assert settings.JWT_SECRET_KEY == ""
+    log = capture_warnings.getvalue()
+    assert "WARNING" in log
+    assert "JWT_SECRET_KEY" in log
+    assert "ENV=dev" in log
+
+
+def test_unset_env_warns_but_does_not_abort(monkeypatch, capture_warnings):
+    """No ENV at all (empty environment): treated as local — warn, don't crash."""
+    settings = _fresh_settings(monkeypatch, {})
+    assert settings.ENVIRONMENT == ""
+    log = capture_warnings.getvalue()
+    assert "WARNING" in log
+    assert "ENV=<unset>" in log
+    # A representative Tier A key must show up in the warning.
+    assert "DATABASE_URL" in log
 
 
 # --- Raw-value semantics: legitimate 0 / False must NOT be flagged -----------
