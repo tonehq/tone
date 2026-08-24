@@ -11,9 +11,11 @@ from fastapi import FastAPI, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from pipecat.runner.types import WebSocketRunnerArguments
+from pipecat.runner.types import (LiveKitRunnerArguments,
+                                  WebSocketRunnerArguments)
 
 from core.bot import bot
+from core.services.webrtc.dispatcher import get_bot_dispatcher
 from shared.config import settings
 from core.internal.machine import generate_fingerprint
 from core.internal.license import init_license_validator, get_license_info
@@ -459,17 +461,6 @@ async def ws_test_endpoint(websocket: WebSocket) -> None:
 
 @app.post("/internal/livekit/start")
 async def livekit_room_start(request: Request):
-    """Intra-cluster hand-off target: run a LiveKit room pipeline ON THIS voice pod.
-
-    Inbound SIP calls land as LiveKit rooms; the API pod resolves the agent and POSTs here so the
-    media pipeline (STT/LLM/TTS + turn detection) runs on a voice pod instead of the API pod, whose
-    CPU limit is far too small for real-time inference. Cluster-only, same trust model and token as
-    the WS-bridge hand-off."""
-    from fastapi.responses import JSONResponse
-    from pipecat.runner.types import LiveKitRunnerArguments
-
-    from core.services.webrtc.dispatcher import LocalBotDispatcher
-
     if _WORKER_MODE != "voice":
         logger.warning("[sip] livekit start refused — not a voice pod (WORKER_MODE={!r})", _WORKER_MODE)
         return JSONResponse({"detail": "not a voice pod"}, status_code=404)
@@ -493,12 +484,12 @@ async def livekit_room_start(request: Request):
             {"detail": "room, url, token and agent_id are required"}, status_code=400
         )
 
-    dispatcher = _livekit_dispatcher()
+    dispatcher = get_bot_dispatcher()
     if dispatcher.is_active(room):
         return JSONResponse({"room": room, "status": "already_running"}, status_code=200)
 
     limit = settings.MAX_CONCURRENT_CALLS
-    if limit > 0 and _active_call_count() >= limit:
+    if limit > 0 and dispatcher.active_count() >= limit:
         logger.info("[sip] livekit start at capacity room={} limit={}", room, limit)
         return JSONResponse({"detail": "at capacity"}, status_code=429)
 

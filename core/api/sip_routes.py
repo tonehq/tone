@@ -17,15 +17,13 @@ from core.services.pod_picker import PodPicker
 from core.services.sip.livekit_termination import (BOT_IDENTITY, SIP_ROOM_PREFIX,
                                                    LiveKitTermination)
 from core.services.transport.telephony_credentials import channel_config
-from core.services.webrtc.dispatcher import LocalBotDispatcher
+from core.services.webrtc.dispatcher import get_bot_dispatcher
 from core.utils.encryption import decrypt_json
 from shared.config import settings
 
 _HANDOFF_TIMEOUT_SECONDS = 10.0
 
 router = APIRouter()
-
-_dispatcher = LocalBotDispatcher()
 
 SIP_ATTR_CALLED_NUMBER = "sip.trunkPhoneNumber"
 SIP_ATTR_CALLER_NUMBER = "sip.phoneNumber"
@@ -155,12 +153,12 @@ async def _handoff_to_voice_pod(payload: Dict[str, Any]) -> bool:
 async def _dispatch_bot(room_name: str, runner_args, handoff: Dict[str, Any]) -> None:
     try:
         if await _handoff_to_voice_pod(handoff):
-            _dispatcher.release(room_name)
+            get_bot_dispatcher().release(room_name)
             return
-        await _dispatcher.dispatch_reserved(room_name, runner_args)
+        await get_bot_dispatcher().dispatch_reserved(room_name, runner_args)
     except Exception:
         logger.exception("[sip] bot dispatch failed room={}", room_name)
-        _dispatcher.release(room_name)
+        get_bot_dispatcher().release(room_name)
 
 
 def _participant_numbers(participant) -> Dict[str, str]:
@@ -187,7 +185,7 @@ async def livekit_webhook(
     logger.info("[sip] livekit webhook event={} room={}", event_name, room_name)
     if event_name not in ("participant_joined", "room_started"):
         return {"ok": True}
-    if not room_name or _dispatcher.is_active(room_name):
+    if not room_name or get_bot_dispatcher().is_active(room_name):
         return {"ok": True}
 
     participant_identity = getattr(getattr(event, "participant", None), "identity", "")
@@ -239,7 +237,7 @@ async def livekit_webhook(
         "[sip] inbound routed room={} from={} to={} agent={}",
         room_name, numbers["from"], numbers["to"], agent.id,
     )
-    if not _dispatcher.reserve(room_name):
+    if not get_bot_dispatcher().reserve(room_name):
         return {"ok": True}
     handoff = {
         "room": room_name,

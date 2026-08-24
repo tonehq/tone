@@ -79,8 +79,6 @@ class PodPicker(BaseService):
         return f"wss://{self.host}/pod/{pod.ordinal}/ws"
 
     def http_base_for(self, pod: Optional[Pod]) -> Optional[str]:
-        """Per-pod HTTPS base via the existing ``/pod/{ordinal}`` ingress route — the same
-        addressing ``url_for`` uses for media pinning, so no extra service or config is needed."""
         if pod is None or pod.ordinal is None or not self.host:
             return None
         return f"https://{self.host}/pod/{pod.ordinal}"
