@@ -288,7 +288,7 @@ class OutboundCallService(BaseService):
             raise HTTPException(
                 status_code=400,
                 detail="No outbound phone number is configured for this organization. "
-                       "Add a Twilio or Telnyx number, or pick one explicitly.",
+                       "Add a Twilio, Telnyx or SIP trunk number, or pick one explicitly.",
             )
         if len(numbers) == 1:
             return numbers[0]
@@ -312,8 +312,8 @@ class OutboundCallService(BaseService):
         # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
         return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
 
-    _PSTN_PROVIDERS = ("twilio", "telnyx")
-    _SUPPORTED_PROVIDERS = ("twilio", "telnyx", "websocket")
+    _PSTN_PROVIDERS = ("twilio", "telnyx", "sip")
+    _SUPPORTED_PROVIDERS = ("twilio", "telnyx", "sip", "websocket")
 
     def _validate_provider(self, provider: Optional[str]) -> str:
         """Normalize + validate the trigger provider. Empty means auto — the engine is
@@ -387,7 +387,7 @@ class OutboundCallService(BaseService):
         if channel_type not in self._PSTN_PROVIDERS:
             raise HTTPException(
                 status_code=400,
-                detail="from_number must belong to a Twilio or Telnyx channel.",
+                detail="from_number must belong to a Twilio, Telnyx or SIP trunk channel.",
             )
         if requested and channel_type != requested:
             raise HTTPException(

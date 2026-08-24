@@ -8,6 +8,7 @@ from core.models.model_language import ModelLanguage
 # Telephony
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
+from core.models.sip_trunk import SipTrunk
 
 # Uploads & Knowledge Base
 from core.models.knowledge_base import KnowledgeBase
