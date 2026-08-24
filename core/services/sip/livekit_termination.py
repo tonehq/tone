@@ -14,6 +14,18 @@ BOT_IDENTITY = "agent"
 CALLER_IDENTITY_PREFIX = "caller-"
 
 
+def normalize_sip_host(value: str) -> str:
+    host = (value or "").strip()
+    if not host:
+        return ""
+    if host.startswith("sip:"):
+        host = host[4:]
+    if host.startswith("sips:"):
+        host = host[5:]
+    host = host.split("@")[-1]
+    return host.split(":")[0].strip().lower()
+
+
 def livekit_sip_host(livekit_url: str) -> str:
     host = urlparse(livekit_url or "").hostname or (livekit_url or "").strip()
     if not host:
@@ -48,6 +60,9 @@ class LiveKitTermination:
         self._url = (config.get("url") or "").strip()
         self._api_key = (config.get("api_key") or "").strip()
         self._api_secret = (config.get("api_secret") or "").strip()
+        self._sip_host = normalize_sip_host(
+            config.get("sip_uri") or config.get("sip_host") or ""
+        )
 
     @property
     def configured(self) -> bool:
@@ -55,7 +70,7 @@ class LiveKitTermination:
 
     @property
     def sip_host(self) -> str:
-        return livekit_sip_host(self._url)
+        return self._sip_host or livekit_sip_host(self._url)
 
     def _require_configured(self) -> None:
         if not self.configured:
