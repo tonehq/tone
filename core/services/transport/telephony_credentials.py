@@ -74,6 +74,14 @@ def get_telnyx_api_key(org_id=None) -> str:
     return channel_config("telnyx", org_id).get("api_key") or ""
 
 
+def get_sip_credentials(org_id=None, channel_id=None) -> dict:
+    cfg = channel_config("sip", org_id, channel_id=channel_id)
+    sip_trunk_id = cfg.get("sip_trunk_id")
+    if sip_trunk_id:
+        return {"sip_trunk_id": sip_trunk_id, "carrier": cfg.get("carrier") or ""}
+    return {}
+
+
 def get_telnyx_credentials(org_id=None) -> dict:
     cfg = channel_config("telnyx", org_id)
     api_key = cfg.get("api_key")
@@ -91,6 +99,7 @@ _CREDENTIAL_LOADERS = {
     "twilio": get_twilio_credentials,
     "telnyx": get_telnyx_credentials,
     "plivo": get_plivo_credentials,
+    "sip": get_sip_credentials,
 }
 
 

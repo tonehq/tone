@@ -4,6 +4,7 @@ import { channelsAtom, fetchChannelsAtom, resetChannelsAtom } from '@/atoms/Inte
 import { fetchOAuthAtom, oauthAtom, resetOAuthAtom } from '@/atoms/OAuthAtom';
 import AvailableIntegrationsCatalog from '@/components/integrations/available-integrations-catalog';
 import ChannelGrid, { type ChannelGridHandle } from '@/components/integrations/channel-grid';
+import SipTrunkGrid from '@/components/integrations/sip-trunk-grid';
 import CustomCredentialModal from '@/components/integrations/custom-credential-modal';
 import OAuthConnectionGrid from '@/components/integrations/oauth-connection-grid';
 import { CustomButton } from '@/components/shared';
@@ -13,7 +14,7 @@ import type { OAuthCatalogProvider } from '@/types/oauth';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useAtomValue, useSetAtom } from 'jotai';
-import { KeyRound, Phone, Plug, Plus, RefreshCw, Settings, Sparkles } from 'lucide-react';
+import { KeyRound, Network, Phone, Plug, Plus, RefreshCw, Settings, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -97,7 +98,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   // openAdd can fire synchronously from the catalog button regardless of
   // which tab is showing. We still flip the active tab so the user sees the
   // new card land in the list after they save.
-  const [activeTab, setActiveTab] = useState<'services' | 'channels'>('services');
+  const [activeTab, setActiveTab] = useState<'services' | 'channels' | 'sip'>('services');
 
   const handleAddApiKey = useCallback((providerKey: string) => {
     setActiveTab('channels');
@@ -230,7 +231,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
 
             <Tabs
               value={activeTab}
-              onValueChange={(v) => setActiveTab(v as 'services' | 'channels')}
+              onValueChange={(v) => setActiveTab(v as 'services' | 'channels' | 'sip')}
               className="relative w-full"
             >
               <TabsList className="mb-5 bg-background/80 shadow-sm">
@@ -243,6 +244,10 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
                   <Phone className="size-3.5" />
                   <span>Channels</span>
                   <CountChip value={channelsCount} dim />
+                </TabsTrigger>
+                <TabsTrigger value="sip" className="gap-1.5 px-3">
+                  <Network className="size-3.5" />
+                  <span>SIP Trunks</span>
                 </TabsTrigger>
               </TabsList>
 
@@ -259,6 +264,10 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
                   user only sees it when this tab is selected. */}
               <TabsContent value="channels" forceMount>
                 <ChannelGrid controlRef={channelGridRef} />
+              </TabsContent>
+
+              <TabsContent value="sip">
+                <SipTrunkGrid />
               </TabsContent>
             </Tabs>
           </section>

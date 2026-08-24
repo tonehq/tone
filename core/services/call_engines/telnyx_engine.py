@@ -133,6 +133,30 @@ class TelnyxCallEngine(CallEngine):
             "answered_by": data.get("answered_by"),
         }
 
+    def transfer_call(
+        self, call_id: str, sip_address: str, headers: Optional[Dict[str, str]] = None
+    ) -> bool:
+        payload: Dict[str, Any] = {"sip_address": sip_address}
+        if headers:
+            payload["custom_headers"] = [
+                {"name": name, "value": value} for name, value in headers.items()
+            ]
+        try:
+            response = requests.post(
+                f"https://api.telnyx.com/v2/calls/{quote(str(call_id))}/actions/refer",
+                headers={**self._headers(), "Content-Type": "application/json"},
+                json=payload,
+                timeout=HTTP_TIMEOUT,
+            )
+            response.raise_for_status()
+            logger.info("[telnyx] REFER sent call_control_id={} to={}", call_id, sip_address)
+            return True
+        except Exception:
+            logger.exception(
+                "[telnyx] REFER failed call_control_id={} to={}", call_id, sip_address
+            )
+            return False
+
     def generate_twiml(self, ws_url: str, params: Dict[str, str]) -> str:
         query = {
             str(name): str(value)

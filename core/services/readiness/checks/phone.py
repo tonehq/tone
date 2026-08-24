@@ -34,7 +34,7 @@ from core.services.readiness.schemas import (
 # Kept module-level so ``applies()`` and the check body reason from one list;
 # extending it (e.g. adding "signalwire") means one edit plus a branch in
 # ``probes.probe_transport``.
-_TELEPHONY_CHANNEL_TYPES = frozenset({"twilio", "telnyx", "plivo", "exotel"})
+_TELEPHONY_CHANNEL_TYPES = frozenset({"twilio", "telnyx", "plivo", "exotel", "sip"})
 
 
 class PhoneAssignedIfInboundCheck(ShallowCheck):

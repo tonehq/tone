@@ -5,40 +5,9 @@ from fastapi.responses import Response
 from loguru import logger
 
 from core.database.session import get_db_context
-from core.services.pod_picker import PodPicker
-from shared.config import settings
+from core.utils.telephony import pinned_ws_url
 
 router = APIRouter()
-
-
-def _pinned_ws_url(default_ws_url: str, tag: str):
-    """Resolve the media-stream WebSocket URL, honoring pod pinning.
-
-    Returns ``(ws_url, pod_name, pod_ordinal, node_name)`` — the pinned pod URL when
-    pinning is enabled and succeeds, otherwise ``default_ws_url``. Shared by the
-    inbound ``/twiml`` and outbound ``/twiml/outbound`` endpoints so both dial the
-    same pinned voice pod at answer time.
-    """
-    ws_url = default_ws_url
-    pod_name = None
-    pod_ordinal = None
-    node_name = None
-    if settings.POD_PINNING_ENABLED:
-        try:
-            pinned_url = None
-            with get_db_context() as db:
-                picker = PodPicker(db)
-                pod = picker.pick()
-                pinned_url = picker.url_for(pod)
-                if pod is not None:
-                    pod_name = pod.name
-                    pod_ordinal = pod.ordinal
-                    node_name = pod.node.name if pod.node is not None else None
-            if pinned_url:
-                ws_url = pinned_url
-        except Exception:
-            logger.exception("[{}] pod pinning failed, falling back to /ws", tag)
-    return ws_url, pod_name, pod_ordinal, node_name
 
 
 async def _resolve_stream(request: Request, tag: str):
@@ -59,7 +28,7 @@ async def _resolve_stream(request: Request, tag: str):
         # call still proceeds. Capture the traceback rather than swallowing silently.
         logger.exception("[{}] failed to parse From/To from request", tag)
 
-    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, tag)
+    ws_url, pod_name, pod_ordinal, node_name = pinned_ws_url(default_ws_url, tag)
 
     logger.info(
         "[{}] REQUEST from={} to={} pod={} ordinal={} node={} pod_url={}",
@@ -140,7 +109,7 @@ async def _outbound_answer_xml(request: Request, provider: str, tag: str) -> Res
         return Response(content=_HANGUP_TWIML, media_type="application/xml")
 
     default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
-    ws_url, pod_name, pod_ordinal, node_name = _pinned_ws_url(default_ws_url, tag)
+    ws_url, pod_name, pod_ordinal, node_name = pinned_ws_url(default_ws_url, tag)
     params = {
         "from": (qp.get("from") or "").strip(),
         "to": to_number,

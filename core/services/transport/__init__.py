@@ -36,6 +36,8 @@ from core.services.transport.registry import (build_transport,
                                               get_transport,
                                               register_telephony_provider,
                                               register_transport)
+from core.services.transport.sip import (SIP_TRANSPORT_TYPE, SipTransport,
+                                         build_sip_call_body)
 from core.services.transport.smallwebrtc import SmallWebRTCCallTransport
 from core.services.transport.telnyx import TelnyxTransport
 from core.services.transport.test_provider import TestTransport
@@ -48,6 +50,8 @@ register_telephony_provider(TwilioTransport())
 register_telephony_provider(TelnyxTransport())
 register_telephony_provider(PlivoTransport())
 register_telephony_provider(ExotelTransport())
+# BYO SIP trunk media leg — the SBC bridges the carrier's RTP to /ws as raw PCM.
+register_telephony_provider(SipTransport())
 # Telephony-free raw-PCM provider backing the /ws/test endpoint (see main.py).
 register_telephony_provider(TestTransport())
 
@@ -59,8 +63,11 @@ register_transport(LiveKitRunnerArguments, LiveKitCallTransport())
 
 __all__ = [
     "CallTransport",
+    "SIP_TRANSPORT_TYPE",
+    "SipTransport",
     "TelephonyProvider",
     "TelephonyTransport",
+    "build_sip_call_body",
     "build_transport",
     "build_ws_bridge_transport",
     "BRIDGE_SAMPLE_RATE",
