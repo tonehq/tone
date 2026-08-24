@@ -678,3 +678,143 @@ def enqueue_loki_log_sync_sync(call_id, *, delay_seconds: int = 0) -> int:
             return sync_loki_logs_task.configure(
                 schedule_in={"seconds": delay_seconds}
             ).defer(call_id=str(call_id))
+
+
+# ── Post-call transcript eval task ─────────────────────────────────────
+# Every ``triggered_by`` value the post-call transcript eval task will
+# accept. ``'auto'`` covers the default post-call action; ``'manual'`` is
+# reserved for a future re-run endpoint / CLI.
+_CALL_TRANSCRIPT_EVAL_TRIGGERS = {"auto", "manual"}
+
+
+@app.task(name="score_call_transcript", queue="call_transcript_eval")
+def score_call_transcript_task(
+    call_id: str,
+    org_id: str,
+    force: bool = False,
+    triggered_by: str = "auto",
+) -> None:
+    """Score one completed call's transcript asynchronously.
+
+    Kept on its OWN queue (``call_transcript_eval``, not ``call_transcripts``
+    or ``agent_eval``) so:
+    (1) an older worker deployment that doesn't yet know this task can't
+    grab the job and fail it as ``TaskNotFound``,
+    (2) slow judge-LLM calls don't back up the transcript-consolidation
+    queue that has to keep up with call completions, and
+    (3) the LLM eval judge's cost profile stays separate.
+    Workers must include ``call_transcript_eval`` in their ``--queues`` list
+    to consume — until then jobs enqueue but nothing runs (matches shipping
+    pattern for ``eval`` / ``agent_eval``).
+
+    Failure policy mirrors ``run_agent_llm_eval``: split by phase so a
+    pre-service transient (DB unreachable, missing call) retries via
+    Procrastinate, but a mid-service failure is swallowed (the service has
+    already persisted a ``status='failed'`` row) so the worker doesn't
+    crash-loop the task.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.call_transcript.service import (
+        CallTranscriptEvalService,
+    )
+
+    if triggered_by not in _CALL_TRANSCRIPT_EVAL_TRIGGERS:
+        logger.warning(
+            "[call-transcript-eval] unknown triggered_by={!r} for call={}; "
+            "defaulting to 'auto'",
+            triggered_by, call_id,
+        )
+        triggered_by = "auto"
+
+    logger.info(
+        "[call-transcript-eval] worker picked job call={} org={} triggered_by={} force={}",
+        call_id, org_id, triggered_by, force,
+    )
+    try:
+        with get_db_context() as db:
+            svc = CallTranscriptEvalService(db, org_id=_UUID(org_id))
+            try:
+                svc.run_for_call(
+                    call_id=_UUID(call_id),
+                    force=bool(force),
+                    triggered_by=triggered_by,
+                )
+            except Exception:  # noqa: BLE001
+                # Scoring-phase failure — the service already persisted a
+                # ``status='failed'`` row (or a skip row), so the FE shows
+                # the failure without needing a worker retry.
+                logger.exception(
+                    "[call-transcript-eval] scoring failed call={} triggered_by={} "
+                    "(swallowed — failure row is persisted)",
+                    call_id, triggered_by,
+                )
+    except Exception:  # noqa: BLE001
+        # Pre-service failure — DB connect, missing call row, unresolved
+        # judge key. Nothing persisted; re-raise so Procrastinate retries
+        # the job. Without this a 5-second DB blip silently drops the run
+        # and the FE user sees no signal.
+        logger.exception(
+            "[call-transcript-eval] pre-run failure call={} triggered_by={} "
+            "(re-raising for retry)",
+            call_id, triggered_by,
+        )
+        raise
+
+    logger.info(
+        "[call-transcript-eval] worker task done call={} triggered_by={}",
+        call_id, triggered_by,
+    )
+
+
+async def enqueue_call_transcript_eval(
+    call_id,
+    org_id,
+    *,
+    force: bool = False,
+    triggered_by: str = "auto",
+) -> int:
+    async with app.open_async():
+        return await score_call_transcript_task.defer_async(
+            call_id=str(call_id),
+            org_id=str(org_id),
+            force=bool(force),
+            triggered_by=triggered_by,
+        )
+
+
+def enqueue_call_transcript_eval_sync(
+    call_id,
+    org_id,
+    *,
+    force: bool = False,
+    triggered_by: str = "auto",
+) -> int:
+    """Sync counterpart for callers inside a sync service method
+    (``PostCallHandler`` fires from ``CallLogService.complete_call``, which
+    is a sync ``def``).
+
+    Uses the same one-shot ``SyncPsycopgConnector`` pattern as
+    :func:`enqueue_agent_llm_eval_sync` — never opens the module-level
+    async ``app`` from a threadpool thread (that would create cross-loop
+    futures and close the shared psycopg pool).
+    """
+    from procrastinate import App as _App
+    from procrastinate import SyncPsycopgConnector
+
+    ephemeral = _App(
+        connector=SyncPsycopgConnector(
+            conninfo=_conninfo(), min_size=1, max_size=1,
+        )
+    )
+    with ephemeral.open():
+        return ephemeral.configure_task(
+            name="score_call_transcript",
+            queue="call_transcript_eval",
+        ).defer(
+            call_id=str(call_id),
+            org_id=str(org_id),
+            force=bool(force),
+            triggered_by=triggered_by,
+        )

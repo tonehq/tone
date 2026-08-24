@@ -28,10 +28,14 @@ from deepeval.metrics import (  # noqa: E402
     ContextualPrecisionMetric,
     ContextualRecallMetric,
     ContextualRelevancyMetric,
+    ConversationCompletenessMetric,
     FaithfulnessMetric,
     GEval,
     HallucinationMetric,
+    KnowledgeRetentionMetric,
+    RoleAdherenceMetric,
     ToxicityMetric,
+    TurnRelevancyMetric,
 )
 from deepeval.metrics.base_metric import BaseMetric  # noqa: E402
 from deepeval.test_case import LLMTestCaseParams  # noqa: E402
@@ -152,6 +156,43 @@ def _instruction_following(
     )
 
 
+def _role_adherence(llm: ToneDeepEvalLLM, threshold: float, **_: object) -> BaseMetric:
+    """Conversation-native — scores whether the assistant stayed in the role
+    described by ``ConversationalTestCase.chatbot_role``."""
+    return RoleAdherenceMetric(threshold=threshold, model=llm, async_mode=True)
+
+
+def _conversation_completeness(
+    llm: ToneDeepEvalLLM, threshold: float, **_: object,
+) -> BaseMetric:
+    """Conversation-native — scores whether the assistant addressed every
+    user goal expressed across the conversation's turns."""
+    return ConversationCompletenessMetric(
+        threshold=threshold, model=llm, async_mode=True,
+    )
+
+
+def _conversation_relevancy(
+    llm: ToneDeepEvalLLM, threshold: float, **_: object,
+) -> BaseMetric:
+    """Conversation-native — scores per-turn assistant relevance across the
+    conversation. Backed by DeepEval's ``TurnRelevancyMetric`` (the current
+    per-turn replacement for the older ``ConversationRelevancyMetric``);
+    still operates on the shared ``ConversationalTestCase``."""
+    return TurnRelevancyMetric(threshold=threshold, model=llm, async_mode=True)
+
+
+def _knowledge_retention(
+    llm: ToneDeepEvalLLM, threshold: float, **_: object,
+) -> BaseMetric:
+    """Conversation-native — scores whether the assistant retained context
+    from earlier turns instead of losing prior information. Registered for
+    v2; not enabled by default in v1."""
+    return KnowledgeRetentionMetric(
+        threshold=threshold, model=llm, async_mode=True,
+    )
+
+
 SUPPORTED_METRICS: dict[str, MetricBuilder] = {
     "faithfulness": _faithfulness,
     "answer_relevancy": _answer_relevancy,
@@ -164,6 +205,12 @@ SUPPORTED_METRICS: dict[str, MetricBuilder] = {
     "toxicity": _toxicity,
     "persona_adherence": _persona_adherence,
     "instruction_following": _instruction_following,
+    # Conversation-native — consumed by the post-call transcript judge on a
+    # ``ConversationalTestCase``. See ``CONVERSATION_METRICS`` below.
+    "role_adherence": _role_adherence,
+    "conversation_completeness": _conversation_completeness,
+    "conversation_relevancy": _conversation_relevancy,
+    "knowledge_retention": _knowledge_retention,
 }
 
 # Metrics whose default GEval criterion references an AGENT system prompt —
@@ -174,6 +221,21 @@ SUPPORTED_METRICS: dict[str, MetricBuilder] = {
 AGENT_CONTEXT_METRICS: frozenset[str] = frozenset({
     "persona_adherence",
     "instruction_following",
+})
+
+
+# Conversation-native metrics — consume a ``ConversationalTestCase`` (turns
+# + ``chatbot_role``), NOT a single-turn ``LLMTestCase``. The post-call
+# transcript judge dispatches by membership in this set: names here are
+# measured against the built ``ConversationalTestCase``; everything else is
+# measured against the joined ``LLMTestCase``. Only the transcript judge
+# consults this set — the RAG judge and the agent-LLM judge still measure
+# every metric against ``LLMTestCase`` unchanged.
+CONVERSATION_METRICS: frozenset[str] = frozenset({
+    "role_adherence",
+    "conversation_completeness",
+    "conversation_relevancy",
+    "knowledge_retention",
 })
 
 

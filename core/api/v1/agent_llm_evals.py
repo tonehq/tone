@@ -181,6 +181,10 @@ def _run_summary_to_dict(s) -> dict:
         "run_number": s.run_number,
         "triggered_by": s.triggered_by,
         "judge_model": s.judge_model,
+        # Answer model — the agent's LLM at the time of the run. Snapshotted
+        # per-row and rolled up in the grouped summary query.
+        "llm_model": getattr(s, "llm_model", None),
+        "llm_provider": getattr(s, "llm_provider", None),
         "status": s.status,
         "error": s.error,
         "started_at": s.started_at.isoformat() if s.started_at else None,
