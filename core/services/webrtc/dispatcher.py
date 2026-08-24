@@ -34,7 +34,6 @@ class LocalBotDispatcher(BotDispatcher):
         self._spawn(room, runner_args, cleanup)
 
     def reserve(self, room: str) -> bool:
-        """Claim ``room`` before dispatching. False when another caller already holds it."""
         if room in self._rooms:
             return False
         self._rooms.add(room)
@@ -43,10 +42,12 @@ class LocalBotDispatcher(BotDispatcher):
     def release(self, room: str) -> None:
         self._rooms.discard(room)
 
+    def active_count(self) -> int:
+        return len(self._rooms)
+
     async def dispatch_reserved(
         self, room: str, runner_args: RunnerArguments, cleanup: Cleanup = None
     ) -> None:
-        """Run the bot for a room already claimed via :meth:`reserve`."""
         self._spawn(room, runner_args, cleanup)
 
     def _spawn(self, room: str, runner_args: RunnerArguments, cleanup: Cleanup) -> None:
@@ -64,3 +65,13 @@ class LocalBotDispatcher(BotDispatcher):
                     await cleanup()
                 except Exception as exc:
                     logger.exception("webrtc room cleanup failed: {}", exc)
+
+
+_dispatcher: Optional["LocalBotDispatcher"] = None
+
+
+def get_bot_dispatcher() -> "LocalBotDispatcher":
+    global _dispatcher
+    if _dispatcher is None:
+        _dispatcher = LocalBotDispatcher()
+    return _dispatcher
