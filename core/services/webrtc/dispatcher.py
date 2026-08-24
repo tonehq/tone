@@ -31,6 +31,25 @@ class LocalBotDispatcher(BotDispatcher):
         if room in self._rooms:
             return
         self._rooms.add(room)
+        self._spawn(room, runner_args, cleanup)
+
+    def reserve(self, room: str) -> bool:
+        """Claim ``room`` before dispatching. False when another caller already holds it."""
+        if room in self._rooms:
+            return False
+        self._rooms.add(room)
+        return True
+
+    def release(self, room: str) -> None:
+        self._rooms.discard(room)
+
+    async def dispatch_reserved(
+        self, room: str, runner_args: RunnerArguments, cleanup: Cleanup = None
+    ) -> None:
+        """Run the bot for a room already claimed via :meth:`reserve`."""
+        self._spawn(room, runner_args, cleanup)
+
+    def _spawn(self, room: str, runner_args: RunnerArguments, cleanup: Cleanup) -> None:
         task = asyncio.create_task(self._run(room, runner_args, cleanup))
         task.add_done_callback(lambda _task: self._rooms.discard(room))
 
