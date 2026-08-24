@@ -517,7 +517,7 @@ class Settings:
         self._validate_required()
 
     def _validate_required(self) -> None:
-        """Abort process startup when mandatory env vars are missing.
+        """Enforce mandatory env vars — hard-abort in deployed envs, warn in dev.
 
         Runs once per ``Settings()`` instantiation (i.e. on first import of
         ``shared.config``) so every entry point — API pod, EE pod, ingestion
@@ -533,10 +533,17 @@ class Settings:
         Settings instance), NOT the coerced attribute — so an int knob whose
         legitimate value is 0 doesn't get flagged as missing.
 
-        On failure: emit a single ``logger.critical`` line naming every
-        missing key (loguru → stderr → Alloy DaemonSet → Loki → Grafana),
-        then ``sys.exit(1)`` via ``SystemExit``. K8s marks the pod
-        CrashLoopBackOff and Grafana surfaces the CRITICAL line.
+        Behavior on missing keys is ENV-dependent:
+
+        - **Deployed** (``ENV`` set and not in ``DEV_ENV_NAMES`` —
+          staging, production, uat, …): emit a single ``logger.critical``
+          line naming every missing key (loguru → stderr → Alloy DaemonSet →
+          Loki → Grafana), then ``sys.exit(1)`` via ``SystemExit``. K8s marks
+          the pod CrashLoopBackOff and Grafana surfaces the CRITICAL line.
+        - **Local / dev** (``ENV`` in ``DEV_ENV_NAMES``, or unset): emit a
+          single ``logger.warning`` line naming every missing key and
+          continue startup, so a developer can iterate on unrelated code
+          without a fully-populated ``.env``.
         """
         env_name = (os.getenv("ENV") or self.ENVIRONMENT or "").lower()
         is_deployed = bool(env_name) and env_name not in DEV_ENV_NAMES
@@ -556,15 +563,27 @@ class Settings:
             return
 
         keys_block = "\n".join(f"  - {k}" for k in missing)
-        logger.critical(
-            "[config] Pod startup aborted — missing {count} required env "
-            "variable(s) for ENV={env}:\n{keys}\nSee .env.example for the "
-            "full template and required set.",
+
+        if is_deployed:
+            logger.critical(
+                "[config] Pod startup aborted — missing {count} required env "
+                "variable(s) for ENV={env}:\n{keys}\nSee .env.example for the "
+                "full template and required set.",
+                count=len(missing),
+                env=env_name or "<unset>",
+                keys=keys_block,
+            )
+            raise SystemExit(1)
+
+        logger.warning(
+            "[config] Missing {count} env variable(s) for ENV={env} — "
+            "starting anyway because this is a local/dev environment. "
+            "Deployed envs (staging/production/…) would abort. "
+            "Missing keys:\n{keys}\nSee .env.example for the full template.",
             count=len(missing),
             env=env_name or "<unset>",
             keys=keys_block,
         )
-        raise SystemExit(1)
 
     def loki_read_configured(self) -> bool:
         """True only when we have enough to read a call's logs back from Loki.
