@@ -66,6 +66,7 @@ from core.models.agent_contact import AgentContact
 # Calls & Metrics
 from core.models.call import Call
 from core.models.call_metrics import CallMetrics
+from core.models.call_transcript_eval_result import CallTranscriptEvalResult
 from core.models.log_entry import CallPipelineLog
 from core.models.scheduled_call import ScheduledCall
 from core.models.tool_execution import ToolExecution

@@ -35,7 +35,10 @@ from deepeval.test_case import LLMTestCase  # noqa: E402
 from loguru import logger  # noqa: E402
 
 from core.services.evals.deepeval.llm_adapter import ToneDeepEvalLLM  # noqa: E402
-from core.services.evals.deepeval.metric_registry import build_metrics  # noqa: E402
+from core.services.evals.deepeval.metric_registry import (  # noqa: E402
+    CONVERSATION_METRICS,
+    build_metrics,
+)
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
 
@@ -97,6 +100,23 @@ class AgentLlmJudgeService:
             criteria["persona_adherence"] = persona_criteria
         if instruction_criteria:
             criteria["instruction_following"] = instruction_criteria
+
+        # Reject conversation-native metrics — they need a
+        # ``ConversationalTestCase`` (turns + chatbot_role) which this
+        # single-turn judge doesn't build. Without this guard,
+        # ``build_metrics`` would happily construct e.g. ``RoleAdherenceMetric``
+        # and the a_measure call would raise ``MissingTestCaseParamsError``
+        # per-scenario, fake-FAILing every row instead of aborting cleanly.
+        # Configure these via ``CALL_EVAL_METRICS_ENABLED`` — the post-call
+        # transcript judge owns them.
+        bad_conv = [m for m in metrics if m in CONVERSATION_METRICS]
+        if bad_conv:
+            raise EvalConfigurationError(
+                f"AGENT_LLM_EVAL_METRICS_ENABLED contains conversation-native "
+                f"metric(s) {bad_conv!r}; those require a ConversationalTestCase "
+                "the agent-LLM judge does not build. Configure them via "
+                "CALL_EVAL_METRICS_ENABLED (post-call transcript flavor)."
+            )
 
         llm = ToneDeepEvalLLM(api_key=api_key, model=model)
         # Configuration errors are systemic — re-raise so the service aborts
