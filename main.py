@@ -457,6 +457,73 @@ async def ws_test_endpoint(websocket: WebSocket) -> None:
         logger.info("[ws-test] /ws/test connection closed")
 
 
+@app.post("/internal/livekit/start")
+async def livekit_room_start(request: Request):
+    """Intra-cluster hand-off target: run a LiveKit room pipeline ON THIS voice pod.
+
+    Inbound SIP calls land as LiveKit rooms; the API pod resolves the agent and POSTs here so the
+    media pipeline (STT/LLM/TTS + turn detection) runs on a voice pod instead of the API pod, whose
+    CPU limit is far too small for real-time inference. Cluster-only, same trust model and token as
+    the WS-bridge hand-off."""
+    from fastapi.responses import JSONResponse
+    from pipecat.runner.types import LiveKitRunnerArguments
+
+    from core.services.webrtc.dispatcher import LocalBotDispatcher
+
+    if _WORKER_MODE != "voice":
+        logger.warning("[sip] livekit start refused — not a voice pod (WORKER_MODE={!r})", _WORKER_MODE)
+        return JSONResponse({"detail": "not a voice pod"}, status_code=404)
+
+    token = settings.WS_BRIDGE_INTERNAL_TOKEN
+    if token and request.headers.get("x-ws-bridge-token") != token:
+        logger.warning("[sip] livekit start rejected — bad/missing x-ws-bridge-token")
+        return JSONResponse({"detail": "forbidden"}, status_code=403)
+
+    try:
+        body = await request.json()
+    except Exception:
+        return JSONResponse({"detail": "invalid JSON body"}, status_code=400)
+
+    room = (body.get("room") or "").strip()
+    url = (body.get("url") or "").strip()
+    room_token = (body.get("token") or "").strip()
+    agent_id = (body.get("agent_id") or "").strip()
+    if not room or not url or not room_token or not agent_id:
+        return JSONResponse(
+            {"detail": "room, url, token and agent_id are required"}, status_code=400
+        )
+
+    dispatcher = _livekit_dispatcher()
+    if dispatcher.is_active(room):
+        return JSONResponse({"room": room, "status": "already_running"}, status_code=200)
+
+    limit = settings.MAX_CONCURRENT_CALLS
+    if limit > 0 and _active_call_count() >= limit:
+        logger.info("[sip] livekit start at capacity room={} limit={}", room, limit)
+        return JSONResponse({"detail": "at capacity"}, status_code=429)
+
+    runner_args = LiveKitRunnerArguments(
+        room_name=room,
+        url=url,
+        token=room_token,
+        body={
+            "agent_id": agent_id,
+            "transport_type": "livekit",
+            "direction": body.get("direction") or "inbound",
+            "call_data": {
+                "from": body.get("from") or "",
+                "to": body.get("to") or "",
+                "call_id": room,
+                "stream_id": room,
+                "sip_trunk_id": body.get("trunk_id") or "",
+            },
+        },
+    )
+    logger.info("[sip] livekit pipeline starting on voice pod room={} agent={}", room, agent_id)
+    await dispatcher.dispatch(room, runner_args)
+    return JSONResponse({"room": room, "status": "started"}, status_code=202)
+
+
 @app.post("/internal/ws-bridge/start")
 async def ws_bridge_start(request: Request):
     """Intra-cluster hand-off target: run a WebSocket bridge ON THIS (outbound voice) pod.
