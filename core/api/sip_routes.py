@@ -52,7 +52,8 @@ def _verify(body: bytes, auth_header: str) -> Optional[tuple]:
         if not api_key or not api_secret:
             continue
         try:
-            event = api.WebhookReceiver(api_key, api_secret).receive(payload, auth_header)
+            receiver = api.WebhookReceiver(api.TokenVerifier(api_key, api_secret))
+            event = receiver.receive(payload, auth_header)
             return event, config
         except Exception as exc:
             logger.debug("[sip] livekit webhook not signed by channel org={}: {}",
