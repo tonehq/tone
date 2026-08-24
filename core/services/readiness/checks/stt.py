@@ -72,19 +72,23 @@ class STTApiKeyDecryptsCheck(_STTMixin, ApiKeyDecryptsCheck):
 
 
 class STTLanguageConfiguredCheck(_STTMixin, ShallowCheck):
-    """A language must be selected so the STT provider knows what to transcribe.
+    """Warn when no language is selected — STT falls back to the provider's
+    default (usually English), which is fine for English deployments but
+    silently mistranscribes any other language.
 
-    Providers like Deepgram, Sarvam, Speechmatics require an explicit
-    ``language`` / ``language_code`` — without it the provider either rejects
-    the request or auto-detects with unpredictable results. Two sources are
-    accepted (matches how ``service_resolver._build_service_specs`` reads
-    language today): the AgentConfig FK ``language_id`` OR the JSONB
+    ``WARNING`` severity, not blocker: every pipecat STT service ships an
+    English default (Cartesia, Deepgram, AssemblyAI, Whisper, Sarvam, …), so
+    a missing language never crashes the call. English-only agents work as-is
+    and shouldn't be blocked; non-English deployments need the drawer hint to
+    catch the misconfiguration before customers hear garbled transcripts.
+    Two sources are accepted (matches how ``service_resolver._build_service_specs``
+    reads language today): the AgentConfig FK ``language_id`` OR the JSONB
     ``stt_settings.language`` / ``.language_code`` key.
     """
 
     id: ClassVar[str] = "stt.language_configured"
     category: ClassVar[Category] = Category.STT
-    severity: ClassVar[Severity] = Severity.BLOCKER
+    severity: ClassVar[Severity] = Severity.WARNING
 
     async def run(self, ctx: CheckContext) -> CheckResult:
         if ctx.config is not None and getattr(ctx.config, "language_id", None):
@@ -94,8 +98,8 @@ class STTLanguageConfiguredCheck(_STTMixin, ShallowCheck):
         if lang:
             return self._pass(f"STT language configured: {lang}.")
         return self._fail(
-            "STT language not configured — provider needs to know which "
-            "language to transcribe.",
+            "STT language not configured — provider will default to English. "
+            "Non-English calls will be mistranscribed.",
             remediation=(
                 "Pick a language on the agent (Language tab) or set "
                 "'language' in the STT settings."
@@ -104,8 +108,13 @@ class STTLanguageConfiguredCheck(_STTMixin, ShallowCheck):
 
 
 class STTModelLanguageMatchCheck(_STTMixin, ShallowCheck):
-    """The selected STT model must declare support for the agent's language.
+    """Warn when the selected STT model doesn't declare support for the agent's
+    language.
 
+    ``WARNING`` severity: providers with a mismatched language typically fall
+    back to their default language or a coarser model, producing degraded
+    transcripts rather than a hard failure. The check surfaces the mismatch
+    so users can pick a language-supporting model, but doesn't block publish.
     Reads ``ModelLanguage`` join rows for ``ctx.stt.model``. Empty result set
     means the model's language metadata isn't seeded — SKIP rather than fail,
     so older models don't regress passing agents.
@@ -113,7 +122,7 @@ class STTModelLanguageMatchCheck(_STTMixin, ShallowCheck):
 
     id: ClassVar[str] = "stt.model_language_match"
     category: ClassVar[Category] = Category.STT
-    severity: ClassVar[Severity] = Severity.BLOCKER
+    severity: ClassVar[Severity] = Severity.WARNING
 
     def applies(self, ctx: CheckContext) -> bool:
         return not ctx.is_s2s and ctx.stt.model is not None

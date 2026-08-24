@@ -69,17 +69,22 @@ class TTSApiKeyDecryptsCheck(_TTSMixin, ApiKeyDecryptsCheck):
 
 
 class TTSLanguageConfiguredCheck(_TTSMixin, ShallowCheck):
-    """A language must be selected so the TTS provider synthesises in the
-    intended locale (and so the voice/language pairing is meaningful).
+    """Warn when no language is selected — TTS falls back to the provider's
+    default (usually English), which is fine for English deployments but
+    silently synthesises non-English content with the wrong accent/phonemes.
 
-    Two sources are accepted (matches how ``service_resolver._build_service_specs``
-    reads language today): the AgentConfig FK ``language_id`` OR the JSONB
+    ``WARNING`` severity, not blocker: pipecat TTS services default to English
+    voices when no language is passed, so a missing language never breaks the
+    call. English-only agents work as-is; non-English deployments need the
+    drawer hint to catch the misconfiguration. Two sources are accepted
+    (matches how ``service_resolver._build_service_specs`` reads language today):
+    the AgentConfig FK ``language_id`` OR the JSONB
     ``voice_settings.language`` / ``.language_code`` key.
     """
 
     id: ClassVar[str] = "tts.language_configured"
     category: ClassVar[Category] = Category.TTS
-    severity: ClassVar[Severity] = Severity.BLOCKER
+    severity: ClassVar[Severity] = Severity.WARNING
 
     async def run(self, ctx: CheckContext) -> CheckResult:
         if ctx.config is not None and getattr(ctx.config, "language_id", None):
@@ -89,8 +94,8 @@ class TTSLanguageConfiguredCheck(_TTSMixin, ShallowCheck):
         if lang:
             return self._pass(f"TTS language configured: {lang}.")
         return self._fail(
-            "TTS language not configured — voice output will fail or "
-            "default to English unpredictably.",
+            "TTS language not configured — voice will default to English. "
+            "Non-English content will sound wrong.",
             remediation=(
                 "Pick a language on the agent (Language tab) or set "
                 "'language' in the voice settings."
@@ -125,21 +130,21 @@ class TTSVoiceSelectedCheck(_TTSMixin, ShallowCheck):
 
 
 class TTSVoiceLanguageMatchCheck(_TTSMixin, ShallowCheck):
-    """The selected voice must declare support for the agent's language.
+    """Warn when the selected voice doesn't declare support for the agent's
+    language.
 
     ``ModelVoice.language_list`` is a JSONB array of provider-specific codes
     (e.g. ``["en", "hi", "es"]``). If the code isn't in the list, the voice
-    still "works" but sounds wrong — the wrong-accent / wrong-phonemes
-    failure is silent at call time. Fail loudly here instead.
-
-    Skipped for legacy voices whose ``language_list`` is empty/null (metadata
-    not seeded) so this check never false-flags an agent that was passing
-    yesterday.
+    still "works" — the wrong-accent / wrong-phonemes failure is a quality
+    problem, not a hard failure — so this is a WARNING that surfaces in the
+    drawer without blocking publish. Skipped for legacy voices whose
+    ``language_list`` is empty/null (metadata not seeded) so the check never
+    false-flags an agent that was passing yesterday.
     """
 
     id: ClassVar[str] = "tts.voice_language_match"
     category: ClassVar[Category] = Category.TTS
-    severity: ClassVar[Severity] = Severity.BLOCKER
+    severity: ClassVar[Severity] = Severity.WARNING
 
     def applies(self, ctx: CheckContext) -> bool:
         return not ctx.is_s2s and ctx.voice is not None
@@ -178,16 +183,20 @@ class TTSVoiceLanguageMatchCheck(_TTSMixin, ShallowCheck):
 
 
 class TTSModelLanguageMatchCheck(_TTSMixin, ShallowCheck):
-    """The selected TTS model must declare support for the agent's language.
+    """Warn when the selected TTS model doesn't declare support for the agent's
+    language.
 
-    Reads ``ModelLanguage`` join rows for ``ctx.tts.model``. Empty result set
-    means the model's language metadata isn't seeded — SKIP rather than fail,
-    so older models don't regress passing agents.
+    ``WARNING`` severity: TTS providers with a mismatched language usually
+    fall back to their default language or a degraded voice rather than
+    hard-failing. The check surfaces the mismatch so users can pick a
+    language-supporting model, but doesn't block publish. Empty
+    ``ModelLanguage`` result set means metadata isn't seeded — SKIP rather
+    than fail, so older models don't regress passing agents.
     """
 
     id: ClassVar[str] = "tts.model_language_match"
     category: ClassVar[Category] = Category.TTS
-    severity: ClassVar[Severity] = Severity.BLOCKER
+    severity: ClassVar[Severity] = Severity.WARNING
 
     def applies(self, ctx: CheckContext) -> bool:
         return not ctx.is_s2s and ctx.tts.model is not None
