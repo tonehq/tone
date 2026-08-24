@@ -1,4 +1,4 @@
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 
 from loguru import logger
 
@@ -11,7 +11,11 @@ class GenericSipCarrier(SipCarrier):
     carrier_type = "generic"
 
     def provision_trunk(
-        self, trunk, credentials: Dict[str, Any], termination: TerminationEndpoint
+        self,
+        trunk,
+        credentials: Dict[str, Any],
+        termination: TerminationEndpoint,
+        auth: Optional[Dict[str, str]] = None,
     ) -> CarrierProvisionResult:
         logger.info("[sip] generic trunk provisioned locally trunk={}", trunk.id)
         return CarrierProvisionResult(

@@ -119,7 +119,7 @@ export default function SipTrunkGrid({
       fullWidth
       onClick={openAdd}
       className={cn(
-        '!h-auto group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
+        'h-auto! group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
         'hover:border-foreground/30 hover:bg-background hover:text-foreground hover:shadow-sm',
       )}
     >

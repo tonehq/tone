@@ -1,3 +1,4 @@
+import secrets
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
@@ -164,7 +165,8 @@ class SipTrunkService(BaseService):
         credentials = self._carrier_credentials(record)
         try:
             result = get_carrier(record.carrier).provision_trunk(
-                record, credentials, self.termination_endpoint()
+                record, credentials, self.termination_endpoint(),
+                self.outbound_credentials(record),
             )
             record.carrier_config = {**(record.carrier_config or {}), **result.carrier_ids}
             termination_payload = self.termination_payload(record)
@@ -364,6 +366,22 @@ class SipTrunkService(BaseService):
         record.status_detail = None
         self.db.commit()
 
+    def outbound_credentials(self, record: SipTrunk) -> Dict[str, str]:
+        auth = trunk_auth(record)
+        username = auth.get("auth_username") or auth.get("outbound_username") or ""
+        password = auth.get("auth_password") or auth.get("outbound_password") or ""
+        if username and password:
+            return {"auth_username": username, "auth_password": password}
+
+        username = f"tone{str(record.id).replace('-', '')[:12]}"
+        password = secrets.token_urlsafe(21)
+        record.encrypted_auth = encrypt_json(
+            {**auth, "outbound_username": username, "outbound_password": password}
+        )
+        self.db.commit()
+        logger.info("[sip] generated outbound credentials trunk={}", record.id)
+        return {"auth_username": username, "auth_password": password}
+
     def termination_payload(self, record: SipTrunk) -> Dict[str, Any]:
         auth = trunk_auth(record)
         numbers = [
@@ -389,8 +407,7 @@ class SipTrunkService(BaseService):
             "outbound": {
                 "enabled": bool(record.outbound_enabled and record.is_active),
                 "gateways": validation.outbound_gateways(record.gateways),
-                "auth_username": auth.get("auth_username") or "",
-                "auth_password": auth.get("auth_password") or "",
+                **self.outbound_credentials(record),
             },
             "media_encryption": record.media_encryption,
         }

@@ -1,4 +1,5 @@
 import asyncio
+import ipaddress
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
@@ -21,6 +22,20 @@ def livekit_sip_host(livekit_url: str) -> str:
         return host
     project, _, domain = host.partition(".")
     return f"{project}.sip.{domain}" if project and domain else ""
+
+
+def ip_acl_entries(hosts: List[str]) -> List[str]:
+    entries = []
+    for host in hosts or []:
+        try:
+            entries.append(str(ipaddress.ip_network(host, strict=False)))
+        except ValueError:
+            logger.info(
+                "[sip] livekit ip-acl skipping non-IP gateway host {} — LiveKit allows "
+                "IP addresses and CIDR blocks only",
+                host,
+            )
+    return entries
 
 
 def _http_url(livekit_url: str) -> str:
@@ -81,23 +96,7 @@ class LiveKitTermination:
                 "dispatch_rule_id": "",
             }
 
-            for old_id in (existing.get("inbound_trunk_id"), existing.get("outbound_trunk_id")):
-                if old_id:
-                    try:
-                        await client.sip.delete_sip_trunk(
-                            api.DeleteSIPTrunkRequest(sip_trunk_id=old_id)
-                        )
-                    except Exception as exc:
-                        logger.debug("[sip] livekit trunk {} already gone: {}", old_id, exc)
-            if existing.get("dispatch_rule_id"):
-                try:
-                    await client.sip.delete_sip_dispatch_rule(
-                        api.DeleteSIPDispatchRuleRequest(
-                            sip_dispatch_rule_id=existing["dispatch_rule_id"]
-                        )
-                    )
-                except Exception as exc:
-                    logger.debug("[sip] livekit dispatch rule already gone: {}", exc)
+            await self._purge_existing(client, payload["trunk_id"], name, existing)
 
             if not numbers:
                 logger.info(
@@ -117,7 +116,9 @@ class LiveKitTermination:
                     trunk.auth_username = inbound.get("auth_username") or ""
                     trunk.auth_password = inbound.get("auth_password") or ""
                 else:
-                    trunk.allowed_addresses.extend(inbound.get("allowed_hosts") or [])
+                    trunk.allowed_addresses.extend(
+                        ip_acl_entries(inbound.get("allowed_hosts") or [])
+                    )
                 created = await client.sip.create_sip_inbound_trunk(
                     api.CreateSIPInboundTrunkRequest(trunk=trunk)
                 )
@@ -159,6 +160,42 @@ class LiveKitTermination:
         ids = self._run(_sync)
         logger.info("[sip] livekit trunk synced trunk={} ids={}", payload.get("trunk_id"), ids)
         return ids
+
+    @staticmethod
+    async def _purge_existing(
+        client, trunk_id: str, name: str, existing: Dict[str, Any]
+    ) -> None:
+        def owned(item) -> bool:
+            return getattr(item, "metadata", "") == trunk_id or getattr(item, "name", "") == name
+
+        try:
+            rules = await client.sip.list_sip_dispatch_rule(api.ListSIPDispatchRuleRequest())
+            for rule in rules.items:
+                if owned(rule) or rule.sip_dispatch_rule_id == existing.get("dispatch_rule_id"):
+                    await client.sip.delete_sip_dispatch_rule(
+                        api.DeleteSIPDispatchRuleRequest(
+                            sip_dispatch_rule_id=rule.sip_dispatch_rule_id
+                        )
+                    )
+                    logger.info("[sip] livekit removed dispatch rule {}", rule.sip_dispatch_rule_id)
+        except Exception as exc:
+            logger.debug("[sip] livekit dispatch rule cleanup skipped: {}", exc)
+
+        tracked = {existing.get("inbound_trunk_id"), existing.get("outbound_trunk_id")}
+        for lister, request in (
+            (client.sip.list_sip_inbound_trunk, api.ListSIPInboundTrunkRequest()),
+            (client.sip.list_sip_outbound_trunk, api.ListSIPOutboundTrunkRequest()),
+        ):
+            try:
+                found = await lister(request)
+                for item in found.items:
+                    if owned(item) or item.sip_trunk_id in tracked:
+                        await client.sip.delete_sip_trunk(
+                            api.DeleteSIPTrunkRequest(sip_trunk_id=item.sip_trunk_id)
+                        )
+                        logger.info("[sip] livekit removed trunk {}", item.sip_trunk_id)
+            except Exception as exc:
+                logger.debug("[sip] livekit trunk cleanup skipped: {}", exc)
 
     @staticmethod
     def _transport(transport: Optional[str]):
