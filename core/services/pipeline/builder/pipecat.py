@@ -247,7 +247,13 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # the author remembered to bind. loguru's bind() composes: a later
         # ``.bind(agent_id=agent.id, ...)`` overrides ``agent_id`` for that
         # single line but keeps ``organization_id`` inherited from this base.
-        logger = logger.bind(agent_id=_agent_id, organization_id=_org_id)
+        #
+        # ``globals()["logger"]`` on the RHS is required, NOT stylistic: assigning
+        # to a name marks it local for the whole function scope, so a bare
+        # ``logger = logger.bind(...)`` raises ``UnboundLocalError`` (the RHS
+        # tries to read the not-yet-assigned local ``logger``). Reading through
+        # ``globals()`` bypasses the local lookup and grabs the module import.
+        logger = globals()["logger"].bind(agent_id=_agent_id, organization_id=_org_id)
         logger.bind(
             is_s2s=is_s2s,
             llm_provider=(params.llm or {}).get("provider_name"),

@@ -24,6 +24,28 @@ export function categoriesToProbeOnSave(
   const prevCfg = prev.config;
   const nextCfg = next.config;
 
+  // Agent-level content (prompt / workflow attach / mode / language) — any of
+  // these change the AGENT-category shallow checks (prompt-or-workflow,
+  // workflow validity). Language changes also cascade into STT/TTS
+  // model-language and TTS voice-language checks, so we add those too.
+  if (
+    prevCfg.mode !== nextCfg.mode ||
+    prevCfg.system_prompt_template !== nextCfg.system_prompt_template ||
+    prevCfg.workflow_id !== nextCfg.workflow_id
+  ) {
+    changed.add('agent');
+  }
+  if (prevCfg.language_id !== nextCfg.language_id) {
+    changed.add('agent');
+    changed.add('stt');
+    changed.add('tts');
+  }
+  // Embedding model swap affects the KB-embedding checks (model configured,
+  // key usable, vector-space match against KB ingestion runs).
+  if (prevCfg.knowledge_model_id !== nextCfg.knowledge_model_id) {
+    changed.add('knowledge_bases');
+  }
+
   if (!isEqual(prevCfg.llm_settings, nextCfg.llm_settings)) changed.add('llm');
   if (!isEqual(prevCfg.stt_settings, nextCfg.stt_settings)) changed.add('stt');
   if (!isEqual(prevCfg.voice_settings, nextCfg.voice_settings)) changed.add('tts');
@@ -44,7 +66,11 @@ export function categoriesToProbeOnSave(
     changed.add('mcp_servers');
   }
   if (!isEqual(prev.upload_ids, next.upload_ids)) changed.add('knowledge_bases');
-  if (!isEqual(prev.phone_numbers, next.phone_numbers)) changed.add('phone');
+  // Phone-number changes also affect telephony-account credit probe (transport).
+  if (!isEqual(prev.phone_numbers, next.phone_numbers)) {
+    changed.add('phone');
+    changed.add('transport');
+  }
 
   return Array.from(changed);
 }

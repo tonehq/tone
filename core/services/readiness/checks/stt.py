@@ -13,6 +13,7 @@ from typing import ClassVar
 from core.services.readiness.base import (
     CheckContext,
     DeepCheck,
+    ShallowCheck,
     with_timeout_and_retry,
 )
 from core.services.readiness.checks._common import (
@@ -21,7 +22,12 @@ from core.services.readiness.checks._common import (
     ModelConfiguredCheck,
     ProviderConfiguredCheck,
 )
-from core.services.readiness.schemas import Category, CheckResult, Severity
+from core.services.readiness.schemas import (
+    Category,
+    CheckResult,
+    ResourceRef,
+    Severity,
+)
 
 
 _S2S_SKIP_REASON = "Speech-to-speech mode — STT is handled by the LLM."
@@ -63,6 +69,103 @@ class STTApiKeyDecryptsCheck(_STTMixin, ApiKeyDecryptsCheck):
     category: ClassVar[Category] = Category.STT
     spec_attr: ClassVar[str] = "stt"
     service_label: ClassVar[str] = "STT"
+
+
+class STTLanguageConfiguredCheck(_STTMixin, ShallowCheck):
+    """Warn when no language is selected — STT falls back to the provider's
+    default (usually English), which is fine for English deployments but
+    silently mistranscribes any other language.
+
+    ``WARNING`` severity, not blocker: every pipecat STT service ships an
+    English default (Cartesia, Deepgram, AssemblyAI, Whisper, Sarvam, …), so
+    a missing language never crashes the call. English-only agents work as-is
+    and shouldn't be blocked; non-English deployments need the drawer hint to
+    catch the misconfiguration before customers hear garbled transcripts.
+    Two sources are accepted (matches how ``service_resolver._build_service_specs``
+    reads language today): the AgentConfig FK ``language_id`` OR the JSONB
+    ``stt_settings.language`` / ``.language_code`` key.
+    """
+
+    id: ClassVar[str] = "stt.language_configured"
+    category: ClassVar[Category] = Category.STT
+    severity: ClassVar[Severity] = Severity.WARNING
+
+    async def run(self, ctx: CheckContext) -> CheckResult:
+        if ctx.config is not None and getattr(ctx.config, "language_id", None):
+            return self._pass("STT language selected on agent.")
+        settings = ctx.stt.settings or {}
+        lang = settings.get("language_code") or settings.get("language")
+        if lang:
+            return self._pass(f"STT language configured: {lang}.")
+        return self._fail(
+            "STT language not configured — provider will default to English. "
+            "Non-English calls will be mistranscribed.",
+            remediation=(
+                "Pick a language on the agent (Language tab) or set "
+                "'language' in the STT settings."
+            ),
+        )
+
+
+class STTModelLanguageMatchCheck(_STTMixin, ShallowCheck):
+    """Warn when the selected STT model doesn't declare support for the agent's
+    language.
+
+    ``WARNING`` severity: providers with a mismatched language typically fall
+    back to their default language or a coarser model, producing degraded
+    transcripts rather than a hard failure. The check surfaces the mismatch
+    so users can pick a language-supporting model, but doesn't block publish.
+    Reads ``ModelLanguage`` join rows for ``ctx.stt.model``. Empty result set
+    means the model's language metadata isn't seeded — SKIP rather than fail,
+    so older models don't regress passing agents.
+    """
+
+    id: ClassVar[str] = "stt.model_language_match"
+    category: ClassVar[Category] = Category.STT
+    severity: ClassVar[Severity] = Severity.WARNING
+
+    def applies(self, ctx: CheckContext) -> bool:
+        return not ctx.is_s2s and ctx.stt.model is not None
+
+    def skip_reason(self, ctx: CheckContext) -> str:
+        if ctx.is_s2s:
+            return _S2S_SKIP_REASON
+        return "STT model not resolved."
+
+    async def run(self, ctx: CheckContext) -> CheckResult:
+        from core.models.model_language import ModelLanguage
+        from core.services.readiness.checks._language import resolve_language_code
+
+        code = resolve_language_code(ctx, "stt")
+        if not code:
+            return self._skip("Language not configured (see language check).")
+
+        rows = (
+            ctx.db.query(ModelLanguage.name)
+            .filter(
+                ModelLanguage.model_id == ctx.stt.model.id,
+                ModelLanguage.is_active.is_(True),
+            )
+            .all()
+        )
+        if not rows:
+            return self._skip(
+                "STT model does not declare supported languages (metadata not seeded)."
+            )
+        supported = {str(r[0]).strip().lower() for r in rows if r[0]}
+        if code.lower() not in supported:
+            return self._fail(
+                f"STT model '{ctx.stt.model.name}' does not support language "
+                f"'{code}'.",
+                remediation=(
+                    "Pick an STT model that supports the language, or switch "
+                    "the language."
+                ),
+                resource_ref=ResourceRef(type="model", id=str(ctx.stt.model.id)),
+            )
+        return self._pass(
+            f"STT model '{ctx.stt.model.name}' supports language '{code}'."
+        )
 
 
 class STTProviderReachableCheck(DeepCheck):

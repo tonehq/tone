@@ -33,6 +33,7 @@ class Category(str, Enum):
     fail at runtime and that the CRUD layer can't validate on save.
     """
 
+    AGENT = "agent"
     LLM = "llm"
     STT = "stt"
     TTS = "tts"

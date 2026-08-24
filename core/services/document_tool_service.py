@@ -421,7 +421,25 @@ def get_kb_document_names(agent_id: int) -> Optional[dict]:
         )
 
     if not doc_names:
+        logger.bind(agent_id=agent_id).debug(
+            "[doc-tool] agent {} has no ready KB uploads on the published config",
+            agent_id,
+        )
         return None
+    # One aggregate line per resolve so a "KB shows N docs but only M were
+    # searchable" report is one grep away. Names + counts only — no
+    # embeddings, no chunk contents (potential customer data).
+    unresolved_count = len(upload_ids) - len(upload_runs)
+    logger.bind(
+        agent_id=agent_id,
+        doc_count=len(doc_names),
+        upload_count=len(upload_ids),
+        resolved_upload_count=len(upload_runs),
+        unresolved_upload_count=unresolved_count,
+    ).info(
+        "[doc-tool] resolved KB uploads agent={} uploads={} resolved_runs={} unresolved={}",
+        agent_id, len(upload_ids), len(upload_runs), unresolved_count,
+    )
     return {
         "document_names": doc_names,
         "upload_ids": upload_ids,
@@ -440,14 +458,31 @@ def build_document_tool(
     Returns the ToolsSchema (for LLMContext) or None if the agent has no KB documents.
     """
     if not kb or not kb.get("document_names"):
-        logger.info("Agent {} has no KB documents, skipping tool registration", agent_id)
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            kb_configured=bool(kb),
+        ).info(
+            "[doc-tool] agent {} has no KB documents — skipping tool registration",
+            agent_id,
+        )
         return None
 
     doc_names = kb["document_names"]
     upload_runs = kb.get("upload_runs") or []
     if not upload_runs:
-        logger.warning(
-            "Agent {} has KB documents but no active ingestion runs; skipping tool", agent_id
+        # Documents exist but none have a resolvable ingestion run — surface
+        # the count so operators can see WHICH KBs are stalled without
+        # opening the DB. This is a common misconfiguration (upload uploaded
+        # but never ingested) that used to be invisible.
+        logger.bind(
+            agent_id=agent_id,
+            organization_id=org_id,
+            doc_count=len(doc_names),
+        ).warning(
+            "[doc-tool] agent {} has {} KB document(s) but NO active ingestion runs — "
+            "skipping tool registration (docs: {})",
+            agent_id, len(doc_names), doc_names,
         )
         return None
 
@@ -459,7 +494,15 @@ def build_document_tool(
         current_turn=current_turn,
     )
     llm.register_function("read_document", handler)
-    logger.info("Registered read_document tool for agent {} with docs: {}", agent_id, doc_names)
+    logger.bind(
+        agent_id=agent_id,
+        organization_id=org_id,
+        doc_count=len(doc_names),
+        upload_run_count=len(upload_runs),
+    ).info(
+        "[doc-tool] registered read_document tool agent={} docs={} upload_runs={} names={}",
+        agent_id, len(doc_names), len(upload_runs), doc_names,
+    )
     return tools_schema
 
 
