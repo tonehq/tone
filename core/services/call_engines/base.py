@@ -64,3 +64,14 @@ class CallEngine(ABC):
     def generate_twiml(self, ws_url: str, params: Dict[str, str]) -> str:
         """Render the answer instructions that bridge the call to ``ws_url`` with the
         given ``<Parameter>`` values (agent_id, direction, from, to, scheduled_call_id)."""
+
+    def transfer_call(
+        self, call_id: str, sip_address: str, headers: Optional[Dict[str, str]] = None
+    ) -> bool:
+        """Blind-transfer an in-flight call to ``sip_address`` via SIP REFER.
+
+        Optional: providers that cannot REFER raise ``NotImplementedError``. Implemented
+        by the Telnyx (call-control REFER) and SIP-trunk (SBC REFER) engines."""
+        raise NotImplementedError(
+            f"{self.provider_name} does not support SIP REFER transfer."
+        )

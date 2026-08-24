@@ -14,6 +14,7 @@ from fastapi.responses import JSONResponse
 from pipecat.runner.types import WebSocketRunnerArguments
 
 from core.bot import bot
+from core.services.transport import build_sip_call_body
 from shared.config import settings
 from core.internal.machine import generate_fingerprint
 from core.internal.license import init_license_validator, get_license_info
@@ -30,7 +31,7 @@ _LOAD_FULL_API = _WORKER_MODE != "voice"
 
 # webrtc router is always loaded — call pods receive
 #   POST /api/v1/webrtc/agent/{id}/start   (via /pod/{N}/... pod-pinning)
-from core.api.v1 import webrtc
+from core.api.v1 import sip_trunks, webrtc
 
 if _LOAD_FULL_API:
     from core.api.v1 import (
@@ -45,6 +46,7 @@ if _LOAD_FULL_API:
     )
 from core.middleware.request_context import RequestContextMiddleware
 from core.api.telephony_routes import router as telephony_router
+from core.api.sip_routes import router as sip_router
 from core.api.monitoring_routes import (
     router as monitoring_router,
     active_calls_inc,
@@ -140,6 +142,7 @@ if ee_enabled:
         api_v1.include_router(ee_organizations.router, prefix="/organization", tags=["organization"])
         api_v1.include_router(ee_agent_configs.router, prefix="/agent_config", tags=["agent_config"])
         api_v1.include_router(ee_channels.router, prefix="/channel", tags=["channel"])
+        api_v1.include_router(sip_trunks.router, prefix="/sip-trunk", tags=["sip-trunk"])
         api_v1.include_router(ee_oauth.router, prefix="/oauth", tags=["oauth"])
         from ee.api.v1 import knowledge_base as ee_knowledge_base
         api_v1.include_router(ee_knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
@@ -193,6 +196,7 @@ else:
         api_v1.include_router(organizations.router, prefix="/organization", tags=["organization"])
         api_v1.include_router(agent_configs.router, prefix="/agent_config", tags=["agent_config"])
         api_v1.include_router(channels.router, prefix="/channel", tags=["channel"])
+        api_v1.include_router(sip_trunks.router, prefix="/sip-trunk", tags=["sip-trunk"])
         api_v1.include_router(oauth.router, prefix="/oauth", tags=["oauth"])
         api_v1.include_router(knowledge_base.router, prefix="/knowledge-base", tags=["knowledge-base"])
         api_v1.include_router(agents.router, prefix="/agent", tags=["agent"])
@@ -346,6 +350,7 @@ def environment():
 
 
 app.include_router(telephony_router)
+app.include_router(sip_router)
 app.include_router(monitoring_router)
 
 
@@ -358,6 +363,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         for key in ("agent_id", "direction", "scheduled_call_id")
         if (value := (websocket.query_params.get(key) or "").strip())
     }
+    sip_body = build_sip_call_body(websocket.query_params)
+    if sip_body:
+        body.update(sip_body)
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     try:
         active_calls_inc()
