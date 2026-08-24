@@ -1,4 +1,4 @@
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Request
 from livekit import api
@@ -21,23 +21,47 @@ SIP_ATTR_CALLER_NUMBER = "sip.phoneNumber"
 SIP_ATTR_TRUNK_ID = "sip.trunkID"
 
 
-def _livekit_config(org_id=None) -> Dict[str, Any]:
-    return channel_config("livekit", org_id=org_id)
+def _livekit_channels() -> List[Dict[str, Any]]:
+    from core.models.channel import Channel
+    from core.utils.encryption import decrypt_json
+
+    configs = []
+    with get_db_context() as db:
+        for row in db.query(Channel).filter(Channel.channel_type == "livekit").all():
+            if not row.encrypted_config:
+                continue
+            try:
+                cfg = decrypt_json(row.encrypted_config) or {}
+            except Exception:
+                logger.exception("[sip] could not decrypt livekit channel {}", row.id)
+                continue
+            cfg["organization_id"] = row.organization_id
+            configs.append(cfg)
+    return configs
 
 
-def _verify(body: bytes, auth_header: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    api_key = (config.get("api_key") or "").strip()
-    api_secret = (config.get("api_secret") or "").strip()
-    if not api_key or not api_secret:
+def _verify(body: bytes, auth_header: str) -> Optional[tuple]:
+    payload = body.decode("utf-8")
+    channels = _livekit_channels()
+    if not channels:
         logger.warning("[sip] livekit webhook rejected — no livekit channel configured")
         return None
-    try:
-        receiver = api.WebhookReceiver(api_key, api_secret)
-        event = receiver.receive(body.decode("utf-8"), auth_header)
-        return event
-    except Exception:
-        logger.exception("[sip] livekit webhook signature verification failed")
-        return None
+    for config in channels:
+        api_key = (config.get("api_key") or "").strip()
+        api_secret = (config.get("api_secret") or "").strip()
+        if not api_key or not api_secret:
+            continue
+        try:
+            event = api.WebhookReceiver(api_key, api_secret).receive(payload, auth_header)
+            return event, config
+        except Exception as exc:
+            logger.debug("[sip] livekit webhook not signed by channel org={}: {}",
+                         config.get("organization_id"), exc)
+    logger.warning(
+        "[sip] livekit webhook rejected — signature did not match any of {} livekit channels",
+        len(channels),
+    )
+    return None
 
 
 def _participant_numbers(participant) -> Dict[str, str]:
@@ -52,12 +76,14 @@ def _participant_numbers(participant) -> Dict[str, str]:
 @router.post("/sip/livekit-webhook")
 async def livekit_webhook(request: Request) -> Dict[str, Any]:
     raw = await request.body()
-    config = _livekit_config()
-    event = _verify(raw, request.headers.get("authorization", ""), config)
-    if event is None:
+    verified = _verify(raw, request.headers.get("authorization", ""))
+    if verified is None:
         return {"ok": False}
+    event, config = verified
 
     event_name = getattr(event, "event", "")
+    room_name = getattr(getattr(event, "room", None), "name", "")
+    logger.info("[sip] livekit webhook event={} room={}", event_name, room_name)
     if event_name != "participant_joined":
         return {"ok": True}
 
@@ -68,9 +94,12 @@ async def livekit_webhook(request: Request) -> Dict[str, Any]:
 
     numbers = _participant_numbers(participant)
     if not numbers["to"]:
+        logger.warning(
+            "[sip] participant_joined without a dialled number room={} attributes={}",
+            room_name, dict(getattr(participant, "attributes", {}) or {}),
+        )
         return {"ok": True}
 
-    room_name = room.name
     if _dispatcher.is_active(room_name):
         return {"ok": True}
 
