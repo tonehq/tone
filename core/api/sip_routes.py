@@ -2,18 +2,26 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
+import httpx
 from fastapi import APIRouter, BackgroundTasks, Request
 from livekit import api
 from loguru import logger
 from pipecat.runner.types import LiveKitRunnerArguments
 
 from core.database.session import get_db_context
+from core.models.channel import Channel
+from core.models.scheduled_call import ScheduledCall
 from core.services.agent_runner_service import AgentRunnerService
+from core.services.outbound_call_service import OutboundCallService
+from core.services.pod_picker import PodPicker
 from core.services.sip.livekit_termination import (BOT_IDENTITY, SIP_ROOM_PREFIX,
                                                    LiveKitTermination)
 from core.services.transport.telephony_credentials import channel_config
 from core.services.webrtc.dispatcher import LocalBotDispatcher
+from core.utils.encryption import decrypt_json
 from shared.config import settings
+
+_HANDOFF_TIMEOUT_SECONDS = 10.0
 
 router = APIRouter()
 
@@ -25,9 +33,6 @@ SIP_ATTR_TRUNK_ID = "sip.trunkID"
 
 
 def _livekit_channels() -> List[Dict[str, Any]]:
-    from core.models.channel import Channel
-    from core.utils.encryption import decrypt_json
-
     configs = []
     with get_db_context() as db:
         for row in db.query(Channel).filter(Channel.channel_type == "livekit").all():
@@ -113,8 +118,45 @@ async def _numbers_from_room(config: Dict[str, Any], room_name: str) -> Dict[str
     return {"to": "", "from": "", "trunk_id": ""}
 
 
-async def _dispatch_bot(room_name: str, runner_args) -> None:
+async def _handoff_to_voice_pod(payload: Dict[str, Any]) -> bool:
+    with get_db_context() as db:
+        picker = PodPicker(db)
+        pod = picker.pick()
+        base = picker.http_base_for(pod)
+        pod_name = pod.name if pod is not None else None
+
+    if not base:
+        logger.warning("[sip] no voice pod available — running pipeline locally room={}",
+                       payload.get("room"))
+        return False
+
+    headers = {"Content-Type": "application/json"}
+    if settings.WS_BRIDGE_INTERNAL_TOKEN:
+        headers["x-ws-bridge-token"] = settings.WS_BRIDGE_INTERNAL_TOKEN
     try:
+        async with httpx.AsyncClient(timeout=_HANDOFF_TIMEOUT_SECONDS) as client:
+            response = await client.post(
+                f"{base}/internal/livekit/start", json=payload, headers=headers
+            )
+    except Exception:
+        logger.exception("[sip] voice pod hand-off failed pod={} room={}", pod_name,
+                         payload.get("room"))
+        return False
+
+    if response.status_code in (200, 202):
+        logger.info("[sip] pipeline handed off to voice pod={} room={}", pod_name,
+                    payload.get("room"))
+        return True
+    logger.warning("[sip] voice pod refused hand-off pod={} status={} body={}",
+                   pod_name, response.status_code, response.text[:200])
+    return False
+
+
+async def _dispatch_bot(room_name: str, runner_args, handoff: Dict[str, Any]) -> None:
+    try:
+        if await _handoff_to_voice_pod(handoff):
+            _dispatcher.release(room_name)
+            return
         await _dispatcher.dispatch_reserved(room_name, runner_args)
     except Exception:
         logger.exception("[sip] bot dispatch failed room={}", room_name)
@@ -199,15 +241,22 @@ async def livekit_webhook(
     )
     if not _dispatcher.reserve(room_name):
         return {"ok": True}
-    background.add_task(_dispatch_bot, room_name, runner_args)
+    handoff = {
+        "room": room_name,
+        "url": grant["url"],
+        "token": grant["token"],
+        "agent_id": str(agent.id),
+        "direction": "inbound",
+        "from": numbers["from"],
+        "to": numbers["to"],
+        "trunk_id": numbers.get("trunk_id") or "",
+    }
+    background.add_task(_dispatch_bot, room_name, runner_args, handoff)
     return {"ok": True, "agent_id": str(agent.id), "room": room_name}
 
 
 @router.post("/sip/status")
 async def sip_status(request: Request) -> Dict[str, Any]:
-    from core.models.scheduled_call import ScheduledCall
-    from core.services.outbound_call_service import OutboundCallService
-
     try:
         payload = await request.json()
     except Exception:
