@@ -107,12 +107,34 @@ class TelnyxSipCarrier(SipCarrier):
         )
         return data.get("data", {}).get("id", "")
 
-    def _ensure_connection(self, trunk, credentials: Dict[str, Any]) -> str:
+    @staticmethod
+    def _outbound_auth(trunk, auth: Optional[Dict[str, str]]) -> Dict[str, Any]:
+        auth = auth or {}
+        if not auth.get("auth_username") or not auth.get("auth_password"):
+            raise SipCarrierError(
+                "Outbound credentials are missing for this trunk — Telnyx needs a "
+                "username and password to authenticate outbound calls."
+            )
+        return {
+            "fqdn_authentication_method": "credential-authentication",
+            "user_name": auth["auth_username"],
+            "password": auth["auth_password"],
+        }
+
+    def _ensure_connection(
+        self, trunk, credentials: Dict[str, Any], auth: Optional[Dict[str, str]] = None
+    ) -> str:
+        outbound_auth = self._outbound_auth(trunk, auth)
         payload: Dict[str, Any] = {
             "connection_name": self._resource_name(trunk),
             "transport_protocol": self._connection_transport(trunk),
             "active": bool(trunk.is_active),
+            "user_name": outbound_auth["user_name"],
+            "password": outbound_auth["password"],
             "inbound": {"ani_number_format": "+E.164", "dnis_number_format": "+e164"},
+            "outbound": {
+                "fqdn_authentication_method": outbound_auth["fqdn_authentication_method"]
+            },
         }
         if trunk.media_encryption == "srtp":
             payload["encrypted_media"] = "SRTP"
@@ -127,13 +149,22 @@ class TelnyxSipCarrier(SipCarrier):
         return data.get("data", {}).get("id", "")
 
     def _assign_outbound_profile(
-        self, credentials: Dict[str, Any], connection_id: str, outbound_voice_profile_id: str
+        self,
+        credentials: Dict[str, Any],
+        connection_id: str,
+        outbound_voice_profile_id: str,
+        outbound_auth: Dict[str, Any],
     ) -> None:
         self._request(
             "PATCH",
             f"/fqdn_connections/{connection_id}",
             credentials,
-            payload={"outbound": {"outbound_voice_profile_id": outbound_voice_profile_id}},
+            payload={
+                "outbound": {
+                    "outbound_voice_profile_id": outbound_voice_profile_id,
+                    "fqdn_authentication_method": outbound_auth["fqdn_authentication_method"],
+                }
+            },
         )
 
     def _ensure_fqdn(
@@ -156,21 +187,63 @@ class TelnyxSipCarrier(SipCarrier):
             "dns_record_type": "a",
         }
         if fqdn_id:
-            self._request("PATCH", f"/fqdns/{fqdn_id}", credentials, payload=payload)
-            return fqdn_id
+            try:
+                self._request("PATCH", f"/fqdns/{fqdn_id}", credentials, payload=payload)
+                return fqdn_id
+            except SipCarrierError:
+                logger.warning(
+                    "[sip] telnyx fqdn patch failed trunk={} fqdn_id={} — recreating",
+                    trunk.id, fqdn_id,
+                )
+                try:
+                    self._request("DELETE", f"/fqdns/{fqdn_id}", credentials)
+                except SipCarrierError:
+                    logger.exception("[sip] telnyx fqdn delete failed fqdn_id={}", fqdn_id)
+
+        for stale in self._connection_fqdns(credentials, connection_id):
+            if stale.get("fqdn") != termination_fqdn:
+                try:
+                    self._request("DELETE", f"/fqdns/{stale['id']}", credentials)
+                    logger.info(
+                        "[sip] telnyx removed stale fqdn {} from connection {}",
+                        stale.get("fqdn"), connection_id,
+                    )
+                except SipCarrierError:
+                    logger.exception("[sip] telnyx stale fqdn delete failed id={}", stale.get("id"))
+
         data = self._request("POST", "/fqdns", credentials, payload=payload)
         return data.get("data", {}).get("id", "")
 
+    def _connection_fqdns(
+        self, credentials: Dict[str, Any], connection_id: str
+    ) -> List[Dict[str, Any]]:
+        try:
+            data = self._request(
+                "GET", "/fqdns", credentials, params={"filter[connection_id]": connection_id}
+            )
+        except SipCarrierError:
+            return []
+        return [row for row in data.get("data") or [] if row.get("id")]
+
     def provision_trunk(
-        self, trunk, credentials: Dict[str, Any], termination: TerminationEndpoint
+        self,
+        trunk,
+        credentials: Dict[str, Any],
+        termination: TerminationEndpoint,
+        auth: Optional[Dict[str, str]] = None,
     ) -> CarrierProvisionResult:
-        connection_id = self._ensure_connection(trunk, credentials)
+        connection_id = self._ensure_connection(trunk, credentials, auth)
         fqdn_id = self._ensure_fqdn(trunk, credentials, connection_id, termination)
         outbound_voice_profile_id = self._ensure_outbound_voice_profile(trunk, credentials)
 
         outbound_profile_attached = True
         try:
-            self._assign_outbound_profile(credentials, connection_id, outbound_voice_profile_id)
+            self._assign_outbound_profile(
+                credentials,
+                connection_id,
+                outbound_voice_profile_id,
+                self._outbound_auth(trunk, auth),
+            )
         except SipCarrierError as exc:
             outbound_profile_attached = False
             logger.warning(

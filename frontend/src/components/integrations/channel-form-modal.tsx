@@ -163,7 +163,7 @@ export default function ChannelFormModal({
       confirmDisabled={!canSave || hydrating}
     >
       {hydrating ? (
-        <AppLoader className="min-h-[260px]" />
+        <AppLoader className="min-h-65" />
       ) : (
         <div className="space-y-4">
           <TextInput

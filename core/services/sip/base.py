@@ -28,7 +28,11 @@ class SipCarrier(ABC):
 
     @abstractmethod
     def provision_trunk(
-        self, trunk, credentials: Dict[str, Any], termination: TerminationEndpoint
+        self,
+        trunk,
+        credentials: Dict[str, Any],
+        termination: TerminationEndpoint,
+        auth: Optional[Dict[str, str]] = None,
     ) -> CarrierProvisionResult:
         ...
 
