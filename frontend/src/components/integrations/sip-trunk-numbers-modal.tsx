@@ -74,7 +74,7 @@ export default function SipTrunkNumbersModal({ open, onClose, trunk }: SipTrunkN
       onConfirm={onClose}
     >
       {isLoading ? (
-        <AppLoader className="min-h-[220px]" />
+        <AppLoader className="min-h-55" />
       ) : (
         <div className="space-y-5">
           <div className="space-y-2">

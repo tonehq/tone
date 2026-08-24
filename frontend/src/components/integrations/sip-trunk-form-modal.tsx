@@ -221,7 +221,7 @@ export default function SipTrunkFormModal({
       confirmDisabled={!canSave || hydrating}
     >
       {hydrating ? (
-        <AppLoader className="min-h-[320px]" />
+        <AppLoader className="min-h-80" />
       ) : (
         <div className="space-y-5">
           <TextInput
