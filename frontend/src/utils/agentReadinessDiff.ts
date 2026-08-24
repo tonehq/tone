@@ -40,11 +40,10 @@ export function categoriesToProbeOnSave(
     changed.add('stt');
     changed.add('tts');
   }
-  // Embedding model swap affects the KB-embedding checks (model configured,
-  // key usable, vector-space match against KB ingestion runs).
-  if (prevCfg.knowledge_model_id !== nextCfg.knowledge_model_id) {
-    changed.add('knowledge_bases');
-  }
+  // KB embedding checks now read from the KB's own ingestion run (not the
+  // agent's knowledge_model_id), so a change to that agent-level field
+  // doesn't need to re-probe KB deep checks. The upload/attachment diff
+  // below still covers real KB attach/detach changes.
 
   if (!isEqual(prevCfg.llm_settings, nextCfg.llm_settings)) changed.add('llm');
   if (!isEqual(prevCfg.stt_settings, nextCfg.stt_settings)) changed.add('stt');
