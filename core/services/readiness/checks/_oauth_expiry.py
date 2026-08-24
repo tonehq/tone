@@ -31,10 +31,16 @@ from core.services.readiness.schemas import CheckResult, ResourceRef
 from core.utils.oauth_resolution import effective_of
 
 
-# Same 60-second buffer used by ``OAuthService.get_valid_access_token_for_connection``
-# (see ``core/services/oauth_service.py:572``). Keeping the two constants aligned
-# means shallow and Deep agree on when a token counts as "about to expire".
-_EXPIRY_BUFFER_SECONDS = 60
+# Readiness warns when the token expires within this many seconds. Intentionally
+# LARGER than the 60-second refresh buffer used by
+# ``OAuthService.get_valid_access_token_for_connection``
+# (``core/services/oauth_service.py:572``): the runtime service refreshes at
+# 60s, but readiness is a *user-facing warning surface* — we want the drawer
+# to say "token expires in a few minutes, reconnect now" BEFORE the token gets
+# close enough for the runtime refresh to matter. 15 minutes gives users time
+# to reconnect during a workday without letting the warning fire so early
+# it becomes background noise.
+_EXPIRY_BUFFER_SECONDS = 15 * 60  # 15 minutes
 
 
 class OAuthTokenExpiryShallowCheck(ShallowCheck):
@@ -190,7 +196,7 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
     @staticmethod
     def _evaluate_expiry(connection: OAuthConnection) -> Optional[str]:
         """Return ``None`` when the token is comfortably valid, or a short
-        reason string when it's expired or within the 60s buffer."""
+        reason string when it's expired or within the warning buffer."""
         expiry = (connection.public_metadata or {}).get("token_expiry")
         try:
             expiry_i = int(expiry)  # type: ignore[arg-type]
@@ -201,7 +207,7 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
             return f"expired {_humanize_seconds(now - expiry_i)} ago"
         remaining = expiry_i - now
         if remaining <= _EXPIRY_BUFFER_SECONDS:
-            return f"expires in {remaining}s"
+            return f"expires in {_humanize_seconds(remaining)}"
         return None
 
     @staticmethod

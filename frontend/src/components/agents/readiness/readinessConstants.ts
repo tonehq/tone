@@ -8,10 +8,12 @@ import type { ReadinessCategory, ReadinessSeverity } from '@/types/readiness';
 
 /** Human-readable label for each category. Used as group headings in the drawer. */
 export const CATEGORY_LABEL: Record<ReadinessCategory, string> = {
+  agent: 'Agent',
   llm: 'LLM',
   stt: 'Speech-to-text',
   tts: 'Voice',
   phone: 'Phone',
+  transport: 'Telephony account',
   tools: 'Tools',
   knowledge_bases: 'Knowledge bases',
   mcp_servers: 'MCP servers',
@@ -19,14 +21,17 @@ export const CATEGORY_LABEL: Record<ReadinessCategory, string> = {
 
 /**
  * The order in which categories appear in the drawer. Mirrors the natural
- * order of the pipeline: brain (LLM) → ears (STT) → mouth (TTS) → routing
- * (Phone) → attached extras (Tools, Knowledge bases, MCP).
+ * order of the pipeline: agent-level content (prompt/workflow) → brain (LLM)
+ * → ears (STT) → mouth (TTS) → routing (Phone) → account credit (Transport)
+ * → attached extras (Tools, Knowledge bases, MCP).
  */
 export const CATEGORY_ORDER: ReadinessCategory[] = [
+  'agent',
   'llm',
   'stt',
   'tts',
   'phone',
+  'transport',
   'tools',
   'knowledge_bases',
   'mcp_servers',
