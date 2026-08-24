@@ -94,8 +94,9 @@ class TTSLanguageConfiguredCheck(_TTSMixin, ShallowCheck):
         if lang:
             return self._pass(f"TTS language configured: {lang}.")
         return self._fail(
-            "TTS language not configured — voice will default to English. "
-            "Non-English content will sound wrong.",
+            "No TTS language selected — if your agent speaks in another "
+            "language, set the language on the Language tab or in voice "
+            "settings.",
             remediation=(
                 "Pick a language on the agent (Language tab) or set "
                 "'language' in the voice settings."
