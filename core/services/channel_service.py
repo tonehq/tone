@@ -11,9 +11,11 @@ from uuid import UUID
 import requests
 from fastapi import HTTPException, status
 from loguru import logger
+from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
 from core.models.agent import Agent
+from core.models.call import Call
 from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.services.base import BaseService
@@ -151,9 +153,37 @@ class ChannelService(BaseService):
 
     def delete_channel(self, channel_id: Union[str, UUID]) -> Dict[str, str]:
         record = self._get_record(channel_id)
-        self.db.delete(record)
-        self.db.commit()
+        if self.delete_channel_record(record):
+            return {
+                "message": "Channel kept because call history references it. Its calls and "
+                           "recordings remain available."
+            }
         return {"message": "Channel deleted successfully"}
+
+    def delete_channel_record(self, record: Channel) -> bool:
+        """Delete a channel unless call history references it. Returns True when kept.
+
+        ``calls.channel_id`` is ``ondelete=RESTRICT`` so history can never be orphaned, and
+        every call listing INNER JOINs Channel — nulling the FK would hide those calls from
+        the UI. Keeping the row is what preserves them. Single source of truth for channel
+        deletion: the SIP trunk teardown calls this instead of deleting the row itself.
+        """
+        referencing_calls = (
+            self.db.query(func.count(Call.id)).filter(Call.channel_id == record.id).scalar() or 0
+        )
+        if referencing_calls:
+            logger.info(
+                "[channel] keeping {} — {} call(s) reference it", record.id, referencing_calls
+            )
+            return True
+        try:
+            self.db.delete(record)
+            self.db.commit()
+            return False
+        except IntegrityError:
+            self.db.rollback()
+            logger.exception("[channel] {} still referenced — keeping it", record.id)
+            return True
 
     def get_or_create_channel_by_type(
         self,

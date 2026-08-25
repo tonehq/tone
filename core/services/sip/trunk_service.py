@@ -2,7 +2,7 @@ import secrets
 from typing import Any, Dict, List, Optional, Union
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException
 from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
@@ -10,6 +10,7 @@ from core.models.channel import Channel
 from core.models.phone_number import PhoneNumber
 from core.models.sip_trunk import SipTrunk
 from core.services.base import BaseService
+from core.services.channel_service import ChannelService
 from core.services.sip import validation
 from core.services.sip.base import (SipCarrierError, SipTerminationError,
                                     TerminationEndpoint)
@@ -153,12 +154,24 @@ class SipTrunkService(BaseService):
 
         channel_id = record.channel_id
         self.db.delete(record)
-        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
-        if channel is not None:
-            self.db.delete(channel)
         self.db.commit()
-        logger.info("[sip] trunk deleted id={}", trunk_id)
+
+        kept_channel = self._delete_channel_if_unused(channel_id)
+        logger.info("[sip] trunk deleted id={} channel_kept={}", trunk_id, kept_channel)
+        if kept_channel:
+            return {
+                "message": "SIP trunk deleted. Its channel was kept because call history "
+                           "references it."
+            }
         return {"message": "SIP trunk deleted successfully"}
+
+    def _delete_channel_if_unused(self, channel_id) -> bool:
+        channel = self.db.query(Channel).filter(Channel.id == channel_id).first()
+        if channel is None:
+            return False
+        return ChannelService(
+            self.db, user_id=self.user_id, org_id=self.org_id
+        ).delete_channel_record(channel)
 
     def provision_trunk(self, trunk_id: Union[str, UUID]) -> Dict[str, Any]:
         record = self._get_record(trunk_id)
