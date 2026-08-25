@@ -2,24 +2,20 @@ import asyncio
 import json
 from typing import Any, Dict, List, Optional
 
-import httpx
 from fastapi import APIRouter, BackgroundTasks, Request
 from livekit import api
 from loguru import logger
-from pipecat.runner.types import LiveKitRunnerArguments
 
 from core.database.session import get_db_context
 from core.models.channel import Channel
 from core.models.scheduled_call import ScheduledCall
 from core.services.agent_runner_service import AgentRunnerService
 from core.services.outbound_call_service import OutboundCallService
-from core.services.pod_picker import PodPicker
+from core.services.sip.dispatch import build_handoff_payload, dispatch_call
 from core.services.sip.livekit_termination import (BOT_IDENTITY, SIP_ROOM_PREFIX,
                                                    LiveKitTermination)
-from core.services.transport.telephony_credentials import channel_config
 from core.services.webrtc.dispatcher import get_bot_dispatcher
 from core.utils.encryption import decrypt_json
-from shared.config import settings
 
 _HANDOFF_TIMEOUT_SECONDS = 10.0
 
@@ -116,51 +112,6 @@ async def _numbers_from_room(config: Dict[str, Any], room_name: str) -> Dict[str
     return {"to": "", "from": "", "trunk_id": ""}
 
 
-async def _handoff_to_voice_pod(payload: Dict[str, Any]) -> bool:
-    with get_db_context() as db:
-        picker = PodPicker(db)
-        pod = picker.pick()
-        base = picker.http_base_for(pod)
-        pod_name = pod.name if pod is not None else None
-
-    if not base:
-        logger.warning("[sip] no voice pod available — running pipeline locally room={}",
-                       payload.get("room"))
-        return False
-
-    headers = {"Content-Type": "application/json"}
-    if settings.WS_BRIDGE_INTERNAL_TOKEN:
-        headers["x-ws-bridge-token"] = settings.WS_BRIDGE_INTERNAL_TOKEN
-    try:
-        async with httpx.AsyncClient(timeout=_HANDOFF_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                f"{base}/internal/livekit/start", json=payload, headers=headers
-            )
-    except Exception:
-        logger.exception("[sip] voice pod hand-off failed pod={} room={}", pod_name,
-                         payload.get("room"))
-        return False
-
-    if response.status_code in (200, 202):
-        logger.info("[sip] pipeline handed off to voice pod={} room={}", pod_name,
-                    payload.get("room"))
-        return True
-    logger.warning("[sip] voice pod refused hand-off pod={} status={} body={}",
-                   pod_name, response.status_code, response.text[:200])
-    return False
-
-
-async def _dispatch_bot(room_name: str, runner_args, handoff: Dict[str, Any]) -> None:
-    try:
-        if await _handoff_to_voice_pod(handoff):
-            get_bot_dispatcher().release(room_name)
-            return
-        await get_bot_dispatcher().dispatch_reserved(room_name, runner_args)
-    except Exception:
-        logger.exception("[sip] bot dispatch failed room={}", room_name)
-        get_bot_dispatcher().release(room_name)
-
-
 def _participant_numbers(participant) -> Dict[str, str]:
     attributes = dict(getattr(participant, "attributes", {}) or {})
     return {
@@ -215,22 +166,14 @@ async def livekit_webhook(
         return {"ok": False, "reason": "no_agent_for_number"}
 
     grant = LiveKitTermination(config).bot_grant(room_name)
-    runner_args = LiveKitRunnerArguments(
+    payload = build_handoff_payload(
         room_name=room_name,
-        url=grant["url"],
-        token=grant["token"],
-        body={
-            "agent_id": str(agent.id),
-            "transport_type": "livekit",
-            "direction": "inbound",
-            "call_data": {
-                "from": numbers["from"],
-                "to": numbers["to"],
-                "call_id": room_name,
-                "stream_id": room_name,
-                "sip_trunk_id": numbers["trunk_id"],
-            },
-        },
+        grant=grant,
+        agent_id=str(agent.id),
+        direction="inbound",
+        from_number=numbers["from"],
+        to_number=numbers["to"],
+        trunk_id=numbers.get("trunk_id") or "",
     )
 
     logger.info(
@@ -239,17 +182,7 @@ async def livekit_webhook(
     )
     if not get_bot_dispatcher().reserve(room_name):
         return {"ok": True}
-    handoff = {
-        "room": room_name,
-        "url": grant["url"],
-        "token": grant["token"],
-        "agent_id": str(agent.id),
-        "direction": "inbound",
-        "from": numbers["from"],
-        "to": numbers["to"],
-        "trunk_id": numbers.get("trunk_id") or "",
-    }
-    background.add_task(_dispatch_bot, room_name, runner_args, handoff)
+    background.add_task(dispatch_call, payload)
     return {"ok": True, "agent_id": str(agent.id), "room": room_name}
 
 
