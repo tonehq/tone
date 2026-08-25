@@ -106,6 +106,10 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
 
         expired: List[Tuple[str, str, str]] = []  # (resource_name, connection_label, reason)
         first_failed_id: Optional[str] = None
+        # Track the OAuth connection id for the first failure so the drawer's
+        # per-row "Refresh token" button knows which connection to refresh
+        # without a follow-up lookup by tool/MCP id.
+        first_failed_oauth_id: Optional[str] = None
         checked = 0
 
         for resource in resources:
@@ -129,6 +133,7 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
             )
             if first_failed_id is None:
                 first_failed_id = str(resource.id)
+                first_failed_oauth_id = str(connection.id)
 
         if checked == 0:
             return self._skip(
@@ -158,7 +163,9 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
                     f"and reconnect the OAuth account."
                 ),
                 resource_ref=ResourceRef(
-                    type=self.resource_type_ref, id=first_failed_id
+                    type=self.resource_type_ref,
+                    id=first_failed_id,
+                    oauth_connection_id=first_failed_oauth_id,
                 ) if first_failed_id else None,
             )
         return self._pass(

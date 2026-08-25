@@ -552,7 +552,13 @@ class McpServerService(BaseService):
         else:
             servers = ordered_query.all()
 
-        data = [self.mcp_server_response(s) for s in servers]
+        # Batch-hydrate OAuth summaries once per list response so the UI
+        # can render token-expiry badges without N+1 lookups on the card
+        # grid. Same pattern as ``ToolService.list_tools``.
+        oauth_map = self._hydrate_oauth_summary(
+            [s.oauth_connection_id for s in servers if s.oauth_connection_id]
+        )
+        data = [self.mcp_server_response(s, oauth_map=oauth_map) for s in servers]
 
         if page_size is not None:
             total_pages = (total + page_size - 1) // page_size
@@ -568,6 +574,17 @@ class McpServerService(BaseService):
                 "total_pages": total_pages,
             },
         }
+
+    def _hydrate_oauth_summary(self, connection_ids) -> Dict[Any, Dict[str, Any]]:
+        """Wrap ``OAuthService.hydrate_summary_by_ids`` so ``mcp_server_response``
+        can stay ignorant of OAuthService construction details. Kept as an
+        instance method so the tenant scope flows automatically."""
+        if not connection_ids:
+            return {}
+        from core.services.oauth_service import OAuthService
+
+        oauth_svc = OAuthService(self.db, org_id=self.org_id)
+        return oauth_svc.hydrate_summary_by_ids(connection_ids)
 
     def get_facets(self, filters: List[Dict[str, Any]] = None) -> Dict[str, Any]:
         return build_facets(
@@ -902,7 +919,17 @@ class McpServerService(BaseService):
             **result,
         }
 
-    def mcp_server_response(self, mcp_server: McpServer) -> Dict[str, Any]:
+    def mcp_server_response(
+        self,
+        mcp_server: McpServer,
+        oauth_map: Optional[Dict[Any, Dict[str, Any]]] = None,
+    ) -> Dict[str, Any]:
+        # ``oauth_map`` is the pre-hydrated OAuth summary produced by
+        # ``_hydrate_oauth_summary`` during list responses; single-item
+        # responses can omit it and the nested block simply stays ``None``.
+        oauth_connection = None
+        if mcp_server.oauth_connection_id and oauth_map:
+            oauth_connection = oauth_map.get(mcp_server.oauth_connection_id)
         return {
             "id": str(mcp_server.id),
             "name": mcp_server.name,
@@ -917,6 +944,11 @@ class McpServerService(BaseService):
             "oauth_connection_id": (
                 str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None
             ),
+            # Compact summary the UI uses to render the token-expiry badge
+            # + "Test connection" button on the MCP card footer. ``None``
+            # when the server has no OAuth link OR the connection wasn't
+            # hydrated (single-item response paths).
+            "oauth_connection": oauth_connection,
             "app_integration_id": (
                 str(mcp_server.app_integration_id) if mcp_server.app_integration_id else None
             ),

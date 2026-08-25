@@ -18,6 +18,7 @@ import ErrorBoundary from './ErrorBoundary';
 import Form from './Form';
 import Logo from './Logo';
 import MultiSelectField from './MultiSelectField';
+import OAuthConnectionStatus from './OAuthConnectionStatus';
 import { PhoneNumberDisplay } from './PhoneNumberDisplay';
 import RadioGroupField from './RadioGroupField';
 import RichPromptEditorField from './RichPromptEditorField';
@@ -105,6 +106,7 @@ export {
   Form,
   Logo,
   MultiSelectField,
+  OAuthConnectionStatus,
   PhoneNumberDisplay,
   RadioGroupField,
   RichPromptEditorField,

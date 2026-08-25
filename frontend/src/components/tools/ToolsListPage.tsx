@@ -11,6 +11,7 @@ import {
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
+  OAuthConnectionStatus,
   useFacetedList,
 } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
@@ -207,6 +208,27 @@ export default function ToolsListPage() {
               : record.auth_type.replace('_', ' ')}
           </span>
         ),
+      },
+      {
+        key: 'oauth_status',
+        title: 'OAuth',
+        width: '220px',
+        render: (_val: unknown, record: Tool) => {
+          // Only OAuth-linked tools with a hydrated summary get the widget —
+          // API-key / bearer / none rows render the placeholder dash, keeping
+          // the column visually consistent without adding meaningless badges.
+          if (!record.oauth_connection) {
+            return <span className="text-[12px] text-muted-foreground">-</span>;
+          }
+          return (
+            <OAuthConnectionStatus
+              connectionId={record.oauth_connection.id}
+              providerSlug={record.oauth_connection.provider_slug}
+              tokenExpiry={record.oauth_connection.token_expiry}
+              compact
+            />
+          );
+        },
       },
       {
         key: 'params',

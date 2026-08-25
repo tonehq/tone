@@ -519,12 +519,28 @@ class ToolService(BaseService):
 
         offset = (page - 1) * page_size
         items = query.offset(offset).limit(page_size).all()
+        # Batch-hydrate OAuth summaries once per list response so the UI
+        # can render token-expiry badges without N+1 lookups.
+        oauth_map = self._hydrate_oauth_summary(
+            [t.oauth_connection_id for t in items if t.oauth_connection_id]
+        )
         return {
-            "items": [self.tool_response(t) for t in items],
+            "items": [self.tool_response(t, oauth_map=oauth_map) for t in items],
             "total": total,
             "page": page,
             "page_size": page_size,
         }
+
+    def _hydrate_oauth_summary(self, connection_ids) -> Dict[Any, Dict[str, Any]]:
+        """Wrap ``OAuthService.hydrate_summary_by_ids`` so ``tool_response``
+        can stay ignorant of OAuthService construction details. Kept as an
+        instance method so the tenant scope flows automatically."""
+        if not connection_ids:
+            return {}
+        from core.services.oauth_service import OAuthService
+
+        oauth_svc = OAuthService(self.db, org_id=self.org_id)
+        return oauth_svc.hydrate_summary_by_ids(connection_ids)
 
     def get_facets(self, filters: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
         return build_facets(
@@ -536,7 +552,15 @@ class ToolService(BaseService):
         allowed = {k: column_map[k] for k in ("name", "tool_type", "status")}
         return distinct_values(self._tool_base_query(), allowed, column_name)
 
-    def tool_response(self, tool: Tool) -> Dict[str, Any]:
+    def tool_response(
+        self, tool: Tool, oauth_map: Optional[Dict[Any, Dict[str, Any]]] = None
+    ) -> Dict[str, Any]:
+        # ``oauth_map`` is the pre-hydrated OAuth summary produced by
+        # ``_hydrate_oauth_summary`` during list responses; single-item
+        # responses can omit it and the nested block simply stays ``None``.
+        oauth_connection = None
+        if tool.oauth_connection_id and oauth_map:
+            oauth_connection = oauth_map.get(tool.oauth_connection_id)
         return {
             "id": str(tool.id),
             "name": tool.name,
@@ -549,6 +573,11 @@ class ToolService(BaseService):
             "auth_config": decrypt_auth_config(tool.auth_config),
             "meta_data": tool.meta_data,
             "oauth_connection_id": tool.oauth_connection_id,
+            # Compact summary the UI uses to render the token-expiry badge
+            # + "Test connection" button. ``None`` when the tool has no
+            # OAuth link OR the connection wasn't hydrated (single-item
+            # response paths).
+            "oauth_connection": oauth_connection,
             "app_integration_id": tool.app_integration_id,
             "mcp_server_id": tool.mcp_server_id,
             "is_active": tool.is_active,

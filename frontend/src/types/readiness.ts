@@ -39,6 +39,12 @@ export type ReadinessTrigger =
 export interface ReadinessResourceRef {
   type: string;
   id: string;
+  /** Populated by OAuth expiry checks (tools.oauth_token_valid /
+   * mcp_servers.oauth_token_valid) so the drawer can render a targeted
+   * "Refresh token" button without a follow-up fetch to learn the OAuth
+   * connection id for the affected tool/MCP server. Every other check
+   * leaves this null. */
+  oauth_connection_id?: string | null;
 }
 
 export interface ReadinessCheckResult {
