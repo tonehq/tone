@@ -5,6 +5,25 @@ export type AgentLlmEvalVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 export type AgentLlmEvalBatchStatus = 'completed' | 'failed' | 'running';
 export type AgentLlmEvalScenarioSource = 'manual' | 'csv' | 'generated' | 'fixture';
 
+// Tool-aware eval (Phase 2). Both shapes match the backend
+// ``core.services.evals.agent_llm.tool_selection_metric`` contract 1:1 so the
+// deterministic scorecard flows through without a client-side reshape.
+export interface ExpectedToolCall {
+  name: string;
+  arguments?: Record<string, unknown>;
+}
+
+export interface ToolCallIntent {
+  name: string;
+  arguments: Record<string, unknown>;
+}
+
+// Execution-trace shape emitted by the executor. Single-turn today
+// (``{turns: [{role: 'assistant', tool_calls: [...]}]}``); kept as an
+// opaque record so a future multi-turn extension doesn't require a
+// type-level breaking change on the FE.
+export type AgentLlmEvalExecutionTrace = Record<string, unknown>;
+
 export interface AgentLlmEvalScenario {
   id: string;
   organization_id: string;
@@ -20,8 +39,8 @@ export interface AgentLlmEvalScenario {
   threshold_override: number | null;
   source: AgentLlmEvalScenarioSource;
   generation_metadata: Record<string, unknown> | null;
-  expected_tools: unknown | null;
-  tool_config: unknown | null;
+  expected_tools: ExpectedToolCall[] | null;
+  tool_config: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -119,6 +138,10 @@ export interface AgentLlmEvalScoredScenario {
   judge_error: string | null;
   started_at: string | null;
   completed_at: string | null;
+  // Tool-aware fields (Phase 2). ``null`` (not ``[]``) when the LLM emitted
+  // no tool calls — distinguishes "no tools attempted" from an empty array.
+  tools_called: ToolCallIntent[] | null;
+  execution_trace: AgentLlmEvalExecutionTrace | null;
 }
 
 export interface AgentLlmEvalRunDetail {
@@ -147,6 +170,9 @@ export interface GeneratedScenario {
   tags: string[];
   confidence: number | null;
   generation_metadata: Record<string, unknown> | null;
+  // Tool-aware eval (Phase 2). ``null`` for text-only scenarios so the
+  // "tool" chip only shows on scenarios the generator actually pre-labeled.
+  expected_tools: ExpectedToolCall[] | null;
 }
 
 export interface GenerateScenariosPayload {

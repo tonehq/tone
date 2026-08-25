@@ -11,6 +11,7 @@ import {
   Sparkles,
   Trash2,
   Upload,
+  Wrench,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -370,6 +371,22 @@ function ScenariosTable({
               </td>
               <td className="w-[220px] px-3 py-2 align-top">
                 <div className="flex flex-wrap gap-1">
+                  {/* Tool-aware chip (Phase 2) — surfaces scenarios whose
+                      generator pre-labeled the expected tool call so an
+                      operator can see at a glance which rows will run the
+                      deterministic ``tool_selection`` metric. */}
+                  {s.expected_tools && s.expected_tools.length > 0 ? (
+                    <span
+                      title={s.expected_tools
+                        .map((t) => t.name)
+                        .filter(Boolean)
+                        .join(', ')}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-medium text-primary ring-1 ring-primary/20"
+                    >
+                      <Wrench className="size-2.5" />
+                      tool
+                    </span>
+                  ) : null}
                   {(s.tags ?? []).map((t) => (
                     <span
                       key={t}
@@ -1049,6 +1066,41 @@ function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
               </div>
               <div className="mt-1 whitespace-pre-wrap text-foreground">
                 {scored.judge_reasoning}
+              </div>
+            </div>
+          )}
+          {/* Tool call intents (Phase 2). Only surfaces when the executor
+              actually captured tool_calls — no-tool scenarios stay quiet.
+              The deterministic ``tool_selection`` metric verdict + reason
+              live under Metrics + Judge reasoning above, so this section
+              is inspection-only ("what did the LLM ask to call?"). */}
+          {scored.tools_called && scored.tools_called.length > 0 && (
+            <div className="md:col-span-2">
+              <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-muted-foreground">
+                <Wrench className="size-3" />
+                Tool call intents
+              </div>
+              <div className="mt-1 flex flex-col gap-2">
+                {scored.tools_called.map((intent, i) => (
+                  <div
+                    // Tool call intents are ordered + repeatable (same tool
+                    // may be called twice), so index-in-list is the stable
+                    // React key; ``name`` alone would collide.
+                    key={`${intent.name}-${i}`}
+                    className="rounded border border-border/60 bg-muted/40 px-2 py-1.5"
+                  >
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[11.5px] font-medium text-foreground">
+                        {intent.name}
+                      </span>
+                    </div>
+                    {intent.arguments && Object.keys(intent.arguments).length > 0 && (
+                      <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-all text-[11px] text-muted-foreground">
+                        {JSON.stringify(intent.arguments, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
