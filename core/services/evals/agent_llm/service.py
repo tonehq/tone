@@ -288,6 +288,8 @@ class AgentLlmEvalService:
         judge_model: Optional[str] = None,
         scenario_ids: Optional[List[UUID]] = None,
         tags: Optional[List[str]] = None,
+        folder: Optional[str] = None,
+        folders: Optional[List[str]] = None,
         run_id: Optional[UUID] = None,
         organization_id: Optional[UUID] = None,
     ) -> AgentLlmRunSummary:
@@ -334,6 +336,8 @@ class AgentLlmEvalService:
             agent_id,
             scenario_ids=scenario_ids,
             tags=tags,
+            folder=folder,
+            folders=folders,
         )
         if not rows:
             raise AgentLlmEvalConfigError(
@@ -670,6 +674,11 @@ class AgentLlmEvalService:
                     "triggered_by": triggered_by,
                     "scenario_key": scenario.name,
                     "scenario_tags": list(scenario.tags) if scenario.tags else None,
+                    # Snapshot the folder at run time — matches the tag /
+                    # prompt / expected_answer snapshot pattern. Bulk-rename
+                    # in ``AgentLlmScenarioService.rename_folder`` updates
+                    # this column too so past runs regroup under the new name.
+                    "folder": getattr(scenario, "folder", None),
                     "prompt": scenario.prompt,
                     "expected_answer": scenario.expected_answer,
                     "llm_model": agent_config.llm_model,

@@ -49,6 +49,9 @@ class LLMScenario:
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    # Single-value grouping ("folder") snapshotted onto
+    # ``agent_llm_eval_results.folder`` at run time. ``None`` = "Uncategorized".
+    folder: Optional[str] = None
     # Tool-aware eval (Phase 2) — the deterministic ``tool_selection``
     # metric compares this against what the agent's LLM actually emitted
     # (captured on the result row's ``tools_called`` column). ``None``

@@ -15,7 +15,7 @@ export interface CreateOutboundCallPayload {
 }
 
 /** How an outbound call is triggered. */
-export type OutboundTriggerProvider = 'twilio' | 'telnyx' | 'websocket';
+export type OutboundTriggerProvider = 'twilio' | 'telnyx' | 'sip' | 'websocket';
 
 /** Response from POST /outbound-call/create. `mode` says whether it dialed now or queued.
  * `parallel_websocket` is an immediate WebSocket (test-bridge) fan-out — it dials right away. */

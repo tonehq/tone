@@ -60,6 +60,12 @@ class AgentLlmEvalScenario(OrgScopedModel):
 
     tags = Column(JSONB, nullable=True)
 
+    # Single-value grouping (e.g. "Refund flow"). NULL = "Uncategorized" in the
+    # UI. Snapshotted onto ``agent_llm_eval_results.folder`` at run time so
+    # historical grouping survives edits/deletes. Rename is a bulk UPDATE on
+    # BOTH tables in one transaction — see ``rename_folder`` in the service.
+    folder = Column(String(120), nullable=True)
+
     # Per-scenario overrides — NULL means "use the org's ``agent_llm.*``
     # eval settings from ``organizations.eval_settings``".
     metrics_override = Column(JSONB, nullable=True)
@@ -88,6 +94,7 @@ class AgentLlmEvalScenario(OrgScopedModel):
             "persona_criteria": self.persona_criteria,
             "instruction_criteria": self.instruction_criteria,
             "tags": self.tags,
+            "folder": self.folder,
             "metrics_override": self.metrics_override,
             "threshold_override": self.threshold_override,
             "source": self.source,
