@@ -1,3 +1,4 @@
+import threading
 import uuid
 from typing import Any, Dict, Optional
 
@@ -105,6 +106,23 @@ class SipCallEngine(CallEngine):
             room_name, str(agent_id), from_number, to_number, trunk["id"], scheduled_call_id
         )
 
+        threading.Thread(
+            target=self._originate_when_answered,
+            args=(trunk, dialed, from_number, room_name, attributes, agent_id, scheduled_call_id),
+            name=f"sip-originate-{room_name}",
+            daemon=True,
+        ).start()
+
+        return CallInfo(
+            call_id=room_name,
+            session_id=str(scheduled_call_id or agent_id),
+            status="dialing",
+            provider="sip",
+        )
+
+    def _originate_when_answered(
+        self, trunk, dialed, from_number, room_name, attributes, agent_id, scheduled_call_id
+    ) -> None:
         try:
             data = self._termination().originate(
                 outbound_trunk_id=trunk["outbound_trunk_id"],
@@ -113,23 +131,18 @@ class SipCallEngine(CallEngine):
                 room_name=room_name,
                 attributes=attributes,
                 ringing_timeout=DEFAULT_RING_TIMEOUT,
+                wait_until_answered=True,
             )
-        except SipTerminationError:
+        except Exception:
             logger.exception(
-                "[outbound] sip originate failed agent={} to={} scheduled_call_id={}",
-                agent_id, to_number, scheduled_call_id,
+                "[outbound] sip originate failed agent={} to={} room={} scheduled_call_id={}",
+                agent_id, dialed, room_name, scheduled_call_id,
             )
-            raise
+            return
 
         logger.info(
-            "[outbound] sip call created call_id={} room={} trunk={} scheduled_call_id={}",
+            "[outbound] sip call answered call_id={} room={} trunk={} scheduled_call_id={}",
             data.get("call_id"), room_name, trunk["id"], scheduled_call_id,
-        )
-        return CallInfo(
-            call_id=data.get("call_id") or room_name,
-            session_id=str(scheduled_call_id or agent_id),
-            status=data.get("status") or "ringing",
-            provider="sip",
         )
 
     def _dispatch_bot(
