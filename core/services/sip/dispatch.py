@@ -62,8 +62,12 @@ def build_runner_args(payload: Dict[str, Any]) -> LiveKitRunnerArguments:
     )
 
 
-def _pick_voice_pod():
+def _pick_voice_pod(direction: str):
     with get_db_context() as db:
+        if direction == "outbound":
+            picker = PodPicker.for_outbound(db)
+            pod = picker.pick()
+            return picker.internal_base_for(pod), (pod.name if pod is not None else None)
         picker = PodPicker(db)
         pod = picker.pick()
         return picker.http_base_for(pod), (pod.name if pod is not None else None)
@@ -88,7 +92,7 @@ def _handoff_result(status_code: int, body: str, pod_name, room: str) -> bool:
 
 
 async def handoff_to_voice_pod(payload: Dict[str, Any]) -> bool:
-    base, pod_name = _pick_voice_pod()
+    base, pod_name = _pick_voice_pod(payload.get("direction") or "inbound")
     if not base:
         logger.warning(
             "[sip] no voice pod available — running pipeline locally room={}", payload.get("room")
@@ -108,7 +112,7 @@ async def handoff_to_voice_pod(payload: Dict[str, Any]) -> bool:
 
 
 def handoff_to_voice_pod_sync(payload: Dict[str, Any]) -> bool:
-    base, pod_name = _pick_voice_pod()
+    base, pod_name = _pick_voice_pod(payload.get("direction") or "inbound")
     if not base:
         logger.warning(
             "[sip] no voice pod available — running pipeline locally room={}", payload.get("room")
