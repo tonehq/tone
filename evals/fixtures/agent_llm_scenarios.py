@@ -49,6 +49,12 @@ class LLMScenario:
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    # Tool-aware eval (Phase 2) — the deterministic ``tool_selection``
+    # metric compares this against what the agent's LLM actually emitted
+    # (captured on the result row's ``tools_called`` column). ``None``
+    # marks a text-only scenario — no tool grading is performed.
+    # Shape: ``[{"name": "tool_name", "arguments": {"arg": "value"}}]``.
+    expected_tools: Optional[list] = None
 
 
 SCENARIOS: List[LLMScenario] = [

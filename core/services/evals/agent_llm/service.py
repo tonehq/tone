@@ -40,7 +40,14 @@ from core.services.evals.errors import (
     AgentLlmEvalConfigError,
     EvalConfigurationError,
 )
-from core.services.llm.chat_complete import chat_complete
+from core.services.evals.agent_llm.tool_selection_metric import (
+    METRIC_NAME as _TOOL_SELECTION_METRIC,
+)
+from core.services.llm.chat_complete import (
+    ChatCompletion,
+    chat_complete,
+    chat_complete_with_tools,
+)
 from shared.config import settings
 
 
@@ -143,10 +150,14 @@ class AgentLlmEvalService:
         # scenarios had already burned real LLM calls — those scored rows
         # would be discarded because the persist step runs only after the
         # loop. Fail loudly here BEFORE spending any tokens.
+        #
+        # A scenario with ``expected_tools`` set counts as having a metric
+        # (the deterministic ``tool_selection`` one) even if no DeepEval
+        # metrics are configured, so a tool-only scenario is legal.
         default_metrics = list(settings.AGENT_LLM_EVAL_METRICS_ENABLED or [])
         for s in scenarios:
             resolved = list(s.metrics or default_metrics)
-            if not resolved:
+            if not resolved and not getattr(s, "expected_tools", None):
                 raise AgentLlmEvalConfigError(
                     f"Scenario {s.name!r} has no metrics enabled — set "
                     "AGENT_LLM_EVAL_METRICS_ENABLED or LLMScenario.metrics."
@@ -514,21 +525,51 @@ class AgentLlmEvalService:
         judge_error: Optional[str] = None
         judge_out: dict = {}
 
-        messages = _build_messages(agent_config.system_prompt, scenario.prompt)
+        # Prompt-mode: use the agent's ``system_prompt`` as today.
+        # Workflow-mode: use the serialized playbook — the SAME text the
+        # runtime injects at ``pipeline/service_resolver.py``, so what we
+        # score matches what the bot actually runs. The picker lives on the
+        # dataclass so the branch stays in ONE place.
+        system_content = agent_config.effective_system_prompt
+        messages = _build_messages(system_content, scenario.prompt)
 
+        # Tool-aware branch (Phase 2). When the agent has tools attached we
+        # use the tool-aware chat call so the LLM can emit tool-call intents
+        # instead of (or alongside) text. The tool_calls are captured as
+        # ``actual_tools`` and persisted, but NOT executed — the judge
+        # deterministic ``tool_selection`` metric grades the intent. Agents
+        # with zero tools attached fall through to the exact pre-Phase-2
+        # ``chat_complete`` path, byte-identical.
+        actual_tools: List[dict] = []
+        use_tools = bool(getattr(agent_config, "tools", None))
         try:
-            actual_answer = chat_complete(
-                model=agent_config.llm_model,
-                api_key=agent_config.llm_api_key,
-                messages=messages,
-                temperature=agent_config.temperature,
-                max_tokens=agent_config.max_tokens,
-                json_mode=False,
-            )
+            if use_tools:
+                completion: ChatCompletion = chat_complete_with_tools(
+                    model=agent_config.llm_model,
+                    api_key=agent_config.llm_api_key,
+                    messages=messages,
+                    tools=agent_config.tools,
+                    temperature=agent_config.temperature,
+                    max_tokens=agent_config.max_tokens,
+                )
+                actual_answer = completion.content or ""
+                actual_tools = [
+                    {"name": tc.name, "arguments": tc.arguments}
+                    for tc in completion.tool_calls
+                ]
+            else:
+                actual_answer = chat_complete(
+                    model=agent_config.llm_model,
+                    api_key=agent_config.llm_api_key,
+                    messages=messages,
+                    temperature=agent_config.temperature,
+                    max_tokens=agent_config.max_tokens,
+                    json_mode=False,
+                )
         except Exception as e:  # noqa: BLE001
             logger.exception(
-                "[agent-llm-eval] agent LLM failed scenario={} model={}",
-                scenario.name, agent_config.llm_model,
+                "[agent-llm-eval] agent LLM failed scenario={} model={} use_tools={}",
+                scenario.name, agent_config.llm_model, use_tools,
             )
             answer_error = f"{type(e).__name__}: {e}"
 
@@ -539,6 +580,16 @@ class AgentLlmEvalService:
             enabled_metrics = list(
                 scenario.metrics or settings.AGENT_LLM_EVAL_METRICS_ENABLED
             )
+            # Auto-enable the deterministic tool-selection metric whenever
+            # the scenario declares tool expectations — the generator sets
+            # both together, so this is the common path. Never appears
+            # unless expected_tools is set, so scenarios without tool
+            # expectations score exactly as they did in v1.
+            if (
+                getattr(scenario, "expected_tools", None)
+                and _TOOL_SELECTION_METRIC not in enabled_metrics
+            ):
+                enabled_metrics.append(_TOOL_SELECTION_METRIC)
             threshold = (
                 scenario.threshold
                 if scenario.threshold is not None
@@ -547,7 +598,7 @@ class AgentLlmEvalService:
             try:
                 judge_out = self._judge.judge(
                     prompt=scenario.prompt,
-                    system_prompt=agent_config.system_prompt,
+                    system_prompt=system_content,
                     actual_output=actual_answer,
                     api_key=judge_key,
                     model=judge_model,
@@ -556,6 +607,12 @@ class AgentLlmEvalService:
                     expected_output=scenario.expected_answer,
                     persona_criteria=scenario.persona_criteria,
                     instruction_criteria=scenario.instruction_criteria,
+                    # Tool-aware inputs (Phase 2). The judge dispatches the
+                    # deterministic ``tool_selection`` metric when both are
+                    # non-empty; otherwise it silently skips that metric so
+                    # text-only scenarios score exactly as they did in v1.
+                    expected_tools=getattr(scenario, "expected_tools", None),
+                    actual_tools=actual_tools,
                 )
             except EvalConfigurationError:
                 # Bad config — abort the whole run, don't just this scenario.
@@ -577,6 +634,7 @@ class AgentLlmEvalService:
             "answer_error": answer_error,
             "judge_error": judge_error,
             "status": status,
+            "actual_tools": actual_tools,
         }
 
     def _persist_result_batch(
@@ -600,6 +658,7 @@ class AgentLlmEvalService:
         for scored in scored_rows:
             scenario = scored["scenario"]
             judge = scored.get("judge") or {}
+            actual_tools = scored.get("actual_tools") or []
             rows.append(
                 {
                     "id": uuid.uuid4(),
@@ -615,7 +674,10 @@ class AgentLlmEvalService:
                     "expected_answer": scenario.expected_answer,
                     "llm_model": agent_config.llm_model,
                     "llm_provider": agent_config.llm_provider,
-                    "system_prompt": agent_config.system_prompt,
+                    # Stamp the text the LLM actually saw — the playbook for
+                    # workflow mode, the raw prompt for prompt mode — so the
+                    # results table matches what was scored.
+                    "system_prompt": agent_config.effective_system_prompt,
                     "llm_settings_snapshot": agent_config.llm_settings_snapshot or None,
                     "judge_model": judge_model,
                     "judge_engine": _JUDGE_ENGINE,
@@ -629,6 +691,16 @@ class AgentLlmEvalService:
                     "judge_error": scored.get("judge_error"),
                     "started_at": started_at,
                     "completed_at": completed_at,
+                    # Tool-aware fields (Phase 2). ``None`` (not ``[]``) when
+                    # the LLM didn't emit any tool calls so the persisted
+                    # row visibly distinguishes "no tools attempted" from
+                    # "attempted zero tools" for downstream analytics.
+                    "tools_called": actual_tools or None,
+                    "execution_trace": (
+                        {"turns": [{"role": "assistant", "tool_calls": actual_tools}]}
+                        if actual_tools
+                        else None
+                    ),
                 }
             )
 
@@ -673,6 +745,7 @@ class AgentLlmEvalService:
                     "answer_error": error,
                     "judge_error": None,
                     "status": "failed",
+                    "actual_tools": [],
                 }
             )
         completed_at = datetime.now(timezone.utc)
