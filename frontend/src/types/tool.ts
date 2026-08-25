@@ -1,5 +1,16 @@
 export type ToolType = 'custom' | 'send_sms' | 'google_calendar' | 'google_sheets' | 'mcp';
 
+/** Compact OAuth summary attached to list responses so the UI can render a
+ * token-expiry badge + "Test connection" button without a follow-up fetch.
+ * Only exposes the fields the badge needs — never leaks tokens/credentials. */
+export interface OAuthConnectionSummary {
+  id: string;
+  provider_slug: string;
+  /** Unix timestamp (seconds). ``null`` when the provider didn't declare an
+   * expiry (e.g. static bearer credentials). */
+  token_expiry: number | null;
+}
+
 export interface Tool {
   id: string;
   uuid?: string;
@@ -13,6 +24,9 @@ export interface Tool {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id: string | null;
+  /** Populated by list responses; ``null`` when the tool has no OAuth link
+   * OR when the response path didn't hydrate the connection summary. */
+  oauth_connection?: OAuthConnectionSummary | null;
   app_integration_id?: string | null;
   mcp_server_id?: string | null;
   is_active: boolean;

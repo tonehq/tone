@@ -16,6 +16,14 @@ export interface MCPServer {
   auth_config: Record<string, string> | null;
   meta_data: Record<string, unknown> | null;
   oauth_connection_id?: string | null;
+  /** Populated by list responses; ``null`` when the server has no OAuth link
+   * OR when the response path didn't hydrate the connection summary. Shape
+   * mirrors ``Tool.oauth_connection`` so both pages share one badge helper. */
+  oauth_connection?: {
+    id: string;
+    provider_slug: string;
+    token_expiry: number | null;
+  } | null;
   /** Catalog entry this server belongs to. Optional. */
   app_integration_id?: string | null;
   is_active: boolean;
