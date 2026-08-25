@@ -8,7 +8,6 @@ from livekit import api
 from loguru import logger
 
 from core.services.sip.base import SipTerminationError
-from core.services.sip.validation import DEFAULT_SIP_PORT
 
 SIP_ROOM_PREFIX = "sip-"
 BOT_IDENTITY = "agent"
@@ -259,6 +258,7 @@ class LiveKitTermination:
         room_name: str,
         attributes: Dict[str, str],
         ringing_timeout: int = 45,
+        wait_until_answered: bool = False,
     ) -> Dict[str, Any]:
         async def _dial(client):
             request = api.CreateSIPParticipantRequest(
@@ -268,7 +268,7 @@ class LiveKitTermination:
                 room_name=room_name,
                 participant_identity=f"{CALLER_IDENTITY_PREFIX}{to_number}",
                 participant_name=to_number,
-                wait_until_answered=False,
+                wait_until_answered=wait_until_answered,
                 play_ringtone=True,
             )
             request.participant_attributes.update({k: str(v) for k, v in attributes.items()})
