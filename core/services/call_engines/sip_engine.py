@@ -2,10 +2,9 @@ import uuid
 from typing import Any, Dict, Optional
 
 from loguru import logger
-from pipecat.runner.types import LiveKitRunnerArguments
-
 from core.services.call_engines.base import CallEngine, CallInfo
 from core.services.sip.base import SipTerminationError
+from core.services.sip.dispatch import build_handoff_payload, dispatch_call_sync
 from core.services.sip.livekit_termination import SIP_ROOM_PREFIX, LiveKitTermination
 from core.services.sip.validation import SipConfigError, format_outbound_number
 
@@ -102,7 +101,9 @@ class SipCallEngine(CallEngine):
             agent_id, trunk["id"], from_number, dialed, room_name,
         )
 
-        self._dispatch_bot(room_name, str(agent_id), from_number, to_number, scheduled_call_id)
+        self._dispatch_bot(
+            room_name, str(agent_id), from_number, to_number, trunk["id"], scheduled_call_id
+        )
 
         try:
             data = self._termination().originate(
@@ -137,31 +138,24 @@ class SipCallEngine(CallEngine):
         agent_id: str,
         from_number: str,
         to_number: str,
+        trunk_id: str,
         scheduled_call_id: Optional[str],
     ) -> None:
-        import asyncio
-
-        from core.api.sip_routes import _dispatcher
-
-        grant = self._termination().bot_grant(room_name)
-        body: Dict[str, Any] = {
-            "agent_id": agent_id,
-            "transport_type": "livekit",
-            "direction": "outbound",
-            "call_data": {
-                "from": from_number,
-                "to": to_number,
-                "call_id": room_name,
-                "stream_id": room_name,
-            },
-        }
-        if scheduled_call_id:
-            body["scheduled_call_id"] = str(scheduled_call_id)
-
-        runner_args = LiveKitRunnerArguments(
-            room_name=room_name, url=grant["url"], token=grant["token"], body=body
+        payload = build_handoff_payload(
+            room_name=room_name,
+            grant=self._termination().bot_grant(room_name),
+            agent_id=agent_id,
+            direction="outbound",
+            from_number=from_number,
+            to_number=to_number,
+            trunk_id=trunk_id,
+            scheduled_call_id=scheduled_call_id,
         )
-        asyncio.run(_dispatcher.dispatch(room_name, runner_args))
+        if not dispatch_call_sync(payload):
+            raise SipTerminationError(
+                "No voice pod accepted the outbound SIP call — the media pipeline must run on a "
+                "call worker, not the originating pod."
+            )
 
     def end_call(self, call_id: str) -> bool:
         try:
