@@ -34,6 +34,10 @@ from deepeval.metrics.base_metric import BaseMetric  # noqa: E402
 from deepeval.test_case import LLMTestCase  # noqa: E402
 from loguru import logger  # noqa: E402
 
+from core.services.evals.agent_llm.tool_selection_metric import (  # noqa: E402
+    METRIC_NAME as _TOOL_SELECTION_METRIC,
+    score_tool_selection,
+)
 from core.services.evals.deepeval.llm_adapter import ToneDeepEvalLLM  # noqa: E402
 from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
@@ -68,6 +72,8 @@ class AgentLlmJudgeService:
         expected_output: Optional[str] = None,
         persona_criteria: Optional[str] = None,
         instruction_criteria: Optional[str] = None,
+        expected_tools: Optional[list] = None,
+        actual_tools: Optional[list] = None,
     ) -> dict:
         """Run every enabled metric on ``(prompt, system_prompt, actual_output)``.
 
@@ -101,6 +107,30 @@ class AgentLlmJudgeService:
         if instruction_criteria:
             criteria["instruction_following"] = instruction_criteria
 
+        # Deterministic tool-selection metric (Phase 2). Runs BEFORE DeepEval
+        # so a scenario with no DeepEval metrics enabled still gets scored
+        # on tool intent. ``score_tool_selection`` returns ``None`` when
+        # ``expected_tools`` is empty — text-only scenarios contribute
+        # nothing to the scorecard here (unchanged from v1). The metric
+        # never calls an LLM, so no API cost / no latency / deterministic.
+        # Strip ``tool_selection`` out of the DeepEval-bound list so
+        # ``build_metrics`` doesn't try to construct it as a DeepEval class.
+        tool_scorecard_entry = score_tool_selection(expected_tools, actual_tools)
+        deepeval_metrics = [m for m in metrics if m != _TOOL_SELECTION_METRIC]
+
+        # Config error: requesting the tool_selection metric without
+        # ``expected_tools`` was previously silent — score_tool_selection
+        # returned None, DeepEval branch was skipped, scorecard stayed
+        # empty, and the row persisted as FAIL 'no metrics scored'. Now
+        # a mismatched config surfaces an actionable message to the caller.
+        if _TOOL_SELECTION_METRIC in metrics and not expected_tools:
+            raise EvalConfigurationError(
+                f"Metric {_TOOL_SELECTION_METRIC!r} was enabled but the "
+                "scenario has no expected_tools — either populate "
+                "expected_tools on the scenario or drop tool_selection "
+                "from the metrics list."
+            )
+
         # Reject conversation-native metrics — they need a
         # ``ConversationalTestCase`` (turns + chatbot_role) which this
         # single-turn judge doesn't build. Without this guard,
@@ -109,7 +139,7 @@ class AgentLlmJudgeService:
         # per-scenario, fake-FAILing every row instead of aborting cleanly.
         # Configure these via ``CALL_EVAL_METRICS_ENABLED`` — the post-call
         # transcript judge owns them.
-        bad_conv = [m for m in metrics if m in CONVERSATION_METRICS]
+        bad_conv = [m for m in deepeval_metrics if m in CONVERSATION_METRICS]
         if bad_conv:
             raise EvalConfigurationError(
                 f"AGENT_LLM_EVAL_METRICS_ENABLED contains conversation-native "
@@ -118,45 +148,81 @@ class AgentLlmJudgeService:
                 "CALL_EVAL_METRICS_ENABLED (post-call transcript flavor)."
             )
 
-        llm = ToneDeepEvalLLM(api_key=api_key, model=model)
-        # Configuration errors are systemic — re-raise so the service aborts
-        # the run once instead of persisting N identical fake-FAIL rows.
-        named_metrics: List[Tuple[str, BaseMetric]] = build_metrics(
-            llm,
-            metrics,
-            threshold,
-            criteria=criteria,
-        )
+        # Empty-text guard (Phase 2). When the model emits only tool_calls
+        # (no accompanying text) — a legitimate outcome for tool-triggering
+        # scenarios — every text-based DeepEval metric (persona_adherence,
+        # instruction_following, hallucination, answer_relevancy, ...)
+        # would trivially fail against ``actual_output=""``, dragging the
+        # aggregate verdict down for a scenario the agent handled
+        # correctly. Skip those metrics with a DEBUG log; the deterministic
+        # tool_selection metric still runs above and captures the real
+        # signal. Fires ONLY when both conditions hold, so text-only
+        # scenarios with an accidentally-empty answer still score against
+        # the LLM metrics as they did in v1 (an operator would want to
+        # know the model returned nothing in that case).
+        if not (actual_output or "").strip() and actual_tools:
+            if deepeval_metrics:
+                logger.debug(
+                    "[agent-llm-eval] skipping text-based DeepEval metrics — "
+                    "model emitted only tool_calls (no text) — metrics={}",
+                    deepeval_metrics,
+                )
+            deepeval_metrics = []
 
-        # DeepEval's LLMTestCase uses ``input`` for the user turn and
-        # ``actual_output`` for the model reply. The system prompt isn't a
-        # first-class field, but persona/instruction GEval criteria typically
-        # reference "the system prompt" — prepend it to the input so the
-        # judge sees both turns. Retrieval / expected are optional.
-        composite_input = (
-            f"SYSTEM PROMPT:\n{system_prompt}\n\nUSER:\n{prompt}"
-            if system_prompt
-            else prompt
-        )
-        test_case = LLMTestCase(
-            input=composite_input,
-            actual_output=actual_output or "",
-            expected_output=expected_output,
-        )
-
-        try:
-            scorecard = asyncio.run(_run_all(named_metrics, test_case))
-        except EvalConfigurationError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            logger.exception(
-                "[agent-llm-eval] judge orchestrator failed model={}", model
+        # Skip the DeepEval async loop entirely when NO DeepEval metrics
+        # are enabled — the deterministic tool metric may still contribute
+        # a score row, and paying the async / SDK overhead for zero real
+        # metrics would be waste (and would fail-noisily inside
+        # ``build_metrics`` which requires at least one metric name).
+        scorecard: dict = {}
+        if deepeval_metrics:
+            llm = ToneDeepEvalLLM(api_key=api_key, model=model)
+            # Configuration errors are systemic — re-raise so the service
+            # aborts the run once instead of persisting N identical
+            # fake-FAIL rows.
+            named_metrics: List[Tuple[str, BaseMetric]] = build_metrics(
+                llm,
+                deepeval_metrics,
+                threshold,
+                criteria=criteria,
             )
-            return {
-                "verdict": "FAIL",
-                "reasoning": f"judge error: {type(e).__name__}: {e}",
-                "metric_scores": {},
-            }
+
+            # DeepEval's LLMTestCase uses ``input`` for the user turn and
+            # ``actual_output`` for the model reply. The system prompt isn't
+            # a first-class field, but persona/instruction GEval criteria
+            # typically reference "the system prompt" — prepend it to the
+            # input so the judge sees both turns. Retrieval / expected are
+            # optional.
+            composite_input = (
+                f"SYSTEM PROMPT:\n{system_prompt}\n\nUSER:\n{prompt}"
+                if system_prompt
+                else prompt
+            )
+            test_case = LLMTestCase(
+                input=composite_input,
+                actual_output=actual_output or "",
+                expected_output=expected_output,
+            )
+
+            try:
+                scorecard = asyncio.run(_run_all(named_metrics, test_case))
+            except EvalConfigurationError:
+                raise
+            except Exception as e:  # noqa: BLE001
+                logger.exception(
+                    "[agent-llm-eval] judge orchestrator failed model={}", model
+                )
+                return {
+                    "verdict": "FAIL",
+                    "reasoning": f"judge error: {type(e).__name__}: {e}",
+                    "metric_scores": {},
+                }
+
+        # Merge in the deterministic tool metric if it produced a row.
+        # Placed AFTER DeepEval so the tool score is visible whether or not
+        # the LLM-graded metrics succeeded.
+        if tool_scorecard_entry is not None:
+            scorecard[_TOOL_SELECTION_METRIC] = tool_scorecard_entry
 
         verdict, reasoning, scores = aggregate_scorecard(scorecard)
         if not scores:

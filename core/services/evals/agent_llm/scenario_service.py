@@ -570,6 +570,11 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
         persona_criteria=row.persona_criteria,
         instruction_criteria=row.instruction_criteria,
         tags=list(row.tags) if row.tags else [],
+        # Tool-aware fields — forward the persisted JSONB verbatim; the
+        # deterministic ``tool_selection`` metric consumes it (see
+        # ``core.services.evals.agent_llm.tool_selection_metric``). ``None``
+        # for text-only scenarios so v1 scoring is byte-identical.
+        expected_tools=list(row.expected_tools) if row.expected_tools else None,
     )
 
 
@@ -731,6 +736,10 @@ def _generated_to_input(g: Any) -> ScenarioInput:
         instruction_criteria=getattr(g, "instruction_criteria", None),
         tags=list(getattr(g, "tags", None) or []) or None,
         generation_metadata=getattr(g, "generation_metadata", None),
+        # Forward tool-aware fields when the generator populated them
+        # (Phase 2). ``None`` for text-only scenarios — persistence stores
+        # NULL, and the deterministic ``tool_selection`` metric skips.
+        expected_tools=getattr(g, "expected_tools", None),
     )
 
 

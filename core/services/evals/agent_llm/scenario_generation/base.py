@@ -47,6 +47,13 @@ class GeneratedScenario:
     # was made (strategy, model, prompt hash, coverage bucket, …). The UI
     # never renders this; it's audit-only.
     generation_metadata: Optional[dict] = None
+    # Tool-aware eval (Phase 2) — the generator MAY pre-label a scenario with
+    # the tool call(s) the agent is expected to emit. Persisted verbatim into
+    # ``agent_llm_eval_scenarios.expected_tools`` and consumed by the
+    # deterministic ``tool_selection`` metric. ``None`` for scenarios that
+    # test text-only behavior — no metric row is emitted for those.
+    # Shape: ``[{"name": "tool_name", "arguments": {"arg": "value"}}]``.
+    expected_tools: Optional[list] = None
 
 
 class ScenarioGenerator(ABC):

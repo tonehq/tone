@@ -41,6 +41,7 @@ class LLMScenario:
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: List[str] = field(default_factory=list)
+    expected_tools: Optional[list] = None
 
 
 def _config(**overrides) -> AgentEvalConfig:
@@ -141,11 +142,18 @@ class _EvalHarness:
         chat_return="hi",
         chat_side_effect=None,
         judge_key: str = "sk-judge",
+        chat_with_tools_return=None,
+        chat_with_tools_side_effect=None,
     ):
         self._persisted = persisted
         self._chat_return = chat_return
         self._chat_side_effect = chat_side_effect
         self._judge_key = judge_key
+        # Only patched when a test opts in — a no-tool run must NEVER
+        # touch chat_complete_with_tools (asserted via ``chat_with_tools_called``).
+        self._chat_with_tools_return = chat_with_tools_return
+        self._chat_with_tools_side_effect = chat_with_tools_side_effect
+        self.chat_with_tools_calls: list = []
         self._patches: list = []
 
     def __enter__(self):
@@ -169,6 +177,19 @@ class _EvalHarness:
                     return_value=self._chat_return,
                 )
             )
+
+        def _capture_tools(**kwargs):
+            self.chat_with_tools_calls.append(kwargs)
+            if self._chat_with_tools_side_effect is not None:
+                return self._chat_with_tools_side_effect(**kwargs)
+            return self._chat_with_tools_return
+        self._patches.append(
+            patch(
+                "core.services.evals.agent_llm.service.chat_complete_with_tools",
+                side_effect=_capture_tools,
+            )
+        )
+
         self._patches.append(
             patch(
                 "core.services.rag.provider_keys.ProviderKeyService.get_key",
@@ -270,6 +291,80 @@ def test_run_eval_empty_scenarios_raises():
         svc.run_eval(MagicMock(), agent_id=cfg.agent_id, scenarios=[])
 
 
+def test_run_eval_workflow_mode_uses_playbook_as_system_message():
+    """Workflow-mode agents send the serialized playbook (NOT the raw
+    ``system_prompt``) to both the answer LLM and the judge, and the
+    persisted result row stamps the playbook text so operators can inspect
+    what was actually scored. Verifies the ``effective_system_prompt``
+    branching hits every downstream consumer in one code path."""
+    playbook = (
+        "# Conversation Workflow\n\n"
+        "### Greet — Talk step\nSay hello warmly.\n"
+    )
+    cfg = _config(
+        system_prompt=None,
+        mode="workflow",
+        workflow_id=uuid4(),
+        workflow_serialized=playbook,
+    )
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    persisted: list = []
+    captured_messages: list = []
+
+    def _capture(**kwargs):
+        captured_messages.append(kwargs.get("messages"))
+        return "hi"
+
+    with _EvalHarness(persisted=persisted, chat_side_effect=_capture):
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[_scenario("s1")],
+        )
+
+    # Answer LLM saw the playbook as the system message.
+    assert len(captured_messages) == 1
+    system_msg = next(m for m in captured_messages[0] if m["role"] == "system")
+    assert system_msg["content"] == playbook
+
+    # Judge received the same text on ``system_prompt=``.
+    assert judge.calls[0]["system_prompt"] == playbook
+
+    # Persisted row stamps the playbook so operators can inspect what
+    # was actually scored (matches production-runtime behavior).
+    assert persisted[0]["system_prompt"] == playbook
+
+
+def test_run_eval_prompt_mode_still_uses_system_prompt():
+    """Regression guard: prompt-mode agents (no ``workflow_serialized``)
+    must still pass ``system_prompt`` verbatim to both the LLM and the
+    judge — byte-identical to pre-workflow behavior."""
+    cfg = _config()  # default prompt mode, system_prompt='You are helpful.'
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    persisted: list = []
+    captured_messages: list = []
+
+    def _capture(**kwargs):
+        captured_messages.append(kwargs.get("messages"))
+        return "hi"
+
+    with _EvalHarness(persisted=persisted, chat_side_effect=_capture):
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[_scenario("s1")],
+        )
+
+    system_msg = next(m for m in captured_messages[0] if m["role"] == "system")
+    assert system_msg["content"] == "You are helpful."
+    assert judge.calls[0]["system_prompt"] == "You are helpful."
+    assert persisted[0]["system_prompt"] == "You are helpful."
+
+
 def test_run_eval_uses_scenario_metric_override():
     """Per-scenario ``metrics`` list must reach the judge — otherwise a
     scenario can't override the default ``AGENT_LLM_EVAL_METRICS_ENABLED``."""
@@ -343,3 +438,169 @@ def test_run_eval_judge_key_reuses_agent_key_when_same_provider():
             judge_model="gpt-4o",  # same provider (openai)
         )
     assert judge.calls[0]["api_key"] == "sk-agent"
+
+
+# ── Phase 2: tool-aware execution ─────────────────────────────────────────
+
+
+def _tool(name: str) -> dict:
+    return {
+        "type": "function",
+        "function": {"name": name, "description": "", "parameters": {}},
+    }
+
+
+def test_score_one_scenario_passes_tools_when_agent_has_them():
+    """Agent with tools attached → ``chat_complete_with_tools`` is called
+    with the tool array, the returned ``tool_calls`` are captured on the
+    scored row, and both ``tools_called`` + ``execution_trace`` columns
+    are populated on the persisted result. Judge receives
+    ``actual_tools`` for deterministic grading."""
+    from core.services.llm.chat_complete import ChatCompletion, ToolCallIntent
+
+    cfg = _config(tools=[_tool("book")])
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    tool_completion = ChatCompletion(
+        content=None,
+        tool_calls=[ToolCallIntent(name="book", arguments={"date": "2026-08-26"})],
+    )
+
+    persisted: list = []
+    scenario = _scenario(
+        "book_slot",
+        prompt="Book me a slot for Tuesday",
+        expected_tools=[{"name": "book", "arguments": {"date": "2026-08-26"}}],
+    )
+    with _EvalHarness(
+        persisted=persisted,
+        chat_with_tools_return=tool_completion,
+    ) as h:
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[scenario],
+        )
+
+    # Tool-aware chat WAS called and got the tool list.
+    assert len(h.chat_with_tools_calls) == 1
+    tc_call = h.chat_with_tools_calls[0]
+    assert tc_call["tools"] == cfg.tools
+
+    # Judge received the actual tool calls so it can score deterministically.
+    assert judge.calls[0]["actual_tools"] == [
+        {"name": "book", "arguments": {"date": "2026-08-26"}}
+    ]
+    assert judge.calls[0]["expected_tools"] == [
+        {"name": "book", "arguments": {"date": "2026-08-26"}}
+    ]
+
+    # Persisted result stamps tool_calls + execution_trace.
+    row = persisted[0]
+    assert row["tools_called"] == [
+        {"name": "book", "arguments": {"date": "2026-08-26"}}
+    ]
+    assert row["execution_trace"] == {
+        "turns": [{
+            "role": "assistant",
+            "tool_calls": [{"name": "book", "arguments": {"date": "2026-08-26"}}],
+        }],
+    }
+
+
+def test_score_one_scenario_skips_tools_branch_when_agent_has_none():
+    """Regression guard: no tools attached → ``chat_complete`` is called
+    (NOT ``chat_complete_with_tools``); ``tools_called`` +
+    ``execution_trace`` stay ``NULL`` so the FE renders nothing extra.
+    Byte-identical to Phase 1 executor behavior."""
+    cfg = _config()  # tools default to []
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    persisted: list = []
+    with _EvalHarness(persisted=persisted) as h:
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[_scenario("s1")],
+        )
+
+    # Tool-aware chat MUST NOT be called on a no-tool agent.
+    assert h.chat_with_tools_calls == []
+    # Judge still receives the tool kwargs — always keyword — but they are
+    # empty for a no-tool run.
+    assert judge.calls[0]["actual_tools"] == []
+    assert judge.calls[0]["expected_tools"] is None
+    # Persisted row: tool columns stay NULL.
+    assert persisted[0]["tools_called"] is None
+    assert persisted[0]["execution_trace"] is None
+
+
+def test_score_one_scenario_auto_enables_tool_selection_metric():
+    """A scenario with ``expected_tools`` but NO explicit ``metrics``
+    override → the executor auto-appends ``tool_selection`` so the judge
+    grades intent without operator config. Env-default metrics still
+    apply too (deterministic metric is additive, not replacement)."""
+    cfg = _config(tools=[_tool("book")])
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    from core.services.llm.chat_complete import ChatCompletion
+    completion = ChatCompletion(content=None, tool_calls=[])
+
+    persisted: list = []
+    scenario = _scenario(
+        "book_slot",
+        metrics=["persona_adherence"],  # explicit non-tool metric
+        expected_tools=[{"name": "book", "arguments": {}}],
+    )
+    with _EvalHarness(persisted=persisted, chat_with_tools_return=completion):
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[scenario],
+        )
+    # Judge received BOTH the explicit metric AND the auto-appended one.
+    metrics_passed = judge.calls[0]["metrics"]
+    assert "persona_adherence" in metrics_passed
+    assert "tool_selection" in metrics_passed
+
+
+def test_score_one_scenario_captures_tool_calls_with_empty_content():
+    """Post-review regression: when the LLM emits ONLY tool_calls (no text),
+    actual_answer='' but tool_calls MUST still be captured + persisted.
+    The judge is still invoked with actual_output='' so the deterministic
+    tool_selection metric can score; the JUDGE (not the executor) skips
+    text-based DeepEval metrics in this case."""
+    from core.services.llm.chat_complete import ChatCompletion, ToolCallIntent
+
+    cfg = _config(tools=[_tool("book")])
+    completion = ChatCompletion(
+        content=None,  # ← text absent
+        tool_calls=[ToolCallIntent(name="book", arguments={"date": "2026-08-26"})],
+    )
+    judge = _FakeJudge()
+    svc = AgentLlmEvalService(judge=judge, agent_loader=_FakeLoader(cfg))
+
+    persisted: list = []
+    scenario = _scenario(
+        "book_slot",
+        expected_tools=[{"name": "book", "arguments": {"date": "2026-08-26"}}],
+    )
+    with _EvalHarness(persisted=persisted, chat_with_tools_return=completion):
+        svc.run_eval(
+            _mock_db_with_next_run_number(1),
+            agent_id=cfg.agent_id,
+            scenarios=[scenario],
+        )
+
+    # Tool call captured and persisted despite empty text content.
+    assert persisted[0]["tools_called"] == [
+        {"name": "book", "arguments": {"date": "2026-08-26"}}
+    ]
+    # Executor persisted actual_answer as None (empty string coerced) — the
+    # judge received the intent for grading.
+    assert judge.calls[0]["actual_tools"] == [
+        {"name": "book", "arguments": {"date": "2026-08-26"}}
+    ]
