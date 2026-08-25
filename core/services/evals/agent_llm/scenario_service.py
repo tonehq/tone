@@ -27,7 +27,7 @@ from typing import Any, Iterable, List, Optional, Sequence
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import String, bindparam
+from sqlalchemy import String, bindparam, or_
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError
 
@@ -57,6 +57,9 @@ class ScenarioInput:
     threshold_override: Optional[float] = None
     scenario_ord: Optional[int] = None
     generation_metadata: Optional[dict] = None
+    # Single-value grouping ("folder") for UI-side organization. Empty string
+    # → NULL. Same free-text semantics as tags but stored on its own column.
+    folder: Optional[str] = None
     # v2 forward-compat — accepted here so the same payload can be POSTed
     # by a future tool-scoring UI without touching this DTO. Both stay
     # ``None`` for every v1 scenario.
@@ -82,6 +85,8 @@ class ScenarioPatch:
     # ``(agent_id, scenario_key)`` catches collisions, converted to
     # ``AgentLlmScenarioKeyConflictError`` at the service layer.
     scenario_key: Optional[str] = None
+    # Empty string clears the folder (row → NULL → "Uncategorized").
+    folder: Optional[str] = None
 
 
 _CSV_REQUIRED_COLUMNS = ("scenario_key", "prompt")
@@ -110,6 +115,7 @@ _CSV_ALLOWED_COLUMNS = {
     "metrics_override",
     "threshold_override",
     "scenario_ord",
+    "folder",
 }
 
 
@@ -130,15 +136,20 @@ class AgentLlmScenarioService(BaseService):
         *,
         search: Optional[str] = None,
         tags: Optional[Sequence[str]] = None,
+        folder: Optional[str] = None,
         sort_by: Optional[str] = "created_at",
         sort_order: str = "desc",
         page_no: int = 1,
         page_size: int = 50,
     ) -> tuple[list[AgentLlmEvalScenario], int]:
         """Paginated list of scenarios for one agent, with optional search /
-        tag filter / whitelisted sort. Reuses ``apply_search_sort_pagination``
-        so search / sort / pagination semantics match every other
-        ``POST /…/list`` endpoint.
+        tag filter / folder filter / whitelisted sort. Reuses
+        ``apply_search_sort_pagination`` so search / sort / pagination
+        semantics match every other ``POST /…/list`` endpoint.
+
+        ``folder`` is an exact-match (case-sensitive) filter. An empty
+        string is treated as "Uncategorized" and matches rows with NULL
+        folder; ``None`` skips the filter entirely.
         """
         q = self.query(AgentLlmEvalScenario).filter(
             AgentLlmEvalScenario.agent_id == agent_id
@@ -150,6 +161,8 @@ class AgentLlmScenarioService(BaseService):
         clean_tags = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
         if clean_tags:
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
+
+        q = _apply_folder_filter(q, AgentLlmEvalScenario.folder, folder)
 
         sort_map = {
             "created_at": AgentLlmEvalScenario.created_at,
@@ -187,12 +200,20 @@ class AgentLlmScenarioService(BaseService):
         *,
         scenario_ids: Optional[Sequence[UUID]] = None,
         tags: Optional[Sequence[str]] = None,
+        folder: Optional[str] = None,
+        folders: Optional[Sequence[str]] = None,
     ) -> list[AgentLlmEvalScenario]:
         """Every scenario the run should score, ordered by ``scenario_ord``.
 
-        Filters when ``scenario_ids`` OR ``tags`` is provided; otherwise
-        returns every scenario for the agent. Kept out of ``list_scenarios``
-        so run-eval doesn't accidentally paginate off the 51st scenario.
+        Filters when ``scenario_ids`` / ``tags`` / ``folder`` / ``folders`` is
+        provided; otherwise returns every scenario for the agent. Kept out
+        of ``list_scenarios`` so run-eval doesn't accidentally paginate off
+        the 51st scenario.
+
+        ``folders`` (plural, multi-select) takes precedence over ``folder``
+        (singular) when both are provided — a caller that passes ``folders``
+        opted into the multi-select code path and any ``folder`` value it
+        also sent is ignored so the two never silently combine.
         """
         q = self.query(AgentLlmEvalScenario).filter(
             AgentLlmEvalScenario.agent_id == agent_id
@@ -202,6 +223,10 @@ class AgentLlmScenarioService(BaseService):
         clean_tags = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
         if clean_tags:
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
+        if folders is not None:
+            q = _apply_folders_filter(q, AgentLlmEvalScenario.folder, folders)
+        else:
+            q = _apply_folder_filter(q, AgentLlmEvalScenario.folder, folder)
         return (
             q.order_by(
                 AgentLlmEvalScenario.scenario_ord.asc(),
@@ -311,6 +336,7 @@ class AgentLlmScenarioService(BaseService):
                 persona_criteria=_clean_optional_text(payload.persona_criteria),
                 instruction_criteria=_clean_optional_text(payload.instruction_criteria),
                 tags=_clean_string_list(payload.tags),
+                folder=_clean_folder(payload.folder),
                 metrics_override=_clean_string_list(payload.metrics_override),
                 threshold_override=payload.threshold_override,
                 source=source,
@@ -396,6 +422,8 @@ class AgentLlmScenarioService(BaseService):
             row.instruction_criteria = _clean_optional_text(patch.instruction_criteria)
         if patch.tags is not None:
             row.tags = _clean_string_list(patch.tags)
+        if patch.folder is not None:
+            row.folder = _clean_folder(patch.folder)
         if patch.metrics_override is not None:
             row.metrics_override = _clean_string_list(patch.metrics_override)
         if patch.threshold_override is not None:
@@ -465,6 +493,7 @@ class AgentLlmScenarioService(BaseService):
         count: int = 10,
         dry_run: bool = True,
         options: Optional[dict] = None,
+        folder: Optional[str] = None,
     ) -> "GeneratedBatch":
         """Ask the given generator strategy for ``count`` scenarios.
 
@@ -473,6 +502,10 @@ class AgentLlmScenarioService(BaseService):
         via ``create_scenarios_bulk(source='generated')`` — the SAME entry
         point as manual create, so future automated cron jobs use exactly
         the same code path.
+
+        ``folder`` (when non-None) is stamped on every persisted scenario
+        so a "Generate into this folder" flow lands N rows organized from
+        the start — no post-hoc reshuffling.
         """
         # Local import — the scenario_generation package is lightweight but
         # importing it lazily keeps the CLI (which never generates) fast.
@@ -502,7 +535,7 @@ class AgentLlmScenarioService(BaseService):
                 ),
             )
 
-        payloads = [_generated_to_input(g) for g in generated]
+        payloads = [_generated_to_input(g, folder=folder) for g in generated]
         persisted = self.create_scenarios_bulk(
             agent_id, payloads, source="generated"
         )
@@ -511,6 +544,99 @@ class AgentLlmScenarioService(BaseService):
             generated=generated,
             persisted=persisted,
         )
+
+    # ── Folder read + rename ────────────────────────────────────────────
+
+    def list_folders(self, agent_id: UUID) -> list[dict]:
+        """Return every distinct folder for one agent plus its scenario count.
+
+        NULL folder is included as ``{"folder": None, "count": N}`` so the
+        UI can render "Uncategorized" without a second query. Result is
+        ordered so NULL sorts last and named folders come alphabetically.
+        """
+        from sqlalchemy import func
+
+        rows = (
+            self.query(AgentLlmEvalScenario)
+            .with_entities(
+                AgentLlmEvalScenario.folder.label("folder"),
+                func.count(AgentLlmEvalScenario.id).label("count"),
+            )
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .group_by(AgentLlmEvalScenario.folder)
+            .all()
+        )
+        # NULL sorts last, named folders alphabetically.
+        result = sorted(
+            ({"folder": r.folder, "count": int(r.count)} for r in rows),
+            key=lambda x: (x["folder"] is None, (x["folder"] or "").lower()),
+        )
+        return result
+
+    def rename_folder(
+        self,
+        agent_id: UUID,
+        *,
+        old_name: str,
+        new_name: str,
+    ) -> dict:
+        """Bulk-rename a folder for one agent. Updates BOTH
+        ``agent_llm_eval_scenarios.folder`` AND
+        ``agent_llm_eval_results.folder`` in a single transaction so the
+        sidebar and past-run history both migrate under the new name.
+
+        Raises:
+            EvalConfigurationError: if either name is empty or equal.
+            AgentLlmScenarioNotFoundError: if no scenarios match ``old_name``.
+        """
+        # Local import — avoid a circular hazard if models later import from
+        # services. Cheap either way since it's a one-off per rename.
+        from core.models.agent_llm_eval_result import AgentLlmEvalResult
+
+        cleaned_old = _clean_folder(old_name)
+        cleaned_new = _clean_folder(new_name)
+        if not cleaned_old:
+            raise EvalConfigurationError("old_name must be a non-empty folder")
+        if not cleaned_new:
+            raise EvalConfigurationError("new_name must be a non-empty folder")
+        if cleaned_old == cleaned_new:
+            raise EvalConfigurationError("new_name must differ from old_name")
+
+        scenarios_updated = (
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.folder == cleaned_old)
+            .update(
+                {AgentLlmEvalScenario.folder: cleaned_new},
+                synchronize_session=False,
+            )
+        )
+        if scenarios_updated == 0:
+            self.db.rollback()
+            raise AgentLlmScenarioNotFoundError(
+                f"Folder {cleaned_old!r} not found for agent {agent_id}"
+            )
+
+        results_updated = (
+            self.query(AgentLlmEvalResult)
+            .filter(AgentLlmEvalResult.agent_id == agent_id)
+            .filter(AgentLlmEvalResult.folder == cleaned_old)
+            .update(
+                {AgentLlmEvalResult.folder: cleaned_new},
+                synchronize_session=False,
+            )
+        )
+        self.db.commit()
+        logger.info(
+            "[agent-llm-eval] renamed folder agent={} old={} new={} scenarios={} results={}",
+            agent_id, cleaned_old, cleaned_new, scenarios_updated, results_updated,
+        )
+        return {
+            "old_name": cleaned_old,
+            "new_name": cleaned_new,
+            "scenarios_updated": int(scenarios_updated),
+            "results_updated": int(results_updated),
+        }
 
     # ── Internals ───────────────────────────────────────────────────────
 
@@ -570,6 +696,7 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
         persona_criteria=row.persona_criteria,
         instruction_criteria=row.instruction_criteria,
         tags=list(row.tags) if row.tags else [],
+        folder=row.folder,
         # Tool-aware fields — forward the persisted JSONB verbatim; the
         # deterministic ``tool_selection`` metric consumes it (see
         # ``core.services.evals.agent_llm.tool_selection_metric``). ``None``
@@ -717,17 +844,22 @@ def _csv_row_to_input(row: dict) -> ScenarioInput:
         persona_criteria=(row.get("persona_criteria") or None),
         instruction_criteria=(row.get("instruction_criteria") or None),
         tags=tags,
+        folder=(row.get("folder") or None),
         metrics_override=metrics,
         threshold_override=threshold,
         scenario_ord=scenario_ord,
     )
 
 
-def _generated_to_input(g: Any) -> ScenarioInput:
+def _generated_to_input(g: Any, *, folder: Optional[str] = None) -> ScenarioInput:
     """Convert a ``GeneratedScenario`` into a ``ScenarioInput`` for persist.
     Kept loose (``g: Any``) so this file never imports the generator package
     at module load — the generator, if any, is imported lazily inside
-    ``generate_scenarios``."""
+    ``generate_scenarios``.
+
+    ``folder`` is stamped from the caller (the "Generate into folder X"
+    picker); generators never invent a folder themselves.
+    """
     return ScenarioInput(
         scenario_key=g.scenario_key,
         prompt=g.prompt,
@@ -735,12 +867,83 @@ def _generated_to_input(g: Any) -> ScenarioInput:
         persona_criteria=getattr(g, "persona_criteria", None),
         instruction_criteria=getattr(g, "instruction_criteria", None),
         tags=list(getattr(g, "tags", None) or []) or None,
+        folder=folder,
         generation_metadata=getattr(g, "generation_metadata", None),
         # Forward tool-aware fields when the generator populated them
         # (Phase 2). ``None`` for text-only scenarios — persistence stores
         # NULL, and the deterministic ``tool_selection`` metric skips.
         expected_tools=getattr(g, "expected_tools", None),
     )
+
+
+def _clean_folder(value: Any) -> Optional[str]:
+    """Trim + coerce empty → NULL. Cap at 120 chars to match the column
+    constraint (defensive; the router body validator caps at the same
+    length, but a non-HTTP caller — worker, CLI — has no such guard).
+    """
+    if value is None:
+        return None
+    if not isinstance(value, str):
+        return None
+    trimmed = value.strip()
+    if not trimmed:
+        return None
+    return trimmed[:120]
+
+
+def _apply_folder_filter(query, column, folder: Optional[str]):
+    """Add a folder filter to ``query`` unless ``folder is None``.
+
+    ``folder == ""`` means "Uncategorized" and matches rows where the
+    column IS NULL; ``folder`` otherwise is an exact match. Kept as a
+    helper so ``list_scenarios`` / ``load_all_for_run`` share ONE
+    interpretation of the null-vs-empty-vs-name distinction."""
+    if folder is None:
+        return query
+    if folder == "":
+        return query.filter(column.is_(None))
+    return query.filter(column == folder)
+
+
+def _apply_folders_filter(query, column, folders: Optional[Sequence[str]]):
+    """Multi-folder OR-filter — matches ANY of the entries in ``folders``.
+
+    Each entry follows the same null-vs-name convention as
+    :func:`_apply_folder_filter`: an empty string ``""`` means
+    "Uncategorized" (matches rows where the column IS NULL); any other
+    string is an exact match on that named folder. Multiple entries are
+    combined with ``OR``.
+
+    ``None`` or an empty (post-strip) list is a no-op — the caller
+    signalled "no folder filter", NOT "no folders match". This mirrors
+    the singular helper's contract so a caller that always passes the
+    plural param can still get an unfiltered query by passing ``None``.
+    """
+    if not folders:
+        return query
+    include_null = False
+    named: list[str] = []
+    for f in folders:
+        if f is None:
+            continue
+        if not isinstance(f, str):
+            continue
+        if f == "":
+            include_null = True
+        else:
+            trimmed = f.strip()
+            if trimmed:
+                named.append(trimmed)
+    if not named and not include_null:
+        return query
+    conditions = []
+    if named:
+        conditions.append(column.in_(named))
+    if include_null:
+        conditions.append(column.is_(None))
+    if len(conditions) == 1:
+        return query.filter(conditions[0])
+    return query.filter(or_(*conditions))
 
 
 def _split_csv_list(value: Optional[str]) -> Optional[list[str]]:

@@ -44,12 +44,17 @@ router = APIRouter()
 class ListScenariosRequest(BaseModel):
     """POST body for ``/{agent_id}/llm-evals/scenarios/list`` — matches the
     project's standard ``POST /list`` convention (search + tag filter +
-    whitelisted sort + pagination)."""
+    folder filter + whitelisted sort + pagination).
+
+    ``folder`` is exact-match: a value matches that named folder; an
+    empty string matches "Uncategorized" (NULL folder); ``None`` skips.
+    """
 
     page_no: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=200)
     search: Optional[str] = None
     tags: Optional[List[str]] = None
+    folder: Optional[str] = Field(default=None, max_length=120)
     sort_by: Optional[str] = Field(default="created_at")
     sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
 
@@ -68,6 +73,7 @@ class ScenarioIn(BaseModel):
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: Optional[List[str]] = None
+    folder: Optional[str] = Field(default=None, max_length=120)
     metrics_override: Optional[List[str]] = None
     threshold_override: Optional[float] = Field(default=None, gt=0.0, le=1.0)
     scenario_ord: Optional[int] = Field(default=None, ge=0)
@@ -88,6 +94,7 @@ class ScenarioPatchRequest(BaseModel):
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: Optional[List[str]] = None
+    folder: Optional[str] = Field(default=None, max_length=120)
     metrics_override: Optional[List[str]] = None
     threshold_override: Optional[float] = None
     scenario_ord: Optional[int] = Field(default=None, ge=0)
@@ -102,6 +109,9 @@ class GenerateScenariosRequest(BaseModel):
     count: int = Field(default=10, ge=1, le=100)
     dry_run: bool = Field(default=True)
     options: Optional[dict] = None
+    # When set, every persisted (non-dry-run) scenario is stamped with
+    # this folder. Ignored on dry-run previews.
+    folder: Optional[str] = Field(default=None, max_length=120)
 
 
 class TriggerRunRequest(BaseModel):
@@ -109,7 +119,22 @@ class TriggerRunRequest(BaseModel):
 
     scenario_ids: Optional[List[UUID]] = None
     tags: Optional[List[str]] = None
+    # Restrict the run to one folder (empty string = Uncategorized).
+    folder: Optional[str] = Field(default=None, max_length=120)
+    # Multi-select variant of ``folder`` — matches ANY of the folders in the
+    # list. Each entry follows the same rule as ``folder``: '' = Uncategorized,
+    # any other string = that named folder. When both ``folder`` and
+    # ``folders`` are provided the service treats ``folders`` as the source
+    # of truth and ignores ``folder`` (they never silently AND-combine).
+    folders: Optional[List[str]] = None
     judge_model: Optional[str] = Field(default=None, min_length=1)
+
+
+class RenameFolderRequest(BaseModel):
+    """POST /folders/rename body."""
+
+    old_name: str = Field(..., min_length=1, max_length=120)
+    new_name: str = Field(..., min_length=1, max_length=120)
 
 
 class CompareRunsRequest(BaseModel):
@@ -154,6 +179,7 @@ def _scenario_input_from_body(body: ScenarioIn) -> ScenarioInput:
         persona_criteria=body.persona_criteria,
         instruction_criteria=body.instruction_criteria,
         tags=body.tags,
+        folder=body.folder,
         metrics_override=body.metrics_override,
         threshold_override=body.threshold_override,
         scenario_ord=body.scenario_ord,
@@ -168,6 +194,7 @@ def _scenario_patch_from_body(body: ScenarioPatchRequest) -> ScenarioPatch:
         persona_criteria=body.persona_criteria,
         instruction_criteria=body.instruction_criteria,
         tags=body.tags,
+        folder=body.folder,
         metrics_override=body.metrics_override,
         threshold_override=body.threshold_override,
         scenario_ord=body.scenario_ord,
@@ -243,6 +270,7 @@ def list_llm_eval_scenarios(
         agent_id,
         search=payload.search,
         tags=payload.tags,
+        folder=payload.folder,
         sort_by=payload.sort_by,
         sort_order=payload.sort_order,
         page_no=payload.page_no,
@@ -420,6 +448,7 @@ def generate_llm_eval_scenarios(
             count=payload.count,
             dry_run=payload.dry_run,
             options=payload.options,
+            folder=payload.folder,
         )
     except ValueError as e:
         # Unknown strategy — the factory raises ValueError, mapped to 400.
@@ -483,6 +512,8 @@ def trigger_llm_eval_run(
         agent_id,
         scenario_ids=payload.scenario_ids,
         tags=payload.tags,
+        folder=payload.folder,
+        folders=payload.folders,
     )
     if not rows:
         raise HTTPException(
@@ -490,8 +521,8 @@ def trigger_llm_eval_run(
             detail={
                 "code": "NO_SCENARIOS",
                 "message": (
-                    "No scenarios matched — create scenarios (or drop the tag / id filters) "
-                    "before running an eval."
+                    "No scenarios matched — create scenarios (or drop the folder / tag / id "
+                    "filters) before running an eval."
                 ),
             },
         )
@@ -509,6 +540,8 @@ def trigger_llm_eval_run(
             triggered_by=triggered_by,
             scenario_ids=payload.scenario_ids,
             tags=payload.tags,
+            folder=payload.folder,
+            folders=payload.folders,
             judge_model=payload.judge_model,
         )
     except Exception as e:  # noqa: BLE001
@@ -621,3 +654,46 @@ def compare_llm_eval_runs(
             status_code=status.HTTP_404_NOT_FOUND,
             detail={"code": "RUN_NOT_FOUND", "message": str(e)},
         ) from e
+
+
+# ── Folder routes ───────────────────────────────────────────────────────
+
+
+@router.get("/agents/{agent_id}/llm-evals/folders")
+def list_llm_eval_folders(
+    agent_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Distinct folders for one agent plus each folder's scenario count.
+    NULL folder is returned as ``{"folder": null, "count": N}`` so the UI
+    can render "Uncategorized" without a second query."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmScenarioService(db, org_id=org_id)
+    return {"items": svc.list_folders(agent_id)}
+
+
+@router.post("/agents/{agent_id}/llm-evals/folders/rename")
+def rename_llm_eval_folder(
+    agent_id: UUID,
+    body: RenameFolderRequest = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Bulk-rename a folder for one agent. Updates BOTH
+    ``agent_llm_eval_scenarios.folder`` AND ``agent_llm_eval_results.folder``
+    in a single transaction so past runs regroup under the new name."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmScenarioService(db, org_id=org_id)
+    try:
+        return svc.rename_folder(
+            agent_id, old_name=body.old_name, new_name=body.new_name
+        )
+    except (
+        AgentLlmScenarioNotFoundError,
+        AgentLlmEvalConfigError,
+        EvalConfigurationError,
+    ) as e:
+        raise _handle_scenario_error(e) from e

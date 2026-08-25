@@ -35,6 +35,8 @@ export interface AgentLlmEvalScenario {
   persona_criteria: string | null;
   instruction_criteria: string | null;
   tags: string[] | null;
+  // Single-value grouping ("folder") for the UI sidebar. null = Uncategorized.
+  folder: string | null;
   metrics_override: string[] | null;
   threshold_override: number | null;
   source: AgentLlmEvalScenarioSource;
@@ -43,6 +45,29 @@ export interface AgentLlmEvalScenario {
   tool_config: Record<string, unknown> | null;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// Distinct folder + scenario count for one agent.
+// null folder is returned as { folder: null, count: N } — render as "Uncategorized".
+export interface AgentLlmEvalFolder {
+  folder: string | null;
+  count: number;
+}
+
+export interface ListFoldersResponse {
+  items: AgentLlmEvalFolder[];
+}
+
+export interface RenameFolderPayload {
+  old_name: string;
+  new_name: string;
+}
+
+export interface RenameFolderResponse {
+  old_name: string;
+  new_name: string;
+  scenarios_updated: number;
+  results_updated: number;
 }
 
 export interface ListScenariosResponse {
@@ -57,6 +82,8 @@ export interface ListScenariosRequest {
   page_size?: number;
   search?: string | null;
   tags?: string[] | null;
+  // Exact folder filter. '' = "Uncategorized" (matches NULL rows); null/undefined skips.
+  folder?: string | null;
   sort_by?: string | null;
   sort_order?: 'asc' | 'desc';
 }
@@ -68,6 +95,8 @@ export interface ScenarioInput {
   persona_criteria?: string | null;
   instruction_criteria?: string | null;
   tags?: string[] | null;
+  // Single-value grouping. '' or omitted → Uncategorized.
+  folder?: string | null;
   metrics_override?: string[] | null;
   threshold_override?: number | null;
   scenario_ord?: number | null;
@@ -80,6 +109,8 @@ export interface ScenarioPatch {
   persona_criteria?: string | null;
   instruction_criteria?: string | null;
   tags?: string[] | null;
+  // '' clears the folder (row → NULL → "Uncategorized").
+  folder?: string | null;
   metrics_override?: string[] | null;
   // Sentinel: -1 clears the override so the resolver falls back to the org default.
   threshold_override?: number | null;
@@ -120,6 +151,8 @@ export interface AgentLlmEvalScoredScenario {
   id: string;
   scenario_key: string;
   scenario_tags: string[] | null;
+  // Snapshot of the scenario's folder at run time (null = Uncategorized).
+  folder: string | null;
   prompt: string;
   expected_answer: string | null;
   actual_answer: string | null;
@@ -152,6 +185,13 @@ export interface AgentLlmEvalRunDetail {
 export interface TriggerRunPayload {
   scenario_ids?: string[];
   tags?: string[];
+  // Restrict the run to one folder. '' matches "Uncategorized".
+  folder?: string | null;
+  // Multi-select variant of `folder` — matches ANY of the entries. Each
+  // entry follows the same rule as `folder`: '' = Uncategorized, any other
+  // string = that named folder. When both `folder` and `folders` are
+  // provided the backend uses `folders` and ignores `folder`.
+  folders?: string[];
   judge_model?: string | null;
 }
 
@@ -180,6 +220,8 @@ export interface GenerateScenariosPayload {
   count?: number;
   dry_run?: boolean;
   options?: Record<string, unknown> | null;
+  // When set, every persisted (non-dry-run) scenario lands in this folder.
+  folder?: string | null;
 }
 
 export interface GenerateScenariosResponse {

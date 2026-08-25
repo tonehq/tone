@@ -8,8 +8,11 @@ import type {
   CompareRunsResponse,
   GenerateScenariosPayload,
   GenerateScenariosResponse,
+  ListFoldersResponse,
   ListScenariosRequest,
   ListScenariosResponse,
+  RenameFolderPayload,
+  RenameFolderResponse,
   ScenarioInput,
   ScenarioPatch,
   TriggerRunPayload,
@@ -130,6 +133,24 @@ export const compareAgentLlmEvalRuns = async (
 ): Promise<CompareRunsResponse> => {
   const res = await axiosInstance.post<CompareRunsResponse>(
     `${base(agentId)}/runs/compare`,
+    payload,
+  );
+  return res.data;
+};
+
+// ── Folders ──────────────────────────────────────────────────────────────
+
+export const listAgentLlmEvalFolders = async (agentId: string): Promise<ListFoldersResponse> => {
+  const res = await axiosInstance.get<ListFoldersResponse>(`${base(agentId)}/folders`);
+  return res.data;
+};
+
+export const renameAgentLlmEvalFolder = async (
+  agentId: string,
+  payload: RenameFolderPayload,
+): Promise<RenameFolderResponse> => {
+  const res = await axiosInstance.post<RenameFolderResponse>(
+    `${base(agentId)}/folders/rename`,
     payload,
   );
   return res.data;

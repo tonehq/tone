@@ -7,8 +7,10 @@ import {
   deleteAgentLlmEvalScenario,
   generateAgentLlmEvalScenarios,
   getAgentLlmEvalRunDetail,
+  listAgentLlmEvalFolders,
   listAgentLlmEvalRuns,
   listAgentLlmEvalScenarios,
+  renameAgentLlmEvalFolder,
   triggerAgentLlmEvalRun,
   updateAgentLlmEvalScenario,
   uploadAgentLlmEvalScenariosCsv,
@@ -17,6 +19,7 @@ import type {
   CompareRunsPayload,
   GenerateScenariosPayload,
   ListScenariosRequest,
+  RenameFolderPayload,
   ScenarioInput,
   ScenarioPatch,
   TriggerRunPayload,
@@ -59,16 +62,29 @@ export function useAgentLlmEvalRunDetail(agentId: string | null, runId: string |
   });
 }
 
+export function useAgentLlmEvalFolders(agentId: string | null) {
+  return useQuery({
+    queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'folders', agentId],
+    queryFn: () => listAgentLlmEvalFolders(agentId as string),
+    enabled: !!agentId,
+    // Same snappy semantics as the scenarios list — a create/edit/delete
+    // can change folder membership + counts, so we want a fast refetch.
+    staleTime: 0,
+  });
+}
+
 // ── Shared invalidator ───────────────────────────────────────────────────
 
-/** Invalidate both scenarios AND runs — used by every mutation, since a run
- * doesn't create new scenarios but the "any scenarios exist" state gates
- * the Run button and vice versa. */
+/** Invalidate scenarios + runs + folders — used by every mutation. A
+ * scenario write can change folder counts (add/remove/rename), and a run
+ * completion can add rows tagged with a folder that the results-view might
+ * want to see. Keeping one invalidator prevents drift between call sites. */
 export function useInvalidateAgentLlmEvals(agentId: string) {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'scenarios', agentId] });
     qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'runs', agentId] });
+    qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'folders', agentId] });
   };
 }
 
@@ -139,5 +155,13 @@ export function useTriggerAgentLlmEvalRun(agentId: string) {
 export function useCompareAgentLlmEvalRuns(agentId: string) {
   return useMutation({
     mutationFn: (payload: CompareRunsPayload) => compareAgentLlmEvalRuns(agentId, payload),
+  });
+}
+
+export function useRenameAgentLlmEvalFolder(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (payload: RenameFolderPayload) => renameAgentLlmEvalFolder(agentId, payload),
+    onSuccess: invalidate,
   });
 }
