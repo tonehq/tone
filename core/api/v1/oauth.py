@@ -181,6 +181,62 @@ def get_connection_by_provider(
     return {**svc.connection_response(connection), "connected": True}
 
 
+@router.post("/connections/{connection_id}/refresh")
+def refresh_connection_token(
+    connection_id: str,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """User-triggered refresh of a single OAuth connection's access token.
+
+    Thin wrapper around ``OAuthService.get_valid_access_token_for_connection``
+    — the SAME refresh path runtime + deep readiness use. Reused by three UI
+    surfaces (Global Tools page, Global MCP page, agent readiness drawer) so
+    a broken connection can be re-verified in-context without waiting for
+    the next real call or running a full agent deep test.
+
+    Success shape mirrors the connection-detail responses elsewhere in this
+    router so callers can drop the payload into the same UI state.
+    """
+    svc = _get_service(claims, db)
+    # ``get_connection`` is org-scoped via BaseService.query — a cross-org id
+    # surfaces as 404, matching the semantics of every other endpoint here.
+    connection = svc.get_connection(connection_id)
+    # Provider-side failures (invalid_grant, invalid_client, network error)
+    # raise HTTPException with a user-visible reason; let it bubble — the
+    # OAuth router doesn't wrap OAuthService HTTPExceptions elsewhere either
+    # (see /connection, /disconnect above). A follow-up refactor of
+    # OAuthService to use application-level exceptions is out of scope.
+    svc.get_valid_access_token_for_connection(connection)
+    # Re-read to pick up the freshly-persisted token_expiry / rotated tokens.
+    # ``update_tokens`` (inside ``get_valid_access_token_for_connection``) commits
+    # + refreshes a *different* SQLAlchemy row, so the caller's ``connection``
+    # object stays stale. A second fetch is the simplest way to get the fresh
+    # public_metadata + tokens.
+    #
+    # Guard the re-read against a rare deletion race: another admin deleting
+    # the same connection in the ~ms window between the refresh commit and
+    # this fetch would otherwise turn a successful refresh into a confusing
+    # 404. If that happens, fall back to reporting the refresh succeeded
+    # without the freshly-persisted expiry — the DB already has the new
+    # tokens even though we can't read them back through this session.
+    try:
+        refreshed = svc.get_connection(connection_id)
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_404_NOT_FOUND:
+            return {
+                "status": "refreshed",
+                "token_expiry": None,
+                "connection": None,
+            }
+        raise
+    return {
+        "status": "refreshed",
+        "token_expiry": (refreshed.public_metadata or {}).get("token_expiry"),
+        "connection": svc.connection_response(refreshed),
+    }
+
+
 @router.delete("/disconnect", status_code=status.HTTP_200_OK)
 def disconnect(
     connection_id: str = Query(..., description="The connection UUID to delete"),

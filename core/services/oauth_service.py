@@ -183,6 +183,57 @@ class OAuthService(BaseService):
             )
         return connection
 
+    def hydrate_summary_by_ids(
+        self, connection_ids
+    ) -> Dict[UUID, Dict[str, Any]]:
+        """Return a ``{id: {id, token_expiry, provider_slug}}`` map for the
+        given OAuth connection ids.
+
+        Used by list endpoints (Tools, MCP) to attach a per-row OAuth status
+        summary WITHOUT triggering N+1 lookups: one round-trip per list
+        response regardless of row count. Only exposes the tiny public shape
+        the UI needs — no access_token, no refresh_token, no encrypted
+        credentials leak from this projection.
+
+        Org-scoped automatically via ``BaseService.query`` — a cross-org id
+        silently drops out of the map (matches ``get_connection`` semantics
+        of returning 404 for the same case).
+        """
+        if not connection_ids:
+            return {}
+        # Deduplicate + coerce to UUIDs; skip anything not parseable so a
+        # single bad id doesn't blow up the whole list response.
+        #
+        # A non-UUID id here is a data-integrity issue upstream (a Tool /
+        # MCP row wrote a garbage ``oauth_connection_id``). Log so ops can
+        # find the affected row instead of silently rendering "-" in the
+        # OAuth column and letting the corruption stay invisible.
+        parsed_ids: List[UUID] = []
+        for cid in connection_ids:
+            uid = coerce_uuid(cid)
+            if uid is not None:
+                parsed_ids.append(uid)
+                continue
+            logger.warning(
+                "[oauth-hydrator] dropping non-UUID connection id (data-integrity issue upstream): {!r}",
+                cid,
+            )
+        if not parsed_ids:
+            return {}
+        rows = (
+            self.query(OAuthConnection)
+            .filter(OAuthConnection.id.in_(set(parsed_ids)))
+            .all()
+        )
+        return {
+            row.id: {
+                "id": str(row.id),
+                "provider_slug": row.provider_slug,
+                "token_expiry": (row.public_metadata or {}).get("token_expiry"),
+            }
+            for row in rows
+        }
+
     def delete_connection(self, connection_id: Union[str, UUID]) -> Dict[str, str]:
         connection = self.get_connection(connection_id)
         # Disconnecting a connection leaves anything that relied on it unable to

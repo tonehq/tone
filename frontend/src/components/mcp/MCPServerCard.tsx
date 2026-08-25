@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionMenu } from '@/components/shared';
+import { ActionMenu, OAuthConnectionStatus } from '@/components/shared';
 import { getProviderLogoUrl } from '@/components/service-providers/constants';
 import { Card, CardContent } from '@/components/ui/card';
 import type { MCPServer } from '@/types/mcp';
@@ -164,6 +164,22 @@ const MCPServerCard: React.FC<MCPServerCardProps> = ({ server, onClick, onEdit, 
             {server.is_active ? 'Live' : 'Paused'}
           </span>
         </div>
+
+        {/* OAuth status row — only for OAuth-linked servers whose list
+            response hydrated the connection summary. API-key / bearer / none
+            servers render nothing here. Click-through is stopped inside so
+            the surrounding card ``onClick`` doesn't fire when the user
+            interacts with the Test / Reconnect buttons. */}
+        {server.oauth_connection ? (
+          <div className="mt-2 pt-2 border-t border-border/50" onClick={(e) => e.stopPropagation()}>
+            <OAuthConnectionStatus
+              connectionId={server.oauth_connection.id}
+              providerSlug={server.oauth_connection.provider_slug}
+              tokenExpiry={server.oauth_connection.token_expiry}
+              compact
+            />
+          </div>
+        ) : null}
       </CardContent>
     </Card>
   );

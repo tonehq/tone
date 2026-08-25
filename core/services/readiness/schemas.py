@@ -63,10 +63,18 @@ class OverallStatus(str, Enum):
 
 
 class ResourceRef(BaseModel):
-    """Stable pointer to the resource a check failed on, so the UI can navigate."""
+    """Stable pointer to the resource a check failed on, so the UI can navigate.
+
+    ``oauth_connection_id`` is an optional side-channel populated by OAuth
+    expiry checks (``tools.oauth_token_valid`` / ``mcp_servers.oauth_token_valid``)
+    so the drawer can offer a targeted "Refresh token" button without an
+    extra round-trip to fetch the tool/MCP row just to learn its OAuth id.
+    Other checks leave it None; consumers unaware of the field are unaffected.
+    """
 
     type: str
     id: str
+    oauth_connection_id: Optional[str] = None
 
 
 class CheckResult(BaseModel):

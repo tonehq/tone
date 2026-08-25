@@ -54,6 +54,28 @@ export const disconnectOAuth = async (connectionId: string): Promise<void> => {
   await axiosInstance.delete('/oauth/disconnect', { params: { connection_id: connectionId } });
 };
 
+export interface RefreshOAuthConnectionResponse {
+  status: 'refreshed';
+  token_expiry: number | null;
+  connection: OAuthConnection;
+}
+
+/**
+ * User-triggered refresh of a single OAuth connection's access token.
+ * Hits the SAME refresh path runtime + deep readiness use, then persists the
+ * fresh token_expiry to the DB. On success the caller should update local
+ * badge state; on failure the axios error carries the provider's real reason
+ * (e.g. invalid_grant, invalid_client) which handleApiError surfaces in a toast.
+ */
+export const refreshOAuthConnection = async (
+  connectionId: string,
+): Promise<RefreshOAuthConnectionResponse> => {
+  const { data } = await axiosInstance.post<RefreshOAuthConnectionResponse>(
+    `/oauth/connections/${connectionId}/refresh`,
+  );
+  return data;
+};
+
 export const getOAuthProviders = async (): Promise<string[]> => {
   const { data } = await axiosInstance.get<{ providers: string[] }>('/oauth/providers');
   return data.providers;

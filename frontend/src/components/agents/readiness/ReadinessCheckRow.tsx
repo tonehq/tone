@@ -24,6 +24,13 @@ interface ReadinessCheckRowProps {
  * One row in the check list. Icon on the left encodes both severity and
  * status; the message + remediation stack vertically. A "Fix it" affordance
  * appears only when the backend supplied a `deep_link`.
+ *
+ * OAuth expiry checks intentionally have NO per-row refresh button — the
+ * check's own message points to "Run Deep Test" which triggers a real
+ * refresh via ``tools.reachable`` / ``mcp_servers.reachable``. Manual
+ * refresh is an implementation detail we don't expose to end users; the
+ * Tools / MCP pages surface a "Reconnect" button when the token is
+ * genuinely broken and user action is required.
  */
 export default function ReadinessCheckRow({ check, onFix }: ReadinessCheckRowProps) {
   const { Icon, tone } = iconFor(check);
