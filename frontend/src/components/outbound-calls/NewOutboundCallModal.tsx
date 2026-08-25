@@ -16,7 +16,7 @@ import SampleDownloadMenu from '@/components/contacts/shared/SampleDownloadMenu'
 import { useDirectoriesList } from '@/lib/api/contactDirectories';
 import { useSchema, useSchemasList } from '@/lib/api/contactSchemas';
 import { listAgents } from '@/services/agentsService';
-import { getChannelsByType, listChannelPhoneNumbers } from '@/services/channelService';
+import { listChannelPhoneNumbers, listChannels } from '@/services/channelService';
 import { getOrganizationSettings } from '@/services/organizationService';
 import { getOutboundConcurrencyMax } from '@/services/outboundCallService';
 import type {
@@ -51,8 +51,12 @@ interface OutboundCallForm {
 // call over a WebSocket to a remote /ws/test (agent-to-agent, no telephony).
 const TRIGGER_PROVIDER_OPTIONS: { value: OutboundTriggerProvider; label: string }[] = [
   { value: 'twilio', label: 'Twilio (phone call)' },
+  { value: 'telnyx', label: 'Telnyx (phone call)' },
+  { value: 'sip', label: 'SIP trunk (phone call)' },
   { value: 'websocket', label: 'WebSocket (test bridge)' },
 ];
+
+const PSTN_CHANNEL_TYPES = ['twilio', 'telnyx', 'sip'];
 
 interface NewOutboundCallModalProps {
   open: boolean;
@@ -201,7 +205,7 @@ export default function NewOutboundCallModal({
       try {
         const [agents, channels, settings] = await Promise.all([
           listAgents({ page_size: 200 }),
-          getChannelsByType('twilio'),
+          listChannels(),
           getOrganizationSettings().catch(() => ({})),
         ]);
         if (!active) return;
@@ -216,7 +220,9 @@ export default function NewOutboundCallModal({
         );
 
         const numbersNested = await Promise.all(
-          (channels ?? []).map((c) => listChannelPhoneNumbers(c.id).catch(() => [])),
+          (channels ?? [])
+            .filter((c) => PSTN_CHANNEL_TYPES.includes(c.channel_type))
+            .map((c) => listChannelPhoneNumbers(c.id).catch(() => [])),
         );
         if (!active) return;
         setFromOptions(
