@@ -262,6 +262,19 @@ export interface PaginatedAgentsState {
   loading: boolean;
 }
 
+/** Profile-variable rows the user has staged while in CREATE mode, before the
+ * agent exists. Buffered here in local form state and flushed via a batch of
+ * `POST /agents/{new_id}/profile-variables` calls right after the agent is
+ * created (see `AgentEditorShell.onSubmit`). In EDIT mode this list stays
+ * empty — the tab talks directly to the API. `_draftId` is a client-only
+ * key so we can update/remove one row without a persisted id. */
+export interface ProfileVariableDraft {
+  _draftId: string;
+  key: string;
+  value: string;
+  description: string | null;
+}
+
 /** Single source of truth for the agent create/edit form. Mirrors the
  * create/update payload — serialisers in agentFormUtils convert this into
  * a {@link CreateAgentPayload} or a diff-aware {@link UpdateAgentPayload}. */
@@ -294,6 +307,10 @@ export interface AgentFormState {
    * that mirrors the tool/MCP's default OAuth is treated as "no override". */
   tool_oauth_overrides: OAuthOverrideMap;
   mcp_server_oauth_overrides: OAuthOverrideMap;
+  /** CREATE mode only — profile variables staged before the agent exists.
+   * Flushed to `POST /agents/{new_id}/profile-variables` right after create.
+   * Always `[]` in EDIT mode (the tab talks directly to the API). */
+  profile_variable_drafts: ProfileVariableDraft[];
 }
 
 export interface CreateAgentModalOption {

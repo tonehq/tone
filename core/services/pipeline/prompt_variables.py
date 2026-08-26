@@ -28,7 +28,14 @@ PROMPT_VARIABLE_KEYS = (
 
 # Matches {{ key }} or {{ key|default }} (custom variables carry their default inline,
 # after a pipe). Inner whitespace around the key is tolerated; the default runs up to `}`.
-_TOKEN_RE = re.compile(r"\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|([^}]*))?\}\}")
+# The key is an identifier optionally followed by dotted identifier segments — so
+# ``{{profile.customer_name}}`` matches but incidental prose like ``{{1.0|draft}}``
+# does NOT (segments must start with a letter/underscore, no consecutive dots, no
+# trailing dot). This is a strict superset of the pre-Profile ``[a-zA-Z_][a-zA-Z0-9_]*``
+# behaviour — flat keys still match unchanged.
+_TOKEN_RE = re.compile(
+    r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*(?:\|([^}]*))?\}\}"
+)
 
 
 def _now_in_agent_tz() -> datetime:
@@ -46,6 +53,7 @@ def build_call_context(
     agent: Any = None,
     call_data: Optional[dict] = None,
     transport_type: Optional[str] = None,
+    profile_variables: Optional[dict] = None,
 ) -> dict:
     """Resolve a ``{key: value}`` map for every known variable from live call data.
 
@@ -53,10 +61,16 @@ def build_call_context(
     ``{{caller_number}}`` is removed rather than left as literal braces in the prompt.
     ``transport_type`` is accepted for forward-compatibility (future variables) but is
     not required by any current key.
+
+    ``profile_variables`` is the per-agent profile map already in
+    ``{"profile.<key>": <value>}`` shape (produced by
+    ``AgentProfileVariableService.get_variables_map``). It is merged into the
+    returned dict; passing ``None`` preserves the pre-Profile-Variables behavior
+    exactly.
     """
     call_data = call_data or {}
     now = _now_in_agent_tz()
-    return {
+    context = {
         "caller_number": call_data.get("from", "") or "",
         "callee_number": call_data.get("to", "") or "",
         "agent_name": getattr(agent, "name", "") or "",
@@ -64,6 +78,9 @@ def build_call_context(
         "current_time": now.strftime("%H:%M"),
         "call_direction": getattr(agent, "agent_type", "") or "",
     }
+    if profile_variables:
+        context.update(profile_variables)
+    return context
 
 
 def substitute_variables(text: Optional[str], context: Optional[dict]) -> Optional[str]:

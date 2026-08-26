@@ -7,6 +7,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/utils/cn';
 import CustomDrawer from '@/components/shared/CustomDrawer';
 import CustomButton from '@/components/shared/CustomButton';
+import RichPromptEditorField from '@/components/shared/RichPromptEditorField';
 import TextInput from '@/components/shared/TextInput';
 import TextAreaField from '@/components/shared/TextAreaField';
 import CheckboxField from '@/components/shared/CheckboxField';
@@ -16,6 +17,8 @@ import ApiRequestForm from './ApiRequestForm';
 import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
 import { fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
 import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
+import { buildProfileVariableItems } from '@/constants/promptVariables';
+import { useAgentProfileVariables } from '@/lib/api/agentProfileVariables';
 import type {
   ConditionEdgeData,
   EdgeConditionType,
@@ -37,6 +40,10 @@ const VAR_TYPE_OPTIONS = [
 interface Props {
   node: WorkflowNode | null;
   edge: WorkflowEdge | null;
+  /** Owning agent id when the builder is opened inside an agent editor route.
+   * Enables the "Profile" group in the prompt/first-message variable picker.
+   * Undefined on the standalone `/workflows/[id]` route — the group hides. */
+  agentId?: string;
   onClose: () => void;
   onChangeNode: (id: string, data: D) => void;
   onChangeEdge: (id: string, data: ConditionEdgeData) => void;
@@ -60,6 +67,7 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({
 const NodeConfigDrawer: React.FC<Props> = ({
   node,
   edge,
+  agentId,
   onClose,
   onChangeNode,
   onChangeEdge,
@@ -71,6 +79,16 @@ const NodeConfigDrawer: React.FC<Props> = ({
 
   const { servers: mcpServers, loading: mcpLoading } = useAtomValue(mcpServersAtom);
   const fetchMcp = useSetAtom(fetchMcpServersAtom);
+
+  // Per-agent Profile variables → `{{` typeahead "Profile" group. Only queried
+  // when the drawer is opened inside an agent-scoped workflow route (else the
+  // standalone page and the query stays disabled). CRUD lives in the agent's
+  // Profile sidebar tab — not here.
+  const { data: profileVariables = [] } = useAgentProfileVariables(agentId);
+  const profileVariableItems = useMemo(
+    () => buildProfileVariableItems(profileVariables),
+    [profileVariables],
+  );
 
   // Tool node "source" (Tool vs MCP) — local so picking MCP switches the picker before an
   // id is chosen. Re-synced whenever a different node opens.
@@ -147,30 +165,32 @@ const NodeConfigDrawer: React.FC<Props> = ({
 
         {/* conversation: first message */}
         {(type === 'conversation' || type === 'endCall') && (
-          <TextAreaField
+          <RichPromptEditorField
             name="first-message"
             label={type === 'endCall' ? 'Goodbye message' : 'First message (spoken on entry)'}
-            rows={type === 'conversation' ? 2 : 3}
+            minHeight={type === 'conversation' ? '80px' : '110px'}
             value={fm}
-            onChange={(e) => setFirstMessage(e.target.value)}
+            onChange={setFirstMessage}
             placeholder="What the agent says when it reaches this node…"
+            profileVariables={profileVariableItems}
           />
         )}
 
         {/* conversation / decision: prompt */}
         {(type === 'conversation' || type === 'decision') && (
-          <TextAreaField
+          <RichPromptEditorField
             name="prompt"
             label={type === 'decision' ? 'Routing guidance (optional)' : 'Prompt'}
-            rows={5}
+            minHeight="150px"
             value={String(data.prompt ?? '')}
-            onChange={(e) => patch({ prompt: e.target.value })}
+            onChange={(v) => patch({ prompt: v })}
             placeholder={
               type === 'decision'
                 ? 'Optional hint for AI-routed branches'
                 : 'What should the agent do at this step? Use {{variables}} for dynamic values.'
             }
             helperText="The LLM (model & temperature) is inherited from the assigned agent."
+            profileVariables={profileVariableItems}
           />
         )}
 
