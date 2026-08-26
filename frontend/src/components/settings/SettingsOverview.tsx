@@ -4,6 +4,7 @@ import { motion, useReducedMotion, type Variants } from 'framer-motion';
 import { ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 
+import { IconChip } from '@/components/shared';
 import { SETTINGS_NAV_GROUPS, type SettingsNavItem } from '@/components/settings/navConfig';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
@@ -24,15 +25,12 @@ function SettingsRow({ row, variants }: { row: SettingsNavItem; variants: Varian
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
         )}
       >
-        <span
-          className={cn(
-            'flex size-11 shrink-0 items-center justify-center rounded-xl ring-1 ring-inset transition-colors duration-200',
-            'bg-primary/10 text-primary ring-primary/15',
-            'group-hover:bg-primary group-hover:text-primary-foreground group-hover:ring-primary',
-          )}
-        >
-          <Icon className="size-[21px]" strokeWidth={1.9} />
-        </span>
+        <IconChip
+          icon={<Icon strokeWidth={1.75} />}
+          tone="primary"
+          size="lg"
+          className="group-hover:from-primary group-hover:via-primary group-hover:to-primary group-hover:text-primary-foreground group-hover:ring-primary"
+        />
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-semibold tracking-tight text-foreground">{row.label}</p>
           <p className="mt-0.5 truncate text-[13px] leading-relaxed text-muted-foreground">

@@ -1,21 +1,15 @@
 'use client';
 
-import { BookOpen, Boxes, Phone, Wrench } from 'lucide-react';
+import { BookOpen, Boxes, Wrench } from 'lucide-react';
 import { useState } from 'react';
 
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
+import { AgentTypeBadge } from '@/components/agents/AgentTypeBadge';
+import { IconChip } from '@/components/shared';
+import type { IconChipTone } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
-import type { AgentDirection } from '@/types/agent';
 import { cn } from '@/utils/cn';
-
-const DIRECTION_STYLES: Record<AgentDirection, string> = {
-  inbound:
-    'bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-200 dark:ring-emerald-400/40',
-  outbound:
-    'bg-violet-500/15 text-violet-700 ring-1 ring-inset ring-violet-500/20 dark:bg-violet-500/25 dark:text-violet-200 dark:ring-violet-400/40',
-  both: 'bg-sky-500/15 text-sky-700 ring-1 ring-inset ring-sky-500/20 dark:bg-sky-500/25 dark:text-sky-200 dark:ring-sky-400/40',
-};
 
 function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -32,19 +26,21 @@ function CountStat({
   icon: Icon,
   label,
   value,
+  tone,
 }: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   label: string;
   value: number;
+  tone: IconChipTone;
 }) {
   return (
-    <div className="flex items-center gap-2.5 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5">
-      <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
-        <Icon className="size-4" strokeWidth={2} />
-      </span>
+    <div className="group/stat flex items-center gap-3 rounded-xl border border-border/60 bg-muted/20 px-3 py-2.5 transition-colors duration-300 hover:border-border hover:bg-muted/40">
+      <IconChip icon={<Icon strokeWidth={1.75} />} tone={tone} size="lg" interactive />
       <div className="min-w-0">
-        <p className="text-[15px] font-semibold leading-none tabular-nums">{value}</p>
-        <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{label}</p>
+        <p className="text-[17px] font-semibold leading-none tabular-nums tracking-tight">
+          {value}
+        </p>
+        <p className="mt-1 truncate text-[11px] text-muted-foreground">{label}</p>
       </div>
     </div>
   );
@@ -93,15 +89,7 @@ export default function AgentOverview() {
           <h2 className="truncate text-[17px] font-semibold tracking-tight text-foreground">
             {detail.name}
           </h2>
-          <Badge
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
-              DIRECTION_STYLES[detail.agent_type],
-            )}
-          >
-            <Phone className="size-2.5" />
-            {detail.agent_type}
-          </Badge>
+          <AgentTypeBadge agentType={detail.agent_type} size="sm" />
         </div>
         <div className="flex items-center gap-2.5">
           <span
@@ -174,9 +162,19 @@ export default function AgentOverview() {
           Resources
         </p>
         <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
-          <CountStat icon={Wrench} label="Tools" value={detail.tools?.length ?? 0} />
-          <CountStat icon={Boxes} label="MCP servers" value={detail.mcp_servers?.length ?? 0} />
-          <CountStat icon={BookOpen} label="Knowledge docs" value={detail.documents?.length ?? 0} />
+          <CountStat icon={Wrench} tone="indigo" label="Tools" value={detail.tools?.length ?? 0} />
+          <CountStat
+            icon={Boxes}
+            tone="violet"
+            label="MCP servers"
+            value={detail.mcp_servers?.length ?? 0}
+          />
+          <CountStat
+            icon={BookOpen}
+            tone="sky"
+            label="Knowledge docs"
+            value={detail.documents?.length ?? 0}
+          />
         </div>
       </div>
     </div>

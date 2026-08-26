@@ -4,7 +4,7 @@ import { CircleAlert, MessageSquare, Sparkles, Wand2, Workflow } from 'lucide-re
 import { useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import AgentWorkflowsSection from '@/components/agents/agent-workflows/AgentWorkflowsSection';
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, RichPromptEditorField } from '@/components/shared';
@@ -228,7 +228,7 @@ export default function PromptStep() {
       {mode === 'prompt' ? (
         <SectionCard
           icon={<MessageSquare className="size-3.5" strokeWidth={2.25} />}
-          iconClassName={ACCENTS.violet}
+          tone="violet"
           title="System prompt"
           description="Steers every turn after the call connects. Keep it short and instruction-style."
           action={actions}

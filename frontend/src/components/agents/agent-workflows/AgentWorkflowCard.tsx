@@ -3,6 +3,7 @@
 import React from 'react';
 import { CircleCheck, Clock, TriangleAlert, Workflow as WorkflowIcon } from 'lucide-react';
 
+import { IconChip } from '@/components/shared';
 import ActionMenu from '@/components/shared/ActionMenu';
 import CustomButton from '@/components/shared/CustomButton';
 import { Card, CardContent } from '@/components/ui/card';
@@ -88,9 +89,12 @@ const AgentWorkflowCard: React.FC<AgentWorkflowCardProps> = ({
 
       <CardContent className="flex h-full flex-col p-5 pl-6">
         <div className="flex items-start gap-3">
-          <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-indigo-500/20 bg-indigo-500/10 text-indigo-600 shadow-sm transition-all group-hover:scale-[1.04] dark:text-indigo-400">
-            <WorkflowIcon size={18} strokeWidth={1.75} />
-          </div>
+          <IconChip
+            icon={<WorkflowIcon strokeWidth={1.75} />}
+            tone="indigo"
+            size="lg"
+            className="transition-transform duration-300 group-hover:scale-[1.04]"
+          />
 
           <div className="min-w-0 flex-1 pt-0.5">
             <p className="truncate text-[14px] font-semibold leading-tight tracking-tight text-foreground">

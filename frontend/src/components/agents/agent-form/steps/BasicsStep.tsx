@@ -3,11 +3,10 @@
 import { MessageCircle, PhoneCall, Power, User2 } from 'lucide-react';
 import { Controller, useFormContext } from 'react-hook-form';
 
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import { CheckboxField, TextAreaField, TextInput } from '@/components/shared';
 import { Switch } from '@/components/ui/switch';
 import type { AgentDirection, AgentFormState } from '@/types/agent';
-import { cn } from '@/utils/cn';
 
 /** Two booleans → the persisted agent_type. Returns null when neither is set, so the
  *  caller can block clearing both (at least one call mode is required). */
@@ -25,7 +24,7 @@ export default function BasicsStep() {
     <div className="flex flex-col gap-4">
       <SectionCard
         icon={<User2 className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.indigo}
+        tone="indigo"
         title="Identity"
         description="How this agent appears in the workspace."
       >
@@ -49,7 +48,7 @@ export default function BasicsStep() {
 
       <SectionCard
         icon={<MessageCircle className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.amber}
+        tone="amber"
         title="Conversation messages"
         description="What the agent says at the start and the end of a call."
       >
@@ -83,7 +82,7 @@ export default function BasicsStep() {
           return (
             <SectionCard
               icon={<PhoneCall className="size-3.5" strokeWidth={2.25} />}
-              iconClassName={ACCENTS.indigo}
+              tone="indigo"
               title="Call mode"
               description="Which call directions this agent handles. Outbound (or Both) unlocks scheduling calls to contacts."
             >
@@ -119,7 +118,7 @@ export default function BasicsStep() {
         render={({ field }) => (
           <SectionCard
             icon={<Power className="size-3.5" strokeWidth={2.25} />}
-            iconClassName={cn(field.value ? ACCENTS.emerald : ACCENTS.muted)}
+            tone={field.value ? 'emerald' : 'muted'}
             title={field.value ? 'Accepting traffic' : 'Paused'}
             description={
               field.value
