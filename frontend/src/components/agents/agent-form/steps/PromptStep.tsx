@@ -1,7 +1,7 @@
 'use client';
 
 import { CircleAlert, MessageSquare, Sparkles, Wand2, Workflow } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
@@ -9,8 +9,10 @@ import AgentWorkflowsSection from '@/components/agents/agent-workflows/AgentWork
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, RichPromptEditorField } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
+import { buildProfileVariableItems } from '@/constants/promptVariables';
+import { useAgentProfileVariables } from '@/lib/api/agentProfileVariables';
 import { generateSystemPrompt, improveSystemPrompt } from '@/services/aiService';
-import type { AgentFormState } from '@/types/agent';
+import type { AgentFormState, ProfileVariableDraft } from '@/types/agent';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -28,6 +30,11 @@ Never:
 
 const HELPER_TEXT =
   'Type {{ to insert a variable, or use “Insert variable”. Variables are substituted at runtime.';
+
+/** Stable reference for the "no drafts yet" case — passing a fresh `[]` from
+ * `useWatch(...) ?? []` on every render would invalidate the outer
+ * `useMemo` and defeat the point of the ref-backed picker source. */
+const EMPTY_DRAFTS: readonly ProfileVariableDraft[] = Object.freeze([]);
 
 type Mode = 'prompt' | 'workflow';
 
@@ -60,6 +67,35 @@ export default function PromptStep() {
   const prompt = useWatch({ control, name: 'config.system_prompt_template' }) ?? '';
   const name = useWatch({ control, name: 'name' }) ?? '';
   const description = useWatch({ control, name: 'description' }) ?? '';
+
+  // Per-agent Profile variables → picker "Profile" group. In edit mode we
+  // hit the API; in create mode we read the RHF draft list (variables the
+  // user has staged in the Profile tab before the agent exists). Both are
+  // shaped into the same picker items — the user gets identical UX either way.
+  const { data: apiProfileVariables = [] } = useAgentProfileVariables(agentId);
+  const draftProfileVariables =
+    (useWatch({ control, name: 'profile_variable_drafts' }) as
+      | ProfileVariableDraft[]
+      | undefined) ?? EMPTY_DRAFTS;
+  const profileVariableItems = useMemo(
+    () =>
+      buildProfileVariableItems(
+        agentId
+          ? apiProfileVariables
+          : // Draft rows to the AgentProfileVariable shape the mapper expects.
+            draftProfileVariables.map((d) => ({
+              id: d._draftId,
+              organization_id: '',
+              agent_id: '',
+              key: d.key,
+              value: d.value,
+              description: d.description,
+              created_at: null,
+              updated_at: null,
+            })),
+      ),
+    [agentId, apiProfileVariables, draftProfileVariables],
+  );
 
   const [busy, setBusy] = useState(false);
 
@@ -207,6 +243,7 @@ export default function PromptStep() {
             fill
             placeholder={PLACEHOLDER}
             helperText={HELPER_TEXT}
+            profileVariables={profileVariableItems}
           />
           <p className="inline-flex shrink-0 items-center gap-1.5 text-[11px] text-muted-foreground">
             <Sparkles className="size-3" />

@@ -2,8 +2,8 @@
 
 import { EditorContent, useEditor } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
-import { Settings2, Sparkles, Variable } from 'lucide-react';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Sparkles, Variable } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Controller } from 'react-hook-form';
 
 import CustomButton from '@/components/shared/CustomButton';
@@ -16,13 +16,12 @@ import type {
 } from '@/types/components';
 import { cn } from '@/utils/cn';
 
-import ManageVariablesModal from './rich-prompt-editor/ManageVariablesModal';
 import {
   parseTextToDoc,
   serializeToText,
   VARIABLE_MENTION_NAME,
 } from './rich-prompt-editor/serialization';
-import VariableMention from './rich-prompt-editor/variableMention';
+import { createVariableMention } from './rich-prompt-editor/variableMention';
 
 type RichPromptEditorFieldProps = RichPromptEditorFieldBaseProps | FormRichPromptEditorFieldProps;
 
@@ -49,8 +48,6 @@ const STARTER_KIT = StarterKit.configure({
   underline: false,
 });
 
-const EXTENSIONS = [STARTER_KIT, VariableMention];
-
 const Skeleton = ({ className }: { className?: string }) => (
   <div className={cn('animate-pulse rounded-lg bg-muted', className)} />
 );
@@ -72,11 +69,27 @@ function PlainRichPromptEditorField({
   minHeight = '220px',
   maxHeight,
   fill = false,
+  profileVariables,
 }: RichPromptEditorFieldBaseProps) {
   // Latest onChange in a ref so the editor instance is created once (a changing
   // onChange identity must not re-create the editor / lose the caret).
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+
+  // Per-agent Profile variables shown in the `{{` typeahead. Kept in a ref so
+  // the mention extension is created ONCE (a fresh extension would rebuild the
+  // editor and drop the caret) but its suggestion filter always sees the latest
+  // list — the getter closes over the ref.
+  const profileVarsRef = useRef<PromptVariable[]>(profileVariables ?? []);
+  useEffect(() => {
+    profileVarsRef.current = profileVariables ?? [];
+  }, [profileVariables]);
+
+  // Stable across renders — factory + getter pattern (see createVariableMention).
+  const extensions = useMemo(
+    () => [STARTER_KIT, createVariableMention(() => profileVarsRef.current)],
+    [],
+  );
 
   const [isEmpty, setIsEmpty] = useState(!value);
 
@@ -88,7 +101,7 @@ function PlainRichPromptEditorField({
   const editor = useEditor({
     immediatelyRender: false,
     editable: !disabled,
-    extensions: EXTENSIONS,
+    extensions,
     content: initialContentRef.current, // initial only; synced via effect
     editorProps: {
       attributes: {
@@ -127,7 +140,8 @@ function PlainRichPromptEditorField({
   }, [disabled, editor]);
 
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [manageOpen, setManageOpen] = useState(false);
+  // Insert the picked variable at the caret. Read-only consumer: create /
+  // edit / delete lives on the sidebar Profile tab, never here.
   const insertVariable = useCallback(
     (variable: PromptVariable) => {
       if (!editor) return;
@@ -173,59 +187,45 @@ function PlainRichPromptEditorField({
           className,
         )}
       >
-        {/* Toolbar */}
+        {/* Toolbar — read-only "Insert variable" picker only. Managing profile
+         * variables (add / edit / delete) lives in the sidebar Profile tab. */}
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border/60 bg-muted/30 px-2 py-1.5">
           <span className="inline-flex select-none items-center gap-1.5 pl-1 text-[11px] font-medium text-muted-foreground">
             <Sparkles className="size-3" />
             Variables
           </span>
-          <div className="flex items-center gap-1.5">
-            <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
-              <PopoverTrigger asChild>
-                <CustomButton
-                  type="default"
-                  size="sm"
-                  disabled={disabled}
-                  icon={<Variable className="size-3.5" />}
-                >
-                  Insert variable
-                </CustomButton>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-72 p-1">
-                <div className="border-b border-border/60 px-2 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-                  System variables
-                </div>
-                <div className="mt-1 max-h-64 overflow-auto">
-                  {PROMPT_VARIABLES.map((variable) => (
-                    <button
-                      key={variable.key}
-                      type="button"
-                      onClick={() => insertVariable(variable)}
-                      className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
-                    >
-                      <span className="flex items-baseline gap-1.5 text-sm font-medium">
-                        {variable.label}
-                        <span className="font-mono text-[11px] text-muted-foreground">{`{{${variable.key}}}`}</span>
-                      </span>
-                      <span className="text-xs text-muted-foreground">{variable.description}</span>
-                    </button>
-                  ))}
-                </div>
-              </PopoverContent>
-            </Popover>
-            <CustomButton
-              type="default"
-              size="sm"
-              disabled={disabled}
-              onClick={() => setManageOpen(true)}
-              icon={<Settings2 className="size-3.5" />}
-            >
-              Custom variables
-            </CustomButton>
-          </div>
+          <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+            <PopoverTrigger asChild>
+              <CustomButton
+                type="default"
+                size="sm"
+                disabled={disabled}
+                icon={<Variable className="size-3.5" />}
+              >
+                Insert variable
+              </CustomButton>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 p-1">
+              <div className="max-h-96 overflow-auto">
+                {/* Profile group first — user's stuff is more relevant than
+                 * the auto-filled system context, so it appears above. */}
+                {profileVariables && profileVariables.length > 0 && (
+                  <VariableGroup
+                    title="Profile variables"
+                    items={profileVariables}
+                    onSelect={insertVariable}
+                  />
+                )}
+                <VariableGroup
+                  title="System variables"
+                  items={PROMPT_VARIABLES}
+                  onSelect={insertVariable}
+                />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
 
-        {/* Editor surface — scrolls internally in fill mode or when maxHeight is set */}
         <div
           className={cn(
             'relative px-3 py-2.5 text-sm',
@@ -252,12 +252,44 @@ function PlainRichPromptEditorField({
           {helperText}
         </p>
       )}
+    </div>
+  );
+}
 
-      <ManageVariablesModal
-        editor={editor}
-        open={manageOpen}
-        onClose={() => setManageOpen(false)}
-      />
+/** One labelled section of the "Insert variable" popover. Shared so the System
+ * and Profile groups render with identical markup — no per-group drift. */
+function VariableGroup({
+  title,
+  items,
+  onSelect,
+}: {
+  title: string;
+  items: readonly PromptVariable[];
+  onSelect: (variable: PromptVariable) => void;
+}) {
+  return (
+    <div>
+      <div className="border-b border-border/60 px-2 pb-1.5 pt-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+        {title}
+      </div>
+      <div className="mt-1">
+        {items.map((variable) => (
+          <button
+            key={variable.key}
+            type="button"
+            onClick={() => onSelect(variable)}
+            className="flex w-full flex-col items-start gap-0.5 rounded-md px-2 py-1.5 text-left hover:bg-accent"
+          >
+            <span className="flex items-baseline gap-1.5 text-sm font-medium">
+              {variable.label}
+              <span className="font-mono text-[11px] text-muted-foreground">{`{{${variable.key}}}`}</span>
+            </span>
+            {variable.description && (
+              <span className="text-xs text-muted-foreground">{variable.description}</span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -291,5 +323,7 @@ function RichPromptEditorField(props: RichPromptEditorFieldProps) {
 
   return <MemoizedPlain {...props} />;
 }
+
+RichPromptEditorField.displayName = 'RichPromptEditorField';
 
 export default React.memo(RichPromptEditorField);

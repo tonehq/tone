@@ -243,6 +243,11 @@ export interface RichPromptEditorFieldBaseProps {
   /** Fill the parent's height (the editor area flex-grows and scrolls internally,
    * so the surrounding page doesn't scroll). The parent chain must be height-bounded. */
   fill?: boolean;
+  /** Per-agent Profile variables to expose in the `{{` typeahead as a
+   * "Profile" group. When omitted or empty the typeahead only offers system
+   * variables — existing behavior for callers that don't consume profile
+   * variables is unchanged. */
+  profileVariables?: import('@/constants/promptVariables').PromptVariable[];
 }
 
 export interface FormRichPromptEditorFieldProps

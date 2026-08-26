@@ -19,5 +19,13 @@ export default function AgentWorkflowBuilderPage() {
   const params = useParams<{ type: string; id: string; workflowId: string }>();
   const { type, id, workflowId } = params ?? {};
   if (!workflowId || !type || !id) return <AppLoader />;
-  return <WorkflowBuilder workflowId={workflowId} backHref={`/agents/edit/${type}/${id}/prompt`} />;
+  // Passing `agentId` unlocks the "Profile" group in the node drawer's variable
+  // picker; the standalone /workflows/[id] page omits it and the group hides.
+  return (
+    <WorkflowBuilder
+      workflowId={workflowId}
+      backHref={`/agents/edit/${type}/${id}/prompt`}
+      agentId={id}
+    />
+  );
 }
