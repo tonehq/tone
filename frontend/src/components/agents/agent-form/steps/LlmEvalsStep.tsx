@@ -33,12 +33,14 @@ import {
   CustomButton,
   CustomDrawer,
   CustomModal,
+  CustomPopover,
   CustomTab,
   SearchBar,
   SelectInput,
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import { Checkbox } from '@/components/ui/checkbox';
 import type { TabItem } from '@/components/shared';
 import {
   useAgentLlmEvalFolders,
@@ -49,6 +51,7 @@ import {
   useCreateAgentLlmEvalScenariosBulk,
   useDeleteAgentLlmEvalFolder,
   useDeleteAgentLlmEvalScenario,
+  useDeleteAgentLlmEvalScenariosBulk,
   useGenerateAgentLlmEvalScenarios,
   useRenameAgentLlmEvalFolder,
   useTriggerAgentLlmEvalRun,
@@ -663,20 +666,23 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
             onCancelRename={cancelRenameFolder}
             renamePending={renameFolderMutation.isPending}
           />
-          <div className="min-w-[200px]">
-            <SearchBar
-              value={search}
-              onChange={(v) => setSearch(v)}
-              placeholder="Search scenarios…"
-            />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="min-w-[200px] flex-1">
+              <SearchBar
+                value={search}
+                onChange={(v) => setSearch(v)}
+                placeholder="Search scenarios…"
+              />
+            </div>
+            <ScenariosSourceFilter selectedSource={filterSource} onSourceChange={setFilterSource} />
+            <div className="w-[180px] shrink-0">
+              <ScenariosTagFilter
+                scenarios={scenarios}
+                selectedTags={filterTags}
+                onTagsChange={setFilterTags}
+              />
+            </div>
           </div>
-          <ScenariosFilterBar
-            scenarios={scenarios}
-            selectedTags={filterTags}
-            onTagsChange={setFilterTags}
-            selectedSource={filterSource}
-            onSourceChange={setFilterSource}
-          />
           {selectedScenarioIds.size > 0 && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-[13px]">
               <span className="font-medium text-foreground">
@@ -1111,31 +1117,63 @@ const SCENARIO_SOURCE_OPTIONS: {
   { value: 'fixture', label: 'Fixture' },
 ];
 
-function ScenariosFilterBar({
+// Sentinel for the "no source filter" option. Radix Select forbids an
+// empty-string value on ``<Select.Item>`` (it's reserved for clearing
+// the selection to the placeholder), so we use a non-empty token and
+// map it back to ``null`` at the callback boundary.
+const SOURCE_FILTER_ALL_VALUE = '__all__';
+
+/** Compact source-filter dropdown — rendered inline next to the
+ * SearchBar in the folder-drill-in view so filter + search live on the
+ * SAME visual row. Kept as its own component so the parent can compose
+ * the row layout without inlining Radix-Select glue. */
+function ScenariosSourceFilter({
+  selectedSource,
+  onSourceChange,
+}: {
+  selectedSource: AgentLlmEvalScenarioSource | null;
+  onSourceChange: (next: AgentLlmEvalScenarioSource | null) => void;
+}) {
+  return (
+    <div className="w-[180px] shrink-0">
+      <SelectInput
+        name="scenario_source"
+        value={selectedSource ?? SOURCE_FILTER_ALL_VALUE}
+        onValueChange={(v) =>
+          onSourceChange(
+            v === SOURCE_FILTER_ALL_VALUE || v == null ? null : (v as AgentLlmEvalScenarioSource),
+          )
+        }
+        options={[
+          { value: SOURCE_FILTER_ALL_VALUE, label: 'All sources' },
+          ...SCENARIO_SOURCE_OPTIONS,
+        ]}
+      />
+    </div>
+  );
+}
+
+/** Multi-select tag filter — visually matches ``SelectInput`` (same
+ * trigger height, chevron, ring styles) so it sits cleanly next to the
+ * Source dropdown on the search row. Opens a CustomPopover with a
+ * checkbox list of tag options derived from the currently-visible
+ * scenarios (bounded by page size; a folder with more tags on other
+ * pages grows the list as the user pages — acceptable for MVP). */
+function ScenariosTagFilter({
   scenarios,
   selectedTags,
   onTagsChange,
-  selectedSource,
-  onSourceChange,
 }: {
   scenarios: AgentLlmEvalScenario[];
   selectedTags: string[];
   onTagsChange: (next: string[]) => void;
-  selectedSource: AgentLlmEvalScenarioSource | null;
-  onSourceChange: (next: AgentLlmEvalScenarioSource | null) => void;
 }) {
-  // Union of tags across currently-visible scenarios. Bounded by the
-  // page size — a folder with more tags on other pages will grow this
-  // list as the user pages; acceptable for MVP (a dedicated
-  // /scenarios/tags endpoint is the follow-up if that gets noisy).
+  const [open, setOpen] = useState(false);
   const tagOptions = useMemo(() => {
     const seen = new Set<string>();
     for (const s of scenarios) for (const t of s.tags ?? []) seen.add(t);
     return Array.from(seen).sort((a, b) => a.localeCompare(b));
   }, [scenarios]);
-
-  const hasActive = selectedTags.length > 0 || selectedSource !== null;
-  if (tagOptions.length === 0 && !hasActive) return null;
 
   const toggleTag = (tag: string) => {
     onTagsChange(
@@ -1143,61 +1181,81 @@ function ScenariosFilterBar({
     );
   };
 
+  // Trigger label mirrors the SelectInput pattern — always shows what's
+  // currently applied so the row is self-describing at a glance.
+  const triggerLabel =
+    selectedTags.length === 0
+      ? 'All tags'
+      : selectedTags.length === 1
+        ? selectedTags[0]
+        : `${selectedTags.length} tags`;
+  const disabled = tagOptions.length === 0 && selectedTags.length === 0;
+
   return (
-    <div className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-          Filter
-        </span>
-        <div className="min-w-[180px]">
-          <SelectInput
-            name="scenario_source"
-            value={selectedSource ?? ''}
-            onValueChange={(v) =>
-              onSourceChange(v === '' ? null : (v as AgentLlmEvalScenarioSource))
-            }
-            options={[{ value: '', label: 'All sources' }, ...SCENARIO_SOURCE_OPTIONS]}
-          />
-        </div>
-        {hasActive && (
-          <button
-            type="button"
-            onClick={() => {
-              onTagsChange([]);
-              onSourceChange(null);
-            }}
-            className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            title="Clear all filters"
+    <CustomPopover
+      open={open}
+      onOpenChange={setOpen}
+      align="end"
+      width="w-56"
+      title="Filter by tag"
+      trigger={
+        <button
+          type="button"
+          disabled={disabled}
+          aria-label="Filter by tag"
+          aria-expanded={open}
+          className={cn(
+            'inline-flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-[13px] text-foreground transition-colors',
+            'hover:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
+            disabled && 'cursor-not-allowed opacity-60',
+            !disabled && 'cursor-pointer',
+          )}
+        >
+          <span
+            className={cn('truncate', selectedTags.length === 0 && 'text-muted-foreground')}
+            title={selectedTags.length > 1 ? selectedTags.join(', ') : undefined}
           >
-            <X className="size-3.5" />
-            Clear
-          </button>
-        )}
-      </div>
-      {tagOptions.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
+            {triggerLabel}
+          </span>
+          <ChevronDown className="size-4 shrink-0 text-muted-foreground/70" />
+        </button>
+      }
+      footer={
+        selectedTags.length > 0 ? (
+          <div className="flex justify-end border-t border-border px-3 py-2">
+            <button
+              type="button"
+              onClick={() => onTagsChange([])}
+              className="inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <X className="size-3.5" />
+              Clear tags
+            </button>
+          </div>
+        ) : undefined
+      }
+    >
+      {tagOptions.length === 0 ? (
+        <p className="p-3 text-[12px] text-muted-foreground">No tags on the visible scenarios.</p>
+      ) : (
+        <div className="flex flex-col gap-1">
           {tagOptions.map((t) => {
-            const active = selectedTags.includes(t);
+            const checked = selectedTags.includes(t);
             return (
-              <button
-                type="button"
+              <label
                 key={t}
-                onClick={() => toggleTag(t)}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex cursor-pointer items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 transition-colors',
-                  active
-                    ? 'bg-primary text-primary-foreground ring-primary'
-                    : 'bg-card text-muted-foreground ring-border hover:bg-muted',
-                )}
+                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] text-foreground hover:bg-muted"
               >
-                {t}
-              </button>
+                <Checkbox checked={checked} onCheckedChange={() => toggleTag(t)} aria-label={t} />
+                <span className="truncate" title={t}>
+                  {t}
+                </span>
+              </label>
             );
           })}
         </div>
       )}
-    </div>
+    </CustomPopover>
   );
 }
 
