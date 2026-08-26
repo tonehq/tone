@@ -9,7 +9,7 @@ import { useAgentFormNav } from '@/components/agents/agent-form/AgentFormNav';
 import AttachmentManagerModal, {
   type AttachmentManagerOption,
 } from '@/components/agents/agent-form/AttachmentManagerModal';
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import { CustomButton } from '@/components/shared';
 import { withAttachContext } from '@/utils/agentAttachmentContext';
 import { Badge } from '@/components/ui/badge';
@@ -276,7 +276,7 @@ export default function ToolsMcpStep() {
       {/* ─── Tools ──────────────────────────────────────────────────────── */}
       <SectionCard
         icon={<Wrench className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.amber}
+        tone="amber"
         title="Tools"
         description="Direct function calls available to the agent."
         action={
@@ -337,7 +337,7 @@ export default function ToolsMcpStep() {
       {/* ─── MCP servers ────────────────────────────────────────────────── */}
       <SectionCard
         icon={<Server className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.sky}
+        tone="sky"
         title="MCP servers"
         description="Hosted toolsets the agent can reach."
         action={

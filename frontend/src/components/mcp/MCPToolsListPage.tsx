@@ -3,7 +3,13 @@
 import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { AppLoader, CustomButton, CustomTable, TokenSearchBar } from '@/components/shared';
+import {
+  AppLoader,
+  CustomButton,
+  CustomTable,
+  IconChip,
+  TokenSearchBar,
+} from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { useGoBack } from '@/hooks/useGoBack';
 import { discoverMcpTools, getMcpServer } from '@/services/mcpServerService';
@@ -277,9 +283,7 @@ function CountChip({
 function EmptyState({ hasFilter }: { hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 py-10">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-        <Wrench className="size-6 text-muted-foreground" />
-      </div>
+      <IconChip icon={<Wrench strokeWidth={1.75} />} tone="muted" size="xl" />
       <div className="max-w-sm text-center">
         <p className="font-semibold text-foreground">
           {hasFilter ? 'No tools match your search' : 'No tools available'}

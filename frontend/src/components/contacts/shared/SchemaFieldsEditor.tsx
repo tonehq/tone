@@ -11,6 +11,7 @@ import {
 import {
   CheckboxField,
   CustomButton,
+  IconChip,
   SelectInput,
   TextInput,
   TimezoneSelect,
@@ -214,9 +215,12 @@ export default function SchemaFieldsEditor({
 
       {fields.length === 0 ? (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-10 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-muted/60">
-            <ListPlus className="size-6 text-muted-foreground" aria-hidden />
-          </span>
+          <IconChip
+            icon={<ListPlus strokeWidth={1.75} aria-hidden />}
+            tone="muted"
+            size="xl"
+            className="rounded-full"
+          />
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-foreground">No fields yet</p>
             <p className="text-xs text-muted-foreground">

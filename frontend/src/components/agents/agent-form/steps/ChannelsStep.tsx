@@ -5,9 +5,9 @@ import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import AssignPhoneNumberModal from '@/components/agents/agent-form/steps/AssignPhoneNumberModal';
-import { CustomButton } from '@/components/shared';
+import { CustomButton, IconChip } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { listChannels } from '@/services/channelService';
 import type { AgentFormState, AgentPhoneNumberInput } from '@/types/agent';
@@ -102,7 +102,7 @@ export default function ChannelsStep() {
     <div className="flex flex-col gap-4">
       <SectionCard
         icon={<Radio className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.sky}
+        tone="sky"
         title="Web calls"
         description="Enable in-browser voice calls. Each enabled provider gives this agent a shareable call link."
         action={
@@ -129,9 +129,11 @@ export default function ChannelsStep() {
                 )}
               >
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary ring-1 ring-primary/10">
-                    {WEB_ICONS[c.channel_type] ?? <Radio className="size-4" />}
-                  </span>
+                  <IconChip
+                    icon={WEB_ICONS[c.channel_type] ?? <Radio strokeWidth={1.75} />}
+                    tone="primary"
+                    size="md"
+                  />
                   <span className="flex min-w-0 flex-col gap-0.5">
                     <span className="truncate text-sm font-medium text-foreground">{c.name}</span>
                     <Badge
@@ -161,9 +163,7 @@ export default function ChannelsStep() {
                 key={p.type}
                 className="flex min-w-0 items-center gap-2.5 rounded-xl border border-dashed border-border/60 bg-muted/20 p-3 opacity-90"
               >
-                <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
-                  {WEB_ICONS[p.type] ?? <Radio className="size-4" />}
-                </span>
+                <IconChip icon={WEB_ICONS[p.type] ?? <Radio strokeWidth={1.75} />} size="md" />
                 <span className="flex min-w-0 flex-col gap-0.5">
                   <span className="truncate text-sm font-medium text-muted-foreground">
                     {p.label}
@@ -192,7 +192,7 @@ export default function ChannelsStep() {
 
       <SectionCard
         icon={<Phone className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.emerald}
+        tone="emerald"
         title="Phone numbers"
         description="Numbers that route to this agent."
         action={
@@ -205,9 +205,11 @@ export default function ChannelsStep() {
       >
         {phoneNumbers.length === 0 && (
           <div className="flex flex-col items-center gap-1.5 rounded-xl border border-dashed border-border/70 bg-muted/20 px-4 py-6 text-center">
-            <span className="flex size-8 items-center justify-center rounded-full bg-muted text-muted-foreground">
-              <PhoneIncoming className="size-4" />
-            </span>
+            <IconChip
+              icon={<PhoneIncoming strokeWidth={1.75} />}
+              size="md"
+              className="rounded-full"
+            />
             <p className="text-sm font-medium text-foreground">No phone numbers assigned</p>
             <p className="text-[11px] text-muted-foreground">
               Click below to pick from your connected providers.
@@ -232,9 +234,7 @@ export default function ChannelsStep() {
                     'hover:border-primary/40 hover:shadow-sm',
                   )}
                 >
-                  <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/8 text-primary ring-1 ring-primary/10">
-                    <Phone className="size-4" strokeWidth={2.25} />
-                  </span>
+                  <IconChip icon={<Phone strokeWidth={1.75} />} tone="primary" size="md" />
                   <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                     <span className="flex min-w-0 items-center gap-2">
                       {FlagComponent ? (

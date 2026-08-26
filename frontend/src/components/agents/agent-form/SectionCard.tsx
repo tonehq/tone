@@ -2,10 +2,13 @@
 
 import type React from 'react';
 
+import { IconChip } from '@/components/shared';
+import type { IconChipTone } from '@/components/shared';
 import { cn } from '@/utils/cn';
 
 export interface SectionCardProps {
   icon: React.ReactNode;
+  tone?: IconChipTone;
   /** Tailwind classes for the leading icon chip (bg, text colour, ring).
    * Examples in the steps: indigo/amber/emerald/violet/sky/muted. */
   iconClassName?: string;
@@ -26,6 +29,7 @@ export interface SectionCardProps {
  */
 export default function SectionCard({
   icon,
+  tone,
   iconClassName,
   title,
   description,
@@ -41,16 +45,20 @@ export default function SectionCard({
         className,
       )}
     >
-      <header className="flex items-start justify-between gap-3">
+      <header className="group/section flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-start gap-3">
-          <span
-            className={cn(
-              'flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
-              iconClassName ?? 'bg-muted text-muted-foreground ring-border',
-            )}
-          >
-            {icon}
-          </span>
+          {tone ? (
+            <IconChip icon={icon} tone={tone} size="md" interactive />
+          ) : (
+            <span
+              className={cn(
+                'flex size-8 shrink-0 items-center justify-center rounded-lg ring-1 ring-inset',
+                iconClassName ?? 'bg-muted text-muted-foreground ring-border',
+              )}
+            >
+              {icon}
+            </span>
+          )}
           <div className="min-w-0">
             <h3 className="font-display text-sm font-semibold tracking-tight text-foreground">
               {title}

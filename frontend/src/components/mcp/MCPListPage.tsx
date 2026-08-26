@@ -9,6 +9,7 @@ import {
   CustomButton,
   FacetFilterBar,
   FacetFilterDrawer,
+  IconChip,
   useFacetedList,
 } from '@/components/shared';
 import SelectInput from '@/components/shared/SelectInput';
@@ -140,9 +141,12 @@ export default function MCPListPage() {
 
         {noMatches && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <div className="mb-3 flex size-12 items-center justify-center rounded-xl bg-muted">
-              <Search className="size-5 text-muted-foreground" />
-            </div>
+            <IconChip
+              icon={<Search strokeWidth={1.75} />}
+              tone="muted"
+              size="xl"
+              className="mb-3"
+            />
             <p className="text-sm text-foreground">No MCP servers match your filters</p>
             <CustomButton
               type="link"
@@ -196,9 +200,12 @@ export default function MCPListPage() {
               className="group relative flex h-full min-h-[164px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-card/40 transition-colors hover:border-sky-500/50 hover:bg-sky-500/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
               <div className="flex flex-col items-center gap-2 p-8">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-sky-500/10 text-sky-600 transition-transform group-hover:scale-110 dark:text-sky-400">
-                  <Plus className="size-5" />
-                </div>
+                <IconChip
+                  icon={<Plus strokeWidth={1.75} />}
+                  tone="sky"
+                  size="lg"
+                  className="transition-transform duration-300 group-hover:scale-110"
+                />
                 <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                   New MCP Server
                 </span>

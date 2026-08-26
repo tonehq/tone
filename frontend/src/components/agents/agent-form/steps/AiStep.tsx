@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import { SelectInput, SliderField, TextInput } from '@/components/shared';
 import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
 import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
@@ -155,7 +155,7 @@ export default function AiStep() {
     <div className="flex flex-col gap-4">
       <SectionCard
         icon={<Brain className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.indigo}
+        tone="indigo"
         title="Reasoning model"
         description="The LLM that drives the conversation and decides what the agent says."
       >
@@ -201,7 +201,7 @@ export default function AiStep() {
       {showSettings && (
         <SectionCard
           icon={<Settings2 className="size-3.5" strokeWidth={2.25} />}
-          iconClassName={ACCENTS.slate}
+          tone="slate"
           title="LLM settings"
           description="Fine-tune how the model answers."
         >

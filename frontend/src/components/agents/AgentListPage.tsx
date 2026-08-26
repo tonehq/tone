@@ -13,6 +13,7 @@ import {
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
+  IconChip,
   PhoneNumberDisplay,
   useFacetedList,
 } from '@/components/shared';
@@ -214,9 +215,7 @@ const AgentListPage: React.FC = () => {
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-8">
-              <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-                <Bot className="size-6 text-muted-foreground" />
-              </div>
+              <IconChip icon={<Bot strokeWidth={1.75} />} tone="muted" size="xl" />
               <div className="text-center">
                 <p className="font-semibold text-foreground">No agents yet</p>
                 <p className="mt-1 text-sm text-muted-foreground">

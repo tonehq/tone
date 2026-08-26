@@ -28,6 +28,7 @@ import {
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
+  IconChip,
   useFacetedList,
 } from '@/components/shared';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
@@ -624,9 +625,7 @@ export default function KnowledgeBasePage() {
         {selectedDoc && (
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-                <FileText className="size-5 text-primary" />
-              </div>
+              <IconChip icon={<FileText strokeWidth={1.75} />} tone="primary" size="lg" />
               <div className="min-w-0 flex-1">
                 <p
                   className="break-all text-sm font-semibold text-foreground"
@@ -776,9 +775,7 @@ function DetailRow({
 function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 py-10">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-        <BookOpen className="size-6 text-muted-foreground" />
-      </div>
+      <IconChip icon={<BookOpen strokeWidth={1.75} />} tone="muted" size="xl" />
       <div className="max-w-sm text-center">
         <p className="font-semibold text-foreground">
           {hasFilter ? 'No matching documents' : 'No documents yet'}
