@@ -1,6 +1,6 @@
 'use client';
 
-import { ActionMenu, CustomButton } from '@/components/shared';
+import { ActionMenu, CustomButton, IconChip } from '@/components/shared';
 import type { SipTrunk } from '@/types/sipTrunk';
 import { cn } from '@/utils/cn';
 import { formatRelative } from '@/utils/date';
@@ -60,9 +60,7 @@ export default function SipTrunkCard({
       <span className="absolute inset-y-0 left-0 w-1 bg-indigo-500" aria-hidden />
 
       <div className="flex items-center gap-4 py-4 pl-5 pr-4">
-        <div className="flex size-11 shrink-0 items-center justify-center rounded-xl border border-indigo-200/50 bg-indigo-50 shadow-sm dark:border-indigo-500/20 dark:bg-indigo-500/10">
-          <Network className="size-4 text-indigo-500" />
-        </div>
+        <IconChip icon={<Network strokeWidth={1.75} />} tone="indigo" size="lg" />
 
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

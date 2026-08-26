@@ -1,5 +1,6 @@
 'use client';
 
+import { IconChip } from '@/components/shared';
 import ConsolidatedTurnItem from '@/components/call-history/consolidated/ConsolidatedTurnItem';
 import { getCallLogById } from '@/services/callLogService';
 import type { CallLogRow } from '@/types/callLog';
@@ -107,9 +108,12 @@ function Header({ total }: { total: number }) {
 function PreparingState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-        <Loader2 className="size-5 animate-spin text-muted-foreground" />
-      </div>
+      <IconChip
+        icon={<Loader2 className="animate-spin" strokeWidth={1.75} />}
+        tone="muted"
+        size="lg"
+        className="rounded-full"
+      />
       <div>
         <p className="text-sm font-medium text-foreground">Preparing consolidated view…</p>
         <p className="mt-1 text-xs text-muted-foreground">
@@ -123,9 +127,12 @@ function PreparingState() {
 function InProgressState() {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-        <Layers className="size-5 text-muted-foreground" />
-      </div>
+      <IconChip
+        icon={<Layers strokeWidth={1.75} />}
+        tone="muted"
+        size="lg"
+        className="rounded-full"
+      />
       <p className="text-sm text-muted-foreground">
         Consolidated view is generated after the call ends.
       </p>
@@ -136,9 +143,12 @@ function InProgressState() {
 function EmptyState({ hasPayload }: { hasPayload: boolean }) {
   return (
     <div className="flex flex-col items-center justify-center gap-3 py-14 text-center">
-      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-        <Layers className="size-5 text-muted-foreground" />
-      </div>
+      <IconChip
+        icon={<Layers strokeWidth={1.75} />}
+        tone="muted"
+        size="lg"
+        className="rounded-full"
+      />
       <p className="text-sm text-muted-foreground">
         {hasPayload
           ? 'No turns were recorded for this call.'

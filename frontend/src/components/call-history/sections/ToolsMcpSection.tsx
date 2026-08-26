@@ -9,7 +9,7 @@ import {
   summarize,
   uniqueToolNames,
 } from '@/components/call-history/tools-mcp/helpers';
-import { SelectInput } from '@/components/shared';
+import { IconChip, SelectInput } from '@/components/shared';
 import { getCallToolExecutions } from '@/services/callLogService';
 import type { CallLogRow, ToolExecution, ToolExecutionStatus } from '@/types/callLog';
 import { handleApiError } from '@/utils/helpers';
@@ -88,9 +88,12 @@ function EmptyState({ hasAny, loading }: { hasAny: boolean; loading: boolean }) 
   if (loading) return null;
   return (
     <div className="flex flex-col items-center justify-center gap-2 py-12 text-center">
-      <div className="flex size-10 items-center justify-center rounded-full bg-muted">
-        <Wrench className="size-5 text-muted-foreground" />
-      </div>
+      <IconChip
+        icon={<Wrench strokeWidth={1.75} />}
+        tone="muted"
+        size="lg"
+        className="rounded-full"
+      />
       <p className="text-sm text-muted-foreground">
         {hasAny
           ? 'No tool calls match the current filters.'

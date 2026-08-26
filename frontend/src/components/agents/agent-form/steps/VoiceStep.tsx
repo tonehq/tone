@@ -5,7 +5,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import {
   CustomButton,
   SearchableSelect,
@@ -413,7 +413,7 @@ export default function VoiceStep() {
       {/* ─── Text-to-Speech ─────────────────────────────────────────────── */}
       <SectionCard
         icon={<Volume2 className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.violet}
+        tone="violet"
         title="Text-to-speech"
         description="Language, provider, and voice the agent uses to talk."
         action={
@@ -540,7 +540,7 @@ export default function VoiceStep() {
       {/* ─── Speech-to-Text ─────────────────────────────────────────────── */}
       <SectionCard
         icon={<Mic className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.sky}
+        tone="sky"
         title="Speech-to-text"
         description="How the agent transcribes caller speech."
       >

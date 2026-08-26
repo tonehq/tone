@@ -1,5 +1,6 @@
 'use client';
 
+import { IconChip } from '@/components/shared';
 import type { CallLogRow } from '@/types/callLog';
 import { BrainCircuit, Mic, Volume2 } from 'lucide-react';
 import React from 'react';
@@ -29,7 +30,7 @@ const KeyValue: React.FC<KeyValueProps> = ({ label, value }) => (
 );
 
 interface PipelineCardProps {
-  icon: React.ComponentType<{ className?: string }>;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   title: string;
   /** Ordered list of label/value rows displayed in a 1- or 2-column grid. */
   rows: Array<{ label: string; value: string | null }>;
@@ -38,9 +39,7 @@ interface PipelineCardProps {
 const PipelineCard: React.FC<PipelineCardProps> = ({ icon: Icon, title, rows }) => (
   <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/20 p-4">
     <div className="flex items-center gap-2">
-      <span className="flex size-7 items-center justify-center rounded-lg bg-primary/10 text-primary ring-1 ring-inset ring-primary/15">
-        <Icon className="size-3.5" />
-      </span>
+      <IconChip icon={<Icon strokeWidth={1.75} />} tone="primary" size="sm" />
       <h4 className="text-sm font-semibold text-foreground">{title}</h4>
     </div>
     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">

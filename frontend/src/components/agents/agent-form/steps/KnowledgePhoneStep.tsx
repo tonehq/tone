@@ -4,7 +4,7 @@ import { AlertCircle, Check, FileText, Loader2, Upload } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
-import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
+import SectionCard from '@/components/agents/agent-form/SectionCard';
 import KnowledgeBaseUploadModal from '@/components/agents/agent-form/steps/KnowledgeBaseUploadModal';
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, SearchBar, SelectInput } from '@/components/shared';
@@ -189,7 +189,7 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
       {/* Knowledge base */}
       <SectionCard
         icon={<FileText className="size-3.5" strokeWidth={2.25} />}
-        iconClassName={ACCENTS.indigo}
+        tone="indigo"
         title="Knowledge base"
         description="Attach uploaded documents so the agent can ground its answers."
         action={

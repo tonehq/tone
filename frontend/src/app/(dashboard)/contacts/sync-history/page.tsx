@@ -6,7 +6,7 @@ import { useMemo, useState } from 'react';
 
 import { useDirectoriesList } from '@/lib/api/contactDirectories';
 import { useContactSyncsList } from '@/lib/api/contactSyncs';
-import { CustomButton, SelectInput } from '@/components/shared';
+import { CustomButton, IconChip, SelectInput } from '@/components/shared';
 import SyncErrorTable from '@/components/contacts/shared/SyncErrorTable';
 import SyncStatusChip from '@/components/contacts/shared/SyncStatusChip';
 import type { ContactSync, ContactSyncStatus } from '@/types/contactSync';
@@ -125,9 +125,12 @@ export default function ContactsSyncHistoryPage() {
             <SyncHistorySkeleton />
           ) : syncs.length === 0 ? (
             <div className="flex flex-1 flex-col items-center justify-center gap-4 py-16 text-center">
-              <span className="flex size-14 items-center justify-center rounded-full bg-muted/60 ring-1 ring-border">
-                <History className="size-6 text-muted-foreground" aria-hidden />
-              </span>
+              <IconChip
+                icon={<History strokeWidth={1.75} aria-hidden />}
+                tone="muted"
+                size="xl"
+                className="rounded-full"
+              />
               <div className="space-y-1">
                 <p className="text-sm font-semibold text-foreground">
                   {hasFilters ? 'No syncs match these filters' : 'No syncs yet'}

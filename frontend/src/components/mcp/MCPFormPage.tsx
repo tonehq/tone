@@ -9,6 +9,7 @@ import {
   AppLoader,
   CustomButton,
   CustomModal,
+  IconChip,
   ScopeStatus,
   SelectInput,
   SliderField,
@@ -652,9 +653,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
 
                 <div className="relative">
                   <div className="flex items-center gap-2">
-                    <span className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary">
-                      <Boxes size={15} />
-                    </span>
+                    <IconChip icon={<Boxes strokeWidth={1.75} />} tone="primary" size="sm" />
                     <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                       Configure MCP Server
                     </h2>

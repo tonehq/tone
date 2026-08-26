@@ -12,6 +12,7 @@ import {
   CustomButton,
   CustomPopover,
   CustomTable,
+  IconChip,
   PhoneNumberDisplay,
   TokenSearchBar,
 } from '@/components/shared';
@@ -712,9 +713,7 @@ const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
           }}
           emptyState={
             <div className="flex flex-col items-center gap-4 py-12">
-              <div className="flex size-14 items-center justify-center rounded-2xl bg-gradient-to-b from-muted to-muted/40 ring-1 ring-border">
-                <Phone className="size-6 text-muted-foreground" />
-              </div>
+              <IconChip icon={<Phone strokeWidth={1.75} />} tone="muted" size="xl" />
               <div className="max-w-xs text-center">
                 <p className="font-semibold text-foreground">No call logs found</p>
                 <p className="mt-1 text-sm text-muted-foreground">
