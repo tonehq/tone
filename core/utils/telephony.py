@@ -54,6 +54,22 @@ def pinned_ws_url(default_ws_url: str, tag: str) -> Tuple[str, Optional[str], Op
     return ws_url, pod_name, pod_ordinal, node_name
 
 
+def fallback_media_ws_url(request_hostname: Optional[str]) -> str:
+    """Media-stream WS URL to advertise when pod pinning yields no pinned pod.
+
+    Prefers the call-service host (``CALL_SERVER_HOST``) so an un-pinned call still
+    lands on the voice call-worker pool via ``/ws`` (``wss://{CALL_SERVER_HOST}/ws``
+    routes through the call ingress → ``tone-call-service`` → a call worker) — never
+    on whichever host served the ``/twiml`` webhook (e.g. the API pod, where the whole
+    STT/LLM/TTS pipeline must NOT run). Falls back to the request host only when
+    ``CALL_SERVER_HOST`` is unset (local/dev, where API and call share one process).
+    """
+    from shared.config import settings
+
+    host = settings.CALL_SERVER_HOST or request_hostname or "localhost"
+    return f"wss://{host}/ws"
+
+
 def default_media_ws_url(base_url: str) -> str:
     """Turn a public HTTP base URL into the ``wss://host/ws`` media endpoint.
 

@@ -5,13 +5,13 @@ from fastapi.responses import Response
 from loguru import logger
 
 from core.database.session import get_db_context
-from core.utils.telephony import pinned_ws_url
+from core.utils.telephony import fallback_media_ws_url, pinned_ws_url
 
 router = APIRouter()
 
 
 async def _resolve_stream(request: Request, tag: str):
-    default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
+    default_ws_url = fallback_media_ws_url(request.url.hostname)
 
     from_number = ""
     to_number = ""
@@ -108,7 +108,7 @@ async def _outbound_answer_xml(request: Request, provider: str, tag: str) -> Res
         logger.warning("[{}] missing agent_id", tag)
         return Response(content=_HANGUP_TWIML, media_type="application/xml")
 
-    default_ws_url = f"wss://{request.url.hostname or 'localhost'}/ws"
+    default_ws_url = fallback_media_ws_url(request.url.hostname)
     ws_url, pod_name, pod_ordinal, node_name = pinned_ws_url(default_ws_url, tag)
     params = {
         "from": (qp.get("from") or "").strip(),
