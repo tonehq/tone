@@ -1,4 +1,4 @@
-import { CustomButton } from '@/components/shared';
+import { CustomButton, IconChip } from '@/components/shared';
 import { Boxes, Plus } from 'lucide-react';
 
 interface MCPEmptyStateProps {
@@ -7,9 +7,7 @@ interface MCPEmptyStateProps {
 
 const MCPEmptyState: React.FC<MCPEmptyStateProps> = ({ onCreate }) => (
   <div className="flex flex-col items-center justify-center py-24">
-    <div className="flex size-16 items-center justify-center rounded-2xl bg-primary/10">
-      <Boxes className="size-8 text-primary" />
-    </div>
+    <IconChip icon={<Boxes strokeWidth={1.75} />} tone="primary" size="2xl" />
     <h3 className="mt-5 text-[15px] font-semibold text-foreground">No MCP servers yet</h3>
     <p className="mt-1.5 max-w-sm text-center text-[13px] leading-relaxed text-muted-foreground">
       Register a Model Context Protocol server to give your agents access to external tools, files,

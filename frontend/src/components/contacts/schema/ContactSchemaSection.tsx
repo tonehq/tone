@@ -16,6 +16,7 @@ import {
   AppLoader,
   CustomButton,
   CustomModal,
+  IconChip,
   SearchBar,
   TextAreaField,
   TextInput,
@@ -215,9 +216,12 @@ export default function ContactSchemaSection({ directoryId }: ContactSchemaSecti
     if (schemas.length === 0) {
       return (
         <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border px-6 py-10 text-center">
-          <span className="flex size-12 items-center justify-center rounded-full bg-muted/60">
-            <Rows3 className="size-6 text-muted-foreground" aria-hidden />
-          </span>
+          <IconChip
+            icon={<Rows3 strokeWidth={1.75} aria-hidden />}
+            tone="muted"
+            size="xl"
+            className="rounded-full"
+          />
           <div className="flex flex-col gap-1">
             <p className="text-sm font-medium text-foreground">
               {search ? 'No matching schemas' : 'No schemas yet'}

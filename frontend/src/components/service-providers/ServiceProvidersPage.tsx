@@ -15,6 +15,7 @@ import {
   CustomModal,
   FacetFilterBar,
   FacetFilterDrawer,
+  IconChip,
   useFacetedList,
 } from '@/components/shared';
 import { servicesListConfig } from '@/components/service-providers/servicesListConfig';
@@ -294,9 +295,7 @@ export default function ServiceProvidersPage() {
 function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
   return (
     <div className="flex flex-col items-center gap-4 py-12">
-      <div className="flex size-12 items-center justify-center rounded-xl bg-muted">
-        <Plug className="size-6 text-muted-foreground" />
-      </div>
+      <IconChip icon={<Plug strokeWidth={1.75} />} tone="muted" size="xl" />
       <div className="max-w-sm text-center">
         <p className="font-semibold text-foreground">
           {hasFilter ? 'No matching providers' : 'No providers yet'}

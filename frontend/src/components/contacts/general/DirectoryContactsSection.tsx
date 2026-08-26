@@ -15,7 +15,7 @@ import {
   useDeleteContact,
   useUpdateContact,
 } from '@/lib/api/contacts';
-import { CustomButton, CustomModal } from '@/components/shared';
+import { CustomButton, CustomModal, IconChip } from '@/components/shared';
 import { PhoneNumberDisplay } from '@/components/shared/PhoneNumberDisplay';
 import ContactsTable from '@/components/contacts/shared/ContactsTable';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
@@ -260,9 +260,12 @@ export default function DirectoryContactsSection({ directoryId }: DirectoryConta
         groupRows
         emptyState={
           <div className="flex flex-col items-center gap-3 py-10 text-center">
-            <span className="flex size-12 items-center justify-center rounded-full bg-muted/60">
-              <Users className="size-6 text-muted-foreground" aria-hidden />
-            </span>
+            <IconChip
+              icon={<Users strokeWidth={1.75} aria-hidden />}
+              tone="muted"
+              size="xl"
+              className="rounded-full"
+            />
             <div className="flex flex-col gap-1">
               <p className="text-sm font-medium text-foreground">No contacts yet</p>
               <p className="text-xs text-muted-foreground">

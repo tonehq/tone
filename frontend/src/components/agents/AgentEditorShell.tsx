@@ -2,7 +2,7 @@
 
 import { useAtom } from 'jotai';
 import { isEqual } from 'lodash';
-import { ArrowLeft, Phone, Sparkles } from 'lucide-react';
+import { ArrowLeft, Sparkles } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FormProvider, useForm, useWatch } from 'react-hook-form';
@@ -20,6 +20,7 @@ import {
 import { fetchAgentReadinessAtom, fetchAgentReadinessSummaryAtom } from '@/atoms/ReadinessAtom';
 import { AgentEditorProvider } from '@/components/agents/AgentEditorContext';
 import AgentSaveActions, { type AgentSaveAction } from '@/components/agents/AgentSaveActions';
+import { AgentTypeBadge, DIRECTION_TONES } from '@/components/agents/AgentTypeBadge';
 import AgentVersionSelector from '@/components/agents/AgentVersionSelector';
 import CreateVersionModal, {
   type CreateVersionSelection,
@@ -38,8 +39,7 @@ import {
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
-import { AppLoader, CustomButton, CustomModal } from '@/components/shared';
-import { Badge } from '@/components/ui/badge';
+import { AppLoader, CustomButton, CustomModal, IconChip } from '@/components/shared';
 import { useNavigation } from '@/contexts/navigation';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
 import { createAgentProfileVariable } from '@/services/agentProfileVariableService';
@@ -137,14 +137,6 @@ async function flushProfileVariableDrafts(
   }
   return failed;
 }
-
-const DIRECTION_STYLES: Record<AgentDirection, string> = {
-  inbound:
-    'bg-emerald-500/15 text-emerald-700 ring-1 ring-inset ring-emerald-500/20 dark:bg-emerald-500/25 dark:text-emerald-200 dark:ring-emerald-400/40',
-  outbound:
-    'bg-violet-500/15 text-violet-700 ring-1 ring-inset ring-violet-500/20 dark:bg-violet-500/25 dark:text-violet-200 dark:ring-violet-400/40',
-  both: 'bg-sky-500/15 text-sky-700 ring-1 ring-inset ring-sky-500/20 dark:bg-sky-500/25 dark:text-sky-200 dark:ring-sky-400/40',
-};
 
 const HEADER_TINT: Record<AgentDirection, string> = {
   inbound:
@@ -1019,29 +1011,20 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                   HEADER_TINT[agentType],
                 )}
               >
-                <div
-                  className={cn(
-                    'flex size-10 shrink-0 items-center justify-center rounded-xl text-base font-semibold shadow-sm',
-                    DIRECTION_STYLES[agentType],
-                  )}
-                  aria-hidden
+                <IconChip
+                  tone={DIRECTION_TONES[agentType]}
+                  size="xl"
+                  interactive
+                  className="text-lg font-semibold tracking-tight"
                 >
-                  {agentInitial}
-                </div>
+                  <span aria-hidden>{agentInitial}</span>
+                </IconChip>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
                       {agentName}
                     </h1>
-                    <Badge
-                      className={cn(
-                        'inline-flex shrink-0 items-center gap-1 px-1.5 py-0 text-[10px] capitalize',
-                        DIRECTION_STYLES[agentType],
-                      )}
-                    >
-                      <Phone className="size-2.5" />
-                      {agentType}
-                    </Badge>
+                    <AgentTypeBadge agentType={agentType} size="sm" />
                     {!isEditMode && (
                       <span className="inline-flex shrink-0 items-center gap-1 text-[11px] text-muted-foreground">
                         <Sparkles className="size-3" />

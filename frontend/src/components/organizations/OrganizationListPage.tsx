@@ -17,7 +17,7 @@ import OrganizationDeleteModal from '@/components/organizations/OrganizationDele
 import OrganizationEmptyState from '@/components/organizations/OrganizationEmptyState';
 import OrganizationUpsertModal from '@/components/organizations/OrganizationUpsertModal';
 import type { OrgRow } from '@/components/organizations/constants';
-import { CustomButton } from '@/components/shared';
+import { CustomButton, IconChip } from '@/components/shared';
 import { TextInput } from '@/components/shared';
 import { getOrganizationDetails } from '@/services/organizationService';
 import type { OrganizationDetails, OrganizationUpdatePayload } from '@/types/organization';
@@ -300,9 +300,12 @@ const OrganizationListPage: React.FC = () => {
             className="group relative flex min-h-[150px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-background/40 transition-colors hover:border-primary/40 hover:bg-primary/[0.03]"
           >
             <div className="flex flex-col items-center gap-2 p-8">
-              <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 transition-transform group-hover:scale-110">
-                <Plus className="size-5 text-primary" />
-              </div>
+              <IconChip
+                icon={<Plus strokeWidth={1.75} />}
+                tone="primary"
+                size="lg"
+                className="transition-transform duration-300 group-hover:scale-110"
+              />
               <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
                 New Organization
               </span>

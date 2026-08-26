@@ -3,7 +3,7 @@
 import { CloudUpload, FileText, Upload, X } from 'lucide-react';
 import { useCallback, useRef, useState } from 'react';
 
-import { CustomButton, CustomModal } from '@/components/shared';
+import { CustomButton, CustomModal, IconChip } from '@/components/shared';
 import { useUploadKnowledgeBase } from '@/lib/api/knowledge-base';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -150,9 +150,7 @@ export default function KnowledgeBaseUploadModal({
               : 'border-border hover:border-primary/40 hover:bg-muted/40',
           )}
         >
-          <div className="flex size-11 items-center justify-center rounded-xl bg-primary/10 text-primary">
-            <CloudUpload className="size-5" />
-          </div>
+          <IconChip icon={<CloudUpload strokeWidth={1.75} />} tone="primary" size="lg" />
           <p className="text-sm text-foreground">
             Drag &amp; drop or{' '}
             <span className="font-medium text-primary underline-offset-2 hover:underline">

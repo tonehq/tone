@@ -1,6 +1,8 @@
 'use client';
 
 import dashboardAtom, { fetchDashboardStatsAtom } from '@/atoms/DashboardAtom';
+import { IconChip } from '@/components/shared';
+import type { IconChipTone } from '@/components/shared';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/utils/cn';
 import { useAtomValue, useSetAtom } from 'jotai';
@@ -25,8 +27,7 @@ interface StatCardConfig {
   suffix: string;
   subtitle: string;
   icon: typeof Bot;
-  iconBg: string;
-  iconColor: string;
+  tone: IconChipTone;
   accent: string;
 }
 
@@ -37,8 +38,7 @@ const statCards: StatCardConfig[] = [
     suffix: '',
     subtitle: 'All agents',
     icon: Bot,
-    iconBg: 'bg-violet-500/10',
-    iconColor: 'text-violet-600 dark:text-violet-400',
+    tone: 'violet',
     accent: 'from-violet-500/10 via-transparent to-transparent',
   },
   {
@@ -47,8 +47,7 @@ const statCards: StatCardConfig[] = [
     suffix: '',
     subtitle: 'Real-time',
     icon: Activity,
-    iconBg: 'bg-emerald-500/10',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
+    tone: 'emerald',
     accent: 'from-emerald-500/10 via-transparent to-transparent',
   },
   {
@@ -57,8 +56,7 @@ const statCards: StatCardConfig[] = [
     suffix: '',
     subtitle: 'This month',
     icon: Clock,
-    iconBg: 'bg-sky-500/10',
-    iconColor: 'text-sky-600 dark:text-sky-400',
+    tone: 'sky',
     accent: 'from-sky-500/10 via-transparent to-transparent',
   },
   {
@@ -67,8 +65,7 @@ const statCards: StatCardConfig[] = [
     suffix: '%',
     subtitle: 'Last 30 days',
     icon: CheckCircle2,
-    iconBg: 'bg-amber-500/10',
-    iconColor: 'text-amber-600 dark:text-amber-400',
+    tone: 'amber',
     accent: 'from-amber-500/10 via-transparent to-transparent',
   },
 ];
@@ -78,8 +75,7 @@ interface QuickLinkConfig {
   description: string;
   icon: typeof Bot;
   href: string;
-  iconBg: string;
-  iconColor: string;
+  tone: IconChipTone;
   hoverRing: string;
 }
 
@@ -89,8 +85,7 @@ const quickLinks: QuickLinkConfig[] = [
     description: 'Create and manage your AI voice agents',
     icon: Bot,
     href: '/agents',
-    iconBg: 'bg-violet-500/10',
-    iconColor: 'text-violet-600 dark:text-violet-400',
+    tone: 'violet',
     hoverRing: 'group-hover:ring-violet-500/20',
   },
   {
@@ -98,8 +93,7 @@ const quickLinks: QuickLinkConfig[] = [
     description: 'Manage your team and invite new members',
     icon: Users,
     href: '/settings/members',
-    iconBg: 'bg-pink-500/10',
-    iconColor: 'text-pink-600 dark:text-pink-400',
+    tone: 'rose',
     hoverRing: 'group-hover:ring-pink-500/20',
   },
   {
@@ -107,8 +101,7 @@ const quickLinks: QuickLinkConfig[] = [
     description: 'Connect services and manage API credentials',
     icon: Settings,
     href: '/settings/integrations',
-    iconBg: 'bg-slate-500/10',
-    iconColor: 'text-slate-600 dark:text-slate-300',
+    tone: 'slate',
     hoverRing: 'group-hover:ring-slate-500/20',
   },
 ];
@@ -158,14 +151,12 @@ export default function HomePage() {
             />
 
             <div className="relative flex items-start justify-between px-5 pt-5">
-              <div
-                className={cn(
-                  'flex size-10 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40',
-                  card.iconBg,
-                )}
-              >
-                <card.icon size={18} className={card.iconColor} strokeWidth={2.25} />
-              </div>
+              <IconChip
+                icon={<card.icon strokeWidth={1.75} />}
+                tone={card.tone}
+                size="lg"
+                className="transition-transform duration-300 group-hover:scale-[1.04]"
+              />
               <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/80">
                 {card.subtitle}
               </span>
@@ -209,14 +200,12 @@ export default function HomePage() {
               >
                 <div className="flex h-full flex-col p-5">
                   <div className="mb-4 flex items-start justify-between">
-                    <div
-                      className={cn(
-                        'flex size-11 items-center justify-center rounded-xl ring-1 ring-inset ring-border/40 transition-transform group-hover:scale-[1.04]',
-                        link.iconBg,
-                      )}
-                    >
-                      <link.icon size={20} className={link.iconColor} strokeWidth={2.25} />
-                    </div>
+                    <IconChip
+                      icon={<link.icon strokeWidth={1.75} />}
+                      tone={link.tone}
+                      size="lg"
+                      className="transition-transform duration-300 group-hover:scale-[1.04]"
+                    />
                     <ArrowUpRight
                       size={16}
                       className="text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-foreground"

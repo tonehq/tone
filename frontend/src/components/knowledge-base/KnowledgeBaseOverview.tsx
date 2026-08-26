@@ -2,7 +2,7 @@
 
 import { AlertTriangle, Calendar, FileText, HardDrive, RotateCcw, User } from 'lucide-react';
 
-import { CustomButton } from '@/components/shared';
+import { CustomButton, IconChip } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
@@ -110,9 +110,7 @@ export default function KnowledgeBaseOverview({
   return (
     <div className="space-y-4">
       <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 ring-1 ring-primary/20">
-          <FileText className="size-5 text-primary" />
-        </div>
+        <IconChip icon={<FileText strokeWidth={1.75} />} tone="primary" size="lg" />
         <div className="min-w-0 flex-1">
           <p className="break-all text-sm font-semibold text-foreground" title={doc.file_name}>
             {truncateFileName(doc.file_name)}

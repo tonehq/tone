@@ -4,7 +4,7 @@ import { FolderOpen, Plus } from 'lucide-react';
 import { useMemo, useState } from 'react';
 
 import DirectoryFormModal from '@/components/contacts/DirectoryFormModal';
-import { CustomButton, CustomTooltip, SearchBar } from '@/components/shared';
+import { CustomButton, CustomTooltip, IconChip, SearchBar } from '@/components/shared';
 import { useDirectoriesList } from '@/lib/api/contactDirectories';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
@@ -183,9 +183,12 @@ function EmptyState({
   }
   return (
     <div className="flex flex-col items-center gap-3 px-4 py-10 text-center">
-      <div className="flex size-12 items-center justify-center rounded-full bg-muted/60">
-        <FolderOpen className="size-6 text-muted-foreground/60" strokeWidth={1.5} />
-      </div>
+      <IconChip
+        icon={<FolderOpen strokeWidth={1.5} />}
+        tone="muted"
+        size="xl"
+        className="rounded-full"
+      />
       <div className="space-y-1">
         <p className="text-sm font-medium text-foreground">No directories yet</p>
         <p className="text-xs text-muted-foreground">Create one to start organizing contacts.</p>

@@ -4,6 +4,7 @@ import { FolderOpen } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 
+import { IconChip } from '@/components/shared';
 import { useDirectoriesList } from '@/lib/api/contactDirectories';
 
 /**
@@ -35,9 +36,12 @@ export default function ContactsDirectoriesIndexPage() {
 
   return (
     <div className="flex h-full w-full min-w-0 flex-col items-center justify-center gap-3 p-8 text-center">
-      <div className="flex size-14 items-center justify-center rounded-full bg-muted/60">
-        <FolderOpen className="size-7 text-muted-foreground/60" strokeWidth={1.5} />
-      </div>
+      <IconChip
+        icon={<FolderOpen strokeWidth={1.5} />}
+        tone="muted"
+        size="xl"
+        className="rounded-full"
+      />
       <p className="text-base font-semibold text-foreground">Select a directory</p>
       <p className="max-w-xs text-balance break-words text-sm text-muted-foreground">
         Choose a directory from the list, or create one to start adding contacts.

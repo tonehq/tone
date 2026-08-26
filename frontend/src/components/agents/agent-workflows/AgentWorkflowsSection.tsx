@@ -6,6 +6,7 @@ import { Lock, Plus, RefreshCw, SearchX, TriangleAlert } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
+import { IconChip } from '@/components/shared';
 import { deleteWorkflowAtom, fetchWorkflowListAtom } from '@/atoms/WorkflowAtom';
 import { useAgentFormNav } from '@/components/agents/agent-form/AgentFormNav';
 import AgentWorkflowCard from '@/components/agents/agent-workflows/AgentWorkflowCard';
@@ -146,9 +147,7 @@ export default function AgentWorkflowsSection({
   if (!agentId) {
     return (
       <div className="flex flex-col items-center gap-3 rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-14 text-center">
-        <span className="flex size-11 items-center justify-center rounded-xl bg-muted text-muted-foreground ring-1 ring-inset ring-border">
-          <Lock className="size-5" />
-        </span>
+        <IconChip icon={<Lock strokeWidth={1.75} />} tone="muted" size="lg" />
         <p className="text-sm font-semibold text-foreground">Save the agent first</p>
         <p className="max-w-sm text-[12.5px] text-muted-foreground">
           Workflows belong to an agent version. Create the agent, then come back here to build and

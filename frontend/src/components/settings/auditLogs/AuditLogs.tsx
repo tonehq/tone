@@ -10,6 +10,7 @@ import {
   refetchAuditLogAtom,
   setAuditLogParamsAtom,
 } from '@/atoms/AuditLogAtom';
+import { IconChip } from '@/components/shared';
 import type { AuditLogItem } from '@/types/settings/auditLog';
 
 import AuditLogDetailsDrawer from './AuditLogDetailsDrawer';
@@ -68,9 +69,12 @@ export default function AuditLogs() {
       {/* ── Table / empty state ────────────────────────────────── */}
       {!params.agent_id ? (
         <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border/70 bg-card py-16 text-center">
-          <div className="mb-3 flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-            <ScrollText className="size-6" strokeWidth={1.75} />
-          </div>
+          <IconChip
+            icon={<ScrollText strokeWidth={1.75} />}
+            tone="primary"
+            size="xl"
+            className="mb-3 rounded-full"
+          />
           <h3 className="text-base font-semibold text-foreground">Select an agent</h3>
           <p className="mt-1 max-w-sm text-sm text-muted-foreground">
             Pick an agent from the filter above to view its configuration change history.
