@@ -55,6 +55,11 @@ interface Props {
   /** Where the Back button goes. Overrides the `returnTo` query param when set
    * (used by the nested agent route, which knows the exact section to return to). */
   backHref?: string;
+  /** When the builder is opened inside an agent editor route, this is the owning
+   * agent's id. Passed down to the node drawer so its variable picker can offer
+   * that agent's Profile variables. Omitted (undefined) on the standalone
+   * `/workflows/[id]` route — the picker just hides the Profile group. */
+  agentId?: string;
 }
 
 /** One-tap building blocks for the global prompt drawer. */
@@ -79,7 +84,7 @@ function isMeaningful(changes: NodeChange[] | EdgeChange[]): boolean {
   });
 }
 
-function BuilderInner({ workflowId, backHref: backHrefProp }: Props) {
+function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
   const router = useRouter();
   const searchParams = useSearchParams();
   // Prefer the explicit prop (nested agent route), else a same-origin `returnTo`
@@ -463,6 +468,7 @@ function BuilderInner({ workflowId, backHref: backHrefProp }: Props) {
       <NodeConfigDrawer
         node={selectedNode}
         edge={selectedEdge}
+        agentId={agentId}
         onClose={() => {
           setSelectedNodeId(null);
           setSelectedEdgeId(null);
@@ -572,9 +578,9 @@ function BuilderInner({ workflowId, backHref: backHrefProp }: Props) {
   );
 }
 
-const WorkflowBuilder: React.FC<Props> = ({ workflowId, backHref }) => (
+const WorkflowBuilder: React.FC<Props> = ({ workflowId, backHref, agentId }) => (
   <ReactFlowProvider>
-    <BuilderInner workflowId={workflowId} backHref={backHref} />
+    <BuilderInner workflowId={workflowId} backHref={backHref} agentId={agentId} />
   </ReactFlowProvider>
 );
 

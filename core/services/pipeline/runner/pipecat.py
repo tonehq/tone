@@ -272,8 +272,32 @@ class PipecatPipelineRunner(PipelineRunner):
         # --- Build the pipeline (services + task + observers) ---
         # Per-call variable context ({{caller_number}}, {{agent_name}}, …) resolved from
         # this call's metadata and substituted into the prompt at build time.
+        # Profile variables ({{profile.<key>}}) are loaded ONCE here (per call, never
+        # per-frame) via the shared ``load_profile_context`` helper — the same helper
+        # any future workflow-runtime wiring must use, so both paths stay in sync.
+        # Runs in the default executor so the sync SQLAlchemy round-trip never blocks
+        # the event loop (matches the ``_create_call_log_in_thread`` pattern below).
+        # Attribute access + the DB fetch are wrapped so a detached ORM ``agent`` or
+        # a transient DB failure degrades to an empty map instead of failing the call.
         from core.services.pipeline.prompt_variables import build_call_context
-        prompt_context = build_call_context(agent, call_data, transport_type)
+
+        def _load_profile_vars_blocking() -> dict:
+            from core.services.agents.profile_context import load_profile_context
+            try:
+                _agent_id = getattr(agent, "id", None)
+                _org_id = getattr(agent, "organization_id", None)
+            except Exception:  # noqa: BLE001 — detached ORM instance, etc.
+                logger.exception("[runner] failed to read agent identity for profile vars")
+                return {}
+            with get_db_context() as _db:
+                return load_profile_context(_db, _org_id, _agent_id)
+
+        profile_vars = await asyncio.get_event_loop().run_in_executor(
+            None, _load_profile_vars_blocking
+        )
+        prompt_context = build_call_context(
+            agent, call_data, transport_type, profile_variables=profile_vars
+        )
         build = await self.builder.build(
             transport,
             agent=agent,

@@ -41,6 +41,7 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
   web_channel_ids: [],
   tool_oauth_overrides: {},
   mcp_server_oauth_overrides: {},
+  profile_variable_drafts: [],
 });
 
 /** Build the OAuth override map from AgentDetail refs. Only stores entries
@@ -93,6 +94,9 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
     web_channel_ids: (detail.web_channels ?? []).map((c) => c.channel_id),
     tool_oauth_overrides: refsToOAuthOverrides(detail.tools),
     mcp_server_oauth_overrides: refsToOAuthOverrides(detail.mcp_servers),
+    // Drafts are a CREATE-only concept — hydrating an existing agent always
+    // seeds an empty list; the Profile tab pulls its rows from the API.
+    profile_variable_drafts: [],
   };
 }
 
