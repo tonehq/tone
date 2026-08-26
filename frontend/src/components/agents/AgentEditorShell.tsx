@@ -37,10 +37,12 @@ import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarSh
 import { AppLoader, CustomButton, CustomModal, IconChip } from '@/components/shared';
 import { useNavigation } from '@/contexts/navigation';
 import { useUnsavedChangesGuard } from '@/hooks/useUnsavedChangesGuard';
+import { createAgentProfileVariable } from '@/services/agentProfileVariableService';
 import type {
   AgentDetail,
   AgentDirection,
   AgentFormState,
+  ProfileVariableDraft,
   UpdateAgentPayload,
 } from '@/types/agent';
 import type { PublishGateErrorDetail, ReadinessReport, ReadinessSummary } from '@/types/readiness';
@@ -59,6 +61,76 @@ interface AgentEditorShellProps {
   agentType: AgentDirection;
   agentId?: string;
   children: React.ReactNode;
+}
+
+/** sessionStorage key holding profile-variable drafts that failed to POST
+ * during agent create. The Profile tab reads + clears this on mount for
+ * the matching agent (see `ProfileVariablesManager`), so the user's typed
+ * values / descriptions survive the redirect from create → edit even when
+ * some rows didn't land. */
+export const PROFILE_VAR_FLUSH_FAILED_KEY = (agentId: string) =>
+  `profile-var-drafts-failed:${agentId}`;
+
+/**
+ * POST every profile-variable draft to the freshly-created agent, one at a
+ * time. Returns the list of drafts that failed so the caller can surface
+ * them to the user — the agent itself is already saved, so we never throw
+ * out of here (that would leave the user thinking the create failed).
+ *
+ * Each draft gets one retry on failure to absorb transient network hiccups;
+ * anything still failing is stashed in sessionStorage under
+ * ``PROFILE_VAR_FLUSH_FAILED_KEY(agentId)`` with the full draft payload
+ * (key / value / description) so the edit-mode Profile tab can offer a
+ * one-click retry without the user re-typing.
+ */
+async function flushProfileVariableDrafts(
+  agentId: string,
+  drafts: ProfileVariableDraft[],
+): Promise<ProfileVariableDraft[]> {
+  const failed: ProfileVariableDraft[] = [];
+  const postOnce = (draft: ProfileVariableDraft) =>
+    createAgentProfileVariable(agentId, {
+      key: draft.key,
+      value: draft.value,
+      description: draft.description ?? undefined,
+    });
+
+  for (const draft of drafts) {
+    try {
+      await postOnce(draft);
+      continue;
+    } catch (err) {
+      console.warn(
+        `[profile-variables] flush attempt 1 failed for key="${draft.key}" agent=${agentId}; retrying once`,
+        err,
+      );
+    }
+    // Second attempt after a short backoff for transient failures.
+    try {
+      await new Promise((r) => setTimeout(r, 400));
+      await postOnce(draft);
+    } catch (err) {
+      console.error(
+        `[profile-variables] flush failed for key="${draft.key}" agent=${agentId}`,
+        err,
+      );
+      failed.push(draft);
+    }
+  }
+
+  if (failed.length > 0 && typeof window !== 'undefined') {
+    try {
+      window.sessionStorage.setItem(
+        PROFILE_VAR_FLUSH_FAILED_KEY(agentId),
+        JSON.stringify({ drafts: failed, savedAt: Date.now() }),
+      );
+    } catch (err) {
+      // Storage quota / disabled — best-effort only; user still has the toast
+      // + console entries above to recover from.
+      console.warn('[profile-variables] failed to stash failed drafts', err);
+    }
+  }
+  return failed;
 }
 
 const HEADER_TINT: Record<AgentDirection, string> = {
@@ -462,8 +534,23 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     try {
       if (!isEditMode || !agentId) {
         const created = await createAgent(formStateToCreatePayload(values));
-        showToast.success('Agent created');
-        methods.reset(values);
+        // Flush any profile-variable drafts to the newly-created agent BEFORE
+        // navigating. Failures don't block the redirect — the agent itself is
+        // saved; the user can retry from the (now edit-mode) Profile tab.
+        const failed = await flushProfileVariableDrafts(
+          created.id,
+          values.profile_variable_drafts ?? [],
+        );
+        if (failed.length > 0) {
+          showToast.error(
+            `Agent created, but ${failed.length} profile variable(s) failed to save: ${failed
+              .map((f) => f.key)
+              .join(', ')}. Open the Profile tab to retry.`,
+          );
+        } else {
+          showToast.success('Agent created');
+        }
+        methods.reset({ ...values, profile_variable_drafts: [] });
         router.push(`/agents/edit/${created.agent_type}/${created.id}/setup`);
         return;
       }

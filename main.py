@@ -37,7 +37,8 @@ from core.api.v1 import sip_trunks, webrtc
 if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
-        agents, agent_readiness, agent_llm_evals, benchmarks, mcp_servers, services, tools, dashboard,
+        agents, agent_readiness, agent_llm_evals, agent_profile_variables,
+        benchmarks, mcp_servers, services, tools, dashboard,
         call_logs, call_metrics, call_transcript_evals, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
@@ -152,6 +153,11 @@ if ee_enabled:
         # Agent LLM (Level-2) evals — no EE variant; router paths include the
         # /agents/{agent_id}/llm-evals prefix so no include_router prefix is set.
         api_v1.include_router(agent_llm_evals.router, tags=["agent-llm-evals"])
+        # Agent Profile Variables — per-agent {{profile.<key>}} placeholders.
+        # Router paths carry the /agents/{agent_id}/profile-variables prefix.
+        api_v1.include_router(
+            agent_profile_variables.router, tags=["agent-profile-variables"]
+        )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
@@ -205,6 +211,11 @@ else:
         # Agent LLM (Level-2) evals — router paths already include the
         # /agents/{agent_id}/llm-evals prefix so no include_router prefix.
         api_v1.include_router(agent_llm_evals.router, tags=["agent-llm-evals"])
+        # Agent Profile Variables — per-agent {{profile.<key>}} placeholders.
+        # Router paths carry the /agents/{agent_id}/profile-variables prefix.
+        api_v1.include_router(
+            agent_profile_variables.router, tags=["agent-profile-variables"]
+        )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(

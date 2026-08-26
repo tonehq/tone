@@ -26,8 +26,13 @@ export interface PMNode {
   content?: PMNode[];
 }
 
-// key, then an optional `|default` (default may contain anything except `}`).
-const TOKEN_RE = /\{\{\s*([a-zA-Z0-9_]+)\s*(?:\|([^}]*))?\}\}/g;
+// Key: an identifier optionally followed by dotted identifier segments, so
+// `profile.customer_name` matches but incidental prose like `{{1.0|draft}}`
+// does NOT (segments must start with a letter/underscore). Then an optional
+// `|default` (default may contain anything except `}`). MUST stay in sync
+// with the backend regex in `core/services/pipeline/prompt_variables.py`.
+const TOKEN_RE =
+  /\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*)\s*(?:\|([^}]*))?\}\}/g;
 
 /** Serialize a single variable chip's attrs to its `{{...}}` token form. */
 export function variableToken(key: string, def: string | null | undefined): string {
