@@ -24,14 +24,15 @@ import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, List, Optional
+from typing import Any, List, Optional, Tuple
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from core.models.agent_llm_eval_result import AgentLlmEvalResult
+from core.models.agent_llm_eval_run import AgentLlmEvalRun
 from core.services.evals.agent_llm.agent_config_loader import (
     AgentConfigLoader,
     AgentEvalConfig,
@@ -83,6 +84,22 @@ class AgentLlmRunSummary:
     llm_model: Optional[str] = None
     llm_provider: Optional[str] = None
     summary: dict = field(default_factory=dict)
+    # Number of scenarios the run will score, stamped at ``begin_pending_run``
+    # (known before the worker even picks up the job). Lets the UI render
+    # "Scoring N of M" progress while ``status`` is non-terminal without
+    # waiting for the results table to catch up.
+    total_scenarios: int = 0
+    # Number of ``agent_llm_eval_results`` rows already written for this run.
+    # Equals ``total_scenarios`` for completed runs; less for in-flight ones;
+    # exactly zero for ``pending`` rows. Not stored on the runs table —
+    # derived by the ``list_runs`` LEFT JOIN so it stays fresh without a
+    # write from the worker each time a row lands.
+    scored_count: int = 0
+    # Snapshot of the trigger filter (``scenario_ids``, ``tags``, ``folder``,
+    # ``folders``) at ``begin_pending_run``. Loose ``dict`` — the UI won't
+    # unpack it in v1; kept as a JSONB blob so a future "re-run this exact
+    # selection" affordance can round-trip it without a schema change.
+    filter_snapshot: Optional[dict] = None
 
 
 class AgentLlmEvalService:
@@ -183,11 +200,40 @@ class AgentLlmEvalService:
             judge_model = load_agent_llm_eval_settings_for_org(
                 db, agent_config.organization_id
             ).judge_model
-        next_run_number = self._next_run_number(
-            db,
-            agent_id=agent_config.agent_id,
-            organization_id=agent_config.organization_id,
-        )
+        # When the caller wired us to a runs-table row (FE flow via the
+        # router's ``begin_pending_run``), reuse THAT row's ``run_number``
+        # so the runs table and the per-scenario results rows agree.
+        # Otherwise (CLI / fixture / tests — ``run_id`` is a freshly-minted
+        # UUID with no runs-table row) fall back to the historical
+        # results-table MAX+1 allocator so those code paths are untouched.
+        #
+        # If ``run_id`` WAS provided but the runs-table row is missing,
+        # something is wrong (row deleted, replica lag, wrong id) — DO
+        # NOT silently fall back to the results-table allocator. That
+        # would pick a run_number that mismatches the caller's row, so
+        # future ``list_runs`` (which joins runs↔results by run_id, not
+        # run_number) would still work BUT any historical caller that
+        # groups by run_number would see garbage. Refuse loudly instead
+        # of persisting inconsistent numbers.
+        if run_id is not None:
+            existing_number = (
+                db.query(AgentLlmEvalRun.run_number)
+                .filter(AgentLlmEvalRun.id == run_id)
+                .scalar()
+            )
+            if existing_number is None:
+                raise AgentLlmEvalConfigError(
+                    f"run_id {run_id} was supplied but no matching row exists "
+                    "in agent_llm_eval_runs — refusing to score with a "
+                    "divergent run_number."
+                )
+            next_run_number = int(existing_number)
+        else:
+            next_run_number = self._next_run_number(
+                db,
+                agent_id=agent_config.agent_id,
+                organization_id=agent_config.organization_id,
+            )
         db.close()
 
         started_at = datetime.now(timezone.utc)
@@ -364,6 +410,229 @@ class AgentLlmEvalService:
             run_id=run_id,
         )
 
+    # ── Run lifecycle (agent_llm_eval_runs) ─────────────────────────────
+    #
+    # These four methods are the ONLY writers to ``agent_llm_eval_runs``.
+    # Kept close to ``list_runs`` / ``get_run_detail`` so the read+write
+    # surface for run-level state sits together. Follows the shape of
+    # ``IngestionRunService.begin_pending_run / mark_running / complete_run /
+    # fail_run`` — see ``core/services/ingestion_run_service.py`` for the
+    # reference pattern.
+
+    def begin_pending_run(
+        self,
+        db: Session,
+        *,
+        organization_id: UUID,
+        agent_id: UUID,
+        triggered_by: str,
+        judge_model: Optional[str],
+        judge_engine: Optional[str],
+        total_scenarios: int,
+        filter_snapshot: Optional[dict] = None,
+    ) -> AgentLlmEvalRun:
+        """Insert a ``pending`` run row synchronously (called by the router
+        BEFORE enqueueing the Procrastinate job) so the UI can render the
+        run the moment it's triggered. Allocates ``run_number`` from the
+        new runs table's max — historical values were backfilled from
+        ``agent_llm_eval_results`` in the migration, so the sequence
+        continues without gaps.
+
+        Not idempotent (nothing to key against yet). The router owns the
+        one-call-per-click invariant; a duplicate click would create two
+        pending rows, which the worker resolves by scoring both — each
+        gets its own ``run_id`` and appears as a separate row in the UI.
+        """
+        if triggered_by not in TRIGGERED_BY_VALUES:
+            raise ValueError(
+                f"triggered_by must be one of {sorted(TRIGGERED_BY_VALUES)}; "
+                f"got {triggered_by!r}"
+            )
+
+        # MAX+1 without a lock races under concurrent double-click. A
+        # loser INSERT hits ``uq_agent_llm_eval_runs_agent_run_number``
+        # and raises IntegrityError. Retry a small number of times with
+        # a fresh MAX+1 read after rollback — bounded so a genuinely
+        # broken constraint eventually surfaces instead of looping.
+        from sqlalchemy.exc import IntegrityError
+
+        last_error: Optional[IntegrityError] = None
+        for _attempt in range(3):
+            next_number = self._next_run_number_from_runs_table(
+                db, agent_id=agent_id, organization_id=organization_id
+            )
+            run = AgentLlmEvalRun(
+                organization_id=organization_id,
+                agent_id=agent_id,
+                run_number=next_number,
+                triggered_by=triggered_by,
+                status="pending",
+                judge_model=judge_model,
+                judge_engine=judge_engine,
+                total_scenarios=int(total_scenarios or 0),
+                filter_snapshot=filter_snapshot,
+            )
+            db.add(run)
+            try:
+                db.commit()
+            except IntegrityError as e:
+                # Concurrent begin_pending_run took our run_number. Roll
+                # back the aborted transaction so ``next_number`` can be
+                # re-read cleanly, then try again.
+                db.rollback()
+                last_error = e
+                continue
+            db.refresh(run)
+            logger.info(
+                "[agent-llm-eval] begin_pending_run id={} agent={} run_number={} "
+                "total_scenarios={} triggered_by={}",
+                run.id, agent_id, run.run_number, run.total_scenarios, triggered_by,
+            )
+            return run
+        # 3 concurrent collisions is not a hot-path scenario — bubble up
+        # so the router surfaces a 503 rather than looping forever.
+        raise AgentLlmEvalConfigError(
+            f"begin_pending_run: could not allocate a unique run_number for "
+            f"agent {agent_id} after 3 attempts (concurrent contention)"
+        ) from last_error
+
+    def mark_running(
+        self,
+        db: Session,
+        *,
+        run_id: UUID,
+    ) -> Optional[AgentLlmEvalRun]:
+        """Flip a ``pending`` row to ``running`` and stamp ``started_at``.
+
+        Idempotent between ``pending`` and ``running`` (Procrastinate can
+        replay a task after a crash and we don't want to clobber
+        ``started_at`` on the second attempt).
+
+        Returns:
+        - ``None`` when the runs-table row doesn't exist (legacy CLI /
+          test callers without a pending row — worker keeps going).
+        - The row itself when it flipped or was already ``running``.
+        - **The terminal row unchanged when status is ``completed`` /
+          ``failed``.** Callers MUST check ``row.status`` and short-circuit
+          if terminal — a replay of an already-finished task must NOT
+          re-enter scoring (uq_agent_llm_eval_results_run_scenario would
+          block the INSERT and the scoring-phase except would flip the
+          completed run to ``failed``).
+        """
+        run = (
+            db.query(AgentLlmEvalRun)
+            .filter(AgentLlmEvalRun.id == run_id)
+            .first()
+        )
+        if run is None:
+            return None
+        if run.status == "pending":
+            run.status = "running"
+            run.started_at = datetime.now(timezone.utc)
+            db.commit()
+            db.refresh(run)
+        return run
+
+    def complete_run(
+        self,
+        db: Session,
+        *,
+        run_id: UUID,
+        completed_at: Optional[datetime] = None,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+    ) -> Optional[AgentLlmEvalRun]:
+        """Flip a row to ``completed``, stamp ``completed_at``, and
+        snapshot the answer-model metadata now that the worker knows the
+        agent's live config values. The results table is the source of
+        truth for verdict counts, so no summary is stored on this row.
+
+        Returns ``None`` if the runs-table row doesn't exist — same
+        legacy-path tolerance as :meth:`mark_running`.
+        """
+        run = (
+            db.query(AgentLlmEvalRun)
+            .filter(AgentLlmEvalRun.id == run_id)
+            .first()
+        )
+        if run is None:
+            return None
+        run.status = "completed"
+        run.completed_at = completed_at or datetime.now(timezone.utc)
+        run.error = None
+        if llm_model is not None:
+            run.llm_model = llm_model
+        if llm_provider is not None:
+            run.llm_provider = llm_provider
+        db.commit()
+        db.refresh(run)
+        return run
+
+    def fail_run(
+        self,
+        db: Session,
+        *,
+        run_id: UUID,
+        error: str,
+        llm_model: Optional[str] = None,
+        llm_provider: Optional[str] = None,
+    ) -> Optional[AgentLlmEvalRun]:
+        """Flip a row to ``failed`` and stamp a safe, user-visible error
+        string. Also snapshots the answer-model metadata if the worker
+        got that far before failing. The full traceback belongs in logs
+        (``logger.exception`` in the worker) — this column holds only
+        what the UI can show.
+
+        Returns ``None`` if the runs-table row doesn't exist — same
+        legacy-path tolerance as :meth:`mark_running`.
+        """
+        run = (
+            db.query(AgentLlmEvalRun)
+            .filter(AgentLlmEvalRun.id == run_id)
+            .first()
+        )
+        if run is None:
+            return None
+        run.status = "failed"
+        run.completed_at = datetime.now(timezone.utc)
+        # Cap to keep the column from swallowing a giant repr; the full
+        # trace lives in logs anyway.
+        run.error = (error or "unknown error")[:2000]
+        if llm_model is not None:
+            run.llm_model = llm_model
+        if llm_provider is not None:
+            run.llm_provider = llm_provider
+        db.commit()
+        db.refresh(run)
+        return run
+
+    def _next_run_number_from_runs_table(
+        self,
+        db: Session,
+        *,
+        agent_id: UUID,
+        organization_id: UUID,
+    ) -> int:
+        """Per-(agent, org) monotonic run number, read from the NEW runs
+        table. Historical numbers were backfilled from the results table
+        by the migration, so the sequence never resets.
+
+        Same tolerated-race semantics as :meth:`_next_run_number` — a
+        concurrent trigger click could compute the same next value; the
+        ``UniqueConstraint(agent_id, run_number)`` on the runs table will
+        surface the collision via ``IntegrityError`` (rare enough to
+        leave to the caller's retry).
+        """
+        row = (
+            db.query(func.coalesce(func.max(AgentLlmEvalRun.run_number), 0) + 1)
+            .filter(
+                AgentLlmEvalRun.agent_id == agent_id,
+                AgentLlmEvalRun.organization_id == organization_id,
+            )
+            .scalar()
+        )
+        return int(row or 1)
+
     def compare_runs(
         self,
         db: Session,
@@ -402,23 +671,69 @@ class AgentLlmEvalService:
         db: Session,
         *,
         agent_id: UUID,
-        organization_id: Optional[UUID] = None,
+        organization_id: UUID,
         limit: Optional[int] = None,
-    ) -> List[AgentLlmRunSummary]:
-        """Return each run's aggregate summary for one agent, newest first.
+        page_no: Optional[int] = None,
+        page_size: Optional[int] = None,
+    ) -> Tuple[List[AgentLlmRunSummary], int]:
+        """Return ``(summaries, total)`` for one agent (newest first).
 
-        ``organization_id`` is optional today (CLI is single-tenant); a
-        future API adapter MUST pass ``org_id`` from ``JWTClaims`` — without
-        it a caller that guesses another tenant's ``agent_id`` can read
-        every historical run summary for that agent.
+        Reads from ``agent_llm_eval_runs`` (the source of truth for run
+        lifecycle since the migration to a dedicated runs table). Verdict
+        counts / duration come from a small aggregate over
+        ``agent_llm_eval_results`` for the CURRENT page's ids only — that
+        avoids a giant GROUP BY when the agent has thousands of runs.
+
+        Non-terminal rows (``pending`` / ``running``) surface with zero
+        verdict counts and a partial ``scored_count`` — the UI renders a
+        "Scoring N of M" progress line for those.
+
+        ``organization_id`` is **required** — every read is tenant-scoped
+        so a caller that guesses another tenant's ``agent_id`` can never
+        read cross-tenant summaries. Router extracts it from ``JWTClaims``;
+        other callers must pass it explicitly.
         """
-        rows = _run_grouped_query(
-            db, agent_id=agent_id, organization_id=organization_id
-        ).all()
-        summaries = [_row_to_run_summary(r) for r in rows]
+        # 1. Base query — runs table, newest activity first. Uses
+        # ``COALESCE(started_at, created_at)`` so a freshly-created
+        # ``pending`` row (started_at IS NULL) lands ABOVE older completed
+        # rows — the user's just-triggered run needs to be the first thing
+        # they see. Once the worker flips ``pending -> running`` and
+        # stamps ``started_at``, the row keeps its position.
+        base = (
+            db.query(AgentLlmEvalRun)
+            .filter(
+                AgentLlmEvalRun.agent_id == agent_id,
+                AgentLlmEvalRun.organization_id == organization_id,
+            )
+            .order_by(
+                func.coalesce(
+                    AgentLlmEvalRun.started_at, AgentLlmEvalRun.created_at
+                ).desc(),
+                AgentLlmEvalRun.created_at.desc(),
+            )
+        )
+
+        # 2. Total + page slice.
+        total = base.count()
+        if page_no is not None or page_size is not None:
+            effective_page_no = max(page_no or 1, 1)
+            effective_page_size = min(max(page_size or 20, 1), 200)
+            offset = (effective_page_no - 1) * effective_page_size
+            run_rows = base.offset(offset).limit(effective_page_size).all()
+        else:
+            run_rows = base.all()
+
+        # 3. Aggregate stats for the current page's run_ids. One extra
+        # query bounded by page_size — never grows with total run count.
+        stats_by_run = _fetch_run_stats(db, run_ids=[r.id for r in run_rows])
+
+        summaries = [
+            _run_and_stats_to_summary(run, stats_by_run.get(run.id))
+            for run in run_rows
+        ]
         if limit is not None:
             summaries = summaries[:limit]
-        return summaries
+        return summaries, total
 
     def get_run_detail(
         self,
@@ -922,6 +1237,115 @@ def _row_to_run_summary(row) -> AgentLlmRunSummary:
         started_at=row.started_at,
         completed_at=row.completed_at,
         summary=summary,
+    )
+
+
+def _fetch_run_stats(db: Session, *, run_ids: List[UUID]) -> dict:
+    """Aggregate verdict + duration counts for a bounded list of ``run_id``s.
+    Returns ``{run_id: row}``; run ids without any results rows (pending /
+    running / freshly-triggered) are absent — the caller substitutes zeros
+    when composing the summary.
+
+    Bounded by the page size, NOT by total-runs-per-agent, so this stays
+    fast even for agents with thousands of historical runs. Falls out to
+    a single grouped query against the ``ix_agent_llm_eval_results_run_id``
+    index.
+    """
+    if not run_ids:
+        return {}
+    rows = (
+        db.query(
+            AgentLlmEvalResult.run_id.label("run_id"),
+            func.count(AgentLlmEvalResult.id).label("scored_count"),
+            func.sum(
+                case((AgentLlmEvalResult.verdict == "PASS", 1), else_=0)
+            ).label("pass_count"),
+            func.sum(
+                case((AgentLlmEvalResult.verdict == "PARTIAL", 1), else_=0)
+            ).label("partial_count"),
+            func.sum(
+                case((AgentLlmEvalResult.verdict == "FAIL", 1), else_=0)
+            ).label("fail_count"),
+            # Mutually exclusive with ``fail_count`` on purpose — count
+            # only rows where the scorer never reached a verdict
+            # (status='failed' AND verdict IS NULL). Without this guard,
+            # the old code counted a row that had BOTH verdict='FAIL' and
+            # status='failed' twice, letting fail_rate exceed 1.0.
+            func.sum(
+                case(
+                    (
+                        (AgentLlmEvalResult.status == "failed")
+                        & (AgentLlmEvalResult.verdict.is_(None)),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label("failed_status_count"),
+            func.coalesce(func.sum(AgentLlmEvalResult.latency_ms), 0).label(
+                "duration_ms"
+            ),
+        )
+        .filter(AgentLlmEvalResult.run_id.in_(list(run_ids)))
+        .group_by(AgentLlmEvalResult.run_id)
+        .all()
+    )
+    return {row.run_id: row for row in rows}
+
+
+def _run_and_stats_to_summary(
+    run: AgentLlmEvalRun,
+    stats: Optional[Any],
+) -> AgentLlmRunSummary:
+    """Compose an ``AgentLlmRunSummary`` from a runs-table row + an
+    optional aggregate-stats row (``None`` for runs with no scored
+    scenarios yet — i.e. ``pending`` / ``running``).
+
+    Field names on the returned dataclass are identical to what the old
+    grouped-query path produced, so the API layer, CLI, and existing
+    tests keep working. The three new fields (``total_scenarios``,
+    ``scored_count``, ``filter_snapshot``) carry the pending-state info
+    the FE uses to render the "Scoring N of M" progress line.
+    """
+    scored_count = int(getattr(stats, "scored_count", 0) or 0)
+    passes = int(getattr(stats, "pass_count", 0) or 0)
+    partials = int(getattr(stats, "partial_count", 0) or 0)
+    failed_status = int(getattr(stats, "failed_status_count", 0) or 0)
+    # Same convention as the old ``_row_to_run_summary`` — a scenario that
+    # never scored (``status='failed'`` on the results row) counts as a
+    # fail so the pass_rate matches ``_summarize_scored_rows``.
+    fails = int(getattr(stats, "fail_count", 0) or 0) + failed_status
+    duration_ms = int(getattr(stats, "duration_ms", 0) or 0)
+
+    # Denominator uses the total the router stamped (``total_scenarios``),
+    # falling back to the count of scored rows for historical runs where
+    # the runs-table backfill didn't know the original selection size.
+    total_for_rate = int(run.total_scenarios or scored_count)
+    summary = {
+        "total": total_for_rate,
+        "pass": passes,
+        "partial": partials,
+        "fail": fails,
+        "pass_rate": (passes / total_for_rate) if total_for_rate else 0.0,
+        "partial_rate": (partials / total_for_rate) if total_for_rate else 0.0,
+        "fail_rate": (fails / total_for_rate) if total_for_rate else 0.0,
+        "duration_ms": duration_ms,
+    }
+    return AgentLlmRunSummary(
+        run_id=run.id,
+        agent_id=run.agent_id,
+        run_number=int(run.run_number or 0),
+        triggered_by=run.triggered_by,
+        judge_model=run.judge_model,
+        llm_model=run.llm_model,
+        llm_provider=run.llm_provider,
+        status=run.status,
+        error=run.error,
+        started_at=run.started_at,
+        completed_at=run.completed_at,
+        summary=summary,
+        total_scenarios=int(run.total_scenarios or 0),
+        scored_count=scored_count,
+        filter_snapshot=run.filter_snapshot,
     )
 
 

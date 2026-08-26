@@ -118,6 +118,14 @@ _CSV_ALLOWED_COLUMNS = {
     "folder",
 }
 
+# Whitelisted ``source`` values accepted by ``list_scenarios``. Kept in
+# sync with the router's Pydantic pattern in ``agent_llm_evals.py`` so
+# a service-level typo (e.g. ``'CSV'`` vs ``'csv'``) raises loudly
+# instead of silently returning every source.
+_SCENARIO_SOURCE_WHITELIST: frozenset[str] = frozenset(
+    {"manual", "csv", "generated", "fixture"}
+)
+
 
 class AgentLlmScenarioService(BaseService):
     """Manages ``agent_llm_eval_scenarios`` rows.
@@ -137,19 +145,26 @@ class AgentLlmScenarioService(BaseService):
         search: Optional[str] = None,
         tags: Optional[Sequence[str]] = None,
         folder: Optional[str] = None,
+        source: Optional[str] = None,
         sort_by: Optional[str] = "created_at",
         sort_order: str = "desc",
         page_no: int = 1,
         page_size: int = 50,
     ) -> tuple[list[AgentLlmEvalScenario], int]:
         """Paginated list of scenarios for one agent, with optional search /
-        tag filter / folder filter / whitelisted sort. Reuses
-        ``apply_search_sort_pagination`` so search / sort / pagination
-        semantics match every other ``POST /…/list`` endpoint.
+        tag filter / folder filter / source filter / whitelisted sort.
+        Reuses ``apply_search_sort_pagination`` so search / sort /
+        pagination semantics match every other ``POST /…/list`` endpoint.
 
         ``folder`` is an exact-match (case-sensitive) filter. An empty
         string is treated as "Uncategorized" and matches rows with NULL
         folder; ``None`` skips the filter entirely.
+
+        ``source`` is an exact-match filter on
+        ``AgentLlmEvalScenario.source`` (``manual``/``csv``/``generated``/
+        ``fixture``). Non-whitelisted values are silently ignored (skip
+        semantics — matches the folder/tags behavior for consistency;
+        the router body validator already rejects arbitrary values).
         """
         q = self.query(AgentLlmEvalScenario).filter(
             AgentLlmEvalScenario.agent_id == agent_id
@@ -163,6 +178,18 @@ class AgentLlmScenarioService(BaseService):
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
 
         q = _apply_folder_filter(q, AgentLlmEvalScenario.folder, folder)
+
+        # Source filter — reject unknown values loudly instead of silently
+        # skipping the filter. Router-level Pydantic pattern already
+        # guards HTTP callers; this catches programmatic mistakes
+        # (case-sensitive: ``'CSV'`` would previously return every row).
+        if source is not None:
+            if source not in _SCENARIO_SOURCE_WHITELIST:
+                raise EvalConfigurationError(
+                    f"Unknown source filter {source!r}; expected one of "
+                    f"{sorted(_SCENARIO_SOURCE_WHITELIST)}."
+                )
+            q = q.filter(AgentLlmEvalScenario.source == source)
 
         sort_map = {
             "created_at": AgentLlmEvalScenario.created_at,
@@ -465,6 +492,36 @@ class AgentLlmScenarioService(BaseService):
         self.db.delete(row)
         self.db.commit()
 
+    def delete_scenarios_bulk(
+        self,
+        agent_id: UUID,
+        scenario_ids: Sequence[UUID],
+    ) -> int:
+        """Hard-delete every scenario in ``scenario_ids`` that belongs to
+        ``agent_id`` (and, transitively via ``BaseService.query``, to this
+        service's org). Returns the number of rows removed.
+
+        Ids that don't belong to this (agent, org) — a stale UI cache or
+        a forged request — are silently ignored: the ``.filter()`` chain
+        already scopes the query so the delete only sees the caller's
+        rows. Same history-preservation semantics as :meth:`delete_scenario`
+        — past run results keep their snapshotted prompt/expected_answer.
+
+        Empty ``scenario_ids`` is a no-op returning ``0`` (avoids issuing
+        a ``WHERE id IN ()`` query that some drivers reject).
+        """
+        ids = [i for i in scenario_ids if i is not None]
+        if not ids:
+            return 0
+        deleted = (
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.id.in_(ids))
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return int(deleted)
+
     # ── CSV import ──────────────────────────────────────────────────────
 
     def import_from_csv(
@@ -636,6 +693,79 @@ class AgentLlmScenarioService(BaseService):
             "new_name": cleaned_new,
             "scenarios_updated": int(scenarios_updated),
             "results_updated": int(results_updated),
+        }
+
+    def delete_folder(
+        self,
+        agent_id: UUID,
+        *,
+        name: str,
+    ) -> dict:
+        """Bulk-delete every scenario in a folder for one agent — the folder
+        disappears automatically once its last scenario is gone (folder
+        membership is stored per-scenario, not as a separate row).
+
+        Past run results (``agent_llm_eval_results``) keep their ``folder``
+        snapshot column so the Runs tab's history stays readable — matches
+        the rename flow's "history is preserved" semantics. Users who need
+        to move scenarios elsewhere should re-folder them via the scenario
+        edit modal FIRST; this API is unambiguously destructive.
+
+        Raises:
+            EvalConfigurationError: if ``name`` is empty / whitespace (the
+                ``Uncategorized`` bucket has no name and must not be
+                deletable through this path).
+            AgentLlmScenarioNotFoundError: if no scenarios match ``name``.
+        """
+        cleaned = _clean_folder(name)
+        if not cleaned:
+            # Empty / whitespace name maps to the ``Uncategorized`` bucket
+            # (NULL folder on the results table). That bucket is virtual —
+            # it can't be deleted as a unit; users bulk-delete its
+            # scenarios one-by-one from the scenarios table instead.
+            raise EvalConfigurationError(
+                "Cannot delete folder — a folder name is required "
+                "(Uncategorized is not deletable as a group)."
+            )
+
+        matching = (
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.folder == cleaned)
+        )
+        # Snapshot the count BEFORE the delete so the response shows the
+        # user exactly what was removed (a stale UI cache could show a
+        # different N than the actual delete).
+        scenarios_matched = matching.count()
+        if scenarios_matched == 0:
+            raise AgentLlmScenarioNotFoundError(
+                f"Folder {cleaned!r} not found for agent {agent_id}"
+            )
+
+        # Count past-run rows tagged with this folder BEFORE the delete —
+        # they aren't touched (history is preserved), but the response
+        # surfaces the number so the FE confirmation copy is accurate
+        # ("N scenarios deleted; M past run rows keep their folder label").
+        from core.models.agent_llm_eval_result import AgentLlmEvalResult
+
+        results_preserved = (
+            self.query(AgentLlmEvalResult)
+            .filter(AgentLlmEvalResult.agent_id == agent_id)
+            .filter(AgentLlmEvalResult.folder == cleaned)
+            .count()
+        )
+
+        scenarios_deleted = matching.delete(synchronize_session=False)
+        self.db.commit()
+        logger.info(
+            "[agent-llm-eval] deleted folder agent={} name={} scenarios={} "
+            "results_preserved={}",
+            agent_id, cleaned, scenarios_deleted, results_preserved,
+        )
+        return {
+            "name": cleaned,
+            "scenarios_deleted": int(scenarios_deleted),
+            "results_preserved": int(results_preserved),
         }
 
     # ── Internals ───────────────────────────────────────────────────────

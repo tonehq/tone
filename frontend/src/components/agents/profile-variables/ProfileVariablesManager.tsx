@@ -358,10 +358,15 @@ function VariablesPanel({
         render: (_v, row) => {
           const val = row.value ?? '';
           if (!val) return <span className="italic text-muted-foreground">empty</span>;
-          const short = val.length > 80 ? `${val.slice(0, 79)}…` : val;
+          // Only wrap in a tooltip when the value is actually truncated —
+          // rendering `CustomTooltip` for every row would otherwise pop up an
+          // empty bubble on hover for short values.
+          if (val.length <= 80) {
+            return <span className="line-clamp-1 break-all text-sm">{val}</span>;
+          }
           return (
-            <CustomTooltip content={val.length > 80 ? val : undefined}>
-              <span className="line-clamp-1 break-all text-sm">{short}</span>
+            <CustomTooltip content={val}>
+              <span className="line-clamp-1 break-all text-sm">{`${val.slice(0, 79)}…`}</span>
             </CustomTooltip>
           );
         },

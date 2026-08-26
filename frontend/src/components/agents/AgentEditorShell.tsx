@@ -31,6 +31,11 @@ import ReadinessConfirmDialog from '@/components/agents/readiness/ReadinessConfi
 import ReadinessDrawer from '@/components/agents/readiness/ReadinessDrawer';
 import SaveAsTemplateModal from '@/components/agents/SaveAsTemplateModal';
 import { AgentFormNavProvider } from '@/components/agents/agent-form/AgentFormNav';
+import {
+  firstInvalidFieldPath,
+  scrollToInvalidField,
+  sectionKeyForFieldPath,
+} from '@/components/agents/agent-form/firstInvalidField';
 import { buildAgentNav } from '@/components/agents/agent-form/sectionNav';
 import { AccountMenu, AccountMenuSettingsLink } from '@/components/layout/AccountMenu';
 import { isSidebarItemActive, SidebarShell } from '@/components/layout/SidebarShell';
@@ -427,18 +432,19 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       const detailErr = (err as any)?.response?.data?.detail;
       if (!detailErr || typeof detailErr !== 'object' || !detailErr.errors) return false;
       const validationErrors = detailErr.errors as Record<string, Record<string, string[]>>;
-      let navigated = false;
+      let firstPath: string | null = null;
       for (const [settingsKey, fields] of Object.entries(validationErrors)) {
         for (const [fieldName, messages] of Object.entries(fields)) {
-          const path = `config.${settingsKey}.${fieldName}` as any;
-          methods.setError(path, { type: 'server', message: messages[0] });
+          const path = `config.${settingsKey}.${fieldName}`;
+          methods.setError(path as any, { type: 'server', message: messages[0] });
+          if (!firstPath) firstPath = path;
         }
-        if (!navigated) {
-          if (settingsKey === 'llm_settings') router.push(`${basePath}/setup`);
-          else if (settingsKey === 'voice_settings' || settingsKey === 'stt_settings')
-            router.push(`${basePath}/voice`);
-          navigated = true;
-        }
+      }
+      if (firstPath) {
+        const section = sectionKeyForFieldPath(firstPath);
+        const target = `${basePath}/${section}`;
+        if (!pathname.startsWith(target)) router.push(target);
+        scrollToInvalidField(firstPath);
       }
       showToast.error(
         'Validation failed',
@@ -446,7 +452,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
       );
       return true;
     },
-    [basePath, methods, router],
+    [basePath, methods, pathname, router],
   );
 
   /** Refresh the readiness badge after a save.
@@ -510,10 +516,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const handleSave = useCallback(async () => {
     const valid = await methods.trigger();
     if (!valid) {
-      // Stay on the current tab so the user sees the highlighted invalid
-      // field. Previously this unconditionally routed to `/basics`, hiding
-      // the actual error (e.g. an invalid Voice-tab field would silently
-      // teleport the user to Basics with nothing visibly wrong).
+      // Jump the user to the field that actually failed rather than just
+      // showing a toast that scrolls off the top of a long form. Walk the
+      // (possibly nested) errors tree to find the first invalid path, hop
+      // to the section that owns it if we're not already there, then scroll
+      // + focus the field.
+      const firstPath = firstInvalidFieldPath(methods.formState.errors);
       const errorFields = Object.keys(methods.formState.errors);
       showToast.error(
         'Cannot save',
@@ -521,6 +529,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           ? `Fix ${errorFields.length === 1 ? 'the highlighted error' : `${errorFields.length} highlighted errors`} and try again.`
           : 'Fix the highlighted errors and try again.',
       );
+      if (firstPath) {
+        const section = sectionKeyForFieldPath(firstPath);
+        const target = `${basePath}/${section}`;
+        if (!pathname.startsWith(target)) router.push(target);
+        scrollToInvalidField(firstPath);
+      }
       return;
     }
     // No edits → nothing to write. The create flow always proceeds because
@@ -630,6 +644,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
     detail,
     isEditMode,
     methods,
+    pathname,
     refreshReadinessAfterSave,
     router,
     updateAgent,

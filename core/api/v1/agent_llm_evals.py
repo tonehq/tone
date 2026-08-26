@@ -12,7 +12,7 @@ from __future__ import annotations
 from typing import Any, List, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile, status
+from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -55,6 +55,14 @@ class ListScenariosRequest(BaseModel):
     search: Optional[str] = None
     tags: Optional[List[str]] = None
     folder: Optional[str] = Field(default=None, max_length=120)
+    # Exact-match filter against ``AgentLlmEvalScenario.source``. Bounded
+    # to the whitelisted set so a caller can't sneak arbitrary values into
+    # the SQL. Any unlisted value is silently ignored by the service
+    # (skip-filter semantics — matches the ``folder`` / ``tags`` behavior
+    # for consistency).
+    source: Optional[str] = Field(
+        default=None, pattern="^(manual|csv|generated|fixture)$"
+    )
     sort_by: Optional[str] = Field(default="created_at")
     sort_order: str = Field(default="desc", pattern="^(asc|desc)$")
 
@@ -81,6 +89,13 @@ class ScenarioIn(BaseModel):
 
 class ScenariosBulkRequest(BaseModel):
     scenarios: List[ScenarioIn] = Field(..., min_length=1)
+    # Optional client attribution — defaults to ``'manual'`` for the
+    # normal bulk-create flow. The Auto-generate preview persists with
+    # ``'generated'`` after the user confirms the picks so the source
+    # badge in the scenarios table reflects reality. Whitelisted so a
+    # caller can't invent arbitrary values (``'csv'`` and ``'fixture'``
+    # stay owned by their respective server-side flows).
+    source: Optional[str] = Field(default=None, pattern="^(manual|generated)$")
 
 
 class ScenarioPatchRequest(BaseModel):
@@ -135,6 +150,27 @@ class RenameFolderRequest(BaseModel):
 
     old_name: str = Field(..., min_length=1, max_length=120)
     new_name: str = Field(..., min_length=1, max_length=120)
+
+
+class DeleteFolderRequest(BaseModel):
+    """POST /folders/delete body. ``name`` must be a real folder name —
+    the virtual ``Uncategorized`` bucket (rows with ``folder IS NULL``) is
+    not deletable as a group; the service raises 400 for empty names."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+
+
+class DeleteScenariosBulkRequest(BaseModel):
+    """POST /scenarios/bulk_delete body. Ids that don't belong to the
+    caller's (agent, org) are silently skipped by the service — so a
+    stale UI cache with a since-deleted id doesn't 404 the whole batch.
+
+    Capped at 500 ids per call so a runaway client can't push a giant
+    ``WHERE id IN (…)`` past PG's 65535-parameter limit or make the
+    planner unhappy. A legitimate "delete every scenario in the folder"
+    flow already has a dedicated ``/folders/delete`` endpoint."""
+
+    scenario_ids: List[UUID] = Field(..., min_length=1, max_length=500)
 
 
 class CompareRunsRequest(BaseModel):
@@ -209,7 +245,8 @@ def _run_summary_to_dict(s) -> dict:
         "triggered_by": s.triggered_by,
         "judge_model": s.judge_model,
         # Answer model — the agent's LLM at the time of the run. Snapshotted
-        # per-row and rolled up in the grouped summary query.
+        # by ``mark_running`` / ``complete_run`` when the worker has loaded
+        # the live agent config.
         "llm_model": getattr(s, "llm_model", None),
         "llm_provider": getattr(s, "llm_provider", None),
         "status": s.status,
@@ -217,6 +254,13 @@ def _run_summary_to_dict(s) -> dict:
         "started_at": s.started_at.isoformat() if s.started_at else None,
         "completed_at": s.completed_at.isoformat() if s.completed_at else None,
         "summary": s.summary or {},
+        # Run-lifecycle fields (agent_llm_eval_runs). ``getattr`` fallbacks
+        # keep the response schema-stable if a caller ever hands us the
+        # legacy dataclass shape (e.g. from an in-memory ``run_eval`` CLI
+        # path that hasn't been wired to the runs table).
+        "total_scenarios": int(getattr(s, "total_scenarios", 0) or 0),
+        "scored_count": int(getattr(s, "scored_count", 0) or 0),
+        "filter_snapshot": getattr(s, "filter_snapshot", None),
     }
 
 
@@ -271,6 +315,7 @@ def list_llm_eval_scenarios(
         search=payload.search,
         tags=payload.tags,
         folder=payload.folder,
+        source=payload.source,
         sort_by=payload.sort_by,
         sort_order=payload.sort_order,
         page_no=payload.page_no,
@@ -329,7 +374,9 @@ def create_llm_eval_scenarios_bulk(
     svc = AgentLlmScenarioService(db, org_id=org_id)
     payloads = [_scenario_input_from_body(s) for s in body.scenarios]
     try:
-        rows = svc.create_scenarios_bulk(agent_id, payloads)
+        rows = svc.create_scenarios_bulk(
+            agent_id, payloads, source=body.source or "manual"
+        )
     except (
         AgentLlmScenarioKeyConflictError,
         AgentLlmEvalConfigError,
@@ -422,6 +469,24 @@ def delete_llm_eval_scenario(
     except AgentLlmScenarioNotFoundError as e:
         raise _handle_scenario_error(e) from e
     return {"deleted": str(scenario_id)}
+
+
+@router.post("/agents/{agent_id}/llm-evals/scenarios/bulk_delete")
+def delete_llm_eval_scenarios_bulk(
+    agent_id: UUID,
+    body: DeleteScenariosBulkRequest = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Hard-delete every scenario in ``scenario_ids`` that belongs to
+    ``agent_id``. Ids not in this (agent, org) are silently skipped so
+    a stale UI cache doesn't 404 the whole batch. Response's
+    ``deleted`` count lets the FE quote the exact number in its toast."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmScenarioService(db, org_id=org_id)
+    deleted = svc.delete_scenarios_bulk(agent_id, body.scenario_ids)
+    return {"deleted": deleted, "requested": len(body.scenario_ids)}
 
 
 @router.post("/agents/{agent_id}/llm-evals/scenarios/generate")
@@ -534,6 +599,47 @@ def trigger_llm_eval_run(
     # consistent with the RAG-eval ``'manual'`` triggers.
     triggered_by = "manual"
 
+    # Resolve the judge model here so the pending row surfaces the correct
+    # value in the UI from the moment it appears — mirrors the resolution
+    # the worker's ``run_eval`` does at line ~183 (org override → env →
+    # hardcoded default). Explicit caller value still wins.
+    if payload.judge_model:
+        resolved_judge_model = payload.judge_model
+    else:
+        from core.services.org_settings import load_agent_llm_eval_settings_for_org
+
+        resolved_judge_model = load_agent_llm_eval_settings_for_org(db, org_id).judge_model
+
+    # 1. Insert the pending run row SYNCHRONOUSLY so the FE's runs list
+    # shows the row the moment the invalidator fires — no more "click Run
+    # and stare at nothing while the worker warms up" gap.
+    eval_svc = AgentLlmEvalService()
+    run_row = eval_svc.begin_pending_run(
+        db,
+        organization_id=org_id,
+        agent_id=agent_id,
+        triggered_by=triggered_by,
+        judge_model=resolved_judge_model,
+        judge_engine="deepeval",
+        total_scenarios=len(rows),
+        filter_snapshot={
+            "scenario_ids": (
+                [str(s) for s in payload.scenario_ids] if payload.scenario_ids else None
+            ),
+            "tags": payload.tags,
+            "folder": payload.folder,
+            "folders": payload.folders,
+        },
+    )
+
+    # 2. Enqueue the Procrastinate job, forwarding ``run_id`` so the
+    # worker's ``mark_running`` / ``complete_run`` / ``fail_run`` calls
+    # target the same row. Forwards the ALREADY-RESOLVED ``judge_model``
+    # (not the raw ``payload.judge_model``) so a mid-request org-settings
+    # change can't desync the runs-table row's ``judge_model`` snapshot
+    # from what the worker actually uses to score. The worker's own
+    # resolver stays as a fallback for legacy CLI callers that don't
+    # pre-resolve.
     try:
         job_id = enqueue_agent_llm_eval_sync(
             agent_id,
@@ -542,12 +648,22 @@ def trigger_llm_eval_run(
             tags=payload.tags,
             folder=payload.folder,
             folders=payload.folders,
-            judge_model=payload.judge_model,
+            judge_model=resolved_judge_model,
+            run_id=str(run_row.id),
         )
     except Exception as e:  # noqa: BLE001
         logger.exception(
-            "[agent-llm-eval] enqueue failed agent={} org={}", agent_id, org_id
+            "[agent-llm-eval] enqueue failed agent={} org={} run_id={}",
+            agent_id, org_id, run_row.id,
         )
+        # Flip the pending row to ``failed`` so the UI shows the failure
+        # instead of a phantom row that never transitions.
+        try:
+            eval_svc.fail_run(db, run_id=run_row.id, error="enqueue_failed")
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "[agent-llm-eval] fail_run cleanup failed run_id={}", run_row.id
+            )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={"code": "ENQUEUE_FAILED", "message": str(e)},
@@ -555,7 +671,8 @@ def trigger_llm_eval_run(
 
     return {
         "job_id": job_id,
-        "status": "queued",
+        "run_id": str(run_row.id),
+        "status": "pending",
         "triggered_by": triggered_by,
     }
 
@@ -563,16 +680,35 @@ def trigger_llm_eval_run(
 @router.get("/agents/{agent_id}/llm-evals/runs")
 def list_llm_eval_runs(
     agent_id: UUID,
+    page_no: Optional[int] = Query(default=None, ge=1),
+    page_size: Optional[int] = Query(default=None, ge=1, le=200),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     """Every run for one agent, newest first. Grouped by ``run_id`` at the
-    SQL layer so N scenarios → 1 summary row."""
+    SQL layer so N scenarios → 1 summary row.
+
+    Pagination is optional and backward-compatible: callers that omit
+    ``page_no`` / ``page_size`` get every run (as before). Callers that pass
+    either get the requested page. The response always includes ``total``
+    so a paginated client can render page counts without a second request.
+    """
     org_id = _resolve_org_id(claims)
     _ensure_agent_in_org(db, org_id, agent_id)
     svc = AgentLlmEvalService()
-    summaries = svc.list_runs(db, agent_id=agent_id, organization_id=org_id)
-    return {"items": [_run_summary_to_dict(s) for s in summaries]}
+    summaries, total = svc.list_runs(
+        db,
+        agent_id=agent_id,
+        organization_id=org_id,
+        page_no=page_no,
+        page_size=page_size,
+    )
+    return {
+        "items": [_run_summary_to_dict(s) for s in summaries],
+        "total": total,
+        "page_no": page_no,
+        "page_size": page_size,
+    }
 
 
 @router.get("/agents/{agent_id}/llm-evals/runs/{run_id}")
@@ -691,6 +827,31 @@ def rename_llm_eval_folder(
         return svc.rename_folder(
             agent_id, old_name=body.old_name, new_name=body.new_name
         )
+    except (
+        AgentLlmScenarioNotFoundError,
+        AgentLlmEvalConfigError,
+        EvalConfigurationError,
+    ) as e:
+        raise _handle_scenario_error(e) from e
+
+
+@router.post("/agents/{agent_id}/llm-evals/folders/delete")
+def delete_llm_eval_folder(
+    agent_id: UUID,
+    body: DeleteFolderRequest = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Bulk-delete every scenario in a folder for one agent. Past run
+    results keep their ``folder`` snapshot so the Runs tab history stays
+    readable (matches the rename flow's history-preservation semantics).
+    Returns ``{name, scenarios_deleted, results_preserved}`` so the FE
+    confirmation toast can quote the exact numbers."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmScenarioService(db, org_id=org_id)
+    try:
+        return svc.delete_folder(agent_id, name=body.name)
     except (
         AgentLlmScenarioNotFoundError,
         AgentLlmEvalConfigError,

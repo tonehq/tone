@@ -2,13 +2,19 @@ import axiosInstance from '@/utils/axios';
 
 import type {
   AgentLlmEvalRunDetail,
-  AgentLlmEvalRunSummary,
   AgentLlmEvalScenario,
+  BulkCreateScenariosPayload,
+  BulkDeleteScenariosPayload,
+  BulkDeleteScenariosResponse,
   CompareRunsPayload,
   CompareRunsResponse,
+  DeleteFolderPayload,
+  DeleteFolderResponse,
   GenerateScenariosPayload,
   GenerateScenariosResponse,
   ListFoldersResponse,
+  ListRunsRequest,
+  ListRunsResponse,
   ListScenariosRequest,
   ListScenariosResponse,
   RenameFolderPayload,
@@ -48,11 +54,11 @@ export const createAgentLlmEvalScenario = async (
 
 export const createAgentLlmEvalScenariosBulk = async (
   agentId: string,
-  scenarios: ScenarioInput[],
+  payload: BulkCreateScenariosPayload,
 ): Promise<{ items: AgentLlmEvalScenario[]; created: number }> => {
   const res = await axiosInstance.post<{ items: AgentLlmEvalScenario[]; created: number }>(
     `${base(agentId)}/scenarios/bulk`,
-    { scenarios },
+    payload,
   );
   return res.data;
 };
@@ -79,6 +85,17 @@ export const updateAgentLlmEvalScenario = async (
   const res = await axiosInstance.put<AgentLlmEvalScenario>(
     `${base(agentId)}/scenarios/${scenarioId}`,
     patch,
+  );
+  return res.data;
+};
+
+export const deleteAgentLlmEvalScenariosBulk = async (
+  agentId: string,
+  payload: BulkDeleteScenariosPayload,
+): Promise<BulkDeleteScenariosResponse> => {
+  const res = await axiosInstance.post<BulkDeleteScenariosResponse>(
+    `${base(agentId)}/scenarios/bulk_delete`,
+    payload,
   );
   return res.data;
 };
@@ -114,9 +131,14 @@ export const triggerAgentLlmEvalRun = async (
   return res.data;
 };
 
-export const listAgentLlmEvalRuns = async (agentId: string): Promise<AgentLlmEvalRunSummary[]> => {
-  const res = await axiosInstance.get<{ items: AgentLlmEvalRunSummary[] }>(`${base(agentId)}/runs`);
-  return res.data.items;
+export const listAgentLlmEvalRuns = async (
+  agentId: string,
+  params: ListRunsRequest = {},
+): Promise<ListRunsResponse> => {
+  const res = await axiosInstance.get<ListRunsResponse>(`${base(agentId)}/runs`, {
+    params,
+  });
+  return res.data;
 };
 
 export const getAgentLlmEvalRunDetail = async (
@@ -151,6 +173,17 @@ export const renameAgentLlmEvalFolder = async (
 ): Promise<RenameFolderResponse> => {
   const res = await axiosInstance.post<RenameFolderResponse>(
     `${base(agentId)}/folders/rename`,
+    payload,
+  );
+  return res.data;
+};
+
+export const deleteAgentLlmEvalFolder = async (
+  agentId: string,
+  payload: DeleteFolderPayload,
+): Promise<DeleteFolderResponse> => {
+  const res = await axiosInstance.post<DeleteFolderResponse>(
+    `${base(agentId)}/folders/delete`,
     payload,
   );
   return res.data;
