@@ -5,6 +5,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
+import {
+  reconcileSchemaValues,
+  resetSchemaFields,
+} from '@/components/agents/agent-form/reconcileSchemaValues';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
 import {
   CustomButton,
@@ -262,24 +266,47 @@ export default function VoiceStep() {
   useEffect(() => () => stopPlayback(), [stopPlayback]);
 
   // ─── selection ────────────────────────────────────────────────────────────
+  // Language and provider changes both effectively invalidate the previous
+  // provider's tuning fields, so both go through resetSchemaFields to drop
+  // every schema-driven key (stability, style, ssml, …) in one atomic write.
+  // TTS_STRUCTURAL_KEYS preserves language/language_code/speed — those are
+  // parent-controlled and users routinely reuse them across providers.
   const setLanguage = (v: string) => {
-    setValue('config.voice_settings.language', v || null, { shouldDirty: true });
-    setValue('config.voice_settings.language_code' as never, null as never, { shouldDirty: true });
-    setValue('config.voice_settings.provider_id', null, { shouldDirty: true });
-    setValue('config.voice_settings.model_id' as never, null as never, { shouldDirty: true });
-    setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
+    const current = getValues('config.voice_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    const kept = resetSchemaFields(current, TTS_STRUCTURAL_KEYS);
+    setValue(
+      'config.voice_settings' as never,
+      {
+        ...kept,
+        language: v || null,
+        language_code: null,
+        provider_id: null,
+        model_id: null,
+        voice_id: null,
+      } as never,
+      { shouldDirty: true },
+    );
   };
   const setProvider = (v: string) => {
-    setValue('config.voice_settings.provider_id', v || null, { shouldDirty: true });
-    setValue('config.voice_settings.model_id' as never, null as never, { shouldDirty: true });
-    setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
-    // Persist the provider-specific language code for runtime use
+    const current = getValues('config.voice_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    const kept = resetSchemaFields(current, TTS_STRUCTURAL_KEYS);
+    // Persist the provider-specific language code for runtime use.
     const matched = providers.find((p) => p.id === v);
-    if (matched?.language_code) {
-      setValue('config.voice_settings.language_code' as never, matched.language_code as never, {
-        shouldDirty: true,
-      });
-    }
+    setValue(
+      'config.voice_settings' as never,
+      {
+        ...kept,
+        provider_id: v || null,
+        model_id: null,
+        voice_id: null,
+        ...(matched?.language_code ? { language_code: matched.language_code } : {}),
+      } as never,
+      { shouldDirty: true },
+    );
   };
 
   const languageOptions = useMemo(
@@ -346,59 +373,56 @@ export default function VoiceStep() {
     return matched?.meta_data_schema?.stt ?? [];
   }, [sttModel, sttModels, sttProviderId, sttProviders]);
 
-  // Clear stale TTS / STT schema field values when the user CHANGES the
-  // model. Skipped on the initial settle so the saved settings aren't
-  // silently mutated on load — see AiStep for the same rationale (silent
-  // setValue with shouldDirty:false desyncs _formValues from _defaultValues
-  // and later trips RHF's deep-equality isDirty check, causing a spurious
-  // discard-changes prompt).
-  const prevTtsAllowedKeysRef = useRef<Set<string> | null>(null);
+  // Reconcile saved TTS / STT schema field values against the CURRENT
+  // provider/model schema whenever the user changes provider or model:
+  // (a) drop keys no longer in the schema, (b) clamp numeric values to the
+  // new field's [min, max] range. Without the clamp a leftover value from
+  // the previous provider (e.g. speed=2 on a provider whose max is 1)
+  // renders fine on the slider but fails backend validation on save.
+  //
+  // Skipped on the initial settle so the saved settings aren't silently
+  // mutated on load — see AiStep for the same rationale (silent setValue
+  // desyncs _formValues from _defaultValues and later trips RHF's
+  // deep-equality isDirty check, causing a spurious discard-changes prompt).
+  const prevTtsSchemaRef = useRef<MetaDataSchemaField[] | null>(null);
   useEffect(() => {
     if (!ttsSchema.length) {
-      prevTtsAllowedKeysRef.current = null;
+      prevTtsSchemaRef.current = null;
       return;
     }
-    const allowedKeys = new Set(ttsSchema.map((f) => f.name));
-    const prev = prevTtsAllowedKeysRef.current;
-    prevTtsAllowedKeysRef.current = allowedKeys;
+    const prev = prevTtsSchemaRef.current;
+    prevTtsSchemaRef.current = ttsSchema;
     if (prev === null) return;
-    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
 
     const current = getValues('config.voice_settings' as never) as
       | Record<string, unknown>
       | undefined;
     if (!current) return;
-    for (const key of Object.keys(current)) {
-      if (!TTS_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
-        setValue(`config.voice_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
-        });
-      }
+
+    const changes = reconcileSchemaValues(current, ttsSchema, TTS_STRUCTURAL_KEYS);
+    for (const [key, next] of Object.entries(changes)) {
+      setValue(`config.voice_settings.${key}` as never, next as never, { shouldDirty: true });
     }
   }, [ttsSchema]);
 
-  const prevSttAllowedKeysRef = useRef<Set<string> | null>(null);
+  const prevSttSchemaRef = useRef<MetaDataSchemaField[] | null>(null);
   useEffect(() => {
     if (!sttSchema.length) {
-      prevSttAllowedKeysRef.current = null;
+      prevSttSchemaRef.current = null;
       return;
     }
-    const allowedKeys = new Set(sttSchema.map((f) => f.name));
-    const prev = prevSttAllowedKeysRef.current;
-    prevSttAllowedKeysRef.current = allowedKeys;
+    const prev = prevSttSchemaRef.current;
+    prevSttSchemaRef.current = sttSchema;
     if (prev === null) return;
-    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
 
     const current = getValues('config.stt_settings' as never) as
       | Record<string, unknown>
       | undefined;
     if (!current) return;
-    for (const key of Object.keys(current)) {
-      if (!STT_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
-        setValue(`config.stt_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
-        });
-      }
+
+    const changes = reconcileSchemaValues(current, sttSchema, STT_STRUCTURAL_KEYS);
+    for (const [key, next] of Object.entries(changes)) {
+      setValue(`config.stt_settings.${key}` as never, next as never, { shouldDirty: true });
     }
   }, [sttSchema]);
 
@@ -552,19 +576,19 @@ export default function VoiceStep() {
             loading={loadingStt}
             value={sttProviderId ?? ''}
             onValueChange={(v) => {
-              setValue('config.stt_settings.provider_id' as never, (v || null) as never, {
-                shouldDirty: true,
-              });
-              // Reset the model when the provider changes — names rarely
-              // overlap across providers. model_id must go with it: leaving
-              // the old provider's id behind makes the backend resolve the
-              // wrong model row (and its base_url) on calls.
-              setValue('config.stt_settings.model' as never, null as never, {
-                shouldDirty: true,
-              });
-              setValue('config.stt_settings.model_id' as never, null as never, {
-                shouldDirty: true,
-              });
+              // Full reset on provider change (schema fields + model +
+              // model_id). Names rarely overlap across providers and a
+              // stale model_id makes the backend resolve the wrong model
+              // row (and its base_url) on calls.
+              const current = getValues('config.stt_settings' as never) as
+                | Record<string, unknown>
+                | undefined;
+              const kept = resetSchemaFields(current, STT_STRUCTURAL_KEYS);
+              setValue(
+                'config.stt_settings' as never,
+                { ...kept, provider_id: v || null, model: null, model_id: null } as never,
+                { shouldDirty: true },
+              );
             }}
             placeholder="Select a provider"
           />

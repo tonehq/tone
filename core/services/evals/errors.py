@@ -53,6 +53,15 @@ class AgentLlmScenarioNotFoundError(AgentLlmEvalError):
     to a stable ``SCENARIO_NOT_FOUND`` error code the FE can react to."""
 
 
+class AgentLlmEvalRunNotFoundError(AgentLlmEvalError):
+    """Worker was asked to mark/complete/fail a ``run_id`` that isn't in
+    ``agent_llm_eval_runs``. Should not happen on the happy path — the
+    router inserts the pending row before enqueue — but can occur if
+    Procrastinate replays a task after a partial deploy or after the row
+    was manually deleted. Surfaces so the worker logs it clearly rather
+    than crashing with a raw ``NoResultFound``."""
+
+
 class AgentLlmScenarioKeyConflictError(AgentLlmEvalError):
     """Attempted to create / update a scenario whose ``scenario_key`` collides
     with another scenario on the SAME agent. Enforced via the

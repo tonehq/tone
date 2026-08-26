@@ -5,6 +5,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
+import {
+  reconcileSchemaValues,
+  resetSchemaFields,
+} from '@/components/agents/agent-form/reconcileSchemaValues';
 import SectionCard, { ACCENTS } from '@/components/agents/agent-form/SectionCard';
 import { SelectInput, SliderField, TextInput } from '@/components/shared';
 import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
@@ -118,38 +122,48 @@ export default function AiStep() {
     return model?.meta_data ?? null;
   }, [llmModelId, llmModels]);
 
-  // Clear stale schema field values when the user CHANGES the provider/model
-  // (e.g. switching from GPT-4o to GPT-5 should remove temperature/top_p that
-  // GPT-5 doesn't support). Skipped on the initial settle so the saved
-  // llm_settings isn't silently mutated on load — that mutation would desync
-  // _formValues from _defaultValues, and any later RHF deep-equality recheck
-  // (focus/blur, version select, etc.) would flip isDirty true, triggering a
-  // spurious "discard changes?" prompt despite zero user edits. shouldDirty:
-  // true here because at this point it IS a user edit (changing the model).
-  const prevAllowedKeysRef = useRef<Set<string> | null>(null);
+  // Reconcile saved schema field values against the CURRENT provider/model
+  // schema whenever the user changes provider or model. Two things happen:
+  // (a) keys no longer in the schema are cleared (e.g. GPT-5 doesn't accept
+  // temperature/top_p), (b) numeric values are clamped to the new field's
+  // [min, max] range (e.g. AWS Bedrock temperature=2 → clamp to 1 when
+  // switching to Anthropic where the max is 1). Without the clamp the slider
+  // renders at max but the raw form value is still out of range, so save
+  // fails backend validation with the previous provider's leftover number.
+  //
+  // Skipped on the initial settle so the saved llm_settings isn't silently
+  // mutated on load — that mutation would desync _formValues from
+  // _defaultValues, and any later RHF deep-equality recheck (focus/blur,
+  // version select, etc.) would flip isDirty true, triggering a spurious
+  // "discard changes?" prompt despite zero user edits. shouldDirty: true
+  // below because at that point it IS a user edit (changing provider/model).
+  const prevSchemaRef = useRef<MetaDataSchemaField[] | null>(null);
   useEffect(() => {
     if (!llmSchema.length) {
-      prevAllowedKeysRef.current = null;
+      prevSchemaRef.current = null;
       return;
     }
-    const allowedKeys = new Set(llmSchema.map((f) => f.name));
-    const prev = prevAllowedKeysRef.current;
-    prevAllowedKeysRef.current = allowedKeys;
+    const prev = prevSchemaRef.current;
+    prevSchemaRef.current = llmSchema;
     if (prev === null) return;
-    if (prev.size === allowedKeys.size && [...prev].every((k) => allowedKeys.has(k))) return;
 
     const current = getValues('config.llm_settings' as never) as
       | Record<string, unknown>
       | undefined;
     if (!current) return;
-    for (const key of Object.keys(current)) {
-      if (!LLM_STRUCTURAL_KEYS.has(key) && !allowedKeys.has(key)) {
-        setValue(`config.llm_settings.${key}` as never, undefined as never, {
-          shouldDirty: true,
-        });
-      }
+
+    const changes = reconcileSchemaValues(
+      current,
+      llmSchema,
+      LLM_STRUCTURAL_KEYS,
+      selectedModelMetaData,
+    );
+    for (const [key, next] of Object.entries(changes)) {
+      setValue(`config.llm_settings.${key}` as never, next as never, {
+        shouldDirty: true,
+      });
     }
-  }, [llmSchema]);
+  }, [llmSchema, selectedModelMetaData]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -167,13 +181,19 @@ export default function AiStep() {
           loading={loadingProviders}
           value={llmProviderId ?? ''}
           onValueChange={(v) => {
-            setValue('config.llm_settings.provider_id' as never, (v || null) as never, {
-              shouldDirty: true,
-            });
-            // New provider → forget the previously-chosen model.
-            setValue('config.llm_settings.model_id' as never, null as never, {
-              shouldDirty: true,
-            });
+            // Full reset on provider change: every schema-driven tuning field
+            // (temperature/top_p/top_k/max_completion_tokens/…) is cleared
+            // and provider_id + model_id are re-seeded in one atomic write.
+            // Cross-provider carryover is unsafe — see resetSchemaFields.
+            const current = getValues('config.llm_settings' as never) as
+              | Record<string, unknown>
+              | undefined;
+            const kept = resetSchemaFields(current, LLM_STRUCTURAL_KEYS);
+            setValue(
+              'config.llm_settings' as never,
+              { ...kept, provider_id: v || null, model_id: null } as never,
+              { shouldDirty: true },
+            );
           }}
           placeholder="Select an LLM provider"
         />
