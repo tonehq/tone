@@ -2,7 +2,11 @@
 // `_run_summary_to_dict` in core/api/v1/agent_llm_evals.py.
 
 export type AgentLlmEvalVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
-export type AgentLlmEvalBatchStatus = 'completed' | 'failed' | 'running';
+// ``pending`` = router inserted the runs-table row but the worker hasn't
+// picked up the Procrastinate job yet. ``running`` = worker started
+// scoring. Terminal states are ``completed`` / ``failed``. The UI polls
+// while any row is non-terminal (see ``useAgentLlmEvalRuns``).
+export type AgentLlmEvalBatchStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type AgentLlmEvalScenarioSource = 'manual' | 'csv' | 'generated' | 'fixture';
 
 // Tool-aware eval (Phase 2). Both shapes match the backend
@@ -70,6 +74,20 @@ export interface RenameFolderResponse {
   results_updated: number;
 }
 
+export interface DeleteFolderPayload {
+  name: string;
+}
+
+// ``scenarios_deleted`` is the number of scenarios permanently removed.
+// ``results_preserved`` is the count of past-run rows still tagged with
+// this folder's name — kept intact so run history stays readable. The FE
+// uses both in the confirmation impact + success toast.
+export interface DeleteFolderResponse {
+  name: string;
+  scenarios_deleted: number;
+  results_preserved: number;
+}
+
 export interface ListScenariosResponse {
   items: AgentLlmEvalScenario[];
   total: number;
@@ -84,6 +102,9 @@ export interface ListScenariosRequest {
   tags?: string[] | null;
   // Exact folder filter. '' = "Uncategorized" (matches NULL rows); null/undefined skips.
   folder?: string | null;
+  // Exact-match filter on ``AgentLlmEvalScenario.source``. Whitelisted at
+  // the router (Pydantic regex); non-whitelisted values are rejected.
+  source?: AgentLlmEvalScenarioSource | null;
   sort_by?: string | null;
   sort_order?: 'asc' | 'desc';
 }
@@ -100,6 +121,29 @@ export interface ScenarioInput {
   metrics_override?: string[] | null;
   threshold_override?: number | null;
   scenario_ord?: number | null;
+}
+
+// Bulk-create body. ``source`` is optional client attribution — defaults
+// to ``'manual'`` at the backend. The Auto-generate preview flow sends
+// ``'generated'`` so the scenarios-table source badge reflects reality.
+// Whitelisted server-side to ``manual`` | ``generated`` — ``csv`` /
+// ``fixture`` stay owned by their respective server-side flows.
+export interface BulkCreateScenariosPayload {
+  scenarios: ScenarioInput[];
+  source?: 'manual' | 'generated';
+}
+
+// Bulk-delete body. Ids not belonging to the caller's (agent, org) are
+// silently skipped server-side; the response's ``deleted`` count is the
+// number of rows actually removed (may be less than ``scenario_ids.length``
+// if the UI cache was stale).
+export interface BulkDeleteScenariosPayload {
+  scenario_ids: string[];
+}
+
+export interface BulkDeleteScenariosResponse {
+  deleted: number;
+  requested: number;
 }
 
 export interface ScenarioPatch {
@@ -145,6 +189,18 @@ export interface AgentLlmEvalRunSummary {
   started_at: string | null;
   completed_at: string | null;
   summary: AgentLlmEvalRunSummaryTotals | Record<string, never>;
+  // Known at trigger time — the FE uses it to render "Scoring N of M"
+  // progress while ``status`` is non-terminal. ``0`` for historical
+  // backfilled runs where the original selection size wasn't recorded.
+  total_scenarios: number;
+  // Number of ``agent_llm_eval_results`` rows already written for this run.
+  // Derived by the backend's LEFT JOIN so it stays fresh without a write
+  // from the worker per scored scenario.
+  scored_count: number;
+  // Snapshot of the trigger filter ({scenario_ids, tags, folder, folders}).
+  // Loose typing — the FE doesn't unpack it in v1; kept for a future
+  // "re-run this exact selection" affordance.
+  filter_snapshot: Record<string, unknown> | null;
 }
 
 export interface AgentLlmEvalScoredScenario {
@@ -182,6 +238,21 @@ export interface AgentLlmEvalRunDetail {
   scenarios: AgentLlmEvalScoredScenario[];
 }
 
+export interface ListRunsRequest {
+  page_no?: number;
+  page_size?: number;
+}
+
+export interface ListRunsResponse {
+  items: AgentLlmEvalRunSummary[];
+  total: number;
+  // Echo-back of the requested paging so a client can trust the response
+  // without tracking it separately. ``null`` means "no paging requested"
+  // (backend returned every run — preserved for backward-compat callers).
+  page_no: number | null;
+  page_size: number | null;
+}
+
 export interface TriggerRunPayload {
   scenario_ids?: string[];
   tags?: string[];
@@ -197,7 +268,13 @@ export interface TriggerRunPayload {
 
 export interface TriggerRunResponse {
   job_id: number;
-  status: 'queued';
+  // Router now inserts a pending row in ``agent_llm_eval_runs`` before
+  // enqueue and returns its id + status alongside the Procrastinate job
+  // id. The FE uses ``run_id`` to reconcile the just-triggered row on
+  // the next runs-list fetch; ``status`` is always ``'pending'`` on the
+  // synchronous response.
+  run_id: string;
+  status: AgentLlmEvalBatchStatus;
   triggered_by: string;
 }
 

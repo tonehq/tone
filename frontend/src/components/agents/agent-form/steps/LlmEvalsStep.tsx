@@ -2,12 +2,19 @@
 
 import {
   ArrowLeft,
+  Check,
   CheckCircle2,
   ChevronDown,
+  ChevronLeft,
   ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+  Clock,
+  Download,
   Folder as FolderIcon,
   Gauge,
   History,
+  Loader2,
   MinusCircle,
   Pencil,
   Play,
@@ -15,6 +22,7 @@ import {
   Trash2,
   Upload,
   Wrench,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -38,6 +46,8 @@ import {
   useAgentLlmEvalRuns,
   useAgentLlmEvalScenarios,
   useCreateAgentLlmEvalScenario,
+  useCreateAgentLlmEvalScenariosBulk,
+  useDeleteAgentLlmEvalFolder,
   useDeleteAgentLlmEvalScenario,
   useGenerateAgentLlmEvalScenarios,
   useRenameAgentLlmEvalFolder,
@@ -46,11 +56,14 @@ import {
   useUploadAgentLlmEvalScenariosCsv,
 } from '@/lib/api/agentLlmEvals';
 import type {
+  AgentLlmEvalBatchStatus,
   AgentLlmEvalFolder,
   AgentLlmEvalRunSummary,
   AgentLlmEvalScenario,
+  AgentLlmEvalScenarioSource,
   AgentLlmEvalScoredScenario,
   AgentLlmEvalVerdict,
+  GeneratedScenario,
   ScenarioInput,
   ScenarioPatch,
 } from '@/types/agentLlmEval';
@@ -99,6 +112,63 @@ function VerdictChip({ verdict }: { verdict: AgentLlmEvalVerdict | null | undefi
   );
 }
 
+// ── Run status chip ────────────────────────────────────────────────────
+
+// Chip for the Runs tab's status column. Same visual grammar as
+// ``VerdictChip`` so the two feel like siblings. Terminal states are
+// definitive (Completed / Failed); non-terminal states use motion cues
+// (spinner for running, clock for pending) so the eye picks them out
+// without a colour scan.
+const RUN_STATUS_STYLES: Record<
+  AgentLlmEvalBatchStatus,
+  { label: string; className: string; icon: React.ReactNode }
+> = {
+  pending: {
+    label: 'Pending',
+    className: 'bg-muted text-muted-foreground ring-1 ring-border',
+    icon: <Clock className="size-3" />,
+  },
+  running: {
+    label: 'Running',
+    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
+    icon: <Loader2 className="size-3 animate-spin" />,
+  },
+  completed: {
+    label: 'Completed',
+    className:
+      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
+    icon: <CheckCircle2 className="size-3" />,
+  },
+  failed: {
+    label: 'Failed',
+    className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
+    icon: <XCircle className="size-3" />,
+  },
+};
+
+function RunStatusChip({ status }: { status: AgentLlmEvalBatchStatus }) {
+  const s = RUN_STATUS_STYLES[status] ?? RUN_STATUS_STYLES.pending;
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium',
+        s.className,
+      )}
+    >
+      {s.icon}
+      {s.label}
+    </span>
+  );
+}
+
+// Terminal states = drawer is safe to open (results are persisted).
+// Non-terminal rows (pending / running) suppress the drawer and show a
+// muted "Scoring N of M" progress readout in the Result column instead.
+const RUN_TERMINAL_STATUSES: ReadonlySet<AgentLlmEvalBatchStatus> = new Set([
+  'completed',
+  'failed',
+]);
+
 // ── Folder scope ────────────────────────────────────────────────────────
 
 // The selected folder in the sidebar. ``null`` = "All", ``''`` (empty
@@ -113,6 +183,74 @@ export type FolderScope = null | string;
 type LlmEvalsView = 'folders' | 'runs';
 
 const UNCATEGORIZED_LABEL = 'Uncategorized';
+
+// ── Sample CSV download ─────────────────────────────────────────────────
+//
+// The CSV importer on the backend accepts these column headers (see
+// ``_CSV_ALLOWED_COLUMNS`` in ``core/services/evals/agent_llm/scenario_service.py``).
+// ``scenario_key`` and ``prompt`` are required; the rest are optional.
+// Kept inline in this file — the LLM Evals import flow is the only caller,
+// and the header list needs to stay in lock-step with the backend allow-list.
+const SAMPLE_CSV_HEADERS = [
+  'scenario_key',
+  'prompt',
+  'expected_answer',
+  'persona_criteria',
+  'instruction_criteria',
+  'tags',
+  'folder',
+] as const;
+
+const SAMPLE_CSV_ROWS: readonly (readonly string[])[] = [
+  [
+    'happy_path_booking',
+    'I would like to book a deluxe room for two from June 10th to June 12th.',
+    'Confirms availability and reads back the dates and room type.',
+    'Warm, professional, concise',
+    'Do not invent a price; confirm the reservation before ending the call.',
+    'booking,happy_path',
+    'Booking',
+  ],
+  [
+    'refund_request',
+    'I want a refund for my last stay because the room was not clean.',
+    'Acknowledges the issue, apologizes, and offers a refund per policy.',
+    'Empathetic, calm',
+    'Never blame the guest; always offer a resolution.',
+    'refund,complaint',
+    'Support',
+  ],
+  [
+    'out_of_scope',
+    "Can you tell me tomorrow's weather forecast?",
+    'Politely declines and redirects to hotel-related topics.',
+    'Polite, brief',
+    'Do not answer questions unrelated to the hotel.',
+    'guardrail',
+    '',
+  ],
+];
+
+/** Build the sample CSV text. RFC 4180 quoting: wrap any cell containing a
+ * comma, quote, or newline in double quotes and double up embedded quotes. */
+function buildSampleCsv(): string {
+  const escape = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const lines = [SAMPLE_CSV_HEADERS, ...SAMPLE_CSV_ROWS].map((row) => row.map(escape).join(','));
+  return `${lines.join('\n')}\n`;
+}
+
+/** Trigger a browser download for the sample CSV template. */
+function downloadSampleCsv() {
+  const blob = new Blob([buildSampleCsv()], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'llm-evals-scenarios-sample.csv';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+}
 
 // Sentinel option value used by ``FolderPicker``'s inline SelectInput to
 // represent NULL/Uncategorized. Any string not otherwise a folder name is
@@ -170,28 +308,97 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // Folder scope selector. ``null`` = All (no filter). ``''`` = Uncategorized
   // (matches rows with NULL folder). Any other string = that named folder.
   const [selectedFolder, setSelectedFolder] = useState<FolderScope>(null);
-  const [renameFolder, setRenameFolder] = useState<string | null>(null);
+  // Folder currently in inline-rename mode (name of the folder being
+  // edited). ``null`` = no folder is being renamed. Only one folder can
+  // be in edit mode at a time; the card / breadcrumb whose ``name``
+  // matches renders ``InlineFolderNameEditor`` in place of the name span.
+  const [editingFolder, setEditingFolder] = useState<string | null>(null);
+  // Folder pending delete. Non-null → shared ``ConfirmDeleteModal`` is
+  // open with the folder's name + scenario-count impact copy.
+  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<string | null>(null);
+  // Bulk-selection for scenarios inside a folder. Persists across pages
+  // (Gmail-style — a user selects row A on page 1, paginates, comes back,
+  // A is still checked). Cleared when the folder scope changes so
+  // selections don't leak across contexts (see the useEffect below).
+  const [selectedScenarioIds, setSelectedScenarioIds] = useState<Set<string>>(() => new Set());
+  const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   // Sub-tab inside the LLM Evals section — 'folders' (default: scenario
   // management) vs 'runs' (past run history). Kept as local state; not
   // URL-synced in v1. Promote to a query param later if deep-links needed.
   const [activeView, setActiveView] = useState<LlmEvalsView>('folders');
 
+  // Pagination for the scenarios list inside a folder. Reset back to page 1
+  // whenever the folder scope, search query, or any filter changes so the
+  // user never lands on an out-of-range page after switching context.
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  // Filters for the scenarios-in-folder table. Backend supports both via
+  // ``ListScenariosRequest``: tags = JSONB has-any-of match, source =
+  // exact-match enum. Empty arrays / null are omitted from the request.
+  const [filterTags, setFilterTags] = useState<string[]>([]);
+  const [filterSource, setFilterSource] = useState<AgentLlmEvalScenarioSource | null>(null);
+  useEffect(() => {
+    setPage(1);
+  }, [selectedFolder, search, filterTags, filterSource]);
+  // Wipe bulk-selection whenever the user changes context (folder or
+  // filters). Keeping a stale selection alive across contexts would let
+  // users delete rows they can't currently see — surprising and unsafe.
+  useEffect(() => {
+    setSelectedScenarioIds(new Set());
+  }, [selectedFolder, search, filterTags, filterSource]);
+
+  // Pagination for the Runs tab. Kept as separate state from the scenarios
+  // pager so switching folders doesn't reset the runs page (and vice-versa).
+  const [runsPage, setRunsPage] = useState(1);
+  const [runsPageSize, setRunsPageSize] = useState(10);
+
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
     search: search || undefined,
     folder: selectedFolder === null ? undefined : selectedFolder,
-    page_size: 200,
+    // Send filters only when set — omitting them entirely so the backend
+    // takes its "no filter" fast path and the query key stays compact
+    // (no stray ``tags: []`` vs ``tags: undefined`` cache-key drift).
+    tags: filterTags.length ? filterTags : undefined,
+    source: filterSource ?? undefined,
+    page_no: page,
+    page_size: pageSize,
   });
   const foldersQuery = useAgentLlmEvalFolders(agentId);
-  const runsQuery = useAgentLlmEvalRuns(agentId);
+  const runsQuery = useAgentLlmEvalRuns(agentId, {
+    page_no: runsPage,
+    page_size: runsPageSize,
+  });
   const uploadCsv = useUploadAgentLlmEvalScenariosCsv(agentId);
   const deleteScenario = useDeleteAgentLlmEvalScenario(agentId);
+  const deleteScenariosBulk = useDeleteAgentLlmEvalScenariosBulk(agentId);
+  const deleteFolder = useDeleteAgentLlmEvalFolder(agentId);
+  const renameFolderMutation = useRenameAgentLlmEvalFolder(agentId);
   const triggerRun = useTriggerAgentLlmEvalRun(agentId);
 
   const scenarios = scenariosQuery.data?.items ?? [];
-  const runs = runsQuery.data ?? [];
+  const runs = runsQuery.data?.items ?? [];
+  const runsTotal = runsQuery.data?.total ?? runs.length;
   const scenarioCount = scenariosQuery.data?.total ?? scenarios.length;
   const folders = foldersQuery.data?.items ?? [];
   const totalScenariosAllFolders = folders.reduce((n, f) => n + f.count, 0);
+
+  // Snap ``page`` back into range whenever the total shrinks below the
+  // current page (bulk-delete, filter change, folder-delete side effect).
+  // Without this the query keeps requesting an out-of-range page_no and
+  // the table shows an empty state the user has no obvious way out of.
+  // Only runs after the query returns (``scenariosQuery.data`` truthy)
+  // so we don't fight the initial 0-total transition on first load.
+  useEffect(() => {
+    if (!scenariosQuery.data) return;
+    const maxPage = Math.max(1, Math.ceil(scenarioCount / pageSize));
+    if (page > maxPage) setPage(maxPage);
+  }, [scenarioCount, pageSize, page, scenariosQuery.data]);
+  useEffect(() => {
+    if (!runsQuery.data) return;
+    const maxRunsPage = Math.max(1, Math.ceil(runsTotal / runsPageSize));
+    if (runsPage > maxRunsPage) setRunsPage(maxRunsPage);
+  }, [runsTotal, runsPageSize, runsPage, runsQuery.data]);
 
   // Quick-run one folder from a card / breadcrumb.
   //   - ``null``      → Uncategorized card → send folder='' (matches NULL rows)
@@ -203,10 +410,28 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const runFolder = async (folderName: string | null) => {
     const folderValue = folderName === null ? '' : folderName;
     try {
-      const result = await triggerRun.mutateAsync({ folder: folderValue });
+      await triggerRun.mutateAsync({ folder: folderValue });
       showToast.success(
-        'Eval queued',
-        `Job #${result.job_id} — results appear once the worker completes.`,
+        'Evaluation started',
+        'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
+      );
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  // Fire an eval scoped to a single scenario. Reuses the same trigger
+  // endpoint the folder / tag / modal flows use — the backend accepts
+  // ``scenario_ids`` and narrows the run to exactly those rows (see
+  // ``AgentLlmScenarioService.list_scenarios`` + ``TriggerRunRequest``).
+  // The toast copy is identical to the other run entry points so users
+  // learn one mental model regardless of which surface started the run.
+  const runScenario = async (scenario: AgentLlmEvalScenario) => {
+    try {
+      await triggerRun.mutateAsync({ scenario_ids: [scenario.id] });
+      showToast.success(
+        'Evaluation started',
+        `“${scenario.scenario_key}” is running now. Open the Runs tab in a moment to see the result.`,
       );
     } catch (error) {
       handleApiError(error);
@@ -243,10 +468,175 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     }
   };
 
+  const confirmDeleteFolder = async () => {
+    if (!pendingDeleteFolder) return;
+    try {
+      const result = await deleteFolder.mutateAsync({ name: pendingDeleteFolder });
+      // If the user was drilled into the folder they just deleted, drop
+      // back to the folder grid so they don't end up staring at a
+      // now-empty scenarios table for a folder that no longer exists.
+      if (selectedFolder === pendingDeleteFolder) {
+        setSelectedFolder(null);
+      }
+      showToast.success(
+        'Folder deleted',
+        `${result.scenarios_deleted} scenario${result.scenarios_deleted === 1 ? '' : 's'} removed.`,
+      );
+      setPendingDeleteFolder(null);
+    } catch (error) {
+      handleApiError(error);
+      // Same rationale as ``confirmDelete`` — keep the modal open so the
+      // user can see the error toast and retry.
+    }
+  };
+
+  const saveRenameFolder = async (nextName: string) => {
+    // ``editingFolder`` should always be set when this fires (it's what
+    // opens the editor), but guard defensively — a stale callback from
+    // an unmounted card could otherwise send an empty ``old_name``.
+    if (!editingFolder) return;
+    const trimmed = nextName.trim();
+    if (!trimmed || trimmed === editingFolder) {
+      setEditingFolder(null);
+      return;
+    }
+    try {
+      const result = await renameFolderMutation.mutateAsync({
+        old_name: editingFolder,
+        new_name: trimmed,
+      });
+      // Keep the drilled-in view pointing at the SAME folder after a
+      // rename so the user stays where they were (would otherwise get
+      // silently kicked back to the folder grid because ``selectedFolder``
+      // no longer matches any row).
+      if (selectedFolder === editingFolder) {
+        setSelectedFolder(trimmed);
+      }
+      showToast.success(
+        'Folder renamed',
+        `${result.scenarios_updated} scenario${result.scenarios_updated === 1 ? '' : 's'} and ${result.results_updated} past run row${result.results_updated === 1 ? '' : 's'} relabeled.`,
+      );
+      setEditingFolder(null);
+    } catch (error) {
+      handleApiError(error);
+      // Keep edit mode open on failure so the user sees the error toast
+      // and can retry without losing their typed name.
+    }
+  };
+
+  const cancelRenameFolder = () => {
+    if (renameFolderMutation.isPending) return;
+    setEditingFolder(null);
+  };
+
+  const toggleScenarioSelection = (id: string) => {
+    setSelectedScenarioIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const togglePageSelection = () => {
+    // "Select all" header checkbox toggles the CURRENT page only. If
+    // every visible row is already selected, uncheck them (leaving
+    // off-page selections untouched); otherwise, add every visible id.
+    // Off-page selections persist either way — that's the Gmail
+    // convention and it plays nicely with pagination.
+    setSelectedScenarioIds((prev) => {
+      const next = new Set(prev);
+      const pageIds = scenarios.map((s) => s.id);
+      const allOnPageSelected = pageIds.length > 0 && pageIds.every((id) => next.has(id));
+      if (allOnPageSelected) {
+        for (const id of pageIds) next.delete(id);
+      } else {
+        for (const id of pageIds) next.add(id);
+      }
+      return next;
+    });
+  };
+
+  const confirmBulkDelete = async () => {
+    const ids = Array.from(selectedScenarioIds);
+    if (ids.length === 0) return;
+    try {
+      const result = await deleteScenariosBulk.mutateAsync({ scenario_ids: ids });
+      showToast.success(`${result.deleted} scenario${result.deleted === 1 ? '' : 's'} deleted`);
+      setSelectedScenarioIds(new Set());
+      setPendingBulkDelete(false);
+    } catch (error) {
+      handleApiError(error);
+      // Modal stays open on failure — same pattern as the single-scenario
+      // and folder-delete flows.
+    }
+  };
+
   const inFolderView = selectedFolder !== null;
   const activeFolderCount = inFolderView
     ? (folders.find((f) => (f.folder ?? '') === selectedFolder)?.count ?? 0)
     : 0;
+
+  const actionButtons = (
+    <div className="flex flex-wrap items-center justify-end gap-2">
+      <CustomButton
+        type="text"
+        size="sm"
+        onClick={downloadSampleCsv}
+        icon={<Download className="size-3.5" />}
+        title="Download a template with the expected column headers and example rows"
+      >
+        Sample CSV
+      </CustomButton>
+      <CustomButton
+        type="default"
+        size="sm"
+        onClick={() => fileInputRef.current?.click()}
+        disabled={uploadCsv.isPending}
+        icon={<Upload className="size-3.5" />}
+      >
+        {uploadCsv.isPending ? 'Uploading…' : 'Import CSV'}
+      </CustomButton>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".csv,text/csv"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0] ?? null;
+          handleCsvPick(f);
+          e.target.value = '';
+        }}
+      />
+      <CustomButton
+        type="default"
+        size="sm"
+        onClick={() => setOpenGenerate(true)}
+        icon={<Sparkles className="size-3.5" />}
+      >
+        Auto-generate
+      </CustomButton>
+      <CustomButton
+        type="default"
+        size="sm"
+        onClick={() => {
+          setEditing(null);
+          setOpenCreate(true);
+        }}
+      >
+        New Scenario
+      </CustomButton>
+      <CustomButton
+        type="primary"
+        size="sm"
+        onClick={() => setOpenRun(true)}
+        disabled={totalScenariosAllFolders === 0}
+        icon={<Play className="size-3.5" />}
+      >
+        Run Eval
+      </CustomButton>
+    </div>
+  );
 
   const foldersPanel = (
     <SectionCard
@@ -254,89 +644,64 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       iconClassName="bg-violet-500/10 text-violet-700 dark:text-violet-400 ring-violet-500/20"
       title="LLM Evals"
       description="Score this agent's LLM output against your scenarios."
-      action={
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          {inFolderView
-            ? `${scenarioCount} scenario${scenarioCount === 1 ? '' : 's'}`
-            : `${folders.length} folder${folders.length === 1 ? '' : 's'} · ${totalScenariosAllFolders} scenario${totalScenariosAllFolders === 1 ? '' : 's'}`}
-        </span>
-      }
+      action={actionButtons}
+      bodyClassName="mt-2"
     >
-      {/* Toolbar: search (only when drilled into a folder) on the left,
-          action buttons always on the right. The right-aligned action group
-          is a single ``ml-auto`` container so its position is stable whether
-          or not the SearchBar is rendered — no per-view special-casing. */}
-      <div className="flex flex-wrap items-center gap-2">
-        {inFolderView && (
-          <div className="min-w-[200px] flex-1">
-            <SearchBar
-              value={search}
-              onChange={(v) => setSearch(v)}
-              placeholder="Search scenarios…"
-            />
-          </div>
-        )}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
-          <CustomButton
-            type="default"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploadCsv.isPending}
-            icon={<Upload className="size-4" />}
-          >
-            {uploadCsv.isPending ? 'Uploading…' : 'Import CSV'}
-          </CustomButton>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".csv,text/csv"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0] ?? null;
-              handleCsvPick(f);
-              e.target.value = '';
-            }}
-          />
-          <CustomButton
-            type="default"
-            onClick={() => setOpenGenerate(true)}
-            icon={<Sparkles className="size-4" />}
-          >
-            Auto-generate
-          </CustomButton>
-          <CustomButton
-            type="default"
-            onClick={() => {
-              setEditing(null);
-              setOpenCreate(true);
-            }}
-          >
-            New Scenario
-          </CustomButton>
-          <CustomButton
-            type="primary"
-            onClick={() => setOpenRun(true)}
-            disabled={totalScenariosAllFolders === 0}
-            icon={<Play className="size-4" />}
-          >
-            Run Eval
-          </CustomButton>
-        </div>
-      </div>
-
       {inFolderView ? (
         <>
           <FolderBreadcrumb
             folderName={selectedFolder as string}
             count={activeFolderCount}
             onBack={() => setSelectedFolder(null)}
-            onRunFolder={() => runFolder(selectedFolder as string)}
             onRename={
               // Uncategorized ('' = NULL folder) cannot be renamed — there's
               // no actual name to change and NULL isn't a rename target.
-              selectedFolder ? () => setRenameFolder(selectedFolder) : undefined
+              selectedFolder ? () => setEditingFolder(selectedFolder) : undefined
             }
-            isRunning={triggerRun.isPending}
+            isEditing={!!selectedFolder && editingFolder === selectedFolder}
+            onSaveRename={saveRenameFolder}
+            onCancelRename={cancelRenameFolder}
+            renamePending={renameFolderMutation.isPending}
           />
+          <div className="min-w-[200px]">
+            <SearchBar
+              value={search}
+              onChange={(v) => setSearch(v)}
+              placeholder="Search scenarios…"
+            />
+          </div>
+          <ScenariosFilterBar
+            scenarios={scenarios}
+            selectedTags={filterTags}
+            onTagsChange={setFilterTags}
+            selectedSource={filterSource}
+            onSourceChange={setFilterSource}
+          />
+          {selectedScenarioIds.size > 0 && (
+            <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-[13px]">
+              <span className="font-medium text-foreground">
+                {selectedScenarioIds.size} scenario
+                {selectedScenarioIds.size === 1 ? '' : 's'} selected
+              </span>
+              <div className="flex items-center gap-2">
+                <CustomButton
+                  type="text"
+                  size="sm"
+                  onClick={() => setSelectedScenarioIds(new Set())}
+                >
+                  Clear
+                </CustomButton>
+                <CustomButton
+                  type="danger"
+                  size="sm"
+                  onClick={() => setPendingBulkDelete(true)}
+                  icon={<Trash2 className="size-3.5" />}
+                >
+                  Delete selected
+                </CustomButton>
+              </div>
+            </div>
+          )}
           <ScenariosTable
             scenarios={scenarios}
             isLoading={scenariosQuery.isLoading}
@@ -345,6 +710,21 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
               setOpenCreate(true);
             }}
             onDelete={handleDelete}
+            onRun={runScenario}
+            isRunning={triggerRun.isPending}
+            selectedIds={selectedScenarioIds}
+            onToggleRow={toggleScenarioSelection}
+            onToggleAll={togglePageSelection}
+          />
+          <LlmEvalsPagination
+            page={page}
+            pageSize={pageSize}
+            total={scenarioCount}
+            onPageChange={setPage}
+            onPageSizeChange={(size) => {
+              setPageSize(size);
+              setPage(1);
+            }}
           />
         </>
       ) : (
@@ -353,8 +733,13 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
           isLoading={foldersQuery.isLoading}
           onOpen={setSelectedFolder}
           onRunFolder={runFolder}
-          onRename={(name) => setRenameFolder(name)}
+          onRename={(name) => setEditingFolder(name)}
+          onDelete={(name) => setPendingDeleteFolder(name)}
           isRunning={triggerRun.isPending}
+          editingFolder={editingFolder}
+          onSaveRename={saveRenameFolder}
+          onCancelRename={cancelRenameFolder}
+          renamePending={renameFolderMutation.isPending}
         />
       )}
     </SectionCard>
@@ -368,7 +753,7 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       description="Every eval batch for this agent, newest first. Click any row to inspect scored scenarios."
       action={
         <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          {runs.length} run{runs.length === 1 ? '' : 's'}
+          {runsTotal} run{runsTotal === 1 ? '' : 's'}
         </span>
       }
     >
@@ -376,7 +761,18 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         runs={runs}
         isLoading={runsQuery.isLoading}
         onOpen={setOpenRunId}
-        onEmptyCTA={() => setActiveView('folders')}
+        onEmptyCTA={runsTotal === 0 ? () => setActiveView('folders') : undefined}
+        showEmptyState={runsTotal === 0}
+      />
+      <LlmEvalsPagination
+        page={runsPage}
+        pageSize={runsPageSize}
+        total={runsTotal}
+        onPageChange={setRunsPage}
+        onPageSizeChange={(size) => {
+          setRunsPageSize(size);
+          setRunsPage(1);
+        }}
       />
     </SectionCard>
   );
@@ -393,9 +789,9 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       label: (
         <span className="inline-flex items-center gap-2">
           Runs
-          {runs.length > 0 && (
+          {runsTotal > 0 && (
             <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
-              {runs.length}
+              {runsTotal}
             </span>
           )}
         </span>
@@ -436,13 +832,6 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         folderOptions={folders}
         defaultFolder={typeof selectedFolder === 'string' ? selectedFolder : ''}
       />
-      <RenameFolderModal
-        open={renameFolder !== null}
-        onClose={() => setRenameFolder(null)}
-        agentId={agentId}
-        oldName={renameFolder}
-        folders={folders}
-      />
       <AgentLlmEvalResultsDrawer
         agentId={agentId}
         runId={openRunId}
@@ -467,6 +856,53 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         }
         loading={deleteScenario.isPending}
       />
+      <ConfirmDeleteModal
+        open={pendingBulkDelete}
+        onClose={() => {
+          if (!deleteScenariosBulk.isPending) setPendingBulkDelete(false);
+        }}
+        onConfirm={confirmBulkDelete}
+        title={`Delete ${selectedScenarioIds.size} scenario${selectedScenarioIds.size === 1 ? '' : 's'}`}
+        description="This can’t be undone. Historical eval results for each deleted scenario keep their own snapshot and are not removed."
+        impact={
+          <p className="text-sm text-foreground">
+            You’re about to delete <span className="font-medium">{selectedScenarioIds.size}</span>{' '}
+            scenario
+            {selectedScenarioIds.size === 1 ? '' : 's'}.
+          </p>
+        }
+        loading={deleteScenariosBulk.isPending}
+      />
+      <ConfirmDeleteModal
+        open={!!pendingDeleteFolder}
+        onClose={() => {
+          if (!deleteFolder.isPending) setPendingDeleteFolder(null);
+        }}
+        onConfirm={confirmDeleteFolder}
+        title="Delete folder"
+        description="This permanently deletes every scenario in this folder. Past eval-run history for the folder is preserved."
+        impact={
+          pendingDeleteFolder ? (
+            <div className="space-y-2 text-sm text-foreground">
+              <p>
+                You’re about to delete the folder{' '}
+                <span className="font-medium">{pendingDeleteFolder}</span> and every scenario in it.
+              </p>
+              {(() => {
+                const count = folders.find((f) => f.folder === pendingDeleteFolder)?.count ?? 0;
+                return count > 0 ? (
+                  <p className="text-muted-foreground">
+                    <span className="font-medium text-foreground">{count}</span> scenario
+                    {count === 1 ? '' : 's'} will be removed. To keep any of them, edit each
+                    scenario and change its folder before deleting.
+                  </p>
+                ) : null;
+              })()}
+            </div>
+          ) : null
+        }
+        loading={deleteFolder.isPending}
+      />
     </div>
   );
 }
@@ -478,12 +914,46 @@ function ScenariosTable({
   isLoading,
   onEdit,
   onDelete,
+  onRun,
+  isRunning,
+  selectedIds,
+  onToggleRow,
+  onToggleAll,
 }: {
   scenarios: AgentLlmEvalScenario[];
   isLoading: boolean;
   onEdit: (s: AgentLlmEvalScenario) => void;
   onDelete: (s: AgentLlmEvalScenario) => void;
+  // Single-scenario eval trigger. The parent owns the mutation so its
+  // ``isPending`` disables every row's Run button at once — prevents a
+  // second click while the first request is still in flight.
+  onRun: (s: AgentLlmEvalScenario) => void;
+  isRunning: boolean;
+  // Bulk-selection state. ``selectedIds`` is the set of scenario ids
+  // currently checked — the parent owns it so selection persists across
+  // pages (a Gmail-style pattern; the header checkbox only toggles the
+  // CURRENT page).
+  selectedIds: Set<string>;
+  onToggleRow: (id: string) => void;
+  onToggleAll: () => void;
 }) {
+  // Native ``<input>`` doesn't expose ``indeterminate`` as a prop — set
+  // it imperatively so the tri-state renders (some-but-not-all selected).
+  const headerCheckboxRef = useRef<HTMLInputElement | null>(null);
+  const currentPageIds = useMemo(() => scenarios.map((s) => s.id), [scenarios]);
+  const currentPageSelectedCount = useMemo(
+    () => currentPageIds.filter((id) => selectedIds.has(id)).length,
+    [currentPageIds, selectedIds],
+  );
+  const allOnPageSelected = scenarios.length > 0 && currentPageSelectedCount === scenarios.length;
+  const someOnPageSelected =
+    currentPageSelectedCount > 0 && currentPageSelectedCount < scenarios.length;
+  useEffect(() => {
+    if (headerCheckboxRef.current) {
+      headerCheckboxRef.current.indeterminate = someOnPageSelected;
+    }
+  }, [someOnPageSelected]);
+
   if (isLoading) {
     return (
       <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
@@ -503,6 +973,16 @@ function ScenariosTable({
       <table className="w-full text-sm">
         <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
           <tr>
+            <th className="w-10 px-3 py-2 text-left">
+              <input
+                ref={headerCheckboxRef}
+                type="checkbox"
+                aria-label="Select all on this page"
+                checked={allOnPageSelected}
+                onChange={onToggleAll}
+                className="cursor-pointer accent-primary"
+              />
+            </th>
             <th className="px-3 py-2 text-left">Scenario</th>
             <th className="px-3 py-2 text-left">Prompt</th>
             {/* Fixed-width tags + source columns so the Prompt column can
@@ -510,12 +990,24 @@ function ScenariosTable({
                 sliver (which caused tag chips to wrap vertically). */}
             <th className="w-[220px] px-3 py-2 text-left">Tags</th>
             <th className="w-[100px] px-3 py-2 text-left">Source</th>
-            <th className="w-[80px] px-3 py-2" />
+            <th className="w-[110px] px-3 py-2" />
           </tr>
         </thead>
         <tbody>
           {scenarios.map((s) => (
-            <tr key={s.id} className="border-t border-border/60">
+            <tr
+              key={s.id}
+              className={cn('border-t border-border/60', selectedIds.has(s.id) && 'bg-primary/5')}
+            >
+              <td className="w-10 px-3 py-2 align-top">
+                <input
+                  type="checkbox"
+                  aria-label={`Select ${s.scenario_key}`}
+                  checked={selectedIds.has(s.id)}
+                  onChange={() => onToggleRow(s.id)}
+                  className="cursor-pointer accent-primary"
+                />
+              </td>
               <td className="px-3 py-2 align-top font-medium text-foreground">{s.scenario_key}</td>
               <td className="w-full px-3 py-2 align-top text-muted-foreground">
                 <span
@@ -563,8 +1055,18 @@ function ScenariosTable({
                 <div className="flex items-center justify-end gap-1">
                   <button
                     type="button"
+                    onClick={() => onRun(s)}
+                    disabled={isRunning}
+                    className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    aria-label={`Run ${s.scenario_key}`}
+                    title="Run this scenario"
+                  >
+                    <Play className="size-4" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => onEdit(s)}
-                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     aria-label="Edit scenario"
                   >
                     <Pencil className="size-4" />
@@ -572,7 +1074,7 @@ function ScenariosTable({
                   <button
                     type="button"
                     onClick={() => onDelete(s)}
-                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     aria-label="Delete scenario"
                   >
                     <Trash2 className="size-4" />
@@ -587,6 +1089,217 @@ function ScenariosTable({
   );
 }
 
+// ── Scenarios filter bar ───────────────────────────────────────────────
+
+/** Compact filter bar rendered above the scenarios table inside a folder.
+ * Source is a single-select dropdown (whitelisted enum — matches backend
+ * ``AgentLlmEvalScenarioSource``); tag options are derived from the
+ * currently-loaded scenarios so users can filter by any tag they see.
+ * A single-tag selection is enough for the JSONB "has any of" backend
+ * filter — the picker is multi-select so users can broaden a scan.
+ *
+ * When neither filter is active AND there are no tag options, the bar
+ * hides itself entirely so an empty folder doesn't get chrome it can't
+ * use. */
+const SCENARIO_SOURCE_OPTIONS: {
+  value: AgentLlmEvalScenarioSource;
+  label: string;
+}[] = [
+  { value: 'manual', label: 'Manual' },
+  { value: 'csv', label: 'CSV import' },
+  { value: 'generated', label: 'Auto-generated' },
+  { value: 'fixture', label: 'Fixture' },
+];
+
+function ScenariosFilterBar({
+  scenarios,
+  selectedTags,
+  onTagsChange,
+  selectedSource,
+  onSourceChange,
+}: {
+  scenarios: AgentLlmEvalScenario[];
+  selectedTags: string[];
+  onTagsChange: (next: string[]) => void;
+  selectedSource: AgentLlmEvalScenarioSource | null;
+  onSourceChange: (next: AgentLlmEvalScenarioSource | null) => void;
+}) {
+  // Union of tags across currently-visible scenarios. Bounded by the
+  // page size — a folder with more tags on other pages will grow this
+  // list as the user pages; acceptable for MVP (a dedicated
+  // /scenarios/tags endpoint is the follow-up if that gets noisy).
+  const tagOptions = useMemo(() => {
+    const seen = new Set<string>();
+    for (const s of scenarios) for (const t of s.tags ?? []) seen.add(t);
+    return Array.from(seen).sort((a, b) => a.localeCompare(b));
+  }, [scenarios]);
+
+  const hasActive = selectedTags.length > 0 || selectedSource !== null;
+  if (tagOptions.length === 0 && !hasActive) return null;
+
+  const toggleTag = (tag: string) => {
+    onTagsChange(
+      selectedTags.includes(tag) ? selectedTags.filter((t) => t !== tag) : [...selectedTags, tag],
+    );
+  };
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-border/60 bg-muted/20 px-3 py-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          Filter
+        </span>
+        <div className="min-w-[180px]">
+          <SelectInput
+            name="scenario_source"
+            value={selectedSource ?? ''}
+            onValueChange={(v) =>
+              onSourceChange(v === '' ? null : (v as AgentLlmEvalScenarioSource))
+            }
+            options={[{ value: '', label: 'All sources' }, ...SCENARIO_SOURCE_OPTIONS]}
+          />
+        </div>
+        {hasActive && (
+          <button
+            type="button"
+            onClick={() => {
+              onTagsChange([]);
+              onSourceChange(null);
+            }}
+            className="ml-auto inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            title="Clear all filters"
+          >
+            <X className="size-3.5" />
+            Clear
+          </button>
+        )}
+      </div>
+      {tagOptions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {tagOptions.map((t) => {
+            const active = selectedTags.includes(t);
+            return (
+              <button
+                type="button"
+                key={t}
+                onClick={() => toggleTag(t)}
+                aria-pressed={active}
+                className={cn(
+                  'inline-flex cursor-pointer items-center rounded-full px-2 py-0.5 text-[10.5px] font-medium ring-1 transition-colors',
+                  active
+                    ? 'bg-primary text-primary-foreground ring-primary'
+                    : 'bg-card text-muted-foreground ring-border hover:bg-muted',
+                )}
+              >
+                {t}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Pagination footer ───────────────────────────────────────────────────
+
+/** Compact pagination footer shared by every paginated list inside the LLM
+ * Evals section (scenarios-in-folder + runs). Mirrors the shape used by the
+ * shared ``CustomTable`` (rows-per-page selector + first/prev/current/next/
+ * last controls) so pagination feels the same everywhere. Kept local to
+ * this file — a 3rd caller would justify promoting it to ``@/components/shared``. */
+const LLM_EVALS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
+
+function LlmEvalsPagination({
+  page,
+  pageSize,
+  total,
+  onPageChange,
+  onPageSizeChange,
+}: {
+  page: number;
+  pageSize: number;
+  total: number;
+  onPageChange: (p: number) => void;
+  onPageSizeChange: (size: number) => void;
+}) {
+  if (total === 0) return null;
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const firstItem = (currentPage - 1) * pageSize + 1;
+  const lastItem = Math.min(currentPage * pageSize, total);
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+      <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
+        <span>Rows per page</span>
+        <select
+          value={pageSize}
+          onChange={(e) => onPageSizeChange(Number(e.target.value))}
+          className="h-8 w-16 cursor-pointer rounded-lg border border-input bg-background px-2 text-[13px] text-foreground transition-colors hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+        >
+          {LLM_EVALS_PAGE_SIZE_OPTIONS.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="flex items-center gap-4">
+        <span className="text-[13px] text-muted-foreground">
+          <span className="font-medium text-foreground">
+            {firstItem}
+            {' - '}
+            {lastItem}
+          </span>
+          {' of '}
+          <span className="font-medium text-foreground">{total}</span>
+        </span>
+        <div className="flex items-center gap-1.5">
+          <CustomButton
+            type="text"
+            size="icon-xs"
+            onClick={() => onPageChange(1)}
+            disabled={currentPage <= 1}
+            className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronsLeft className="size-4" />
+          </CustomButton>
+          <CustomButton
+            type="text"
+            size="icon-xs"
+            onClick={() => onPageChange(currentPage - 1)}
+            disabled={currentPage <= 1}
+            className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronLeft className="size-4" />
+          </CustomButton>
+          <span className="flex h-7 min-w-7 items-center justify-center rounded-lg bg-primary/10 px-2 text-xs font-medium text-primary">
+            {currentPage}
+          </span>
+          <CustomButton
+            type="text"
+            size="icon-xs"
+            onClick={() => onPageChange(currentPage + 1)}
+            disabled={currentPage >= totalPages}
+            className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronRight className="size-4" />
+          </CustomButton>
+          <CustomButton
+            type="text"
+            size="icon-xs"
+            onClick={() => onPageChange(totalPages)}
+            disabled={currentPage >= totalPages}
+            className="rounded-lg text-muted-foreground hover:text-foreground disabled:opacity-30"
+          >
+            <ChevronsRight className="size-4" />
+          </CustomButton>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Runs table ──────────────────────────────────────────────────────────
 
 function RunsTable({
@@ -594,11 +1307,16 @@ function RunsTable({
   isLoading,
   onOpen,
   onEmptyCTA,
+  showEmptyState = true,
 }: {
   runs: AgentLlmEvalRunSummary[];
   isLoading: boolean;
   onOpen: (runId: string) => void;
   onEmptyCTA?: () => void;
+  // ``true`` when the ENTIRE dataset is empty (not just the current page).
+  // Lets a paginated caller suppress the "no runs yet" welcome state when
+  // the emptiness is just an out-of-range page rather than a fresh agent.
+  showEmptyState?: boolean;
 }) {
   if (isLoading) {
     return (
@@ -608,6 +1326,7 @@ function RunsTable({
     );
   }
   if (runs.length === 0) {
+    if (!showEmptyState) return null;
     return (
       <div className="flex flex-col items-center gap-3 rounded-md border border-dashed border-border/60 p-8 text-center">
         <History className="size-6 text-muted-foreground/60" />
@@ -633,6 +1352,7 @@ function RunsTable({
         <thead className="bg-muted/40 text-[11px] uppercase tracking-wide text-muted-foreground">
           <tr>
             <th className="px-3 py-2 text-left">Run</th>
+            <th className="px-3 py-2 text-left">Status</th>
             <th className="px-3 py-2 text-left">Started</th>
             <th className="px-3 py-2 text-left">Judge</th>
             <th className="px-3 py-2 text-left">Answer Model</th>
@@ -649,13 +1369,26 @@ function RunsTable({
             const fail = (summary.fail as number) ?? 0;
             const partial = (summary.partial as number) ?? 0;
             const passRate = (summary.pass_rate as number) ?? 0;
+            const isTerminal = RUN_TERMINAL_STATUSES.has(r.status);
+            // Non-terminal rows: swap the pass/fail readout for a
+            // "Scoring N of M" progress line. Also disables the drawer
+            // (the drawer reads persisted rows; non-terminal runs may
+            // have partial or zero rows persisted so the drawer would
+            // read as empty / half-scored).
             return (
               <tr
                 key={r.run_id}
-                className="cursor-pointer border-t border-border/60 hover:bg-muted/30"
-                onClick={() => onOpen(r.run_id)}
+                className={cn(
+                  'border-t border-border/60',
+                  isTerminal ? 'cursor-pointer hover:bg-muted/30' : 'cursor-default bg-muted/10',
+                )}
+                onClick={isTerminal ? () => onOpen(r.run_id) : undefined}
+                title={isTerminal ? undefined : 'Run in progress — open once it completes'}
               >
                 <td className="px-3 py-2 font-medium text-foreground">#{r.run_number}</td>
+                <td className="px-3 py-2">
+                  <RunStatusChip status={r.status} />
+                </td>
                 <td className="px-3 py-2 text-muted-foreground">
                   {r.started_at ? formatDate(r.started_at) : '—'}
                 </td>
@@ -670,30 +1403,46 @@ function RunsTable({
                 </td>
                 <td className="px-3 py-2 text-muted-foreground">{r.triggered_by}</td>
                 <td className="px-3 py-2">
-                  <div className="flex items-center gap-2">
-                    <span className="tabular-nums text-foreground">
-                      <span className="text-emerald-600">{pass}</span>
-                      {partial > 0 && (
-                        <>
-                          {' / '}
-                          <span className="text-amber-600">{partial}</span>
-                        </>
-                      )}
-                      {fail > 0 && (
-                        <>
-                          {' / '}
-                          <span className="text-destructive">{fail}</span>
-                        </>
-                      )}
-                      <span className="text-muted-foreground"> of {total}</span>
+                  {isTerminal ? (
+                    <div className="flex items-center gap-2">
+                      <span className="tabular-nums text-foreground">
+                        <span className="text-emerald-600">{pass}</span>
+                        {partial > 0 && (
+                          <>
+                            {' / '}
+                            <span className="text-amber-600">{partial}</span>
+                          </>
+                        )}
+                        {fail > 0 && (
+                          <>
+                            {' / '}
+                            <span className="text-destructive">{fail}</span>
+                          </>
+                        )}
+                        <span className="text-muted-foreground"> of {total}</span>
+                      </span>
+                      <span className="text-[11px] tabular-nums text-muted-foreground">
+                        {Math.round(passRate * 100)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-[12px] tabular-nums text-muted-foreground">
+                      Scoring <span className="font-medium text-foreground">{r.scored_count}</span>
+                      {' of '}
+                      <span className="font-medium text-foreground">
+                        {r.total_scenarios || '—'}
+                      </span>
                     </span>
-                    <span className="text-[11px] tabular-nums text-muted-foreground">
-                      {Math.round(passRate * 100)}%
-                    </span>
-                  </div>
+                  )}
                 </td>
                 <td className="px-3 py-2 text-right text-muted-foreground">
-                  <ChevronRight className="ml-auto size-4" />
+                  {isTerminal ? (
+                    <ChevronRight className="ml-auto size-4" />
+                  ) : (
+                    <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70">
+                      In progress
+                    </span>
+                  )}
                 </td>
               </tr>
             );
@@ -716,14 +1465,29 @@ function FoldersView({
   onOpen,
   onRunFolder,
   onRename,
+  onDelete,
   isRunning,
+  editingFolder,
+  onSaveRename,
+  onCancelRename,
+  renamePending,
 }: {
   folders: AgentLlmEvalFolder[];
   isLoading: boolean;
   onOpen: (folder: FolderScope) => void;
   onRunFolder: (folder: string | null) => void;
   onRename: (folder: string) => void;
+  // Named folders only — the Uncategorized bucket is not deletable as a
+  // group (see backend ``delete_folder``); the card omits the affordance.
+  onDelete: (folder: string) => void;
   isRunning: boolean;
+  // Inline-rename plumbing. ``editingFolder`` is the name of the folder
+  // currently in edit mode (only one at a time). Cards compare their own
+  // name against it to decide whether to render the editor.
+  editingFolder: string | null;
+  onSaveRename: (next: string) => void;
+  onCancelRename: () => void;
+  renamePending: boolean;
 }) {
   if (isLoading) {
     return (
@@ -753,7 +1517,12 @@ function FoldersView({
           onOpen={() => onOpen(f.folder)}
           onRun={() => onRunFolder(f.folder)}
           onRename={() => onRename(f.folder as string)}
+          onDelete={() => onDelete(f.folder as string)}
           isRunning={isRunning}
+          isEditing={editingFolder === f.folder}
+          onSaveRename={onSaveRename}
+          onCancelRename={onCancelRename}
+          renamePending={renamePending}
         />
       ))}
       {uncategorized && uncategorized.count > 0 && (
@@ -767,6 +1536,135 @@ function FoldersView({
           isRunning={isRunning}
         />
       )}
+    </div>
+  );
+}
+
+/** Inline single-field editor for a folder name. Replaces the old
+ * "rename folder" modal — clicking Rename on a folder card / breadcrumb
+ * swaps the name span for this editor in place, so the user never leaves
+ * the folders grid.
+ *
+ * ✓ (or Enter) commits, ✕ (or Escape) cancels. A blank / unchanged
+ * value silently cancels — matches how contact-directory rename works
+ * elsewhere in the app. The parent owns the mutation and passes
+ * ``pending`` to disable the buttons + input while the save is in flight.
+ *
+ * Rendered inside interactive containers (a ``<button>`` card, a
+ * clickable breadcrumb row), so click / keydown handlers stop propagation
+ * to prevent the drill-in / focus-shift from also firing. */
+function InlineFolderNameEditor({
+  initialValue,
+  onSave,
+  onCancel,
+  pending = false,
+  size = 'sm',
+}: {
+  initialValue: string;
+  onSave: (next: string) => void;
+  onCancel: () => void;
+  pending?: boolean;
+  // ``sm`` = folder-card scale, ``md`` = breadcrumb scale. Tuned so the
+  // editor visually replaces the corresponding name span without shifting
+  // the surrounding layout.
+  size?: 'sm' | 'md';
+}) {
+  const [value, setValue] = useState(initialValue);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    // Autofocus + select-all so the user can immediately overwrite or
+    // start typing — matches native inline-rename UX (Finder, Drive).
+    if (inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, []);
+
+  useEffect(() => {
+    // Re-sync when the underlying folder name changes externally
+    // (concurrent rename by another user + a folders-query refetch).
+    // Without this the editor keeps showing the stale name and ✓ would
+    // try to rename a folder that no longer exists.
+    setValue(initialValue);
+  }, [initialValue]);
+
+  const commit = () => {
+    if (pending) return;
+    const trimmed = value.trim();
+    // Blank or unchanged → silent cancel (no toast, no request).
+    if (!trimmed || trimmed === initialValue) {
+      onCancel();
+      return;
+    }
+    onSave(trimmed);
+  };
+
+  return (
+    <div
+      className="flex items-center gap-1"
+      onClick={(e) => e.stopPropagation()}
+      onKeyDown={(e) => {
+        // Prevent the enclosing card / breadcrumb from picking up
+        // Enter/Space when the input has focus.
+        e.stopPropagation();
+      }}
+      role="presentation"
+    >
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            onCancel();
+          }
+        }}
+        disabled={pending}
+        maxLength={120}
+        className={cn(
+          'min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-semibold text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60',
+          size === 'sm' ? 'h-7 text-[13px]' : 'h-8 text-[14px]',
+        )}
+        aria-label="Folder name"
+      />
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          commit();
+        }}
+        disabled={pending}
+        aria-label="Save folder name"
+        title="Save"
+        className={cn(
+          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400',
+          size === 'sm' ? 'size-7' : 'size-8',
+        )}
+      >
+        {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onCancel();
+        }}
+        disabled={pending}
+        aria-label="Cancel rename"
+        title="Cancel"
+        className={cn(
+          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+          size === 'sm' ? 'size-7' : 'size-8',
+        )}
+      >
+        <X className="size-3.5" />
+      </button>
     </div>
   );
 }
@@ -785,7 +1683,12 @@ function FolderCard({
   onOpen,
   onRun,
   onRename,
+  onDelete,
   isRunning,
+  isEditing = false,
+  onSaveRename,
+  onCancelRename,
+  renamePending = false,
 }: {
   name: string;
   count: number;
@@ -794,20 +1697,37 @@ function FolderCard({
   onOpen: () => void;
   onRun: () => void;
   onRename?: () => void;
+  // Undefined for the virtual ``Uncategorized`` bucket — that bucket is
+  // not deletable as a group (NULL folder has no name to target).
+  onDelete?: () => void;
   isRunning: boolean;
+  // Inline-edit state. When ``isEditing`` is true, the name span is
+  // swapped for ``InlineFolderNameEditor`` and the drill-in click is
+  // suppressed so a click inside the input doesn't also open the folder.
+  isEditing?: boolean;
+  onSaveRename?: (next: string) => void;
+  onCancelRename?: () => void;
+  renamePending?: boolean;
 }) {
   const runDisabled = isRunning || count === 0;
+  // The whole card is normally a ``<button>`` so the entire tile is
+  // clickable. During inline edit we swap to a ``<div>`` because native
+  // HTML forbids a ``<button>`` inside a ``<button>`` and the editor's
+  // ✓/✕ / input are interactive controls.
+  const Container = isEditing ? 'div' : 'button';
   return (
-    <button
-      type="button"
-      onClick={onOpen}
+    <Container
+      type={isEditing ? undefined : ('button' as const)}
+      onClick={isEditing ? undefined : onOpen}
       className={cn(
         'group relative flex h-full flex-col gap-4 rounded-xl border border-border/60 p-4 text-left',
-        'transition-all duration-150 hover:-translate-y-0.5 hover:border-border hover:shadow-sm',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+        'transition-all duration-150',
+        !isEditing &&
+          'hover:-translate-y-0.5 hover:border-border hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+        isEditing && 'ring-2 ring-ring/40',
         isMuted ? 'bg-muted/30' : 'bg-card',
       )}
-      aria-label={`Open folder ${name}`}
+      aria-label={isEditing ? `Renaming folder ${name}` : `Open folder ${name}`}
     >
       {/* Top row: folder icon + name. Icon is prominent so the "folder"
           metaphor is instantly readable; the small chevron on the right
@@ -824,47 +1744,72 @@ function FolderCard({
           <FolderIcon className="size-5" />
         </div>
         <div className="min-w-0 flex-1 pt-0.5">
-          <div
-            className="truncate text-[14px] font-semibold leading-tight text-foreground"
-            title={name}
-          >
-            {name}
-          </div>
+          {isEditing && onSaveRename && onCancelRename ? (
+            <InlineFolderNameEditor
+              initialValue={name}
+              onSave={onSaveRename}
+              onCancel={onCancelRename}
+              pending={renamePending}
+              size="sm"
+            />
+          ) : (
+            <div
+              className="truncate text-[14px] font-semibold leading-tight text-foreground"
+              title={name}
+            >
+              {name}
+            </div>
+          )}
           <div className="mt-1 inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10.5px] font-medium text-muted-foreground">
             {count} scenario{count === 1 ? '' : 's'}
           </div>
         </div>
-        <ChevronRight
-          className={cn(
-            'mt-1 size-4 shrink-0 text-muted-foreground/40 transition-all',
-            'group-hover:translate-x-0.5 group-hover:text-muted-foreground',
-          )}
-        />
+        {!isEditing && (
+          <ChevronRight
+            className={cn(
+              'mt-1 size-4 shrink-0 text-muted-foreground/40 transition-all',
+              'group-hover:translate-x-0.5 group-hover:text-muted-foreground',
+            )}
+          />
+        )}
       </div>
 
       {/* Bottom action row — always visible, muted by default so the card
           reads clean, brightens on card hover so users know they're
-          interactive. Divider gives visual separation without extra chrome. */}
-      <div className="mt-auto flex items-center gap-1 border-t border-border/50 pt-3">
-        {canRename && onRename && (
+          interactive. Divider gives visual separation without extra chrome.
+          Actions are hidden during inline rename so the editor gets full
+          focus (the ✓/✕ inside the editor are the only relevant actions). */}
+      {!isEditing && (
+        <div className="mt-auto flex items-center gap-1 border-t border-border/50 pt-3">
+          {canRename && onRename && (
+            <FolderCardAction
+              icon={<Pencil className="size-3.5" />}
+              label="Rename"
+              onActivate={onRename}
+              title={`Rename ${name}`}
+            />
+          )}
+          {onDelete && (
+            <FolderCardAction
+              icon={<Trash2 className="size-3.5" />}
+              label="Delete"
+              onActivate={onDelete}
+              emphasis="danger"
+              title={`Delete folder ${name}`}
+            />
+          )}
           <FolderCardAction
-            icon={<Pencil className="size-3.5" />}
-            label="Rename"
-            onActivate={onRename}
-            title={`Rename ${name}`}
+            icon={<Play className="size-3.5" />}
+            label="Run folder"
+            onActivate={onRun}
+            disabled={runDisabled}
+            title={count === 0 ? 'Folder is empty' : `Run ${name}`}
+            emphasis="primary"
+            className="ml-auto"
           />
-        )}
-        <FolderCardAction
-          icon={<Play className="size-3.5" />}
-          label="Run folder"
-          onActivate={onRun}
-          disabled={runDisabled}
-          title={count === 0 ? 'Folder is empty' : `Run ${name}`}
-          emphasis="primary"
-          className="ml-auto"
-        />
-      </div>
-    </button>
+        </div>
+      )}
+    </Container>
   );
 }
 
@@ -886,7 +1831,10 @@ function FolderCardAction({
   onActivate: () => void;
   disabled?: boolean;
   title?: string;
-  emphasis?: 'default' | 'primary';
+  // ``danger`` matches the destructive-action visual grammar used on the
+  // scenarios row (red hover) — reserved for Delete so users can't
+  // mistake it for a benign action.
+  emphasis?: 'default' | 'primary' | 'danger';
   className?: string;
 }) {
   return (
@@ -911,7 +1859,9 @@ function FolderCardAction({
           ? 'cursor-not-allowed text-muted-foreground/40'
           : emphasis === 'primary'
             ? 'cursor-pointer text-foreground hover:bg-primary hover:text-primary-foreground'
-            : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground',
+            : emphasis === 'danger'
+              ? 'cursor-pointer text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+              : 'cursor-pointer text-muted-foreground hover:bg-muted hover:text-foreground',
         className,
       )}
       title={title}
@@ -923,80 +1873,78 @@ function FolderCardAction({
   );
 }
 
-/** Header shown when the user has drilled into a folder. Two-tier layout:
- *   - Top: subtle "← All folders" text link (secondary; not a heavy button).
- *   - Main: prominent folder icon + name + count on the left, Rename +
- *     Run-this-folder actions on the right.
- * Uncategorized omits Rename (NULL folder has no name to rename). */
+/** Compact breadcrumb shown when the user has drilled into a folder — just
+ * enough to say "you're inside this folder": ``← All folders / <name> · N
+ * scenarios``. Rename stays available as a small icon-only affordance next
+ * to the name (Uncategorized omits it — NULL folder has no name to rename).
+ * Per-folder run is triggered from the folder card in the grid view; the
+ * global "Run Eval" button in the header covers running from inside a folder. */
 function FolderBreadcrumb({
   folderName,
   count,
   onBack,
-  onRunFolder,
   onRename,
-  isRunning,
+  isEditing = false,
+  onSaveRename,
+  onCancelRename,
+  renamePending = false,
 }: {
   folderName: string; // '' means Uncategorized
   count: number;
   onBack: () => void;
-  onRunFolder: () => void;
   onRename?: () => void;
-  isRunning: boolean;
+  // Inline-rename state — mirrors ``FolderCard``. When ``isEditing`` is
+  // true the folder-name span is swapped for ``InlineFolderNameEditor``.
+  isEditing?: boolean;
+  onSaveRename?: (next: string) => void;
+  onCancelRename?: () => void;
+  renamePending?: boolean;
 }) {
   const displayName = folderName === '' ? UNCATEGORIZED_LABEL : folderName;
-  const isUncategorized = folderName === '';
   return (
-    <div className="flex flex-col gap-3">
-      {/* Back link — text-only so the visual weight lands on the folder
-          title below, not on the navigation affordance. */}
+    <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
       <button
         type="button"
         onClick={onBack}
-        className="inline-flex w-fit cursor-pointer items-center gap-1 text-[12px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+        className="inline-flex cursor-pointer items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
         <ArrowLeft className="size-3.5" />
         All folders
       </button>
-
-      {/* Title bar — icon + name + count on the left, actions on the right. */}
-      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/60 bg-card px-4 py-3">
-        <div
-          className={cn(
-            'flex size-9 shrink-0 items-center justify-center rounded-lg ring-1',
-            isUncategorized
-              ? 'bg-muted text-muted-foreground ring-border'
-              : 'bg-violet-500/10 text-violet-700 ring-violet-500/20 dark:text-violet-400',
-          )}
-        >
-          <FolderIcon className="size-5" />
-        </div>
-        <div className="flex min-w-0 flex-col">
-          <div
-            className="truncate text-[15px] font-semibold leading-tight text-foreground"
+      <ChevronRight className="size-3.5 text-muted-foreground/60" />
+      <FolderIcon className="size-3.5 text-muted-foreground" />
+      {isEditing && onSaveRename && onCancelRename ? (
+        <InlineFolderNameEditor
+          initialValue={displayName}
+          onSave={onSaveRename}
+          onCancel={onCancelRename}
+          pending={renamePending}
+          size="md"
+        />
+      ) : (
+        <>
+          <span
+            className="max-w-[240px] truncate font-semibold text-foreground"
             title={displayName}
           >
             {displayName}
-          </div>
-          <div className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {count} scenario{count === 1 ? '' : 's'}
-          </div>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
+          </span>
+          <span className="text-muted-foreground">
+            · {count} scenario{count === 1 ? '' : 's'}
+          </span>
           {onRename && (
-            <CustomButton type="default" onClick={onRename} icon={<Pencil className="size-4" />}>
-              Rename
-            </CustomButton>
+            <button
+              type="button"
+              onClick={onRename}
+              aria-label={`Rename ${displayName}`}
+              title="Rename folder"
+              className="ml-1 inline-flex cursor-pointer items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            >
+              <Pencil className="size-3.5" />
+            </button>
           )}
-          <CustomButton
-            type="primary"
-            onClick={onRunFolder}
-            disabled={isRunning || count === 0}
-            icon={<Play className="size-4" />}
-          >
-            Run this folder
-          </CustomButton>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
@@ -1087,100 +2035,6 @@ function FolderPicker({
       onValueChange={handleSelectChange}
       options={options}
     />
-  );
-}
-
-// ── Rename folder modal ─────────────────────────────────────────────────
-
-function RenameFolderModal({
-  open,
-  onClose,
-  agentId,
-  oldName,
-  folders,
-}: {
-  open: boolean;
-  onClose: () => void;
-  agentId: string;
-  oldName: string | null;
-  folders: AgentLlmEvalFolder[];
-}) {
-  const rename = useRenameAgentLlmEvalFolder(agentId);
-  const [newName, setNewName] = useState('');
-
-  useEffect(() => {
-    if (open) setNewName(oldName ?? '');
-    else setNewName('');
-  }, [open, oldName]);
-
-  const affectedCount = useMemo(() => {
-    if (!oldName) return 0;
-    return folders.find((f) => f.folder === oldName)?.count ?? 0;
-  }, [folders, oldName]);
-
-  const submit = async () => {
-    if (!oldName) return;
-    const trimmed = newName.trim();
-    if (!trimmed || trimmed === oldName) return;
-    try {
-      const result = await rename.mutateAsync({
-        old_name: oldName,
-        new_name: trimmed,
-      });
-      showToast.success(
-        'Folder renamed',
-        `${result.scenarios_updated} scenario${result.scenarios_updated === 1 ? '' : 's'} and ${result.results_updated} past result${result.results_updated === 1 ? '' : 's'} moved.`,
-      );
-      onClose();
-    } catch (error) {
-      handleApiError(error);
-    }
-  };
-
-  const trimmed = newName.trim();
-  const canSubmit = !!oldName && !!trimmed && trimmed !== oldName && !rename.isPending;
-
-  return (
-    <CustomModal
-      open={open}
-      onClose={rename.isPending ? () => undefined : onClose}
-      title="Rename folder"
-      description="Renames the folder on every scenario AND on every past run result so history stays grouped under the new name."
-      width="max-w-md"
-      footer={
-        <div className="flex justify-end gap-2">
-          <CustomButton type="default" onClick={onClose} disabled={rename.isPending}>
-            Cancel
-          </CustomButton>
-          <CustomButton
-            type="primary"
-            onClick={submit}
-            disabled={!canSubmit}
-            loading={rename.isPending}
-          >
-            Rename
-          </CustomButton>
-        </div>
-      }
-    >
-      <div className="flex flex-col gap-3">
-        <TextInput name="old_folder" label="Current name" value={oldName ?? ''} disabled />
-        <TextInput
-          name="new_folder"
-          label="New name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          placeholder="e.g. Refunds"
-          isRequired
-        />
-        {affectedCount > 0 && (
-          <p className="text-[12px] text-muted-foreground">
-            This will rename {affectedCount} scenario{affectedCount === 1 ? '' : 's'} plus any past
-            run results tagged with this folder.
-          </p>
-        )}
-      </div>
-    </CustomModal>
   );
 }
 
@@ -1430,7 +2284,7 @@ function RunEvalModal({
 
   const submit = async () => {
     try {
-      const result = await trigger.mutateAsync({
+      await trigger.mutateAsync({
         judge_model: judge.trim() || undefined,
         tags: scope === 'tags' && selectedTags.length ? selectedTags : undefined,
         // Send the plural `folders` field on multi-select. Backend prefers
@@ -1439,8 +2293,8 @@ function RunEvalModal({
         folders: scope === 'folders' && selectedFolders.length ? selectedFolders : undefined,
       });
       showToast.success(
-        'Eval queued',
-        `Job #${result.job_id} — results appear once the worker completes.`,
+        'Evaluation started',
+        'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
       );
       onClose();
     } catch (error) {
@@ -1587,88 +2441,289 @@ function GenerateScenariosModal({
   folderOptions: AgentLlmEvalFolder[];
   defaultFolder: string;
 }) {
+  // Two-step flow: dry-run generate → preview table with per-row
+  // checkboxes → user confirms → bulk-create only the selected items with
+  // ``source='generated'`` so the source badge in the scenarios table
+  // still reflects reality. The bulk endpoint is the SAME code path a
+  // manual bulk create uses (duplicate keys 409 the whole batch), which
+  // keeps the scenario-write invariants in one place.
   const generate = useGenerateAgentLlmEvalScenarios(agentId);
+  const persist = useCreateAgentLlmEvalScenariosBulk(agentId);
   const [count, setCount] = useState(String(GENERATE_DEFAULT_COUNT));
   const [folder, setFolder] = useState('');
+  // Preview state — ``null`` = the form is showing; a non-null array
+  // = the preview table is showing. Kept as separate state (not derived
+  // from ``generate.data``) so switching from preview back to form
+  // (Regenerate) doesn't tear down the visible table before we're ready.
+  const [preview, setPreview] = useState<GeneratedScenario[] | null>(null);
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!open) {
+      // Reset every piece of state on close so a re-open starts fresh
+      // (avoids resurrecting a stale preview from a previous session).
       setCount(String(GENERATE_DEFAULT_COUNT));
       setFolder('');
+      setPreview(null);
+      setSelectedKeys(new Set());
       return;
     }
     setFolder(defaultFolder ?? '');
   }, [open, defaultFolder]);
 
-  const submit = async () => {
+  const runGenerate = async () => {
     const parsedCount = Math.max(
       1,
       Math.min(GENERATE_MAX_COUNT, Number(count) || GENERATE_DEFAULT_COUNT),
     );
-    const trimmedFolder = folder.trim();
     try {
       const result = await generate.mutateAsync({
-        // Only one strategy is surfaced in v1. ``noop`` stays on the backend
-        // as a safety net + test target.
         strategy: 'llm',
         count: parsedCount,
-        // Persist directly — the ``persisted`` list on the response drives
-        // the scenarios-table refresh via ``useGenerateAgentLlmEvalScenarios``'s
-        // shared invalidator.
-        dry_run: false,
-        folder: trimmedFolder || null,
+        // Preview only — nothing is written yet. The subsequent
+        // ``persist`` mutation writes the user's selection with
+        // ``source='generated'``.
+        dry_run: true,
+        folder: folder.trim() || null,
       });
-      const added = result.persisted.length;
-      if (added === 0) {
+      if (result.generated.length === 0) {
         showToast.info(
           'Auto-generate',
           result.note ??
             'The generator returned no usable scenarios. Try again, or tweak the agent’s system prompt.',
         );
-      } else {
-        showToast.success(
-          `${added} scenario${added === 1 ? '' : 's'} added`,
-          'Generated from the agent’s published system prompt.',
-        );
+        return;
       }
+      setPreview(result.generated);
+      // Default to every row selected — the common case is "accept all".
+      setSelectedKeys(new Set(result.generated.map((s) => s.scenario_key)));
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const savePreview = async () => {
+    if (!preview) return;
+    const chosen = preview.filter((s) => selectedKeys.has(s.scenario_key));
+    if (chosen.length === 0) return;
+    const trimmedFolder = folder.trim();
+    try {
+      const result = await persist.mutateAsync({
+        source: 'generated',
+        scenarios: chosen.map<ScenarioInput>((s) => ({
+          scenario_key: s.scenario_key,
+          prompt: s.prompt,
+          expected_answer: s.expected_answer,
+          persona_criteria: s.persona_criteria,
+          instruction_criteria: s.instruction_criteria,
+          tags: s.tags.length ? s.tags : null,
+          folder: trimmedFolder || null,
+        })),
+      });
+      showToast.success(
+        `${result.created} scenario${result.created === 1 ? '' : 's'} added`,
+        'Generated from the agent’s published system prompt.',
+      );
       onClose();
     } catch (error) {
       handleApiError(error);
     }
   };
 
+  const toggleRow = (key: string) => {
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const toggleAll = () => {
+    if (!preview) return;
+    setSelectedKeys((prev) =>
+      prev.size === preview.length ? new Set() : new Set(preview.map((s) => s.scenario_key)),
+    );
+  };
+
+  const inPreview = preview !== null;
+  const anyPending = generate.isPending || persist.isPending;
+  // Cancel = full modal close; Regenerate = go back to the form to
+  // re-run generation (keeps count + folder inputs so the user can tweak).
+  const modalClose = anyPending ? () => undefined : onClose;
+
   return (
     <CustomModal
       open={open}
-      onClose={onClose}
-      title="Auto-generate scenarios"
-      description="Uses the org’s judge model + this agent’s system prompt to draft scenarios and save them."
-      width="max-w-lg"
+      onClose={modalClose}
+      title={inPreview ? 'Review generated scenarios' : 'Auto-generate scenarios'}
+      description={
+        inPreview
+          ? 'Uncheck any scenario you don’t want. Only checked rows will be saved.'
+          : 'Uses the org’s judge model + this agent’s system prompt to draft scenarios. You’ll review the drafts before saving.'
+      }
+      width={inPreview ? 'max-w-3xl' : 'max-w-lg'}
       footer={
-        <div className="flex justify-end gap-2">
-          <CustomButton type="default" onClick={onClose} disabled={generate.isPending}>
-            Cancel
-          </CustomButton>
-          <CustomButton type="primary" onClick={submit} loading={generate.isPending}>
-            Generate
-          </CustomButton>
-        </div>
+        inPreview ? (
+          <div className="flex items-center justify-between gap-2">
+            <CustomButton
+              type="text"
+              onClick={() => {
+                setPreview(null);
+                setSelectedKeys(new Set());
+              }}
+              disabled={anyPending}
+            >
+              ← Regenerate
+            </CustomButton>
+            <div className="flex gap-2">
+              <CustomButton type="default" onClick={onClose} disabled={anyPending}>
+                Cancel
+              </CustomButton>
+              <CustomButton
+                type="primary"
+                onClick={savePreview}
+                loading={persist.isPending}
+                disabled={selectedKeys.size === 0 || anyPending}
+              >
+                Save {selectedKeys.size} scenario{selectedKeys.size === 1 ? '' : 's'}
+              </CustomButton>
+            </div>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-2">
+            <CustomButton type="default" onClick={onClose} disabled={anyPending}>
+              Cancel
+            </CustomButton>
+            <CustomButton
+              type="primary"
+              onClick={runGenerate}
+              loading={generate.isPending}
+              icon={<Sparkles className="size-3.5" />}
+            >
+              Generate preview
+            </CustomButton>
+          </div>
+        )
       }
     >
-      <div className="flex flex-col gap-3">
-        <TextInput
-          name="count"
-          label="How many scenarios?"
-          type="number"
-          min={1}
-          max={GENERATE_MAX_COUNT}
-          value={count}
-          onChange={(e) => setCount(e.target.value)}
-          helperText={`Between 1 and ${GENERATE_MAX_COUNT}. Existing scenarios are never overwritten — duplicates skip.`}
+      {inPreview && preview ? (
+        <GeneratedScenariosPreview
+          rows={preview}
+          selectedKeys={selectedKeys}
+          onToggleRow={toggleRow}
+          onToggleAll={toggleAll}
         />
-        <FolderPicker folders={folderOptions} value={folder} onChange={setFolder} />
-      </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <TextInput
+            name="count"
+            label="How many scenarios?"
+            type="number"
+            min={1}
+            max={GENERATE_MAX_COUNT}
+            value={count}
+            onChange={(e) => setCount(e.target.value)}
+            helperText={`Between 1 and ${GENERATE_MAX_COUNT}. Nothing is saved until you review the preview.`}
+          />
+          <FolderPicker folders={folderOptions} value={folder} onChange={setFolder} />
+        </div>
+      )}
     </CustomModal>
+  );
+}
+
+// Preview table for the Auto-generate flow. Kept local to this file
+// because it's a one-off shape — nothing else renders ``GeneratedScenario``.
+function GeneratedScenariosPreview({
+  rows,
+  selectedKeys,
+  onToggleRow,
+  onToggleAll,
+}: {
+  rows: GeneratedScenario[];
+  selectedKeys: Set<string>;
+  onToggleRow: (key: string) => void;
+  onToggleAll: () => void;
+}) {
+  const allSelected = rows.length > 0 && selectedKeys.size === rows.length;
+  const someSelected = selectedKeys.size > 0 && selectedKeys.size < rows.length;
+  const selectAllRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    // Native indeterminate state isn't reachable via a prop — set it
+    // imperatively so the "some selected" tri-state renders correctly.
+    if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
+  }, [someSelected]);
+  return (
+    <div className="flex max-h-[420px] flex-col overflow-hidden rounded-md border border-border/60">
+      <div className="overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0 bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+            <tr>
+              <th className="w-10 px-3 py-2 text-left">
+                <input
+                  ref={selectAllRef}
+                  type="checkbox"
+                  aria-label="Select all"
+                  checked={allSelected}
+                  onChange={onToggleAll}
+                  className="cursor-pointer accent-primary"
+                />
+              </th>
+              <th className="px-3 py-2 text-left">Scenario</th>
+              <th className="px-3 py-2 text-left">Prompt</th>
+              <th className="w-[180px] px-3 py-2 text-left">Tags</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const checked = selectedKeys.has(r.scenario_key);
+              return (
+                <tr
+                  key={r.scenario_key}
+                  className={cn(
+                    'cursor-pointer border-t border-border/60 hover:bg-muted/30',
+                    !checked && 'opacity-70',
+                  )}
+                  onClick={() => onToggleRow(r.scenario_key)}
+                >
+                  <td className="px-3 py-2 align-top">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => onToggleRow(r.scenario_key)}
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label={`Select ${r.scenario_key}`}
+                      className="cursor-pointer accent-primary"
+                    />
+                  </td>
+                  <td className="px-3 py-2 align-top font-medium text-foreground">
+                    {r.scenario_key}
+                  </td>
+                  <td className="px-3 py-2 align-top text-muted-foreground">
+                    <span className="line-clamp-2 block max-w-[520px]" title={r.prompt}>
+                      {r.prompt}
+                    </span>
+                  </td>
+                  <td className="w-[180px] px-3 py-2 align-top">
+                    <div className="flex flex-wrap gap-1">
+                      {r.tags.map((t) => (
+                        <span
+                          key={t}
+                          className="max-w-[160px] truncate rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground"
+                        >
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

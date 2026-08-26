@@ -375,11 +375,39 @@ def run_agent_llm_eval(
     # begins scoring, per-scenario failures are already persisted onto
     # ``agent_llm_eval_results`` (fail-soft rows), so swallow-and-log at
     # THAT phase to avoid double-writing.
+    #
+    # ``run_id`` — when the router created a pending row in
+    # ``agent_llm_eval_runs`` (the FE flow), lifecycle-flip that row so
+    # the UI sees pending → running → completed / failed. CLI / test
+    # callers that trigger the task without a pending row pass
+    # ``run_id=None`` and the lifecycle helpers no-op safely.
+    parsed_run_id = _UUID(run_id) if run_id else None
+    run_summary_out = None
     try:
         with get_db_context() as db:
             svc = AgentLlmEvalService()
+            if parsed_run_id is not None:
+                # Idempotency guard for Procrastinate replays. If the row
+                # is already in a terminal state (completed / failed) a
+                # previous worker attempt finished the scoring; re-entering
+                # the scoring loop would trip
+                # ``uq_agent_llm_eval_results_run_scenario`` on
+                # ``_persist_result_batch`` and the scoring-phase except
+                # would flip the completed run to ``failed``. Skip cleanly
+                # instead.
+                existing = svc.mark_running(db, run_id=parsed_run_id)
+                if existing is not None and existing.status in {
+                    "completed",
+                    "failed",
+                }:
+                    logger.info(
+                        "[agent-llm-eval] worker skipping replay agent={} "
+                        "run_id={} status={} (already terminal — no-op)",
+                        agent_id, parsed_run_id, existing.status,
+                    )
+                    return
             try:
-                svc.run_eval_for_agent(
+                run_summary_out = svc.run_eval_for_agent(
                     db,
                     agent_id=_UUID(agent_id),
                     triggered_by=triggered_by,
@@ -390,9 +418,9 @@ def run_agent_llm_eval(
                     tags=tags,
                     folder=folder,
                     folders=folders,
-                    run_id=_UUID(run_id) if run_id else None,
+                    run_id=parsed_run_id,
                 )
-            except Exception:  # noqa: BLE001
+            except Exception as scoring_error:  # noqa: BLE001
                 # Scoring-phase failure — per-scenario failures were already
                 # persisted by ``run_eval`` (or its ``_mark_failed`` path),
                 # so the FE run history shows the failure without needing a
@@ -402,6 +430,55 @@ def run_agent_llm_eval(
                     "(swallowed — per-scenario failures are persisted)",
                     agent_id, triggered_by,
                 )
+                if parsed_run_id is not None:
+                    # ``run_eval`` closes ``db`` internally after snapshotting
+                    # config (mirrors ``_persist_result_batch``'s fresh-session
+                    # pattern — Neon's ``idle_in_transaction_session_timeout``
+                    # would drop a session held across the LLM loop). Use a
+                    # fresh session for the terminal flip so we're not
+                    # writing through a closed handle. Best-effort — a
+                    # lifecycle-flip failure must not shadow the scoring
+                    # error (already logged).
+                    try:
+                        with get_db_context() as flip_db:
+                            svc.fail_run(
+                                flip_db,
+                                run_id=parsed_run_id,
+                                error=f"{type(scoring_error).__name__}: {scoring_error}",
+                            )
+                    except Exception:  # noqa: BLE001
+                        logger.exception(
+                            "[agent-llm-eval] fail_run cleanup after scoring "
+                            "failure failed run_id={}",
+                            parsed_run_id,
+                        )
+            else:
+                if parsed_run_id is not None:
+                    llm_model = getattr(run_summary_out, "llm_model", None)
+                    llm_provider = getattr(run_summary_out, "llm_provider", None)
+                    completed_at = getattr(run_summary_out, "completed_at", None)
+                    # Same closed-session reason as the failure branch —
+                    # open a fresh session for the terminal ``complete_run``
+                    # flip.
+                    try:
+                        with get_db_context() as flip_db:
+                            svc.complete_run(
+                                flip_db,
+                                run_id=parsed_run_id,
+                                completed_at=completed_at,
+                                llm_model=llm_model,
+                                llm_provider=llm_provider,
+                            )
+                    except Exception:  # noqa: BLE001
+                        # A lifecycle-flip failure at the tail must not turn
+                        # a successful scoring run into a worker-level
+                        # exception (which would retry the whole job and
+                        # double-write results).
+                        logger.exception(
+                            "[agent-llm-eval] complete_run flip failed run_id={} "
+                            "(scoring succeeded, results already persisted)",
+                            parsed_run_id,
+                        )
     except Exception:  # noqa: BLE001
         # Pre-``run_eval`` failure — DB connect, agent lookup, config
         # resolution. Nothing persisted; re-raise so Procrastinate retries
