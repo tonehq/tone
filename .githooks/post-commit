@@ -1,0 +1,17 @@
+#!/bin/sh
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+cd "$REPO_ROOT" 2>/dev/null || exit 0
+
+if [ "${TONE_HOOKS_DISABLE:-0}" = "1" ]; then
+  exit 0
+fi
+
+if command -v gitnexus >/dev/null 2>&1; then
+  gitnexus analyze >/dev/null 2>&1
+fi
+
+exit 0
