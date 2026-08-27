@@ -14,22 +14,22 @@ This script:
 
 Usage:
     # Trigger 5 concurrent calls and watch subprocess spawning
-    python tools/twilio_load_test.py --calls 5 \
+    python _archive/tools/twilio_load_test.py --calls 5 \
         --to-number "+1234567890" --webhook-url "https://your-server.com/voice"
 
     # Gradual load test: 2 -> 5 -> 10 -> 15 -> 20
-    python tools/twilio_load_test.py --mode load_test \
+    python _archive/tools/twilio_load_test.py --mode load_test \
         --to-number "+1234567890" --webhook-url "https://your-server.com/voice"
 
     # With delay between calls (staggered)
-    python tools/twilio_load_test.py --calls 10 --delay 1.0 \
+    python _archive/tools/twilio_load_test.py --calls 10 --delay 1.0 \
         --to-number "+1234567890" --webhook-url "https://your-server.com/voice"
 
     # Monitor running bot subprocesses without triggering calls
-    python tools/twilio_load_test.py --mode monitor --server-pid 12345
+    python _archive/tools/twilio_load_test.py --mode monitor --server-pid 12345
 
     # Specify the server base URL for /calls and /status endpoint checks
-    python tools/twilio_load_test.py --calls 5 \
+    python _archive/tools/twilio_load_test.py --calls 5 \
         --to-number "+1234567890" --webhook-url "https://your-server.com/voice" \
         --server-url "http://localhost:7860"
 
