@@ -5,16 +5,16 @@ Connects to the local /ws endpoint and sends Twilio-format messages
 to trigger the incoming call flow.
 
 Usage:
-    python test_incoming_call.py
+    python _archive/root/test_incoming_call.py
 
     # Send a WAV file as speech input (triggers the bot to respond):
-    python test_incoming_call.py --audio-file hello.wav
+    python _archive/root/test_incoming_call.py --audio-file hello.wav
 
     # Send silence audio frames to keep connection alive:
-    python test_incoming_call.py --send-audio
+    python _archive/root/test_incoming_call.py --send-audio
 
     # With custom server URL:
-    python test_incoming_call.py --url ws://localhost:7860/ws
+    python _archive/root/test_incoming_call.py --url ws://localhost:7860/ws
 """
 
 import argparse
