@@ -70,6 +70,26 @@ class AgentLlmScenarioKeyConflictError(AgentLlmEvalError):
     user before the INSERT."""
 
 
+class AgentLlmEvalFolderNotFoundError(AgentLlmEvalError):
+    """Requested folder row does not exist for the caller's (agent, org)
+    scope. Distinguished so the router can map it to a stable
+    ``FOLDER_NOT_FOUND`` code the FE can react to."""
+
+
+class AgentLlmEvalFolderNameConflictError(AgentLlmEvalError):
+    """Attempted to create / rename a folder whose ``name`` collides with
+    another folder on the same agent. Enforced via the
+    ``uq_agent_llm_eval_folders_agent_name`` DB constraint AND explicitly
+    checked at the service layer so the offending name is surfaced before
+    the INSERT/UPDATE."""
+
+
+class AgentLlmEvalFolderNotDeletableError(AgentLlmEvalError):
+    """Attempted to delete the LAST remaining folder for an agent. Every
+    agent must always have at least one folder so create-scenario always
+    has a valid ``folder_id`` to write."""
+
+
 class CallTranscriptEvalError(EvalError):
     """Base class for typed post-call transcript eval errors — separates the
     Level-3 (real-call) harness from the RAG and agent-LLM flows so callers

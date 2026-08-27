@@ -334,8 +334,8 @@ class AgentLlmEvalService:
         judge_model: Optional[str] = None,
         scenario_ids: Optional[List[UUID]] = None,
         tags: Optional[List[str]] = None,
-        folder: Optional[str] = None,
-        folders: Optional[List[str]] = None,
+        folder_id: Optional[UUID] = None,
+        folder_ids: Optional[List[UUID]] = None,
         run_id: Optional[UUID] = None,
         organization_id: Optional[UUID] = None,
     ) -> AgentLlmRunSummary:
@@ -382,8 +382,8 @@ class AgentLlmEvalService:
             agent_id,
             scenario_ids=scenario_ids,
             tags=tags,
-            folder=folder,
-            folders=folders,
+            folder_id=folder_id,
+            folder_ids=folder_ids,
         )
         if not rows:
             raise AgentLlmEvalConfigError(

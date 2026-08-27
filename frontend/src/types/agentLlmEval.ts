@@ -39,7 +39,12 @@ export interface AgentLlmEvalScenario {
   persona_criteria: string | null;
   instruction_criteria: string | null;
   tags: string[] | null;
-  // Single-value grouping ("folder") for the UI sidebar. null = Uncategorized.
+  // FK to first-class folder row. Every scenario always belongs to a real
+  // folder; the backend seeds a "Default" folder on agent-create so
+  // ``folder_id`` is never null.
+  folder_id: string;
+  // Convenience display name (JOINed from the folder row) — read-only. The
+  // backend populates it so the table / drawer don't need a second query.
   folder: string | null;
   metrics_override: string[] | null;
   threshold_override: number | null;
@@ -51,39 +56,51 @@ export interface AgentLlmEvalScenario {
   updated_at: string | null;
 }
 
-// Distinct folder + scenario count for one agent.
-// null folder is returned as { folder: null, count: N } — render as "Uncategorized".
+// First-class folder row + its scenario count.
 export interface AgentLlmEvalFolder {
-  folder: string | null;
+  id: string;
+  agent_id: string;
+  name: string;
+  description: string | null;
   count: number;
+  created_at: string | null;
+  updated_at: string | null;
 }
 
 export interface ListFoldersResponse {
   items: AgentLlmEvalFolder[];
 }
 
+export interface CreateFolderPayload {
+  name: string;
+  description?: string | null;
+}
+
+// Backend echoes the created folder row on ``POST /folders``. Uses a
+// type alias (not an empty ``extends`` interface) because
+// ``@typescript-eslint/no-empty-object-type`` correctly flags the
+// no-op subtype as equivalent to its supertype.
+export type CreateFolderResponse = AgentLlmEvalFolder;
+
 export interface RenameFolderPayload {
-  old_name: string;
+  folder_id: string;
   new_name: string;
 }
 
-export interface RenameFolderResponse {
-  old_name: string;
-  new_name: string;
-  scenarios_updated: number;
-  results_updated: number;
-}
+// Backend echoes the renamed folder row on ``POST /folders/rename``.
+// Type alias for the same reason as ``CreateFolderResponse``.
+export type RenameFolderResponse = AgentLlmEvalFolder;
 
 export interface DeleteFolderPayload {
-  name: string;
+  folder_id: string;
 }
 
-// ``scenarios_deleted`` is the number of scenarios permanently removed.
+// ``scenarios_deleted`` is the number of scenarios removed by the CASCADE.
 // ``results_preserved`` is the count of past-run rows still tagged with
 // this folder's name — kept intact so run history stays readable. The FE
 // uses both in the confirmation impact + success toast.
 export interface DeleteFolderResponse {
-  name: string;
+  folder_id: string;
   scenarios_deleted: number;
   results_preserved: number;
 }
@@ -100,8 +117,8 @@ export interface ListScenariosRequest {
   page_size?: number;
   search?: string | null;
   tags?: string[] | null;
-  // Exact folder filter. '' = "Uncategorized" (matches NULL rows); null/undefined skips.
-  folder?: string | null;
+  // Exact folder filter by FK; null/undefined skips.
+  folder_id?: string | null;
   // Exact-match filter on ``AgentLlmEvalScenario.source``. Whitelisted at
   // the router (Pydantic regex); non-whitelisted values are rejected.
   source?: AgentLlmEvalScenarioSource | null;
@@ -116,8 +133,9 @@ export interface ScenarioInput {
   persona_criteria?: string | null;
   instruction_criteria?: string | null;
   tags?: string[] | null;
-  // Single-value grouping. '' or omitted → Uncategorized.
-  folder?: string | null;
+  // FK to first-class folder row. When omitted, the backend resolves the
+  // agent's Default folder.
+  folder_id?: string | null;
   metrics_override?: string[] | null;
   threshold_override?: number | null;
   scenario_ord?: number | null;
@@ -153,8 +171,9 @@ export interface ScenarioPatch {
   persona_criteria?: string | null;
   instruction_criteria?: string | null;
   tags?: string[] | null;
-  // '' clears the folder (row → NULL → "Uncategorized").
-  folder?: string | null;
+  // Move to a different folder. Every scenario must belong to a real
+  // folder — there is no way to clear it.
+  folder_id?: string | null;
   metrics_override?: string[] | null;
   // Sentinel: -1 clears the override so the resolver falls back to the org default.
   threshold_override?: number | null;
@@ -197,7 +216,7 @@ export interface AgentLlmEvalRunSummary {
   // Derived by the backend's LEFT JOIN so it stays fresh without a write
   // from the worker per scored scenario.
   scored_count: number;
-  // Snapshot of the trigger filter ({scenario_ids, tags, folder, folders}).
+  // Snapshot of the trigger filter ({scenario_ids, tags, folder_id, folder_ids}).
   // Loose typing — the FE doesn't unpack it in v1; kept for a future
   // "re-run this exact selection" affordance.
   filter_snapshot: Record<string, unknown> | null;
@@ -207,7 +226,9 @@ export interface AgentLlmEvalScoredScenario {
   id: string;
   scenario_key: string;
   scenario_tags: string[] | null;
-  // Snapshot of the scenario's folder at run time (null = Uncategorized).
+  // Snapshot of the scenario's folder NAME at run time (null when the
+  // scenario had no folder at scoring time — legacy history rows only;
+  // new scenarios always belong to a folder).
   folder: string | null;
   prompt: string;
   expected_answer: string | null;
@@ -256,13 +277,12 @@ export interface ListRunsResponse {
 export interface TriggerRunPayload {
   scenario_ids?: string[];
   tags?: string[];
-  // Restrict the run to one folder. '' matches "Uncategorized".
-  folder?: string | null;
-  // Multi-select variant of `folder` — matches ANY of the entries. Each
-  // entry follows the same rule as `folder`: '' = Uncategorized, any other
-  // string = that named folder. When both `folder` and `folders` are
-  // provided the backend uses `folders` and ignores `folder`.
-  folders?: string[];
+  // Restrict the run to one folder (FK id).
+  folder_id?: string | null;
+  // Multi-select variant of `folder_id` — matches ANY of the folder ids
+  // in the list. When both `folder_id` and `folder_ids` are provided the
+  // backend uses `folder_ids` and ignores `folder_id`.
+  folder_ids?: string[];
   judge_model?: string | null;
 }
 
@@ -298,7 +318,7 @@ export interface GenerateScenariosPayload {
   dry_run?: boolean;
   options?: Record<string, unknown> | null;
   // When set, every persisted (non-dry-run) scenario lands in this folder.
-  folder?: string | null;
+  folder_id?: string | null;
 }
 
 export interface GenerateScenariosResponse {
