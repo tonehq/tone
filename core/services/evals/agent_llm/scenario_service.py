@@ -16,6 +16,12 @@ Every scenario row is:
 Errors are TYPED (``AgentLlmScenarioNotFoundError`` /
 ``AgentLlmScenarioKeyConflictError`` / ``EvalConfigurationError``) — the
 route layer maps them to HTTP codes, never the service.
+
+Folder membership is via ``folder_id`` FK to ``agent_llm_eval_folders``.
+Every scenario always belongs to a real folder — callers that omit
+``folder_id`` fall back to the agent's ``Default`` folder (seeded on
+agent-create). Folder writes (create/rename/delete) live on
+``AgentLlmEvalFolderService``.
 """
 
 from __future__ import annotations
@@ -23,18 +29,24 @@ from __future__ import annotations
 import csv
 import io
 from dataclasses import dataclass, field
-from typing import Any, Iterable, List, Optional, Sequence
+from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import String, bindparam, or_
+from sqlalchemy import String, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import joinedload
 
 from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
+from core.services.evals.agent_llm.folder_service import (
+    DEFAULT_FOLDER_NAME,
+    AgentLlmEvalFolderService,
+)
 from core.services.evals.errors import (
+    AgentLlmEvalFolderNotFoundError,
     AgentLlmScenarioKeyConflictError,
     AgentLlmScenarioNotFoundError,
     EvalConfigurationError,
@@ -57,9 +69,14 @@ class ScenarioInput:
     threshold_override: Optional[float] = None
     scenario_ord: Optional[int] = None
     generation_metadata: Optional[dict] = None
-    # Single-value grouping ("folder") for UI-side organization. Empty string
-    # → NULL. Same free-text semantics as tags but stored on its own column.
-    folder: Optional[str] = None
+    # First-class folder FK. When ``None``, the service resolves the
+    # agent's ``Default`` folder. Callers with an explicit user-picked
+    # folder pass ``folder_id`` directly.
+    folder_id: Optional[UUID] = None
+    # CSV / importer path: the raw folder NAME from the source file.
+    # When set (and ``folder_id`` is None), the service resolves-or-creates
+    # the folder by name in the same transaction.
+    folder_name: Optional[str] = None
     # v2 forward-compat — accepted here so the same payload can be POSTed
     # by a future tool-scoring UI without touching this DTO. Both stay
     # ``None`` for every v1 scenario.
@@ -85,8 +102,10 @@ class ScenarioPatch:
     # ``(agent_id, scenario_key)`` catches collisions, converted to
     # ``AgentLlmScenarioKeyConflictError`` at the service layer.
     scenario_key: Optional[str] = None
-    # Empty string clears the folder (row → NULL → "Uncategorized").
-    folder: Optional[str] = None
+    # Move to a different folder. Every scenario must belong to a real
+    # folder — ``None`` here means "don't change"; there is no way to
+    # detach a scenario from all folders.
+    folder_id: Optional[UUID] = None
 
 
 _CSV_REQUIRED_COLUMNS = ("scenario_key", "prompt")
@@ -144,7 +163,7 @@ class AgentLlmScenarioService(BaseService):
         *,
         search: Optional[str] = None,
         tags: Optional[Sequence[str]] = None,
-        folder: Optional[str] = None,
+        folder_id: Optional[UUID] = None,
         source: Optional[str] = None,
         sort_by: Optional[str] = "created_at",
         sort_order: str = "desc",
@@ -156,18 +175,13 @@ class AgentLlmScenarioService(BaseService):
         Reuses ``apply_search_sort_pagination`` so search / sort /
         pagination semantics match every other ``POST /…/list`` endpoint.
 
-        ``folder`` is an exact-match (case-sensitive) filter. An empty
-        string is treated as "Uncategorized" and matches rows with NULL
-        folder; ``None`` skips the filter entirely.
-
-        ``source`` is an exact-match filter on
-        ``AgentLlmEvalScenario.source`` (``manual``/``csv``/``generated``/
-        ``fixture``). Non-whitelisted values are silently ignored (skip
-        semantics — matches the folder/tags behavior for consistency;
-        the router body validator already rejects arbitrary values).
+        ``folder_id`` is an exact-match filter; ``None`` skips the filter
+        entirely.
         """
-        q = self.query(AgentLlmEvalScenario).filter(
-            AgentLlmEvalScenario.agent_id == agent_id
+        q = (
+            self.query(AgentLlmEvalScenario)
+            .options(joinedload(AgentLlmEvalScenario.folder_ref))
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
         )
 
         # Tag filter — JSONB ``?|`` (has-any-of-these-keys) so a scenario
@@ -177,7 +191,8 @@ class AgentLlmScenarioService(BaseService):
         if clean_tags:
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
 
-        q = _apply_folder_filter(q, AgentLlmEvalScenario.folder, folder)
+        if folder_id is not None:
+            q = q.filter(AgentLlmEvalScenario.folder_id == folder_id)
 
         # Source filter — reject unknown values loudly instead of silently
         # skipping the filter. Router-level Pydantic pattern already
@@ -198,7 +213,7 @@ class AgentLlmScenarioService(BaseService):
             "scenario_ord": AgentLlmEvalScenario.scenario_ord,
         }
 
-        return apply_search_sort_pagination(
+        rows, total = apply_search_sort_pagination(
             q,
             search=search,
             search_fields=[
@@ -211,6 +226,7 @@ class AgentLlmScenarioService(BaseService):
             page_no=page_no,
             page_size=page_size,
         )
+        return rows, total
 
     def get_scenario(self, agent_id: UUID, scenario_id: UUID) -> AgentLlmEvalScenario:
         """Fetch one scenario, org- + agent-scoped. Raises
@@ -218,8 +234,7 @@ class AgentLlmScenarioService(BaseService):
         to another agent in the same org (agent-mismatch is a 404, not a 403 —
         the caller shouldn't be able to distinguish "wrong agent" from
         "no such row" without another API call)."""
-        row = self._require_scenario(agent_id, scenario_id)
-        return row
+        return self._require_scenario(agent_id, scenario_id)
 
     def load_all_for_run(
         self,
@@ -227,40 +242,48 @@ class AgentLlmScenarioService(BaseService):
         *,
         scenario_ids: Optional[Sequence[UUID]] = None,
         tags: Optional[Sequence[str]] = None,
-        folder: Optional[str] = None,
-        folders: Optional[Sequence[str]] = None,
+        folder_id: Optional[UUID] = None,
+        folder_ids: Optional[Sequence[UUID]] = None,
     ) -> list[AgentLlmEvalScenario]:
         """Every scenario the run should score, ordered by ``scenario_ord``.
 
-        Filters when ``scenario_ids`` / ``tags`` / ``folder`` / ``folders`` is
-        provided; otherwise returns every scenario for the agent. Kept out
-        of ``list_scenarios`` so run-eval doesn't accidentally paginate off
-        the 51st scenario.
+        Filters when ``scenario_ids`` / ``tags`` / ``folder_id`` /
+        ``folder_ids`` is provided; otherwise returns every scenario for
+        the agent.
 
-        ``folders`` (plural, multi-select) takes precedence over ``folder``
-        (singular) when both are provided — a caller that passes ``folders``
-        opted into the multi-select code path and any ``folder`` value it
-        also sent is ignored so the two never silently combine.
+        ``folder_ids`` (plural, multi-select) takes precedence over
+        ``folder_id`` (singular) when both are provided.
         """
-        q = self.query(AgentLlmEvalScenario).filter(
-            AgentLlmEvalScenario.agent_id == agent_id
+        q = (
+            self.query(AgentLlmEvalScenario)
+            .options(joinedload(AgentLlmEvalScenario.folder_ref))
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
         )
         if scenario_ids:
             q = q.filter(AgentLlmEvalScenario.id.in_(list(scenario_ids)))
         clean_tags = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
         if clean_tags:
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
-        if folders is not None:
-            q = _apply_folders_filter(q, AgentLlmEvalScenario.folder, folders)
-        else:
-            q = _apply_folder_filter(q, AgentLlmEvalScenario.folder, folder)
-        return (
+        if folder_ids is not None:
+            # ``folder_ids`` explicitly supplied — filter by it (even if
+            # empty means "no folders selected → no rows"). Do NOT silently
+            # broaden to every scenario when the list is empty or all-None:
+            # a caller who asked for a folder filter would rather see zero
+            # results than a run scoring every scenario in the agent.
+            cleaned_ids = [f for f in folder_ids if f is not None]
+            if not cleaned_ids:
+                return []
+            q = q.filter(AgentLlmEvalScenario.folder_id.in_(cleaned_ids))
+        elif folder_id is not None:
+            q = q.filter(AgentLlmEvalScenario.folder_id == folder_id)
+        rows = (
             q.order_by(
                 AgentLlmEvalScenario.scenario_ord.asc(),
                 AgentLlmEvalScenario.created_at.asc(),
             )
             .all()
         )
+        return rows
 
     # ── Write ───────────────────────────────────────────────────────────
 
@@ -288,10 +311,10 @@ class AgentLlmScenarioService(BaseService):
         ``AgentLlmScenarioKeyConflictError`` before any INSERT — no partial
         writes.
 
-        ``source`` is stamped on every created row so the UI can badge
-        manual vs csv vs generated vs fixture inputs identically. It's a
-        keyword arg on the SERVICE (not the DTO) so a caller can't spoof
-        the provenance of a payload it received from the network.
+        Every scenario must land in a real folder — payloads that omit
+        ``folder_id`` fall back to the agent's ``Default`` folder;
+        payloads that carry a raw ``folder_name`` (CSV path) resolve-or-
+        create the folder by name.
         """
         payloads = list(payloads)
         if not payloads:
@@ -334,22 +357,49 @@ class AgentLlmScenarioService(BaseService):
                 f"scenario_key(s) already exist for this agent: {sorted(existing_keys)}"
             )
 
+        # Resolve folder_id for every payload BEFORE the INSERT loop so the
+        # DB write is a single transaction. Reuse the folder service so
+        # "resolve-or-create" logic isn't duplicated here.
+        # ``commit=False`` on the folder writes — the outer commit at the
+        # bottom of this method finalizes folders + scenarios atomically.
+        folder_svc = AgentLlmEvalFolderService(
+            self.db, user_id=self.user_id, org_id=self.org_id
+        )
+        default_folder_id: Optional[UUID] = None
+        name_to_id: dict[str, UUID] = {}
+        resolved_folder_ids: list[UUID] = []
+        for p in payloads:
+            if p.folder_id is not None:
+                # Validate the folder belongs to this (agent, org).
+                folder_svc.get_folder(agent_id, p.folder_id)
+                resolved_folder_ids.append(p.folder_id)
+                continue
+            raw_name = (p.folder_name or "").strip()
+            if raw_name:
+                cached = name_to_id.get(raw_name)
+                if cached is None:
+                    folder = folder_svc.get_or_create_folder(
+                        agent_id, raw_name, commit=False
+                    )
+                    cached = folder.id
+                    name_to_id[raw_name] = cached
+                resolved_folder_ids.append(cached)
+                continue
+            if default_folder_id is None:
+                default_folder_id = folder_svc.get_or_create_folder(
+                    agent_id, DEFAULT_FOLDER_NAME, commit=False
+                ).id
+            resolved_folder_ids.append(default_folder_id)
+
         # Figure out the next ``scenario_ord`` once so bulk imports land
         # after existing rows in display order (rather than at 0 or NULL).
         next_ord = self._next_scenario_ord(agent_id)
 
         created: list[AgentLlmEvalScenario] = []
-        for offset, payload in enumerate(payloads):
+        for offset, (payload, folder_id) in enumerate(
+            zip(payloads, resolved_folder_ids)
+        ):
             row = AgentLlmEvalScenario(
-                # Explicitly stamp the caller's org — the model's default reads
-                # a context var (``get_current_org_id``) that isn't guaranteed
-                # to be populated for every code path (workers, seed scripts,
-                # tests). Setting it here keeps the pre-check
-                # (org-scoped ``self.query``) consistent with the INSERT, so
-                # a duplicate we DID surface at the pre-check step can't be
-                # duplicated via a different-org row that the pre-check missed
-                # but the DB constraint (``(agent_id, scenario_key)``, which is
-                # NOT org-scoped) still catches.
                 organization_id=self.org_id,
                 agent_id=agent_id,
                 scenario_key=payload.scenario_key.strip(),
@@ -363,7 +413,7 @@ class AgentLlmScenarioService(BaseService):
                 persona_criteria=_clean_optional_text(payload.persona_criteria),
                 instruction_criteria=_clean_optional_text(payload.instruction_criteria),
                 tags=_clean_string_list(payload.tags),
-                folder=_clean_folder(payload.folder),
+                folder_id=folder_id,
                 metrics_override=_clean_string_list(payload.metrics_override),
                 threshold_override=payload.threshold_override,
                 source=source,
@@ -399,6 +449,7 @@ class AgentLlmScenarioService(BaseService):
             ) from exc
 
         for row in created:
+            # ``folder_ref`` will load lazily on first access in ``to_dict``.
             self.db.refresh(row)
         return created
 
@@ -449,8 +500,13 @@ class AgentLlmScenarioService(BaseService):
             row.instruction_criteria = _clean_optional_text(patch.instruction_criteria)
         if patch.tags is not None:
             row.tags = _clean_string_list(patch.tags)
-        if patch.folder is not None:
-            row.folder = _clean_folder(patch.folder)
+        if patch.folder_id is not None:
+            # Validate the folder belongs to this (agent, org).
+            folder_svc = AgentLlmEvalFolderService(
+                self.db, user_id=self.user_id, org_id=self.org_id
+            )
+            folder_svc.get_folder(agent_id, patch.folder_id)
+            row.folder_id = patch.folder_id
         if patch.metrics_override is not None:
             row.metrics_override = _clean_string_list(patch.metrics_override)
         if patch.threshold_override is not None:
@@ -535,6 +591,9 @@ class AgentLlmScenarioService(BaseService):
         maps them to HTTP 400 with the exact reason. Row validation
         (empty ``prompt``, duplicate keys, …) reuses the same checks as
         the manual create path — one implementation of the rules.
+        Folder names referenced by rows are resolve-or-created by
+        ``create_scenarios_bulk`` so a CSV column ``folder=Support`` lands
+        the row in a (new or existing) Support folder.
         """
         parsed = _parse_scenarios_csv(csv_bytes)
         payloads = [_csv_row_to_input(r) for r in parsed]
@@ -550,7 +609,7 @@ class AgentLlmScenarioService(BaseService):
         count: int = 10,
         dry_run: bool = True,
         options: Optional[dict] = None,
-        folder: Optional[str] = None,
+        folder_id: Optional[UUID] = None,
     ) -> "GeneratedBatch":
         """Ask the given generator strategy for ``count`` scenarios.
 
@@ -560,9 +619,10 @@ class AgentLlmScenarioService(BaseService):
         point as manual create, so future automated cron jobs use exactly
         the same code path.
 
-        ``folder`` (when non-None) is stamped on every persisted scenario
-        so a "Generate into this folder" flow lands N rows organized from
-        the start — no post-hoc reshuffling.
+        ``folder_id`` (when non-None) is stamped on every persisted
+        scenario so a "Generate into this folder" flow lands N rows
+        organized from the start. When omitted, the create path resolves
+        the agent's ``Default`` folder.
         """
         # Local import — the scenario_generation package is lightweight but
         # importing it lazily keeps the CLI (which never generates) fast.
@@ -592,7 +652,7 @@ class AgentLlmScenarioService(BaseService):
                 ),
             )
 
-        payloads = [_generated_to_input(g, folder=folder) for g in generated]
+        payloads = [_generated_to_input(g, folder_id=folder_id) for g in generated]
         persisted = self.create_scenarios_bulk(
             agent_id, payloads, source="generated"
         )
@@ -601,172 +661,6 @@ class AgentLlmScenarioService(BaseService):
             generated=generated,
             persisted=persisted,
         )
-
-    # ── Folder read + rename ────────────────────────────────────────────
-
-    def list_folders(self, agent_id: UUID) -> list[dict]:
-        """Return every distinct folder for one agent plus its scenario count.
-
-        NULL folder is included as ``{"folder": None, "count": N}`` so the
-        UI can render "Uncategorized" without a second query. Result is
-        ordered so NULL sorts last and named folders come alphabetically.
-        """
-        from sqlalchemy import func
-
-        rows = (
-            self.query(AgentLlmEvalScenario)
-            .with_entities(
-                AgentLlmEvalScenario.folder.label("folder"),
-                func.count(AgentLlmEvalScenario.id).label("count"),
-            )
-            .filter(AgentLlmEvalScenario.agent_id == agent_id)
-            .group_by(AgentLlmEvalScenario.folder)
-            .all()
-        )
-        # NULL sorts last, named folders alphabetically.
-        result = sorted(
-            ({"folder": r.folder, "count": int(r.count)} for r in rows),
-            key=lambda x: (x["folder"] is None, (x["folder"] or "").lower()),
-        )
-        return result
-
-    def rename_folder(
-        self,
-        agent_id: UUID,
-        *,
-        old_name: str,
-        new_name: str,
-    ) -> dict:
-        """Bulk-rename a folder for one agent. Updates BOTH
-        ``agent_llm_eval_scenarios.folder`` AND
-        ``agent_llm_eval_results.folder`` in a single transaction so the
-        sidebar and past-run history both migrate under the new name.
-
-        Raises:
-            EvalConfigurationError: if either name is empty or equal.
-            AgentLlmScenarioNotFoundError: if no scenarios match ``old_name``.
-        """
-        # Local import — avoid a circular hazard if models later import from
-        # services. Cheap either way since it's a one-off per rename.
-        from core.models.agent_llm_eval_result import AgentLlmEvalResult
-
-        cleaned_old = _clean_folder(old_name)
-        cleaned_new = _clean_folder(new_name)
-        if not cleaned_old:
-            raise EvalConfigurationError("old_name must be a non-empty folder")
-        if not cleaned_new:
-            raise EvalConfigurationError("new_name must be a non-empty folder")
-        if cleaned_old == cleaned_new:
-            raise EvalConfigurationError("new_name must differ from old_name")
-
-        scenarios_updated = (
-            self.query(AgentLlmEvalScenario)
-            .filter(AgentLlmEvalScenario.agent_id == agent_id)
-            .filter(AgentLlmEvalScenario.folder == cleaned_old)
-            .update(
-                {AgentLlmEvalScenario.folder: cleaned_new},
-                synchronize_session=False,
-            )
-        )
-        if scenarios_updated == 0:
-            self.db.rollback()
-            raise AgentLlmScenarioNotFoundError(
-                f"Folder {cleaned_old!r} not found for agent {agent_id}"
-            )
-
-        results_updated = (
-            self.query(AgentLlmEvalResult)
-            .filter(AgentLlmEvalResult.agent_id == agent_id)
-            .filter(AgentLlmEvalResult.folder == cleaned_old)
-            .update(
-                {AgentLlmEvalResult.folder: cleaned_new},
-                synchronize_session=False,
-            )
-        )
-        self.db.commit()
-        logger.info(
-            "[agent-llm-eval] renamed folder agent={} old={} new={} scenarios={} results={}",
-            agent_id, cleaned_old, cleaned_new, scenarios_updated, results_updated,
-        )
-        return {
-            "old_name": cleaned_old,
-            "new_name": cleaned_new,
-            "scenarios_updated": int(scenarios_updated),
-            "results_updated": int(results_updated),
-        }
-
-    def delete_folder(
-        self,
-        agent_id: UUID,
-        *,
-        name: str,
-    ) -> dict:
-        """Bulk-delete every scenario in a folder for one agent — the folder
-        disappears automatically once its last scenario is gone (folder
-        membership is stored per-scenario, not as a separate row).
-
-        Past run results (``agent_llm_eval_results``) keep their ``folder``
-        snapshot column so the Runs tab's history stays readable — matches
-        the rename flow's "history is preserved" semantics. Users who need
-        to move scenarios elsewhere should re-folder them via the scenario
-        edit modal FIRST; this API is unambiguously destructive.
-
-        Raises:
-            EvalConfigurationError: if ``name`` is empty / whitespace (the
-                ``Uncategorized`` bucket has no name and must not be
-                deletable through this path).
-            AgentLlmScenarioNotFoundError: if no scenarios match ``name``.
-        """
-        cleaned = _clean_folder(name)
-        if not cleaned:
-            # Empty / whitespace name maps to the ``Uncategorized`` bucket
-            # (NULL folder on the results table). That bucket is virtual —
-            # it can't be deleted as a unit; users bulk-delete its
-            # scenarios one-by-one from the scenarios table instead.
-            raise EvalConfigurationError(
-                "Cannot delete folder — a folder name is required "
-                "(Uncategorized is not deletable as a group)."
-            )
-
-        matching = (
-            self.query(AgentLlmEvalScenario)
-            .filter(AgentLlmEvalScenario.agent_id == agent_id)
-            .filter(AgentLlmEvalScenario.folder == cleaned)
-        )
-        # Snapshot the count BEFORE the delete so the response shows the
-        # user exactly what was removed (a stale UI cache could show a
-        # different N than the actual delete).
-        scenarios_matched = matching.count()
-        if scenarios_matched == 0:
-            raise AgentLlmScenarioNotFoundError(
-                f"Folder {cleaned!r} not found for agent {agent_id}"
-            )
-
-        # Count past-run rows tagged with this folder BEFORE the delete —
-        # they aren't touched (history is preserved), but the response
-        # surfaces the number so the FE confirmation copy is accurate
-        # ("N scenarios deleted; M past run rows keep their folder label").
-        from core.models.agent_llm_eval_result import AgentLlmEvalResult
-
-        results_preserved = (
-            self.query(AgentLlmEvalResult)
-            .filter(AgentLlmEvalResult.agent_id == agent_id)
-            .filter(AgentLlmEvalResult.folder == cleaned)
-            .count()
-        )
-
-        scenarios_deleted = matching.delete(synchronize_session=False)
-        self.db.commit()
-        logger.info(
-            "[agent-llm-eval] deleted folder agent={} name={} scenarios={} "
-            "results_preserved={}",
-            agent_id, cleaned, scenarios_deleted, results_preserved,
-        )
-        return {
-            "name": cleaned,
-            "scenarios_deleted": int(scenarios_deleted),
-            "results_preserved": int(results_preserved),
-        }
 
     # ── Internals ───────────────────────────────────────────────────────
 
@@ -796,7 +690,6 @@ class AgentLlmScenarioService(BaseService):
         )
         return int(row or 0)
 
-
 # ── Helpers exposed to callers (eval runner uses the row → LLMScenario one) ──
 
 
@@ -810,10 +703,25 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
 
     ``metrics_override`` on the row maps to ``metrics`` on the scenario
     (the dataclass field is named after the CLI usage, not the DB column).
+
+    The ``folder`` field on the dataclass carries the folder NAME
+    (the runner snapshots it into ``agent_llm_eval_results.folder``).
+    Callers should have loaded the ``folder_ref`` relationship (e.g. via
+    ``joinedload`` in ``list_scenarios`` / ``load_all_for_run``); if the
+    relationship isn't loaded we fall back to None rather than firing a
+    lazy query on a possibly-closed session.
     """
     # Local import keeps the CLI fixture module out of any process that
     # never runs an eval (routes that only list scenarios).
     from evals.fixtures.agent_llm_scenarios import LLMScenario
+
+    folder_name: Optional[str] = None
+    try:
+        folder_row = row.folder_ref
+        if folder_row is not None:
+            folder_name = folder_row.name
+    except Exception:  # noqa: BLE001 — detached / expired instance
+        folder_name = None
 
     return LLMScenario(
         name=row.scenario_key,
@@ -826,7 +734,7 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
         persona_criteria=row.persona_criteria,
         instruction_criteria=row.instruction_criteria,
         tags=list(row.tags) if row.tags else [],
-        folder=row.folder,
+        folder=folder_name,
         # Tool-aware fields — forward the persisted JSONB verbatim; the
         # deterministic ``tool_selection`` metric consumes it (see
         # ``core.services.evals.agent_llm.tool_selection_metric``). ``None``
@@ -926,7 +834,7 @@ def _parse_scenarios_csv(raw: bytes) -> list[dict]:
             f"CSV is missing required column(s): {', '.join(missing)}. "
             f"Expected headers: scenario_key, prompt "
             "(optional: expected_answer, persona_criteria, instruction_criteria, "
-            "tags, metrics_override, threshold_override, scenario_ord)."
+            "tags, metrics_override, threshold_override, scenario_ord, folder)."
         )
 
     rows: list[dict] = []
@@ -974,20 +882,20 @@ def _csv_row_to_input(row: dict) -> ScenarioInput:
         persona_criteria=(row.get("persona_criteria") or None),
         instruction_criteria=(row.get("instruction_criteria") or None),
         tags=tags,
-        folder=(row.get("folder") or None),
+        folder_name=(row.get("folder") or None),
         metrics_override=metrics,
         threshold_override=threshold,
         scenario_ord=scenario_ord,
     )
 
 
-def _generated_to_input(g: Any, *, folder: Optional[str] = None) -> ScenarioInput:
+def _generated_to_input(g: Any, *, folder_id: Optional[UUID] = None) -> ScenarioInput:
     """Convert a ``GeneratedScenario`` into a ``ScenarioInput`` for persist.
     Kept loose (``g: Any``) so this file never imports the generator package
     at module load — the generator, if any, is imported lazily inside
     ``generate_scenarios``.
 
-    ``folder`` is stamped from the caller (the "Generate into folder X"
+    ``folder_id`` is stamped from the caller (the "Generate into folder X"
     picker); generators never invent a folder themselves.
     """
     return ScenarioInput(
@@ -997,83 +905,13 @@ def _generated_to_input(g: Any, *, folder: Optional[str] = None) -> ScenarioInpu
         persona_criteria=getattr(g, "persona_criteria", None),
         instruction_criteria=getattr(g, "instruction_criteria", None),
         tags=list(getattr(g, "tags", None) or []) or None,
-        folder=folder,
+        folder_id=folder_id,
         generation_metadata=getattr(g, "generation_metadata", None),
         # Forward tool-aware fields when the generator populated them
         # (Phase 2). ``None`` for text-only scenarios — persistence stores
         # NULL, and the deterministic ``tool_selection`` metric skips.
         expected_tools=getattr(g, "expected_tools", None),
     )
-
-
-def _clean_folder(value: Any) -> Optional[str]:
-    """Trim + coerce empty → NULL. Cap at 120 chars to match the column
-    constraint (defensive; the router body validator caps at the same
-    length, but a non-HTTP caller — worker, CLI — has no such guard).
-    """
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        return None
-    trimmed = value.strip()
-    if not trimmed:
-        return None
-    return trimmed[:120]
-
-
-def _apply_folder_filter(query, column, folder: Optional[str]):
-    """Add a folder filter to ``query`` unless ``folder is None``.
-
-    ``folder == ""`` means "Uncategorized" and matches rows where the
-    column IS NULL; ``folder`` otherwise is an exact match. Kept as a
-    helper so ``list_scenarios`` / ``load_all_for_run`` share ONE
-    interpretation of the null-vs-empty-vs-name distinction."""
-    if folder is None:
-        return query
-    if folder == "":
-        return query.filter(column.is_(None))
-    return query.filter(column == folder)
-
-
-def _apply_folders_filter(query, column, folders: Optional[Sequence[str]]):
-    """Multi-folder OR-filter — matches ANY of the entries in ``folders``.
-
-    Each entry follows the same null-vs-name convention as
-    :func:`_apply_folder_filter`: an empty string ``""`` means
-    "Uncategorized" (matches rows where the column IS NULL); any other
-    string is an exact match on that named folder. Multiple entries are
-    combined with ``OR``.
-
-    ``None`` or an empty (post-strip) list is a no-op — the caller
-    signalled "no folder filter", NOT "no folders match". This mirrors
-    the singular helper's contract so a caller that always passes the
-    plural param can still get an unfiltered query by passing ``None``.
-    """
-    if not folders:
-        return query
-    include_null = False
-    named: list[str] = []
-    for f in folders:
-        if f is None:
-            continue
-        if not isinstance(f, str):
-            continue
-        if f == "":
-            include_null = True
-        else:
-            trimmed = f.strip()
-            if trimmed:
-                named.append(trimmed)
-    if not named and not include_null:
-        return query
-    conditions = []
-    if named:
-        conditions.append(column.in_(named))
-    if include_null:
-        conditions.append(column.is_(None))
-    if len(conditions) == 1:
-        return query.filter(conditions[0])
-    return query.filter(or_(*conditions))
 
 
 def _split_csv_list(value: Optional[str]) -> Optional[list[str]]:

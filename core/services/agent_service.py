@@ -719,6 +719,7 @@ class AgentService(BaseService):
             )
 
             self._apply_attachments(agent, data, user_id)
+            self._seed_default_llm_eval_folder(agent.id)
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
@@ -821,6 +822,7 @@ class AgentService(BaseService):
                 after=self._snapshot(new_agent, self._AGENT_ROOT_FIELDS),
                 extra={"source_agent_id": str(source.id)},
             )
+            self._seed_default_llm_eval_folder(new_agent.id)
             self.db.commit()
         except IntegrityError as e:
             self.db.rollback()
@@ -1491,6 +1493,31 @@ class AgentService(BaseService):
                 str(config.created_by_user_id) if config.created_by_user_id else None
             ),
         }
+
+    def _seed_default_llm_eval_folder(self, agent_id: UUID) -> None:
+        """Seed the agent's ``Default`` LLM-eval folder inside the same
+        create-agent transaction so the LLM Evals tab never renders a
+        "no folders" empty state and ``create_scenario`` always has a
+        valid ``folder_id`` to write. Idempotent via
+        ``get_or_create_folder`` — retries / replays are a no-op.
+
+        ``commit=False`` — this call runs INSIDE ``create_agent`` /
+        ``clone_agent`` between the agent flush and the outer
+        ``self.db.commit()``. Committing here would end the transaction
+        early and any subsequent failure would leave a partial write
+        that the enclosing ``except`` can't roll back.
+        """
+        from core.services.evals.agent_llm.folder_service import (
+            DEFAULT_FOLDER_NAME,
+            AgentLlmEvalFolderService,
+        )
+
+        folder_svc = AgentLlmEvalFolderService(
+            self.db, user_id=self.user_id, org_id=self.org_id
+        )
+        folder_svc.get_or_create_folder(
+            agent_id, DEFAULT_FOLDER_NAME, commit=False
+        )
 
     def _apply_attachments(
         self,

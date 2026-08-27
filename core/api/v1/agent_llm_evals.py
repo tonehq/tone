@@ -9,7 +9,7 @@ editions from ``main.py``.
 """
 from __future__ import annotations
 
-from typing import Any, List, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, UploadFile, status
@@ -20,6 +20,9 @@ from sqlalchemy.orm import Session
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.models.agent import Agent
+from core.services.evals.agent_llm.folder_service import (
+    AgentLlmEvalFolderService,
+)
 from core.services.evals.agent_llm.scenario_service import (
     AgentLlmScenarioService,
     ScenarioInput,
@@ -28,6 +31,9 @@ from core.services.evals.agent_llm.scenario_service import (
 from core.services.evals.agent_llm.service import AgentLlmEvalService
 from core.services.evals.errors import (
     AgentLlmEvalConfigError,
+    AgentLlmEvalFolderNameConflictError,
+    AgentLlmEvalFolderNotDeletableError,
+    AgentLlmEvalFolderNotFoundError,
     AgentLlmScenarioKeyConflictError,
     AgentLlmScenarioNotFoundError,
     EvalConfigurationError,
@@ -46,15 +52,14 @@ class ListScenariosRequest(BaseModel):
     project's standard ``POST /list`` convention (search + tag filter +
     folder filter + whitelisted sort + pagination).
 
-    ``folder`` is exact-match: a value matches that named folder; an
-    empty string matches "Uncategorized" (NULL folder); ``None`` skips.
+    ``folder_id`` is exact-match; ``None`` skips.
     """
 
     page_no: int = Field(default=1, ge=1)
     page_size: int = Field(default=50, ge=1, le=200)
     search: Optional[str] = None
     tags: Optional[List[str]] = None
-    folder: Optional[str] = Field(default=None, max_length=120)
+    folder_id: Optional[UUID] = None
     # Exact-match filter against ``AgentLlmEvalScenario.source``. Bounded
     # to the whitelisted set so a caller can't sneak arbitrary values into
     # the SQL. Any unlisted value is silently ignored by the service
@@ -73,6 +78,9 @@ class ScenarioIn(BaseModel):
     ``scenario_key`` collision (against existing rows OR within the same
     bulk payload) yields ``409 SCENARIO_KEY_CONFLICT``. Empty
     ``prompt`` / ``scenario_key`` are rejected at the service (400).
+
+    ``folder_id`` is optional — when omitted, the service resolves the
+    agent's ``Default`` folder so create is zero-friction.
     """
 
     scenario_key: str = Field(..., min_length=1, max_length=120)
@@ -81,7 +89,7 @@ class ScenarioIn(BaseModel):
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: Optional[List[str]] = None
-    folder: Optional[str] = Field(default=None, max_length=120)
+    folder_id: Optional[UUID] = None
     metrics_override: Optional[List[str]] = None
     threshold_override: Optional[float] = Field(default=None, gt=0.0, le=1.0)
     scenario_ord: Optional[int] = Field(default=None, ge=0)
@@ -109,7 +117,7 @@ class ScenarioPatchRequest(BaseModel):
     persona_criteria: Optional[str] = None
     instruction_criteria: Optional[str] = None
     tags: Optional[List[str]] = None
-    folder: Optional[str] = Field(default=None, max_length=120)
+    folder_id: Optional[UUID] = None
     metrics_override: Optional[List[str]] = None
     threshold_override: Optional[float] = None
     scenario_ord: Optional[int] = Field(default=None, ge=0)
@@ -126,7 +134,7 @@ class GenerateScenariosRequest(BaseModel):
     options: Optional[dict] = None
     # When set, every persisted (non-dry-run) scenario is stamped with
     # this folder. Ignored on dry-run previews.
-    folder: Optional[str] = Field(default=None, max_length=120)
+    folder_id: Optional[UUID] = None
 
 
 class TriggerRunRequest(BaseModel):
@@ -134,30 +142,35 @@ class TriggerRunRequest(BaseModel):
 
     scenario_ids: Optional[List[UUID]] = None
     tags: Optional[List[str]] = None
-    # Restrict the run to one folder (empty string = Uncategorized).
-    folder: Optional[str] = Field(default=None, max_length=120)
-    # Multi-select variant of ``folder`` — matches ANY of the folders in the
-    # list. Each entry follows the same rule as ``folder``: '' = Uncategorized,
-    # any other string = that named folder. When both ``folder`` and
-    # ``folders`` are provided the service treats ``folders`` as the source
-    # of truth and ignores ``folder`` (they never silently AND-combine).
-    folders: Optional[List[str]] = None
+    # Restrict the run to one folder.
+    folder_id: Optional[UUID] = None
+    # Multi-select variant of ``folder_id`` — matches ANY of the folder ids
+    # in the list. When both ``folder_id`` and ``folder_ids`` are provided
+    # the service treats ``folder_ids`` as the source of truth and ignores
+    # ``folder_id``.
+    folder_ids: Optional[List[UUID]] = None
     judge_model: Optional[str] = Field(default=None, min_length=1)
+
+
+class CreateFolderRequest(BaseModel):
+    """POST /folders body — user-driven create. 409 on name collision."""
+
+    name: str = Field(..., min_length=1, max_length=120)
+    description: Optional[str] = Field(default=None, max_length=2000)
 
 
 class RenameFolderRequest(BaseModel):
     """POST /folders/rename body."""
 
-    old_name: str = Field(..., min_length=1, max_length=120)
+    folder_id: UUID
     new_name: str = Field(..., min_length=1, max_length=120)
 
 
 class DeleteFolderRequest(BaseModel):
-    """POST /folders/delete body. ``name`` must be a real folder name —
-    the virtual ``Uncategorized`` bucket (rows with ``folder IS NULL``) is
-    not deletable as a group; the service raises 400 for empty names."""
+    """POST /folders/delete body. The service refuses to delete the LAST
+    remaining folder for an agent (returns 400 ``FOLDER_NOT_DELETABLE``)."""
 
-    name: str = Field(..., min_length=1, max_length=120)
+    folder_id: UUID
 
 
 class DeleteScenariosBulkRequest(BaseModel):
@@ -215,7 +228,7 @@ def _scenario_input_from_body(body: ScenarioIn) -> ScenarioInput:
         persona_criteria=body.persona_criteria,
         instruction_criteria=body.instruction_criteria,
         tags=body.tags,
-        folder=body.folder,
+        folder_id=body.folder_id,
         metrics_override=body.metrics_override,
         threshold_override=body.threshold_override,
         scenario_ord=body.scenario_ord,
@@ -230,7 +243,7 @@ def _scenario_patch_from_body(body: ScenarioPatchRequest) -> ScenarioPatch:
         persona_criteria=body.persona_criteria,
         instruction_criteria=body.instruction_criteria,
         tags=body.tags,
-        folder=body.folder,
+        folder_id=body.folder_id,
         metrics_override=body.metrics_override,
         threshold_override=body.threshold_override,
         scenario_ord=body.scenario_ord,
@@ -293,6 +306,30 @@ def _handle_scenario_error(exc: Exception) -> HTTPException:
     raise exc
 
 
+def _handle_folder_error(exc: Exception) -> HTTPException:
+    if isinstance(exc, AgentLlmEvalFolderNotFoundError):
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "FOLDER_NOT_FOUND", "message": str(exc)},
+        )
+    if isinstance(exc, AgentLlmEvalFolderNameConflictError):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "FOLDER_NAME_CONFLICT", "message": str(exc)},
+        )
+    if isinstance(exc, AgentLlmEvalFolderNotDeletableError):
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "FOLDER_NOT_DELETABLE", "message": str(exc)},
+        )
+    if isinstance(exc, EvalConfigurationError):
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "EVAL_CONFIG_INVALID", "message": str(exc)},
+        )
+    raise exc
+
+
 # ── Scenario routes ─────────────────────────────────────────────────────
 
 
@@ -314,7 +351,7 @@ def list_llm_eval_scenarios(
         agent_id,
         search=payload.search,
         tags=payload.tags,
-        folder=payload.folder,
+        folder_id=payload.folder_id,
         source=payload.source,
         sort_by=payload.sort_by,
         sort_order=payload.sort_order,
@@ -347,6 +384,10 @@ def create_llm_eval_scenario(
     try:
         row = svc.create_scenario(agent_id, _scenario_input_from_body(body))
     except (
+        AgentLlmEvalFolderNotFoundError,
+    ) as e:
+        raise _handle_folder_error(e) from e
+    except (
         AgentLlmScenarioKeyConflictError,
         AgentLlmScenarioNotFoundError,
         AgentLlmEvalConfigError,
@@ -377,6 +418,8 @@ def create_llm_eval_scenarios_bulk(
         rows = svc.create_scenarios_bulk(
             agent_id, payloads, source=body.source or "manual"
         )
+    except (AgentLlmEvalFolderNotFoundError,) as e:
+        raise _handle_folder_error(e) from e
     except (
         AgentLlmScenarioKeyConflictError,
         AgentLlmEvalConfigError,
@@ -439,6 +482,8 @@ def update_llm_eval_scenario(
         row = svc.update_scenario(
             agent_id, scenario_id, _scenario_patch_from_body(body)
         )
+    except (AgentLlmEvalFolderNotFoundError,) as e:
+        raise _handle_folder_error(e) from e
     except (
         AgentLlmScenarioNotFoundError,
         AgentLlmScenarioKeyConflictError,
@@ -513,7 +558,7 @@ def generate_llm_eval_scenarios(
             count=payload.count,
             dry_run=payload.dry_run,
             options=payload.options,
-            folder=payload.folder,
+            folder_id=payload.folder_id,
         )
     except ValueError as e:
         # Unknown strategy — the factory raises ValueError, mapped to 400.
@@ -521,6 +566,8 @@ def generate_llm_eval_scenarios(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "UNKNOWN_STRATEGY", "message": str(e)},
         ) from e
+    except (AgentLlmEvalFolderNotFoundError,) as e:
+        raise _handle_folder_error(e) from e
     except (
         AgentLlmScenarioKeyConflictError,
         AgentLlmEvalConfigError,
@@ -573,13 +620,16 @@ def trigger_llm_eval_run(
     # would burn a wake-up cycle only to raise ``AgentLlmEvalConfigError``
     # and log a scary "run failed" line.
     svc = AgentLlmScenarioService(db, org_id=org_id)
-    rows = svc.load_all_for_run(
-        agent_id,
-        scenario_ids=payload.scenario_ids,
-        tags=payload.tags,
-        folder=payload.folder,
-        folders=payload.folders,
-    )
+    try:
+        rows = svc.load_all_for_run(
+            agent_id,
+            scenario_ids=payload.scenario_ids,
+            tags=payload.tags,
+            folder_id=payload.folder_id,
+            folder_ids=payload.folder_ids,
+        )
+    except AgentLlmEvalFolderNotFoundError as e:
+        raise _handle_folder_error(e) from e
     if not rows:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -627,8 +677,10 @@ def trigger_llm_eval_run(
                 [str(s) for s in payload.scenario_ids] if payload.scenario_ids else None
             ),
             "tags": payload.tags,
-            "folder": payload.folder,
-            "folders": payload.folders,
+            "folder_id": str(payload.folder_id) if payload.folder_id else None,
+            "folder_ids": (
+                [str(f) for f in payload.folder_ids] if payload.folder_ids else None
+            ),
         },
     )
 
@@ -646,8 +698,8 @@ def trigger_llm_eval_run(
             triggered_by=triggered_by,
             scenario_ids=payload.scenario_ids,
             tags=payload.tags,
-            folder=payload.folder,
-            folders=payload.folders,
+            folder_id=payload.folder_id,
+            folder_ids=payload.folder_ids,
             judge_model=resolved_judge_model,
             run_id=str(run_row.id),
         )
@@ -801,13 +853,38 @@ def list_llm_eval_folders(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Distinct folders for one agent plus each folder's scenario count.
-    NULL folder is returned as ``{"folder": null, "count": N}`` so the UI
-    can render "Uncategorized" without a second query."""
+    """Every folder for one agent + its scenario count."""
     org_id = _resolve_org_id(claims)
     _ensure_agent_in_org(db, org_id, agent_id)
-    svc = AgentLlmScenarioService(db, org_id=org_id)
-    return {"items": svc.list_folders(agent_id)}
+    svc = AgentLlmEvalFolderService(db, org_id=org_id)
+    return {"items": [f.to_dict() for f in svc.list_folders(agent_id)]}
+
+
+@router.post(
+    "/agents/{agent_id}/llm-evals/folders",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_llm_eval_folder(
+    agent_id: UUID,
+    body: CreateFolderRequest = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Create a folder. Returns the persisted row so the FE can drop it
+    straight into its cache without a refetch. 409 on name collision."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalFolderService(db, org_id=org_id)
+    try:
+        row = svc.create_folder(agent_id, body.name, description=body.description)
+    except (
+        AgentLlmEvalFolderNameConflictError,
+        AgentLlmEvalFolderNotFoundError,
+        AgentLlmEvalFolderNotDeletableError,
+        EvalConfigurationError,
+    ) as e:
+        raise _handle_folder_error(e) from e
+    return {**row.to_dict(), "count": 0}
 
 
 @router.post("/agents/{agent_id}/llm-evals/folders/rename")
@@ -817,22 +894,33 @@ def rename_llm_eval_folder(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Bulk-rename a folder for one agent. Updates BOTH
-    ``agent_llm_eval_scenarios.folder`` AND ``agent_llm_eval_results.folder``
-    in a single transaction so past runs regroup under the new name."""
+    """Rename a folder. Single-row UPDATE — past run-result rows keep
+    their snapshotted folder-name text so history renders as it did at
+    scoring time."""
     org_id = _resolve_org_id(claims)
     _ensure_agent_in_org(db, org_id, agent_id)
-    svc = AgentLlmScenarioService(db, org_id=org_id)
+    svc = AgentLlmEvalFolderService(db, org_id=org_id)
     try:
-        return svc.rename_folder(
-            agent_id, old_name=body.old_name, new_name=body.new_name
-        )
+        row = svc.rename_folder(agent_id, body.folder_id, body.new_name)
     except (
-        AgentLlmScenarioNotFoundError,
-        AgentLlmEvalConfigError,
+        AgentLlmEvalFolderNotFoundError,
+        AgentLlmEvalFolderNameConflictError,
+        AgentLlmEvalFolderNotDeletableError,
         EvalConfigurationError,
     ) as e:
-        raise _handle_scenario_error(e) from e
+        raise _handle_folder_error(e) from e
+    # FE type `RenameFolderResponse = AgentLlmEvalFolder` includes `count`
+    # — match `create_llm_eval_folder`'s shape so cache-hydration paths
+    # never see `undefined` on that field.
+    from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario
+
+    count = (
+        db.query(AgentLlmEvalScenario)
+        .filter(AgentLlmEvalScenario.agent_id == agent_id)
+        .filter(AgentLlmEvalScenario.folder_id == row.id)
+        .count()
+    )
+    return {**row.to_dict(), "count": int(count)}
 
 
 @router.post("/agents/{agent_id}/llm-evals/folders/delete")
@@ -842,19 +930,21 @@ def delete_llm_eval_folder(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Bulk-delete every scenario in a folder for one agent. Past run
-    results keep their ``folder`` snapshot so the Runs tab history stays
-    readable (matches the rename flow's history-preservation semantics).
-    Returns ``{name, scenarios_deleted, results_preserved}`` so the FE
-    confirmation toast can quote the exact numbers."""
+    """Delete a folder — DB CASCADE removes every scenario inside it.
+    Past run results keep their snapshotted folder-name text column so
+    history stays readable. Returns
+    ``{folder_id, scenarios_deleted, results_preserved}`` so the FE
+    toast can quote the exact numbers. Refuses to delete the last
+    remaining folder for an agent (400 ``FOLDER_NOT_DELETABLE``)."""
     org_id = _resolve_org_id(claims)
     _ensure_agent_in_org(db, org_id, agent_id)
-    svc = AgentLlmScenarioService(db, org_id=org_id)
+    svc = AgentLlmEvalFolderService(db, org_id=org_id)
     try:
-        return svc.delete_folder(agent_id, name=body.name)
+        return svc.delete_folder(agent_id, body.folder_id)
     except (
-        AgentLlmScenarioNotFoundError,
-        AgentLlmEvalConfigError,
+        AgentLlmEvalFolderNotFoundError,
+        AgentLlmEvalFolderNameConflictError,
+        AgentLlmEvalFolderNotDeletableError,
         EvalConfigurationError,
     ) as e:
-        raise _handle_scenario_error(e) from e
+        raise _handle_folder_error(e) from e

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   compareAgentLlmEvalRuns,
+  createAgentLlmEvalFolder,
   createAgentLlmEvalScenario,
   createAgentLlmEvalScenariosBulk,
   deleteAgentLlmEvalFolder,
@@ -21,6 +22,7 @@ import type {
   BulkCreateScenariosPayload,
   BulkDeleteScenariosPayload,
   CompareRunsPayload,
+  CreateFolderPayload,
   DeleteFolderPayload,
   GenerateScenariosPayload,
   ListRunsRequest,
@@ -209,6 +211,14 @@ export function useTriggerAgentLlmEvalRun(agentId: string) {
 export function useCompareAgentLlmEvalRuns(agentId: string) {
   return useMutation({
     mutationFn: (payload: CompareRunsPayload) => compareAgentLlmEvalRuns(agentId, payload),
+  });
+}
+
+export function useCreateAgentLlmEvalFolder(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (payload: CreateFolderPayload) => createAgentLlmEvalFolder(agentId, payload),
+    onSuccess: invalidate,
   });
 }
 

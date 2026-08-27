@@ -19,6 +19,7 @@ from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
 from core.models.eval import Eval
 from core.models.eval_result import EvalResult
+from core.models.agent_llm_eval_folder import AgentLlmEvalFolder
 from core.models.agent_llm_eval_result import AgentLlmEvalResult
 from core.models.agent_llm_eval_run import AgentLlmEvalRun
 from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario
