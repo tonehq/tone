@@ -2729,7 +2729,7 @@ function GenerateScenariosModal({
           ? 'Uncheck any scenario you don’t want. Only checked rows will be saved.'
           : 'Uses the org’s judge model + this agent’s system prompt to draft scenarios. You’ll review the drafts before saving.'
       }
-      width={inPreview ? 'max-w-3xl' : 'max-w-lg'}
+      width={inPreview ? 'sm:max-w-5xl' : 'sm:max-w-lg'}
       footer={
         inPreview ? (
           <div className="flex items-center justify-between gap-2">
@@ -2828,12 +2828,18 @@ function GeneratedScenariosPreview({
     if (selectAllRef.current) selectAllRef.current.indeterminate = someSelected;
   }, [someSelected]);
   return (
-    <div className="flex max-h-[420px] flex-col overflow-hidden rounded-md border border-border/60">
+    <div className="flex max-h-[60vh] flex-col overflow-hidden rounded-md border border-border/60">
       <div className="overflow-y-auto">
-        <table className="w-full text-sm">
-          <thead className="sticky top-0 bg-muted/50 text-[11px] uppercase tracking-wide text-muted-foreground">
+        <table className="w-full table-fixed text-sm">
+          <colgroup>
+            <col className="w-10" />
+            <col className="w-[220px]" />
+            <col />
+            <col className="w-[200px]" />
+          </colgroup>
+          <thead className="sticky top-0 z-10 bg-muted text-[11px] uppercase tracking-wide text-muted-foreground shadow-[0_1px_0_0_var(--border)]">
             <tr>
-              <th className="w-10 px-3 py-2 text-left">
+              <th className="px-3 py-2 text-left">
                 <input
                   ref={selectAllRef}
                   type="checkbox"
@@ -2845,7 +2851,7 @@ function GeneratedScenariosPreview({
               </th>
               <th className="px-3 py-2 text-left">Scenario</th>
               <th className="px-3 py-2 text-left">Prompt</th>
-              <th className="w-[180px] px-3 py-2 text-left">Tags</th>
+              <th className="px-3 py-2 text-left">Tags</th>
             </tr>
           </thead>
           <tbody>
@@ -2870,15 +2876,15 @@ function GeneratedScenariosPreview({
                       className="cursor-pointer accent-primary"
                     />
                   </td>
-                  <td className="px-3 py-2 align-top font-medium text-foreground">
+                  <td className="px-3 py-2 align-top font-medium text-foreground break-words">
                     {r.scenario_key}
                   </td>
                   <td className="px-3 py-2 align-top text-muted-foreground">
-                    <span className="line-clamp-2 block max-w-[520px]" title={r.prompt}>
+                    <span className="line-clamp-3 block break-words" title={r.prompt}>
                       {r.prompt}
                     </span>
                   </td>
-                  <td className="w-[180px] px-3 py-2 align-top">
+                  <td className="px-3 py-2 align-top">
                     <div className="flex flex-wrap gap-1">
                       {r.tags.map((t) => (
                         <span
