@@ -659,6 +659,13 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
             onSaveRename={saveRenameFolder}
             onCancelRename={cancelRenameFolder}
             renamePending={renameFolderMutation.isPending}
+            onDelete={
+              // Same invariant as the folder grid: the LAST remaining
+              // folder can't be deleted (agent must always have >= 1).
+              activeFolder && folders.length > 1
+                ? () => setPendingDeleteFolderId(activeFolder.id)
+                : undefined
+            }
           />
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-[200px] flex-1">
@@ -1209,6 +1216,7 @@ function ScenariosTagFilter({
       align="end"
       width="w-56"
       title="Filter by tag"
+      footerBordered={false}
       trigger={
         <button
           type="button"
@@ -1233,7 +1241,7 @@ function ScenariosTagFilter({
       }
       footer={
         selectedTags.length > 0 ? (
-          <div className="flex justify-end border-t border-border px-3 py-2">
+          <div className="flex justify-end px-3 py-2">
             <button
               type="button"
               onClick={() => onTagsChange([])}
@@ -1958,6 +1966,7 @@ function FolderBreadcrumb({
   onSaveRename,
   onCancelRename,
   renamePending = false,
+  onDelete,
 }: {
   folderName: string;
   count: number;
@@ -1969,6 +1978,10 @@ function FolderBreadcrumb({
   onSaveRename?: (next: string) => void;
   onCancelRename?: () => void;
   renamePending?: boolean;
+  // Undefined for the last remaining folder — the agent must always
+  // have at least one folder so ``create_scenario`` always has
+  // somewhere to land (matches ``FolderCard.onDelete``).
+  onDelete?: () => void;
 }) {
   const displayName = folderName;
   return (
@@ -2011,6 +2024,17 @@ function FolderBreadcrumb({
               className="ml-1 inline-flex cursor-pointer items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <Pencil className="size-3.5" />
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              aria-label={`Delete folder ${displayName}`}
+              title="Delete folder"
+              className="inline-flex cursor-pointer items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+            >
+              <Trash2 className="size-3.5" />
             </button>
           )}
         </>

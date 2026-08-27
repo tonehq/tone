@@ -15,6 +15,7 @@ const CustomPopover: React.FC<CustomPopoverProps> = ({
   title,
   children,
   footer,
+  footerBordered = true,
   align = 'end',
   side,
   sideOffset = 6,
@@ -50,7 +51,12 @@ const CustomPopover: React.FC<CustomPopoverProps> = ({
       )}
 
       {footer && (
-        <div className="flex items-center justify-between gap-2 border-t border-border p-2">
+        <div
+          className={cn(
+            'flex items-center justify-between gap-2 p-2',
+            footerBordered && 'border-t border-border',
+          )}
+        >
           {footer}
         </div>
       )}
