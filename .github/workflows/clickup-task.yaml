@@ -1,0 +1,130 @@
+name: ClickUp task
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - dev
+      - staging
+      - "staging-*"
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: clickup-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve ClickUp task from branch name
+        id: task
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          CLICKUP_TOKEN: ${{ secrets.CLICKUP_TOKEN }}
+          CLICKUP_LIST_ID: ${{ vars.CLICKUP_LIST_ID }}
+          CLICKUP_TEAM_ID: ${{ vars.CLICKUP_TEAM_ID }}
+        run: |
+          set -u
+
+          TASK_ID=$(printf '%s' "$BRANCH" | grep -oE '[Cc][Uu][-_][0-9A-Za-z]{5,}' | head -1 | sed 's/^[Cc][Uu][-_]//')
+          CUSTOM_ID=0
+
+          if [ -z "$TASK_ID" ]; then
+            TASK_ID=$(printf '%s' "$BRANCH" | grep -oE '[A-Z][A-Z0-9]{1,9}-[0-9]+' | head -1)
+            if [ -n "$TASK_ID" ]; then CUSTOM_ID=1; fi
+          fi
+
+          if [ -z "$TASK_ID" ]; then
+            TASK_ID=$(printf '%s' "$BRANCH" | grep -oE '(^|[/_-])(86[0-9a-z]{6,10}|9[0-9a-z]{7,10})($|[/_-])' | grep -oE '86[0-9a-z]{6,10}|9[0-9a-z]{7,10}' | head -1)
+          fi
+
+          if [ -z "$TASK_ID" ]; then
+            echo "No ClickUp task id in branch '$BRANCH' — nothing to do." >> "$GITHUB_STEP_SUMMARY"
+            echo "found=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ -z "${CLICKUP_TOKEN:-}" ]; then
+            echo "Branch names task \`$TASK_ID\` but the CLICKUP_TOKEN secret is not configured." >> "$GITHUB_STEP_SUMMARY"
+            echo "found=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          URL="https://api.clickup.com/api/v2/task/${TASK_ID}"
+          if [ "$CUSTOM_ID" = "1" ]; then
+            if [ -z "${CLICKUP_TEAM_ID:-}" ]; then
+              echo "\`$TASK_ID\` looks like a custom id — set the CLICKUP_TEAM_ID variable." >> "$GITHUB_STEP_SUMMARY"
+              echo "found=0" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            URL="${URL}?custom_task_ids=true&team_id=${CLICKUP_TEAM_ID}"
+          fi
+
+          RESPONSE_FILE="${RUNNER_TEMP:-/tmp}/clickup-task.json"
+          curl -s --max-time 15 -H "Authorization: ${CLICKUP_TOKEN}" "$URL" -o "$RESPONSE_FILE"
+
+          python3 - "$RESPONSE_FILE" "$GITHUB_OUTPUT" "$GITHUB_STEP_SUMMARY" <<'PY'
+          import json, os, sys
+
+          response_path, out_path, summary_path = sys.argv[1], sys.argv[2], sys.argv[3]
+          expected = os.environ.get("CLICKUP_LIST_ID") or ""
+
+          def write(path, text):
+              with open(path, "a") as fh:
+                  fh.write(text + "\n")
+
+          try:
+              with open(response_path) as fh:
+                  task = json.load(fh)
+          except Exception:
+              write(summary_path, "ClickUp returned an unreadable response.")
+              write(out_path, "found=0")
+              raise SystemExit(0)
+
+          if not isinstance(task, dict) or "id" not in task:
+              err = task.get("err") if isinstance(task, dict) else None
+              write(summary_path, "ClickUp error: " + (err or "unexpected response"))
+              write(out_path, "found=0")
+              raise SystemExit(0)
+
+          lst = task.get("list") or {}
+          list_id = str(lst.get("id") or "")
+          list_name = lst.get("name") or "-"
+          status = (task.get("status") or {}).get("status") or "-"
+          people = [a.get("username") or "" for a in (task.get("assignees") or [])]
+          assignees = ", ".join([p for p in people if p]) or "unassigned"
+
+          lines = [
+              "### ClickUp — [" + (task.get("name") or "") + "](" + (task.get("url") or "") + ")",
+              "",
+              "| | |",
+              "|---|---|",
+              "| Task | `" + str(task.get("id")) + "` |",
+              "| Status | " + status + " |",
+              "| Assignees | " + assignees + " |",
+              "| List | " + list_name + " |",
+          ]
+          if expected and list_id and list_id != expected:
+              lines.append("")
+              lines.append("> This task is in **" + list_name + "**, not the list configured for this repository.")
+
+          body = "\n".join(lines)
+          write(summary_path, body)
+
+          with open(out_path, "a") as fh:
+              fh.write("found=1\n")
+              fh.write("body<<CLICKUP_EOF\n" + body + "\nCLICKUP_EOF\n")
+          PY
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request' && steps.task.outputs.found == '1'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: clickup-task
+          message: ${{ steps.task.outputs.body }}

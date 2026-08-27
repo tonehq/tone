@@ -1,0 +1,55 @@
+#!/bin/sh
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+
+if [ "${TONE_HOOKS_DISABLE:-0}" = "1" ]; then
+  exit 0
+fi
+
+if [ ! -d "$REPO_ROOT/frontend" ]; then
+  exit 0
+fi
+
+STAGED=$(git diff --cached --name-only --diff-filter=ACMR -- 'frontend/*' 2>/dev/null | grep -E '\.(ts|tsx|js|jsx)$')
+if [ -z "$STAGED" ]; then
+  exit 0
+fi
+
+cd "$REPO_ROOT/frontend" 2>/dev/null || exit 0
+
+if [ ! -d node_modules ]; then
+  exit 0
+fi
+
+HAS_LINT_STAGED=$(node -e "try{const p=require('./package.json');process.stdout.write(p['lint-staged']?'1':'')}catch(e){}" 2>/dev/null)
+
+if [ -n "$HAS_LINT_STAGED" ]; then
+  exec npx lint-staged
+fi
+
+REL=$(printf '%s\n' "$STAGED" | sed 's#^frontend/##')
+
+# shellcheck disable=SC2086
+npx eslint --fix $REL
+STATUS=$?
+
+if [ "$STATUS" -ge 2 ]; then
+  printf 'pre-commit: eslint could not run (exit %s) — skipping lint for this commit\n' "$STATUS"
+  exit 0
+fi
+
+if [ "$STATUS" -ne 0 ]; then
+  exit "$STATUS"
+fi
+
+cd "$REPO_ROOT" || exit 0
+printf '%s\n' "$STAGED" | while IFS= read -r f; do
+  if [ -n "$f" ] && [ -f "$f" ]; then
+    git add -- "$f"
+  fi
+done
+
+exit 0
