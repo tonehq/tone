@@ -16,6 +16,7 @@ import {
   History,
   Loader2,
   MinusCircle,
+  MoreVertical,
   Pencil,
   Play,
   Sparkles,
@@ -41,6 +42,12 @@ import {
   TextInput,
 } from '@/components/shared';
 import { Checkbox } from '@/components/ui/checkbox';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import type { TabItem } from '@/components/shared';
 import {
   useAgentLlmEvalFolders,
@@ -334,20 +341,19 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
-  // Filters for the scenarios-in-folder table. Backend supports both via
-  // ``ListScenariosRequest``: tags = JSONB has-any-of match, source =
-  // exact-match enum. Empty arrays / null are omitted from the request.
-  const [filterTags, setFilterTags] = useState<string[]>([]);
+  // Source filter for the scenarios-in-folder table. Backend supports it
+  // via ``ListScenariosRequest.source`` (exact-match enum). ``null`` is
+  // omitted from the request so the "no filter" path is used.
   const [filterSource, setFilterSource] = useState<AgentLlmEvalScenarioSource | null>(null);
   useEffect(() => {
     setPage(1);
-  }, [selectedFolder, search, filterTags, filterSource]);
+  }, [selectedFolder, search, filterSource]);
   // Wipe bulk-selection whenever the user changes context (folder or
   // filters). Keeping a stale selection alive across contexts would let
   // users delete rows they can't currently see — surprising and unsafe.
   useEffect(() => {
     setSelectedScenarioIds(new Set());
-  }, [selectedFolder, search, filterTags, filterSource]);
+  }, [selectedFolder, search, filterSource]);
 
   // Pagination for the Runs tab. Kept as separate state from the scenarios
   // pager so switching folders doesn't reset the runs page (and vice-versa).
@@ -357,10 +363,9 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
     search: search || undefined,
     folder_id: selectedFolder ?? undefined,
-    // Send filters only when set — omitting them entirely so the backend
-    // takes its "no filter" fast path and the query key stays compact
-    // (no stray ``tags: []`` vs ``tags: undefined`` cache-key drift).
-    tags: filterTags.length ? filterTags : undefined,
+    // Send the source filter only when set — omitting it entirely so the
+    // backend takes its "no filter" fast path and the query key stays
+    // compact.
     source: filterSource ?? undefined,
     page_no: page,
     page_size: pageSize,
@@ -580,24 +585,6 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
 
   const actionButtons = (
     <div className="flex flex-wrap items-center justify-end gap-2">
-      <CustomButton
-        type="text"
-        size="sm"
-        onClick={downloadSampleCsv}
-        icon={<Download className="size-3.5" />}
-        title="Download a template with the expected column headers and example rows"
-      >
-        Sample CSV
-      </CustomButton>
-      <CustomButton
-        type="default"
-        size="sm"
-        onClick={() => fileInputRef.current?.click()}
-        disabled={uploadCsv.isPending}
-        icon={<Upload className="size-3.5" />}
-      >
-        {uploadCsv.isPending ? 'Uploading…' : 'Import CSV'}
-      </CustomButton>
       <input
         ref={fileInputRef}
         type="file"
@@ -620,6 +607,14 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       <CustomButton
         type="default"
         size="sm"
+        onClick={() => setOpenNewFolder(true)}
+        icon={<FolderIcon className="size-3.5" />}
+      >
+        New folder
+      </CustomButton>
+      <CustomButton
+        type="default"
+        size="sm"
         onClick={() => {
           setEditing(null);
           setOpenCreate(true);
@@ -636,6 +631,30 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       >
         Run Eval
       </CustomButton>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <CustomButton
+            type="default"
+            size="sm"
+            icon={<MoreVertical className="size-3.5" />}
+            aria-label="More CSV actions"
+            className="h-8 w-8 p-0"
+          />
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-48">
+          <DropdownMenuItem onSelect={() => downloadSampleCsv()}>
+            <Download className="size-3.5" />
+            Sample CSV
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            disabled={uploadCsv.isPending}
+            onSelect={() => fileInputRef.current?.click()}
+          >
+            <Upload className="size-3.5" />
+            {uploadCsv.isPending ? 'Uploading…' : 'Import CSV'}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
     </div>
   );
 
@@ -674,13 +693,6 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
               />
             </div>
             <ScenariosSourceFilter selectedSource={filterSource} onSourceChange={setFilterSource} />
-            <div className="w-[180px] shrink-0">
-              <ScenariosTagFilter
-                scenarios={scenarios}
-                selectedTags={filterTags}
-                onTagsChange={setFilterTags}
-              />
-            </div>
           </div>
           {selectedScenarioIds.size > 0 && (
             <div className="flex items-center justify-between gap-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-[13px]">
@@ -740,7 +752,6 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
           onRunFolder={runFolder}
           onRename={(id) => setEditingFolderId(id)}
           onDelete={(id) => setPendingDeleteFolderId(id)}
-          onNewFolder={() => setOpenNewFolder(true)}
           isRunning={triggerRun.isPending}
           editingFolderId={editingFolderId}
           onSaveRename={saveRenameFolder}
@@ -1169,113 +1180,6 @@ function ScenariosSourceFilter({
   );
 }
 
-/** Multi-select tag filter — visually matches ``SelectInput`` (same
- * trigger height, chevron, ring styles) so it sits cleanly next to the
- * Source dropdown on the search row. Opens a CustomPopover with a
- * checkbox list of tag options derived from the currently-visible
- * scenarios (bounded by page size; a folder with more tags on other
- * pages grows the list as the user pages — acceptable for MVP). */
-function ScenariosTagFilter({
-  scenarios,
-  selectedTags,
-  onTagsChange,
-}: {
-  scenarios: AgentLlmEvalScenario[];
-  selectedTags: string[];
-  onTagsChange: (next: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const tagOptions = useMemo(() => {
-    const seen = new Set<string>();
-    for (const s of scenarios) for (const t of s.tags ?? []) seen.add(t);
-    return Array.from(seen).sort((a, b) => a.localeCompare(b));
-  }, [scenarios]);
-
-  const toggleTag = (tag: string) => {
-    onTagsChange(
-      selectedTags.includes(tag) ? selectedTags.filter((t) => t !== tag) : [...selectedTags, tag],
-    );
-  };
-
-  // Trigger label mirrors the SelectInput pattern — always shows what's
-  // currently applied so the row is self-describing at a glance.
-  const triggerLabel =
-    selectedTags.length === 0
-      ? 'All tags'
-      : selectedTags.length === 1
-        ? selectedTags[0]
-        : `${selectedTags.length} tags`;
-  const disabled = tagOptions.length === 0 && selectedTags.length === 0;
-
-  return (
-    <CustomPopover
-      open={open}
-      onOpenChange={setOpen}
-      align="end"
-      width="w-56"
-      title="Filter by tag"
-      footerBordered={false}
-      trigger={
-        <button
-          type="button"
-          disabled={disabled}
-          aria-label="Filter by tag"
-          aria-expanded={open}
-          className={cn(
-            'inline-flex h-9 w-full items-center justify-between gap-2 rounded-lg border border-input bg-background px-3 text-[13px] text-foreground transition-colors',
-            'hover:border-ring focus:outline-none focus-visible:ring-2 focus-visible:ring-ring/30',
-            disabled && 'cursor-not-allowed opacity-60',
-            !disabled && 'cursor-pointer',
-          )}
-        >
-          <span
-            className={cn('truncate', selectedTags.length === 0 && 'text-muted-foreground')}
-            title={selectedTags.length > 1 ? selectedTags.join(', ') : undefined}
-          >
-            {triggerLabel}
-          </span>
-          <ChevronDown className="size-4 shrink-0 text-muted-foreground/70" />
-        </button>
-      }
-      footer={
-        selectedTags.length > 0 ? (
-          <div className="flex justify-end px-3 py-2">
-            <button
-              type="button"
-              onClick={() => onTagsChange([])}
-              className="inline-flex cursor-pointer items-center gap-1 rounded px-2 py-1 text-[11.5px] font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-            >
-              <X className="size-3.5" />
-              Clear tags
-            </button>
-          </div>
-        ) : undefined
-      }
-    >
-      {tagOptions.length === 0 ? (
-        <p className="p-3 text-[12px] text-muted-foreground">No tags on the visible scenarios.</p>
-      ) : (
-        <div className="flex flex-col gap-1">
-          {tagOptions.map((t) => {
-            const checked = selectedTags.includes(t);
-            return (
-              <label
-                key={t}
-                className="flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-[13px] text-foreground hover:bg-muted"
-              >
-                <Checkbox checked={checked} onCheckedChange={() => toggleTag(t)} aria-label={t} />
-                <span className="truncate" title={t}>
-                  {t}
-                </span>
-              </label>
-            );
-          })}
-        </div>
-      )}
-    </CustomPopover>
-  );
-}
-
 // ── Pagination footer ───────────────────────────────────────────────────
 
 /** Compact pagination footer shared by every paginated list inside the LLM
@@ -1542,7 +1446,6 @@ function FoldersView({
   onRunFolder,
   onRename,
   onDelete,
-  onNewFolder,
   isRunning,
   editingFolderId,
   onSaveRename,
@@ -1556,7 +1459,6 @@ function FoldersView({
   onRunFolder: (folderId: string) => void;
   onRename: (folderId: string) => void;
   onDelete: (folderId: string) => void;
-  onNewFolder: () => void;
   isRunning: boolean;
   // Inline-rename plumbing. ``editingFolderId`` is the id of the folder
   // currently in edit mode (only one at a time). Cards compare their own
@@ -1578,16 +1480,6 @@ function FoldersView({
   }
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex items-center justify-end">
-        <CustomButton
-          type="default"
-          size="sm"
-          onClick={onNewFolder}
-          icon={<FolderIcon className="size-3.5" />}
-        >
-          New folder
-        </CustomButton>
-      </div>
       {folders.length === 0 ? (
         <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
           No folders yet. Click <span className="font-medium">New folder</span> to create one.
