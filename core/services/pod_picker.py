@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
+from loguru import logger
 from sqlalchemy import func
 
 from core.models.call import Call
@@ -50,6 +51,16 @@ class PodPicker(BaseService):
     def pick(self) -> Optional[Pod]:
         candidates = self._candidate_pods()
         if not candidates:
+            total_for_prefix = (
+                self.db.query(func.count(Pod.id))
+                .filter(Pod.name.like(f"{self.prefix}-%"), Pod.ordinal.isnot(None))
+                .scalar()
+            ) or 0
+            logger.warning(
+                "[pod-picker] NO live pod for prefix={!r}: {} registered, 0 with heartbeat "
+                "< {}s — caller will use fallback media URL",
+                self.prefix, total_for_prefix, _POD_ALIVE_SECONDS,
+            )
             return None
 
         def headroom(pod):
@@ -68,10 +79,16 @@ class PodPicker(BaseService):
         with_data = [(score, pod) for score, pod in scored if score is not None]
         if with_data:
             best = max(score for score, _ in with_data)
-            return next(pod for score, pod in with_data if score == best)
+            chosen = next(pod for score, pod in with_data if score == best)
+        else:
+            active = self._active_calls_by_pod()
+            chosen = min(candidates, key=lambda pod: active.get(pod.id, 0))
 
-        active = self._active_calls_by_pod()
-        return min(candidates, key=lambda pod: active.get(pod.id, 0))
+        logger.debug(
+            "[pod-picker] picked pod={} ordinal={} ({} live candidate(s), prefix={!r})",
+            chosen.name, chosen.ordinal, len(candidates), self.prefix,
+        )
+        return chosen
 
     def url_for(self, pod: Optional[Pod]) -> Optional[str]:
         if pod is None or pod.ordinal is None or not self.host:
