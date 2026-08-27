@@ -8,6 +8,8 @@ import type {
   BulkDeleteScenariosResponse,
   CompareRunsPayload,
   CompareRunsResponse,
+  CreateFolderPayload,
+  CreateFolderResponse,
   DeleteFolderPayload,
   DeleteFolderResponse,
   GenerateScenariosPayload,
@@ -164,6 +166,14 @@ export const compareAgentLlmEvalRuns = async (
 
 export const listAgentLlmEvalFolders = async (agentId: string): Promise<ListFoldersResponse> => {
   const res = await axiosInstance.get<ListFoldersResponse>(`${base(agentId)}/folders`);
+  return res.data;
+};
+
+export const createAgentLlmEvalFolder = async (
+  agentId: string,
+  payload: CreateFolderPayload,
+): Promise<CreateFolderResponse> => {
+  const res = await axiosInstance.post<CreateFolderResponse>(`${base(agentId)}/folders`, payload);
   return res.data;
 };
 

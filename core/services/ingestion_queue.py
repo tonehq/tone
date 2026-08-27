@@ -332,8 +332,8 @@ def run_agent_llm_eval(
     tags: Optional[list[str]] = None,
     judge_model: Optional[str] = None,
     run_id: Optional[str] = None,
-    folder: Optional[str] = None,
-    folders: Optional[list[str]] = None,
+    folder_id: Optional[str] = None,
+    folder_ids: Optional[list[str]] = None,
 ) -> None:
     """Run one Level-2 (agent-LLM) eval batch asynchronously.
 
@@ -362,12 +362,12 @@ def run_agent_llm_eval(
         triggered_by = "manual"
 
     logger.info(
-        "[agent-llm-eval] worker picked job agent={} triggered_by={} scenarios={} tags={} folder={} folders={}",
+        "[agent-llm-eval] worker picked job agent={} triggered_by={} scenarios={} tags={} folder_id={} folder_ids={}",
         agent_id, triggered_by,
         len(scenario_ids) if scenario_ids else "all",
         tags or "-",
-        folder or "-",
-        folders or "-",
+        folder_id or "-",
+        folder_ids or "-",
     )
     # Split error handling by phase so transient failures BEFORE ``run_eval``
     # starts (DB unreachable, missing agent, unresolvable config) don't
@@ -416,8 +416,10 @@ def run_agent_llm_eval(
                         [_UUID(s) for s in scenario_ids] if scenario_ids else None
                     ),
                     tags=tags,
-                    folder=folder,
-                    folders=folders,
+                    folder_id=_UUID(folder_id) if folder_id else None,
+                    folder_ids=(
+                        [_UUID(f) for f in folder_ids] if folder_ids else None
+                    ),
                     run_id=parsed_run_id,
                 )
             except Exception as scoring_error:  # noqa: BLE001
@@ -502,8 +504,8 @@ async def enqueue_agent_llm_eval(
     triggered_by: str = "manual",
     scenario_ids: Optional[list] = None,
     tags: Optional[list[str]] = None,
-    folder: Optional[str] = None,
-    folders: Optional[list[str]] = None,
+    folder_id=None,
+    folder_ids: Optional[list] = None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -513,8 +515,8 @@ async def enqueue_agent_llm_eval(
             triggered_by=triggered_by,
             scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
             tags=list(tags) if tags else None,
-            folder=folder,
-            folders=list(folders) if folders else None,
+            folder_id=str(folder_id) if folder_id else None,
+            folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
             judge_model=judge_model,
             run_id=str(run_id) if run_id else None,
         )
@@ -526,8 +528,8 @@ def enqueue_agent_llm_eval_sync(
     triggered_by: str = "manual",
     scenario_ids: Optional[list] = None,
     tags: Optional[list[str]] = None,
-    folder: Optional[str] = None,
-    folders: Optional[list[str]] = None,
+    folder_id=None,
+    folder_ids: Optional[list] = None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -557,8 +559,8 @@ def enqueue_agent_llm_eval_sync(
             triggered_by=triggered_by,
             scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
             tags=list(tags) if tags else None,
-            folder=folder,
-            folders=list(folders) if folders else None,
+            folder_id=str(folder_id) if folder_id else None,
+            folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
             judge_model=judge_model,
             run_id=str(run_id) if run_id else None,
         )

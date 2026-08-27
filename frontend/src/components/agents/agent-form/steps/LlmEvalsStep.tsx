@@ -47,6 +47,7 @@ import {
   useAgentLlmEvalRunDetail,
   useAgentLlmEvalRuns,
   useAgentLlmEvalScenarios,
+  useCreateAgentLlmEvalFolder,
   useCreateAgentLlmEvalScenario,
   useCreateAgentLlmEvalScenariosBulk,
   useDeleteAgentLlmEvalFolder,
@@ -174,18 +175,15 @@ const RUN_TERMINAL_STATUSES: ReadonlySet<AgentLlmEvalBatchStatus> = new Set([
 
 // ── Folder scope ────────────────────────────────────────────────────────
 
-// The selected folder in the sidebar. ``null`` = "All", ``''`` (empty
-// string) = "Uncategorized" (matches DB rows with NULL folder), any other
-// string = that named folder. Kept as one type so downstream props /
-// payloads never accidentally lose the null-vs-empty distinction.
+// The selected folder in the sidebar. ``null`` = "All", non-null = a
+// folder id (folders are first-class rows). Every scenario belongs to a
+// real folder — there is no "Uncategorized" bucket.
 export type FolderScope = null | string;
 
 // Sub-tab identity inside the LLM Evals section. Kept as a named union so
 // the tab key + the state setter agree on the exact strings — a typo in
 // one place fails at compile time instead of silently rendering nothing.
 type LlmEvalsView = 'folders' | 'runs';
-
-const UNCATEGORIZED_LABEL = 'Uncategorized';
 
 // ── Sample CSV download ─────────────────────────────────────────────────
 //
@@ -256,10 +254,9 @@ function downloadSampleCsv() {
 }
 
 // Sentinel option value used by ``FolderPicker``'s inline SelectInput to
-// represent NULL/Uncategorized. Any string not otherwise a folder name is
-// fine; using a reserved token avoids clashing with a real folder called
-// "" or "Uncategorized".
-const UNCAT_OPTION_VALUE = '__uncategorized__';
+// represent the "Create new folder…" affordance. Any string not otherwise
+// a folder id is fine; using a reserved token avoids clashing with a
+// real UUID.
 const NEW_FOLDER_OPTION_VALUE = '__new_folder__';
 
 // ── Main step ───────────────────────────────────────────────────────────
@@ -308,17 +305,18 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [pendingDelete, setPendingDelete] = useState<AgentLlmEvalScenario | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Folder scope selector. ``null`` = All (no filter). ``''`` = Uncategorized
-  // (matches rows with NULL folder). Any other string = that named folder.
+  // Folder scope selector. ``null`` = All (no filter). Non-null = folder id.
   const [selectedFolder, setSelectedFolder] = useState<FolderScope>(null);
-  // Folder currently in inline-rename mode (name of the folder being
+  // Folder currently in inline-rename mode (id of the folder being
   // edited). ``null`` = no folder is being renamed. Only one folder can
-  // be in edit mode at a time; the card / breadcrumb whose ``name``
+  // be in edit mode at a time; the card / breadcrumb whose ``id``
   // matches renders ``InlineFolderNameEditor`` in place of the name span.
-  const [editingFolder, setEditingFolder] = useState<string | null>(null);
-  // Folder pending delete. Non-null → shared ``ConfirmDeleteModal`` is
+  const [editingFolderId, setEditingFolderId] = useState<string | null>(null);
+  // Folder pending delete (id). Non-null → shared ``ConfirmDeleteModal`` is
   // open with the folder's name + scenario-count impact copy.
-  const [pendingDeleteFolder, setPendingDeleteFolder] = useState<string | null>(null);
+  const [pendingDeleteFolderId, setPendingDeleteFolderId] = useState<string | null>(null);
+  // New-folder modal state.
+  const [openNewFolder, setOpenNewFolder] = useState(false);
   // Bulk-selection for scenarios inside a folder. Persists across pages
   // (Gmail-style — a user selects row A on page 1, paginates, comes back,
   // A is still checked). Cleared when the folder scope changes so
@@ -358,7 +356,7 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
 
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
     search: search || undefined,
-    folder: selectedFolder === null ? undefined : selectedFolder,
+    folder_id: selectedFolder ?? undefined,
     // Send filters only when set — omitting them entirely so the backend
     // takes its "no filter" fast path and the query key stays compact
     // (no stray ``tags: []`` vs ``tags: undefined`` cache-key drift).
@@ -377,6 +375,7 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const deleteScenariosBulk = useDeleteAgentLlmEvalScenariosBulk(agentId);
   const deleteFolder = useDeleteAgentLlmEvalFolder(agentId);
   const renameFolderMutation = useRenameAgentLlmEvalFolder(agentId);
+  const createFolder = useCreateAgentLlmEvalFolder(agentId);
   const triggerRun = useTriggerAgentLlmEvalRun(agentId);
 
   const scenarios = scenariosQuery.data?.items ?? [];
@@ -403,17 +402,13 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     if (runsPage > maxRunsPage) setRunsPage(maxRunsPage);
   }, [runsTotal, runsPageSize, runsPage, runsQuery.data]);
 
-  // Quick-run one folder from a card / breadcrumb.
-  //   - ``null``      → Uncategorized card → send folder='' (matches NULL rows)
-  //   - ``''``        → drilled into Uncategorized → same as above
-  //   - ``'<name>'``  → that named folder
-  // Uses the singular ``folder`` field intentionally (single-folder path).
-  // Multi-folder runs go through the RunEvalModal with the plural ``folders``
-  // field instead. The two never mix in one request.
-  const runFolder = async (folderName: string | null) => {
-    const folderValue = folderName === null ? '' : folderName;
+  // Quick-run one folder from a card / breadcrumb. Uses the singular
+  // ``folder_id`` field intentionally (single-folder path). Multi-folder
+  // runs go through the RunEvalModal with the plural ``folder_ids`` field
+  // instead. The two never mix in one request.
+  const runFolder = async (folderId: string) => {
     try {
-      await triggerRun.mutateAsync({ folder: folderValue });
+      await triggerRun.mutateAsync({ folder_id: folderId });
       showToast.success(
         'Evaluation started',
         'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
@@ -472,20 +467,20 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   };
 
   const confirmDeleteFolder = async () => {
-    if (!pendingDeleteFolder) return;
+    if (!pendingDeleteFolderId) return;
     try {
-      const result = await deleteFolder.mutateAsync({ name: pendingDeleteFolder });
+      const result = await deleteFolder.mutateAsync({ folder_id: pendingDeleteFolderId });
       // If the user was drilled into the folder they just deleted, drop
       // back to the folder grid so they don't end up staring at a
       // now-empty scenarios table for a folder that no longer exists.
-      if (selectedFolder === pendingDeleteFolder) {
+      if (selectedFolder === pendingDeleteFolderId) {
         setSelectedFolder(null);
       }
       showToast.success(
         'Folder deleted',
         `${result.scenarios_deleted} scenario${result.scenarios_deleted === 1 ? '' : 's'} removed.`,
       );
-      setPendingDeleteFolder(null);
+      setPendingDeleteFolderId(null);
     } catch (error) {
       handleApiError(error);
       // Same rationale as ``confirmDelete`` — keep the modal open so the
@@ -494,32 +489,23 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   };
 
   const saveRenameFolder = async (nextName: string) => {
-    // ``editingFolder`` should always be set when this fires (it's what
+    // ``editingFolderId`` should always be set when this fires (it's what
     // opens the editor), but guard defensively — a stale callback from
-    // an unmounted card could otherwise send an empty ``old_name``.
-    if (!editingFolder) return;
+    // an unmounted card could otherwise send an empty ``folder_id``.
+    if (!editingFolderId) return;
+    const current = folders.find((f) => f.id === editingFolderId);
     const trimmed = nextName.trim();
-    if (!trimmed || trimmed === editingFolder) {
-      setEditingFolder(null);
+    if (!trimmed || !current || trimmed === current.name) {
+      setEditingFolderId(null);
       return;
     }
     try {
-      const result = await renameFolderMutation.mutateAsync({
-        old_name: editingFolder,
+      await renameFolderMutation.mutateAsync({
+        folder_id: editingFolderId,
         new_name: trimmed,
       });
-      // Keep the drilled-in view pointing at the SAME folder after a
-      // rename so the user stays where they were (would otherwise get
-      // silently kicked back to the folder grid because ``selectedFolder``
-      // no longer matches any row).
-      if (selectedFolder === editingFolder) {
-        setSelectedFolder(trimmed);
-      }
-      showToast.success(
-        'Folder renamed',
-        `${result.scenarios_updated} scenario${result.scenarios_updated === 1 ? '' : 's'} and ${result.results_updated} past run row${result.results_updated === 1 ? '' : 's'} relabeled.`,
-      );
-      setEditingFolder(null);
+      showToast.success('Folder renamed');
+      setEditingFolderId(null);
     } catch (error) {
       handleApiError(error);
       // Keep edit mode open on failure so the user sees the error toast
@@ -529,7 +515,19 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
 
   const cancelRenameFolder = () => {
     if (renameFolderMutation.isPending) return;
-    setEditingFolder(null);
+    setEditingFolderId(null);
+  };
+
+  const submitNewFolder = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      await createFolder.mutateAsync({ name: trimmed });
+      showToast.success('Folder created');
+      setOpenNewFolder(false);
+    } catch (error) {
+      handleApiError(error);
+    }
   };
 
   const toggleScenarioSelection = (id: string) => {
@@ -576,9 +574,9 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   };
 
   const inFolderView = selectedFolder !== null;
-  const activeFolderCount = inFolderView
-    ? (folders.find((f) => (f.folder ?? '') === selectedFolder)?.count ?? 0)
-    : 0;
+  const activeFolder = inFolderView ? (folders.find((f) => f.id === selectedFolder) ?? null) : null;
+  const activeFolderCount = activeFolder?.count ?? 0;
+  const activeFolderName = activeFolder?.name ?? '';
 
   const actionButtons = (
     <div className="flex flex-wrap items-center justify-end gap-2">
@@ -653,15 +651,11 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       {inFolderView ? (
         <>
           <FolderBreadcrumb
-            folderName={selectedFolder as string}
+            folderName={activeFolderName}
             count={activeFolderCount}
             onBack={() => setSelectedFolder(null)}
-            onRename={
-              // Uncategorized ('' = NULL folder) cannot be renamed — there's
-              // no actual name to change and NULL isn't a rename target.
-              selectedFolder ? () => setEditingFolder(selectedFolder) : undefined
-            }
-            isEditing={!!selectedFolder && editingFolder === selectedFolder}
+            onRename={activeFolder ? () => setEditingFolderId(activeFolder.id) : undefined}
+            isEditing={!!activeFolder && editingFolderId === activeFolder.id}
             onSaveRename={saveRenameFolder}
             onCancelRename={cancelRenameFolder}
             renamePending={renameFolderMutation.isPending}
@@ -737,15 +731,17 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         <FoldersView
           folders={folders}
           isLoading={foldersQuery.isLoading}
-          onOpen={setSelectedFolder}
+          onOpen={(id) => setSelectedFolder(id)}
           onRunFolder={runFolder}
-          onRename={(name) => setEditingFolder(name)}
-          onDelete={(name) => setPendingDeleteFolder(name)}
+          onRename={(id) => setEditingFolderId(id)}
+          onDelete={(id) => setPendingDeleteFolderId(id)}
+          onNewFolder={() => setOpenNewFolder(true)}
           isRunning={triggerRun.isPending}
-          editingFolder={editingFolder}
+          editingFolderId={editingFolderId}
           onSaveRename={saveRenameFolder}
           onCancelRename={cancelRenameFolder}
           renamePending={renameFolderMutation.isPending}
+          canDeleteAny={folders.length > 1}
         />
       )}
     </SectionCard>
@@ -821,7 +817,7 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         agentId={agentId}
         scenario={editing}
         folderOptions={folders}
-        defaultFolder={typeof selectedFolder === 'string' ? selectedFolder : ''}
+        defaultFolderId={selectedFolder}
       />
       <RunEvalModal
         open={openRun}
@@ -829,14 +825,22 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         agentId={agentId}
         scenarios={scenarios}
         folders={folders}
-        defaultFolder={selectedFolder}
+        defaultFolderId={selectedFolder}
       />
       <GenerateScenariosModal
         open={openGenerate}
         onClose={() => setOpenGenerate(false)}
         agentId={agentId}
         folderOptions={folders}
-        defaultFolder={typeof selectedFolder === 'string' ? selectedFolder : ''}
+        defaultFolderId={selectedFolder}
+      />
+      <NewFolderModal
+        open={openNewFolder}
+        onClose={() => {
+          if (!createFolder.isPending) setOpenNewFolder(false);
+        }}
+        onSubmit={submitNewFolder}
+        pending={createFolder.isPending}
       />
       <AgentLlmEvalResultsDrawer
         agentId={agentId}
@@ -880,29 +884,36 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         loading={deleteScenariosBulk.isPending}
       />
       <ConfirmDeleteModal
-        open={!!pendingDeleteFolder}
+        open={!!pendingDeleteFolderId}
         onClose={() => {
-          if (!deleteFolder.isPending) setPendingDeleteFolder(null);
+          if (!deleteFolder.isPending) setPendingDeleteFolderId(null);
         }}
         onConfirm={confirmDeleteFolder}
         title="Delete folder"
         description="This permanently deletes every scenario in this folder. Past eval-run history for the folder is preserved."
         impact={
-          pendingDeleteFolder ? (
+          pendingDeleteFolderId ? (
             <div className="space-y-2 text-sm text-foreground">
-              <p>
-                You’re about to delete the folder{' '}
-                <span className="font-medium">{pendingDeleteFolder}</span> and every scenario in it.
-              </p>
               {(() => {
-                const count = folders.find((f) => f.folder === pendingDeleteFolder)?.count ?? 0;
-                return count > 0 ? (
-                  <p className="text-muted-foreground">
-                    <span className="font-medium text-foreground">{count}</span> scenario
-                    {count === 1 ? '' : 's'} will be removed. To keep any of them, edit each
-                    scenario and change its folder before deleting.
-                  </p>
-                ) : null;
+                const target = folders.find((f) => f.id === pendingDeleteFolderId);
+                if (!target) return null;
+                return (
+                  <>
+                    <p>
+                      You’re about to delete the folder{' '}
+                      <span className="font-medium">{target.name}</span> and every scenario in it.
+                    </p>
+                    {target.count > 0 ? (
+                      <p className="text-muted-foreground">
+                        <span className="font-medium text-foreground">{target.count}</span> scenario
+                        {target.count === 1 ? '' : 's'} will be removed. To keep any of them, edit
+                        each scenario and change its folder before deleting.
+                      </p>
+                    ) : (
+                      <p className="text-muted-foreground">This folder is empty.</p>
+                    )}
+                  </>
+                );
               })()}
             </div>
           ) : null
@@ -1514,9 +1525,10 @@ function RunsTable({
 // ── Folders view (default) + drilled-in header ──────────────────────────
 
 /** Default view — a grid of folder cards. Clicking a card drills into
- * that folder's scenarios (see ``FolderBreadcrumb``). Uncategorized (rows
- * with NULL folder) appears as a card too when any exist. Empty state and
- * loading state are handled here so the caller stays declarative. */
+ * that folder's scenarios (see ``FolderBreadcrumb``). Every scenario
+ * belongs to a real folder — there is no Uncategorized bucket. Empty
+ * folders survive after their last scenario is deleted so they still
+ * render as a card. */
 function FoldersView({
   folders,
   isLoading,
@@ -1524,28 +1536,32 @@ function FoldersView({
   onRunFolder,
   onRename,
   onDelete,
+  onNewFolder,
   isRunning,
-  editingFolder,
+  editingFolderId,
   onSaveRename,
   onCancelRename,
   renamePending,
+  canDeleteAny,
 }: {
   folders: AgentLlmEvalFolder[];
   isLoading: boolean;
-  onOpen: (folder: FolderScope) => void;
-  onRunFolder: (folder: string | null) => void;
-  onRename: (folder: string) => void;
-  // Named folders only — the Uncategorized bucket is not deletable as a
-  // group (see backend ``delete_folder``); the card omits the affordance.
-  onDelete: (folder: string) => void;
+  onOpen: (folderId: string) => void;
+  onRunFolder: (folderId: string) => void;
+  onRename: (folderId: string) => void;
+  onDelete: (folderId: string) => void;
+  onNewFolder: () => void;
   isRunning: boolean;
-  // Inline-rename plumbing. ``editingFolder`` is the name of the folder
+  // Inline-rename plumbing. ``editingFolderId`` is the id of the folder
   // currently in edit mode (only one at a time). Cards compare their own
-  // name against it to decide whether to render the editor.
-  editingFolder: string | null;
+  // id against it to decide whether to render the editor.
+  editingFolderId: string | null;
   onSaveRename: (next: string) => void;
   onCancelRename: () => void;
   renamePending: boolean;
+  // Every agent must always have at least one folder — the delete affordance
+  // is hidden on the last folder to prevent the "no folders" empty state.
+  canDeleteAny: boolean;
 }) {
   if (isLoading) {
     return (
@@ -1554,45 +1570,42 @@ function FoldersView({
       </div>
     );
   }
-  const uncategorized = folders.find((f) => f.folder === null);
-  const named = folders.filter((f) => f.folder !== null);
-  const hasAny = named.length > 0 || (uncategorized?.count ?? 0) > 0;
-  if (!hasAny) {
-    return (
-      <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
-        No scenarios yet. Create one, import a CSV, or use Auto-generate.
-      </div>
-    );
-  }
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-      {named.map((f) => (
-        <FolderCard
-          key={f.folder as string}
-          name={f.folder as string}
-          count={f.count}
-          canRename
-          onOpen={() => onOpen(f.folder)}
-          onRun={() => onRunFolder(f.folder)}
-          onRename={() => onRename(f.folder as string)}
-          onDelete={() => onDelete(f.folder as string)}
-          isRunning={isRunning}
-          isEditing={editingFolder === f.folder}
-          onSaveRename={onSaveRename}
-          onCancelRename={onCancelRename}
-          renamePending={renamePending}
-        />
-      ))}
-      {uncategorized && uncategorized.count > 0 && (
-        <FolderCard
-          name={UNCATEGORIZED_LABEL}
-          count={uncategorized.count}
-          canRename={false}
-          isMuted
-          onOpen={() => onOpen('')}
-          onRun={() => onRunFolder(null)}
-          isRunning={isRunning}
-        />
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-end">
+        <CustomButton
+          type="default"
+          size="sm"
+          onClick={onNewFolder}
+          icon={<FolderIcon className="size-3.5" />}
+        >
+          New folder
+        </CustomButton>
+      </div>
+      {folders.length === 0 ? (
+        <div className="rounded-md border border-dashed border-border/60 p-6 text-center text-sm text-muted-foreground">
+          No folders yet. Click <span className="font-medium">New folder</span> to create one.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {folders.map((f) => (
+            <FolderCard
+              key={f.id}
+              name={f.name}
+              count={f.count}
+              canRename
+              onOpen={() => onOpen(f.id)}
+              onRun={() => onRunFolder(f.id)}
+              onRename={() => onRename(f.id)}
+              onDelete={canDeleteAny ? () => onDelete(f.id) : undefined}
+              isRunning={isRunning}
+              isEditing={editingFolderId === f.id}
+              onSaveRename={onSaveRename}
+              onCancelRename={onCancelRename}
+              renamePending={renamePending}
+            />
+          ))}
+        </div>
       )}
     </div>
   );
@@ -1731,13 +1744,12 @@ function InlineFolderNameEditor({
  * always visible at the bottom (muted → foreground on hover). The whole
  * card is a ``<button>``; nested actions use ``<span role="button">`` +
  * ``e.stopPropagation()`` (invalid to nest ``<button>`` inside a button).
- * Uncategorized passes ``isMuted`` for a slightly softer background and
- * ``canRename=false`` (NULL folder has no name to rename). */
+ * The delete affordance is undefined for the last remaining folder — an
+ * agent must always have at least one folder. */
 function FolderCard({
   name,
   count,
   canRename,
-  isMuted = false,
   onOpen,
   onRun,
   onRename,
@@ -1751,12 +1763,11 @@ function FolderCard({
   name: string;
   count: number;
   canRename: boolean;
-  isMuted?: boolean;
   onOpen: () => void;
   onRun: () => void;
   onRename?: () => void;
-  // Undefined for the virtual ``Uncategorized`` bucket — that bucket is
-  // not deletable as a group (NULL folder has no name to target).
+  // Undefined for the last remaining folder — the agent must always have
+  // at least one folder so create-scenario always has somewhere to land.
   onDelete?: () => void;
   isRunning: boolean;
   // Inline-edit state. When ``isEditing`` is true, the name span is
@@ -1767,6 +1778,7 @@ function FolderCard({
   onCancelRename?: () => void;
   renamePending?: boolean;
 }) {
+  const isMuted = false;
   const runDisabled = isRunning || count === 0;
   // The whole card is normally a ``<button>`` so the entire tile is
   // clickable. During inline edit we swap to a ``<div>`` because native
@@ -1934,9 +1946,9 @@ function FolderCardAction({
 /** Compact breadcrumb shown when the user has drilled into a folder — just
  * enough to say "you're inside this folder": ``← All folders / <name> · N
  * scenarios``. Rename stays available as a small icon-only affordance next
- * to the name (Uncategorized omits it — NULL folder has no name to rename).
- * Per-folder run is triggered from the folder card in the grid view; the
- * global "Run Eval" button in the header covers running from inside a folder. */
+ * to the name. Per-folder run is triggered from the folder card in the grid
+ * view; the global "Run Eval" button in the header covers running from
+ * inside a folder. */
 function FolderBreadcrumb({
   folderName,
   count,
@@ -1947,7 +1959,7 @@ function FolderBreadcrumb({
   onCancelRename,
   renamePending = false,
 }: {
-  folderName: string; // '' means Uncategorized
+  folderName: string;
   count: number;
   onBack: () => void;
   onRename?: () => void;
@@ -1958,7 +1970,7 @@ function FolderBreadcrumb({
   onCancelRename?: () => void;
   renamePending?: boolean;
 }) {
-  const displayName = folderName === '' ? UNCATEGORIZED_LABEL : folderName;
+  const displayName = folderName;
   return (
     <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
       <button
@@ -2009,74 +2021,59 @@ function FolderBreadcrumb({
 
 /** Shared folder picker for the create/edit and generate modals.
  *
- * Two states in one component: a dropdown of existing folders (plus
- * "Uncategorized" and "Create new folder…") OR a text input when the user
- * chose to create a new one. Values are always plain strings — ``''``
- * means Uncategorized/NULL folder. Extracted so all three modals share
- * one shape and one autocomplete list (single source of truth for folder
- * names on the client). */
+ * Two states in one component: a dropdown of existing folders (with a
+ * "+ Create new folder…" affordance) OR a text input when the user chose
+ * to create a new one. Values are folder ids — when in create mode the
+ * caller receives ``__new_folder__`` and the ``pendingName`` prop so it
+ * can create-then-use the returned id at submit time. */
 function FolderPicker({
   folders,
   value,
   onChange,
+  newFolderName,
+  onNewFolderNameChange,
   label = 'Folder',
 }: {
   folders: AgentLlmEvalFolder[];
+  // A folder id, or the sentinel ``NEW_FOLDER_OPTION_VALUE`` while the
+  // user is typing a new-folder name.
   value: string;
   onChange: (v: string) => void;
+  // New-folder text state — held on the parent so the submit handler can
+  // read the typed name at commit time.
+  newFolderName: string;
+  onNewFolderNameChange: (name: string) => void;
   label?: string;
 }) {
-  const [mode, setMode] = useState<'select' | 'new'>('select');
-
-  const namedOptions = useMemo(
-    () =>
-      folders
-        .filter((f) => f.folder !== null)
-        .map((f) => ({ value: f.folder as string, label: f.folder as string })),
+  const options = useMemo(
+    () => [
+      ...folders.map((f) => ({ value: f.id, label: f.name })),
+      { value: NEW_FOLDER_OPTION_VALUE, label: '+ Create new folder…' },
+    ],
     [folders],
   );
 
-  const options = useMemo(
-    () => [
-      { value: UNCAT_OPTION_VALUE, label: UNCATEGORIZED_LABEL },
-      ...namedOptions,
-      { value: NEW_FOLDER_OPTION_VALUE, label: '+ Create new folder…' },
-    ],
-    [namedOptions],
-  );
-
-  const selectValue = value === '' ? UNCAT_OPTION_VALUE : value;
-
   const handleSelectChange = (v: string | null) => {
-    const next = v ?? UNCAT_OPTION_VALUE;
-    if (next === NEW_FOLDER_OPTION_VALUE) {
-      setMode('new');
-      onChange('');
-      return;
-    }
-    if (next === UNCAT_OPTION_VALUE) {
-      onChange('');
-      return;
-    }
-    onChange(next);
+    if (!v) return;
+    onChange(v);
   };
 
-  if (mode === 'new') {
+  if (value === NEW_FOLDER_OPTION_VALUE) {
     return (
       <div className="flex flex-col gap-1">
         <TextInput
           name="folder_new"
           label={label}
-          placeholder="New folder name (leave blank for Uncategorized)"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
+          placeholder="New folder name"
+          value={newFolderName}
+          onChange={(e) => onNewFolderNameChange(e.target.value)}
         />
         <button
           type="button"
           className="self-start text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
           onClick={() => {
-            setMode('select');
-            onChange('');
+            onChange(folders[0]?.id ?? '');
+            onNewFolderNameChange('');
           }}
         >
           Pick an existing folder instead
@@ -2085,11 +2082,15 @@ function FolderPicker({
     );
   }
 
+  // ``value`` is passed through as-is (no ``|| folders[0]?.id`` fallback)
+  // so the SelectInput's rendered value ALWAYS matches parent state — a
+  // silent divergence would land scenarios in an unintended folder. The
+  // parent's own useEffect backfills a valid id once folders load.
   return (
     <SelectInput
-      name="folder"
+      name="folder_id"
       label={label}
-      value={selectValue}
+      value={value}
       onValueChange={handleSelectChange}
       options={options}
     />
@@ -2104,18 +2105,19 @@ function ScenarioFormModal({
   agentId,
   scenario,
   folderOptions,
-  defaultFolder,
+  defaultFolderId,
 }: {
   open: boolean;
   onClose: () => void;
   agentId: string;
   scenario: AgentLlmEvalScenario | null;
   folderOptions: AgentLlmEvalFolder[];
-  defaultFolder: string;
+  defaultFolderId: string | null;
 }) {
   const isEdit = !!scenario;
   const create = useCreateAgentLlmEvalScenario(agentId);
   const update = useUpdateAgentLlmEvalScenario(agentId);
+  const createFolder = useCreateAgentLlmEvalFolder(agentId);
 
   const [key, setKey] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -2123,9 +2125,15 @@ function ScenarioFormModal({
   const [persona, setPersona] = useState('');
   const [instruction, setInstruction] = useState('');
   const [tags, setTags] = useState('');
-  // '' = Uncategorized (NULL folder); non-empty string = named folder.
-  const [folder, setFolder] = useState('');
+  // Folder id, or the ``NEW_FOLDER_OPTION_VALUE`` sentinel while creating.
+  const [folderId, setFolderId] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
 
+  // Initialise once when the modal opens or the target scenario changes.
+  // Deliberately omit ``folderOptions`` from deps — the folders query has
+  // ``staleTime: 0`` so its data reference changes on every background
+  // refetch. Including it here would silently reset the user's mid-edit
+  // folder pick every time the query refetches.
   useEffect(() => {
     if (!open) return;
     setKey(scenario?.scenario_key ?? '');
@@ -2134,18 +2142,39 @@ function ScenarioFormModal({
     setPersona(scenario?.persona_criteria ?? '');
     setInstruction(scenario?.instruction_criteria ?? '');
     setTags((scenario?.tags ?? []).join(', '));
-    // Edit: pre-fill from the row. Create: pre-fill from the sidebar's
-    // current folder selection (falls back to '' = Uncategorized).
-    setFolder(scenario?.folder ?? defaultFolder ?? '');
-  }, [open, scenario, defaultFolder]);
+    setFolderId(scenario?.folder_id ?? defaultFolderId ?? '');
+    setNewFolderName('');
+  }, [open, scenario, defaultFolderId]);
+
+  // Defensive backfill: if the modal opened before the folders query
+  // resolved, folderId is '' — pick the first folder once folders arrive
+  // so the SelectInput's rendered value matches state (fixes silent
+  // display/state divergence in ``FolderPicker``).
+  useEffect(() => {
+    if (!open || folderId || folderId === NEW_FOLDER_OPTION_VALUE) return;
+    if (folderOptions.length === 0) return;
+    setFolderId(folderOptions[0].id);
+  }, [open, folderId, folderOptions]);
 
   const submit = async () => {
     const parsedTags = tags
       .split(',')
       .map((t) => t.trim())
       .filter(Boolean);
-    const trimmedFolder = folder.trim();
     try {
+      // Resolve the folder id — either an existing selection or a
+      // just-created folder from the "+ Create new folder…" affordance.
+      let resolvedFolderId = folderId;
+      if (folderId === NEW_FOLDER_OPTION_VALUE) {
+        const trimmed = newFolderName.trim();
+        if (!trimmed) {
+          showToast.error('Folder name is required');
+          return;
+        }
+        const created = await createFolder.mutateAsync({ name: trimmed });
+        resolvedFolderId = created.id;
+      }
+
       if (isEdit && scenario) {
         // Only send fields the user actually changed — otherwise a
         // concurrent edit (another tab / user) gets silently reverted.
@@ -2153,7 +2182,6 @@ function ScenarioFormModal({
         // as a JSONB array whose order we shouldn't rely on for equality.
         const originalTags = (scenario.tags ?? []).slice().sort().join(',');
         const nextTags = parsedTags.slice().sort().join(',');
-        const originalFolder = scenario.folder ?? '';
         const patch: ScenarioPatch = {
           scenario_key: key !== scenario.scenario_key ? key : undefined,
           prompt: prompt !== scenario.prompt ? prompt : undefined,
@@ -2162,7 +2190,10 @@ function ScenarioFormModal({
           instruction_criteria:
             instruction !== (scenario.instruction_criteria ?? '') ? instruction : undefined,
           tags: nextTags !== originalTags ? parsedTags : undefined,
-          folder: trimmedFolder !== originalFolder ? trimmedFolder : undefined,
+          folder_id:
+            resolvedFolderId && resolvedFolderId !== scenario.folder_id
+              ? resolvedFolderId
+              : undefined,
         };
         await update.mutateAsync({ scenarioId: scenario.id, patch });
         showToast.success('Scenario updated');
@@ -2174,7 +2205,7 @@ function ScenarioFormModal({
           persona_criteria: persona || null,
           instruction_criteria: instruction || null,
           tags: parsedTags.length ? parsedTags : null,
-          folder: trimmedFolder || null,
+          folder_id: resolvedFolderId || null,
         };
         await create.mutateAsync(input);
         showToast.success('Scenario created');
@@ -2185,7 +2216,7 @@ function ScenarioFormModal({
     }
   };
 
-  const pending = create.isPending || update.isPending;
+  const pending = create.isPending || update.isPending || createFolder.isPending;
 
   return (
     <CustomModal
@@ -2259,7 +2290,13 @@ function ScenarioFormModal({
           value={tags}
           onChange={(e) => setTags(e.target.value)}
         />
-        <FolderPicker folders={folderOptions} value={folder} onChange={setFolder} />
+        <FolderPicker
+          folders={folderOptions}
+          value={folderId}
+          onChange={setFolderId}
+          newFolderName={newFolderName}
+          onNewFolderNameChange={setNewFolderName}
+        />
       </div>
     </CustomModal>
   );
@@ -2273,22 +2310,21 @@ function RunEvalModal({
   agentId,
   scenarios,
   folders,
-  defaultFolder,
+  defaultFolderId,
 }: {
   open: boolean;
   onClose: () => void;
   agentId: string;
   scenarios: AgentLlmEvalScenario[];
   folders: AgentLlmEvalFolder[];
-  defaultFolder: FolderScope;
+  defaultFolderId: FolderScope;
 }) {
   const trigger = useTriggerAgentLlmEvalRun(agentId);
   const [judge, setJudge] = useState('');
   const [scope, setScope] = useState<'all' | 'tags' | 'folders'>('all');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  // Each entry: '' = Uncategorized (matches NULL folder), any other string
-  // = that named folder. Chip-toggle multi-select mirroring the tag picker.
-  const [selectedFolders, setSelectedFolders] = useState<string[]>([]);
+  // Each entry: a folder id. Chip-toggle multi-select mirroring the tag picker.
+  const [selectedFolderIds, setSelectedFolderIds] = useState<string[]>([]);
 
   const tagOptions = useMemo(() => {
     const all = new Set<string>();
@@ -2301,8 +2337,8 @@ function RunEvalModal({
   const folderOptions = useMemo(
     () =>
       folders.map((f) => ({
-        value: f.folder ?? '',
-        label: f.folder ?? UNCATEGORIZED_LABEL,
+        value: f.id,
+        label: f.name,
         count: f.count,
       })),
     [folders],
@@ -2313,42 +2349,42 @@ function RunEvalModal({
       setJudge('');
       setScope('all');
       setSelectedTags([]);
-      setSelectedFolders([]);
+      setSelectedFolderIds([]);
       return;
     }
     // If a folder was open when the user opened the modal, pre-seed the
     // multi-select with that one folder — saves them re-picking. They can
     // then check additional folders before running.
-    if (defaultFolder !== null) {
+    if (defaultFolderId !== null) {
       setScope('folders');
-      setSelectedFolders([defaultFolder]);
+      setSelectedFolderIds([defaultFolderId]);
     }
-  }, [open, defaultFolder]);
+  }, [open, defaultFolderId]);
 
   const selectedFoldersCount = useMemo(() => {
-    if (!selectedFolders.length) return 0;
+    if (!selectedFolderIds.length) return 0;
     return folderOptions
-      .filter((o) => selectedFolders.includes(o.value))
+      .filter((o) => selectedFolderIds.includes(o.value))
       .reduce((n, o) => n + o.count, 0);
-  }, [selectedFolders, folderOptions]);
+  }, [selectedFolderIds, folderOptions]);
 
   const toggleFolder = (value: string) => {
-    setSelectedFolders((prev) =>
+    setSelectedFolderIds((prev) =>
       prev.includes(value) ? prev.filter((v) => v !== value) : [...prev, value],
     );
   };
 
-  const canSubmit = scope !== 'folders' || (selectedFolders.length > 0 && selectedFoldersCount > 0);
+  const canSubmit =
+    scope !== 'folders' || (selectedFolderIds.length > 0 && selectedFoldersCount > 0);
 
   const submit = async () => {
     try {
       await trigger.mutateAsync({
         judge_model: judge.trim() || undefined,
         tags: scope === 'tags' && selectedTags.length ? selectedTags : undefined,
-        // Send the plural `folders` field on multi-select. Backend prefers
-        // `folders` when both are provided, so `folder` (singular) is
-        // deliberately omitted here.
-        folders: scope === 'folders' && selectedFolders.length ? selectedFolders : undefined,
+        // Send the plural `folder_ids` field on multi-select. Backend
+        // prefers `folder_ids` when both are provided.
+        folder_ids: scope === 'folders' && selectedFolderIds.length ? selectedFolderIds : undefined,
       });
       showToast.success(
         'Evaluation started',
@@ -2399,12 +2435,12 @@ function RunEvalModal({
           <div className="flex flex-col gap-2">
             <div className="flex flex-wrap gap-2">
               {folderOptions.map((f) => {
-                const active = selectedFolders.includes(f.value);
+                const active = selectedFolderIds.includes(f.value);
                 const isEmpty = f.count === 0;
                 return (
                   <button
                     type="button"
-                    key={f.value || '__uncat__'}
+                    key={f.value}
                     onClick={() => toggleFolder(f.value)}
                     disabled={isEmpty}
                     className={cn(
@@ -2434,9 +2470,9 @@ function RunEvalModal({
               })}
             </div>
             <p className="text-[11px] text-muted-foreground">
-              {selectedFolders.length === 0
+              {selectedFolderIds.length === 0
                 ? 'Pick one or more folders.'
-                : `${selectedFoldersCount} scenario${selectedFoldersCount === 1 ? '' : 's'} across ${selectedFolders.length} folder${selectedFolders.length === 1 ? '' : 's'} will run.`}
+                : `${selectedFoldersCount} scenario${selectedFoldersCount === 1 ? '' : 's'} across ${selectedFolderIds.length} folder${selectedFolderIds.length === 1 ? '' : 's'} will run.`}
             </p>
           </div>
         )}
@@ -2491,13 +2527,13 @@ function GenerateScenariosModal({
   onClose,
   agentId,
   folderOptions,
-  defaultFolder,
+  defaultFolderId,
 }: {
   open: boolean;
   onClose: () => void;
   agentId: string;
   folderOptions: AgentLlmEvalFolder[];
-  defaultFolder: string;
+  defaultFolderId: string | null;
 }) {
   // Two-step flow: dry-run generate → preview table with per-row
   // checkboxes → user confirms → bulk-create only the selected items with
@@ -2507,8 +2543,10 @@ function GenerateScenariosModal({
   // keeps the scenario-write invariants in one place.
   const generate = useGenerateAgentLlmEvalScenarios(agentId);
   const persist = useCreateAgentLlmEvalScenariosBulk(agentId);
+  const createFolder = useCreateAgentLlmEvalFolder(agentId);
   const [count, setCount] = useState(String(GENERATE_DEFAULT_COUNT));
-  const [folder, setFolder] = useState('');
+  const [folderId, setFolderId] = useState('');
+  const [newFolderName, setNewFolderName] = useState('');
   // Preview state — ``null`` = the form is showing; a non-null array
   // = the preview table is showing. Kept as separate state (not derived
   // from ``generate.data``) so switching from preview back to form
@@ -2521,13 +2559,37 @@ function GenerateScenariosModal({
       // Reset every piece of state on close so a re-open starts fresh
       // (avoids resurrecting a stale preview from a previous session).
       setCount(String(GENERATE_DEFAULT_COUNT));
-      setFolder('');
+      setFolderId('');
+      setNewFolderName('');
       setPreview(null);
       setSelectedKeys(new Set());
       return;
     }
-    setFolder(defaultFolder ?? '');
-  }, [open, defaultFolder]);
+    setFolderId(defaultFolderId ?? '');
+    setNewFolderName('');
+  }, [open, defaultFolderId]);
+
+  // Backfill folderId once folders load — see the matching effect on
+  // ``ScenarioFormModal`` for the rationale.
+  useEffect(() => {
+    if (!open || folderId || folderId === NEW_FOLDER_OPTION_VALUE) return;
+    if (folderOptions.length === 0) return;
+    setFolderId(folderOptions[0].id);
+  }, [open, folderId, folderOptions]);
+
+  const resolveFolderIdOrCreate = async (): Promise<string | null> => {
+    if (folderId === NEW_FOLDER_OPTION_VALUE) {
+      const trimmed = newFolderName.trim();
+      if (!trimmed) {
+        showToast.error('Folder name is required');
+        return null;
+      }
+      const created = await createFolder.mutateAsync({ name: trimmed });
+      setFolderId(created.id);
+      return created.id;
+    }
+    return folderId || null;
+  };
 
   const runGenerate = async () => {
     const parsedCount = Math.max(
@@ -2542,7 +2604,6 @@ function GenerateScenariosModal({
         // ``persist`` mutation writes the user's selection with
         // ``source='generated'``.
         dry_run: true,
-        folder: folder.trim() || null,
       });
       if (result.generated.length === 0) {
         showToast.info(
@@ -2564,8 +2625,8 @@ function GenerateScenariosModal({
     if (!preview) return;
     const chosen = preview.filter((s) => selectedKeys.has(s.scenario_key));
     if (chosen.length === 0) return;
-    const trimmedFolder = folder.trim();
     try {
+      const resolvedFolderId = await resolveFolderIdOrCreate();
       const result = await persist.mutateAsync({
         source: 'generated',
         scenarios: chosen.map<ScenarioInput>((s) => ({
@@ -2575,7 +2636,7 @@ function GenerateScenariosModal({
           persona_criteria: s.persona_criteria,
           instruction_criteria: s.instruction_criteria,
           tags: s.tags.length ? s.tags : null,
-          folder: trimmedFolder || null,
+          folder_id: resolvedFolderId || null,
         })),
       });
       showToast.success(
@@ -2605,7 +2666,7 @@ function GenerateScenariosModal({
   };
 
   const inPreview = preview !== null;
-  const anyPending = generate.isPending || persist.isPending;
+  const anyPending = generate.isPending || persist.isPending || createFolder.isPending;
   // Cancel = full modal close; Regenerate = go back to the form to
   // re-run generation (keeps count + folder inputs so the user can tweak).
   const modalClose = anyPending ? () => undefined : onClose;
@@ -2684,7 +2745,13 @@ function GenerateScenariosModal({
             onChange={(e) => setCount(e.target.value)}
             helperText={`Between 1 and ${GENERATE_MAX_COUNT}. Nothing is saved until you review the preview.`}
           />
-          <FolderPicker folders={folderOptions} value={folder} onChange={setFolder} />
+          <FolderPicker
+            folders={folderOptions}
+            value={folderId}
+            onChange={setFolderId}
+            newFolderName={newFolderName}
+            onNewFolderNameChange={setNewFolderName}
+          />
         </div>
       )}
     </CustomModal>
@@ -2782,6 +2849,72 @@ function GeneratedScenariosPreview({
         </table>
       </div>
     </div>
+  );
+}
+
+// ── New folder modal ────────────────────────────────────────────────────
+
+function NewFolderModal({
+  open,
+  onClose,
+  onSubmit,
+  pending,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSubmit: (name: string) => Promise<void> | void;
+  pending: boolean;
+}) {
+  const [name, setName] = useState('');
+
+  useEffect(() => {
+    if (!open) setName('');
+  }, [open]);
+
+  const submit = () => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    onSubmit(trimmed);
+  };
+
+  return (
+    <CustomModal
+      open={open}
+      onClose={onClose}
+      title="New folder"
+      description="Group scenarios by feature, flow, or persona — folders survive after their last scenario is deleted."
+      width="max-w-md"
+      footer={
+        <div className="flex justify-end gap-2">
+          <CustomButton type="default" onClick={onClose} disabled={pending}>
+            Cancel
+          </CustomButton>
+          <CustomButton
+            type="primary"
+            onClick={submit}
+            loading={pending}
+            disabled={pending || !name.trim()}
+          >
+            Create folder
+          </CustomButton>
+        </div>
+      }
+    >
+      <TextInput
+        name="folder_name"
+        label="Folder name"
+        placeholder="e.g. Refund flow"
+        value={name}
+        onChange={(e) => setName(e.target.value)}
+        isRequired
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            submit();
+          }
+        }}
+      />
+    </CustomModal>
   );
 }
 

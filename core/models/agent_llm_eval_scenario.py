@@ -1,5 +1,8 @@
+from typing import Optional
+
 from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import relationship
 
 from core.models.base import OrgScopedModel
 
@@ -37,6 +40,10 @@ class AgentLlmEvalScenario(OrgScopedModel):
             "agent_id",
             "scenario_ord",
         ),
+        Index(
+            "ix_agent_llm_eval_scenarios_folder_id",
+            "folder_id",
+        ),
     )
 
     agent_id = Column(
@@ -60,11 +67,28 @@ class AgentLlmEvalScenario(OrgScopedModel):
 
     tags = Column(JSONB, nullable=True)
 
-    # Single-value grouping (e.g. "Refund flow"). NULL = "Uncategorized" in the
-    # UI. Snapshotted onto ``agent_llm_eval_results.folder`` at run time so
-    # historical grouping survives edits/deletes. Rename is a bulk UPDATE on
-    # BOTH tables in one transaction — see ``rename_folder`` in the service.
-    folder = Column(String(120), nullable=True)
+    # FK to first-class folder row. Every scenario always belongs to a real
+    # folder — the agent's ``Default`` folder is seeded on agent-create so
+    # callers that omit ``folder_id`` land here. Deleting a folder cascades
+    # to every scenario inside it (matches the "delete folder = delete its
+    # contents" UX).
+    folder_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_llm_eval_folders.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    # Read-only relationship — surfaces the folder NAME to ``to_dict`` and
+    # to the eval runner without a manual query. Preferred over caching
+    # the name on an unmapped instance attribute (which silently
+    # disappears after ``expire_on_commit`` fires). List queries in the
+    # scenario service pair this with ``joinedload`` to avoid N+1.
+    folder_ref = relationship(
+        "AgentLlmEvalFolder",
+        foreign_keys=[folder_id],
+        lazy="select",
+        viewonly=True,
+    )
 
     # Per-scenario overrides — NULL means "use the org's ``agent_llm.*``
     # eval settings from ``organizations.eval_settings``".
@@ -83,6 +107,17 @@ class AgentLlmEvalScenario(OrgScopedModel):
     tool_config = Column(JSONB, nullable=True)
 
     def to_dict(self) -> dict:
+        # ``folder`` is the display name from the joined folder row. Falls
+        # back to None if the relationship was never loaded (e.g. detached
+        # instance from a foreign session) rather than firing a lazy
+        # query on a possibly-closed session.
+        folder_name: Optional[str] = None
+        try:
+            folder_row = self.folder_ref
+            if folder_row is not None:
+                folder_name = folder_row.name
+        except Exception:  # noqa: BLE001 — detached / expired instance
+            folder_name = None
         return {
             "id": str(self.id),
             "organization_id": str(self.organization_id),
@@ -94,7 +129,8 @@ class AgentLlmEvalScenario(OrgScopedModel):
             "persona_criteria": self.persona_criteria,
             "instruction_criteria": self.instruction_criteria,
             "tags": self.tags,
-            "folder": self.folder,
+            "folder_id": str(self.folder_id) if self.folder_id else None,
+            "folder": folder_name,
             "metrics_override": self.metrics_override,
             "threshold_override": self.threshold_override,
             "source": self.source,

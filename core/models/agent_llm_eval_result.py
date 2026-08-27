@@ -61,9 +61,10 @@ class AgentLlmEvalResult(OrgScopedModel):
 
     scenario_key = Column(String(120), nullable=False)
     scenario_tags = Column(JSONB, nullable=True)
-    # Snapshot of ``AgentLlmEvalScenario.folder`` at run time. Preserved across
-    # scenario edits/deletes. Bulk-renamed alongside the scenarios table when
-    # a folder is renamed so the UI can group past runs under the current name.
+    # Snapshot of the scenario's folder NAME at run time (resolved from
+    # ``AgentLlmEvalFolder.name`` via ``folder_id``). Immutable: a later
+    # folder rename or delete does NOT rewrite this column, so past runs
+    # remain readable exactly as they were scored.
     folder = Column(String(120), nullable=True)
     prompt = Column(Text, nullable=False)
     expected_answer = Column(Text, nullable=True)
