@@ -433,6 +433,13 @@ export interface CustomPopoverProps {
   title?: React.ReactNode;
   children?: React.ReactNode;
   footer?: React.ReactNode | null;
+  /**
+   * When true (default), the footer is rendered with a top border to
+   * visually separate it from the body. Pass `false` to opt out — useful
+   * when the footer is a lightweight action (e.g. a compact "Clear" link)
+   * that doesn't need the divider.
+   */
+  footerBordered?: boolean;
   align?: 'start' | 'center' | 'end';
   side?: 'top' | 'right' | 'bottom' | 'left';
   sideOffset?: number;
