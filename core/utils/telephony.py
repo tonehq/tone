@@ -49,6 +49,11 @@ def pinned_ws_url(default_ws_url: str, tag: str) -> Tuple[str, Optional[str], Op
                     node_name = pod.node.name if pod.node is not None else None
             if pinned_url:
                 ws_url = pinned_url
+            else:
+                logger.warning(
+                    "[{}] pod pinning yielded no pinned pod — advertising fallback media URL {}",
+                    tag, ws_url,
+                )
         except Exception:
             logger.exception("[{}] pod pinning failed, falling back to /ws", tag)
     return ws_url, pod_name, pod_ordinal, node_name
