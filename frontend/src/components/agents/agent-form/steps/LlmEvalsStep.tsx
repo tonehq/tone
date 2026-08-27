@@ -659,13 +659,11 @@ function LlmEvalsStepBody({ agentId }: { agentId: string }) {
             onSaveRename={saveRenameFolder}
             onCancelRename={cancelRenameFolder}
             renamePending={renameFolderMutation.isPending}
-            onDelete={
-              // Same invariant as the folder grid: the LAST remaining
-              // folder can't be deleted (agent must always have >= 1).
-              activeFolder && folders.length > 1
-                ? () => setPendingDeleteFolderId(activeFolder.id)
-                : undefined
-            }
+            onDelete={activeFolder ? () => setPendingDeleteFolderId(activeFolder.id) : undefined}
+            // Same invariant as the folder grid: the LAST remaining folder
+            // can't be deleted. Render disabled with a tooltip so users
+            // still see the affordance and understand the constraint.
+            canDelete={folders.length > 1}
           />
           <div className="flex flex-wrap items-center gap-2">
             <div className="min-w-[200px] flex-1">
@@ -1605,7 +1603,12 @@ function FoldersView({
               onOpen={() => onOpen(f.id)}
               onRun={() => onRunFolder(f.id)}
               onRename={() => onRename(f.id)}
-              onDelete={canDeleteAny ? () => onDelete(f.id) : undefined}
+              // Always show the Delete affordance so users can see the
+              // feature exists — the LAST folder for an agent renders it
+              // disabled with an explanatory tooltip (backend enforces
+              // the same invariant via ``FOLDER_NOT_DELETABLE``).
+              onDelete={() => onDelete(f.id)}
+              canDelete={canDeleteAny}
               isRunning={isRunning}
               isEditing={editingFolderId === f.id}
               onSaveRename={onSaveRename}
@@ -1752,8 +1755,9 @@ function InlineFolderNameEditor({
  * always visible at the bottom (muted → foreground on hover). The whole
  * card is a ``<button>``; nested actions use ``<span role="button">`` +
  * ``e.stopPropagation()`` (invalid to nest ``<button>`` inside a button).
- * The delete affordance is undefined for the last remaining folder — an
- * agent must always have at least one folder. */
+ * The delete affordance always renders so users see the feature exists;
+ * ``canDelete=false`` renders it disabled with a tooltip (the agent's
+ * LAST folder can't be deleted — invariant enforced by the backend too). */
 function FolderCard({
   name,
   count,
@@ -1762,6 +1766,7 @@ function FolderCard({
   onRun,
   onRename,
   onDelete,
+  canDelete = true,
   isRunning,
   isEditing = false,
   onSaveRename,
@@ -1774,9 +1779,11 @@ function FolderCard({
   onOpen: () => void;
   onRun: () => void;
   onRename?: () => void;
-  // Undefined for the last remaining folder — the agent must always have
-  // at least one folder so create-scenario always has somewhere to land.
+  // Always provided by ``FoldersView`` — see ``canDelete`` for the gate.
   onDelete?: () => void;
+  // ``false`` for the agent's last remaining folder. Renders the Delete
+  // button disabled with a tooltip explaining the invariant.
+  canDelete?: boolean;
   isRunning: boolean;
   // Inline-edit state. When ``isEditing`` is true, the name span is
   // swapped for ``InlineFolderNameEditor`` and the drill-in click is
@@ -1873,7 +1880,12 @@ function FolderCard({
               label="Delete"
               onActivate={onDelete}
               emphasis="danger"
-              title={`Delete folder ${name}`}
+              disabled={!canDelete}
+              title={
+                canDelete
+                  ? `Delete folder ${name}`
+                  : 'Every agent must have at least one folder — create another folder before deleting this one.'
+              }
             />
           )}
           <FolderCardAction
@@ -1967,6 +1979,7 @@ function FolderBreadcrumb({
   onCancelRename,
   renamePending = false,
   onDelete,
+  canDelete = true,
 }: {
   folderName: string;
   count: number;
@@ -1978,10 +1991,11 @@ function FolderBreadcrumb({
   onSaveRename?: (next: string) => void;
   onCancelRename?: () => void;
   renamePending?: boolean;
-  // Undefined for the last remaining folder — the agent must always
-  // have at least one folder so ``create_scenario`` always has
-  // somewhere to land (matches ``FolderCard.onDelete``).
   onDelete?: () => void;
+  // ``false`` for the agent's last remaining folder — the button still
+  // renders (so the affordance is discoverable) but is disabled with a
+  // tooltip explaining the invariant.
+  canDelete?: boolean;
 }) {
   const displayName = folderName;
   return (
@@ -2029,10 +2043,20 @@ function FolderBreadcrumb({
           {onDelete && (
             <button
               type="button"
-              onClick={onDelete}
+              onClick={canDelete ? onDelete : undefined}
+              disabled={!canDelete}
               aria-label={`Delete folder ${displayName}`}
-              title="Delete folder"
-              className="inline-flex cursor-pointer items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+              title={
+                canDelete
+                  ? 'Delete folder'
+                  : 'Every agent must have at least one folder — create another folder before deleting this one.'
+              }
+              className={cn(
+                'inline-flex items-center justify-center rounded p-1 transition-colors',
+                canDelete
+                  ? 'cursor-pointer text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+                  : 'cursor-not-allowed text-muted-foreground/40',
+              )}
             >
               <Trash2 className="size-3.5" />
             </button>
