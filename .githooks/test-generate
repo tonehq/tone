@@ -1,0 +1,151 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import hooklib
+
+BACKEND_DIRS = ("test-cases", "backend/tests", "tests")
+FRONTEND_E2E = ("frontend/e2e",)
+
+
+def backend_root(root):
+    for d in BACKEND_DIRS:
+        if os.path.isdir(os.path.join(root, d)):
+            return d
+    return None
+
+
+def frontend_root(root):
+    for d in FRONTEND_E2E:
+        if os.path.isdir(os.path.join(root, d)):
+            return d
+    return None
+
+
+def touched(paths, prefixes):
+    return any(p.startswith(prefixes) for p in paths)
+
+
+def build_prompt(task, branch, prd_rel, targets):
+    lines = [
+        "Generate automated tests for the feature described in the PRD at " + prd_rel + ".",
+        "",
+        "Use section 5 (Test cases) of that PRD as the specification. Ground every test in the",
+        "repository's real modules, fixtures and conventions - read the existing tests first and",
+        "match their style, imports and fixtures exactly.",
+        "",
+        "Run non-interactively: do NOT ask questions. Do NOT start any dev server and do NOT",
+        "modify application code. Only create or edit test files.",
+        "",
+        "Before writing any mock or patch target, VERIFY the symbol exists and is reachable at",
+        "that path: grep the module for the name and confirm it is imported into that module's",
+        "namespace, not merely defined elsewhere. patch() resolves names in the module under",
+        "test, so patching a symbol the module does not import raises AttributeError at runtime.",
+        "Do not copy patch targets from neighbouring test files without re-verifying them - an",
+        "existing test may itself be stale.",
+        "",
+        "When you have written the tests, run them once with pytest (backend) and fix any",
+        "failures caused by the tests themselves. Do not change application code to make a test",
+        "pass - if a test fails because of a real defect, leave it failing and say so at the top",
+        "of the file.",
+        "",
+        "Write tests to:",
+    ]
+    for kind, path in targets:
+        lines.append("  " + kind + ": " + path)
+    lines += [
+        "",
+        "If a case in the PRD cannot be tested without new application code or fixtures, skip it",
+        "and note why in a comment at the top of the file rather than inventing scaffolding.",
+        "",
+        "ClickUp task: " + str(task.get("id")) + " - " + (task.get("name") or ""),
+        "Branch: " + branch,
+    ]
+    return "\n".join(lines)
+
+
+def plan(root):
+    branch = hooklib.current_branch()
+    if not branch or branch == "HEAD":
+        return None
+
+    env = hooklib.load_env(root)
+    task = hooklib.resolve_task(env, branch)
+    if not task:
+        return None
+
+    slug = hooklib.slugify(task.get("name"))
+    prd_rel = os.path.join("docs", "features", slug + ".md")
+    if not os.path.exists(os.path.join(root, prd_rel)):
+        return None
+
+    paths = hooklib.changed_paths()
+    targets = []
+
+    be_dir = backend_root(root)
+    if be_dir and touched(paths, ("core/", "ee/", "backend/", "alembic/", "main.py")):
+        rel = os.path.join(be_dir, "test_" + slug.replace("-", "_") + ".py")
+        if not os.path.exists(os.path.join(root, rel)):
+            targets.append(("backend", rel))
+
+    fe_dir = frontend_root(root)
+    if fe_dir and touched(paths, ("frontend/",)):
+        rel = os.path.join(fe_dir, slug + ".spec.ts")
+        if not os.path.exists(os.path.join(root, rel)):
+            targets.append(("frontend", rel))
+
+    if not targets:
+        return None
+    return {"task": task, "branch": branch, "slug": slug, "prd": prd_rel, "targets": targets}
+
+
+def main():
+    root = hooklib.repo_root()
+    if not root:
+        return 0
+    os.chdir(root)
+
+    job = plan(root)
+    if not job:
+        return 0
+
+    if "--plan" in sys.argv:
+        print(" ".join(p for _, p in job["targets"]))
+        return 0
+
+    lock = hooklib.acquire_lock(root, "tests-" + job["slug"])
+    if not lock:
+        return 0
+
+    for _, rel in job["targets"]:
+        os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
+
+    try:
+        ok, produced = hooklib.run_claude(
+            root,
+            build_prompt(job["task"], job["branch"], job["prd"], job["targets"]),
+            "test-generate.log",
+            job["branch"] + " -> " + ", ".join(p for _, p in job["targets"]),
+            [p for _, p in job["targets"]],
+        )
+    finally:
+        try:
+            os.remove(lock)
+        except Exception:
+            pass
+
+    if not ok:
+        try:
+            with open(os.path.join(root, ".git", "tests-FAILED"), "w") as fh:
+                fh.write(job["branch"] + " -> " + ", ".join(p for _, p in job["targets"]) + "\n")
+        except Exception:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
