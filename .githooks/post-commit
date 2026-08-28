@@ -10,8 +10,33 @@ if [ "${TONE_HOOKS_DISABLE:-0}" = "1" ]; then
   exit 0
 fi
 
-if command -v gitnexus >/dev/null 2>&1; then
-  gitnexus analyze >/dev/null 2>&1
+for marker in prd tests; do
+  if [ -f "$REPO_ROOT/.git/${marker}-FAILED" ]; then
+    printf '%s: last run failed — %s' "$marker" "$(cat "$REPO_ROOT/.git/${marker}-FAILED")"
+    printf '%s: see .git/%s-generate.log\n' "$marker" "$marker"
+    rm -f "$REPO_ROOT/.git/${marker}-FAILED"
+  fi
+done
+
+if ! command -v claude >/dev/null 2>&1; then
+  exit 0
+fi
+
+if [ "${TONE_PRD_DISABLE:-0}" != "1" ] && [ -x "$REPO_ROOT/.githooks/prd-generate" ]; then
+  TARGET=$("$REPO_ROOT/.githooks/prd-generate" --plan 2>/dev/null)
+  if [ -n "$TARGET" ]; then
+    printf 'prd: generating %s in the background (several minutes)\n' "$TARGET"
+    nohup "$REPO_ROOT/.githooks/prd-generate" >/dev/null 2>&1 &
+    exit 0
+  fi
+fi
+
+if [ "${TONE_TESTS_DISABLE:-0}" != "1" ] && [ -x "$REPO_ROOT/.githooks/test-generate" ]; then
+  TARGET=$("$REPO_ROOT/.githooks/test-generate" --plan 2>/dev/null)
+  if [ -n "$TARGET" ]; then
+    printf 'tests: generating %s in the background (several minutes)\n' "$TARGET"
+    nohup "$REPO_ROOT/.githooks/test-generate" >/dev/null 2>&1 &
+  fi
 fi
 
 if [ -f "$REPO_ROOT/.git/prd-FAILED" ]; then
