@@ -39,4 +39,18 @@ if [ "${TONE_TESTS_DISABLE:-0}" != "1" ] && [ -x "$REPO_ROOT/.githooks/test-gene
   fi
 fi
 
+if [ -f "$REPO_ROOT/.git/prd-FAILED" ]; then
+  printf 'prd: last run failed — %s' "$(cat "$REPO_ROOT/.git/prd-FAILED")"
+  printf 'prd: see .git/prd-generate.log\n'
+  rm -f "$REPO_ROOT/.git/prd-FAILED"
+fi
+
+if [ "${TONE_PRD_DISABLE:-0}" != "1" ] && [ -x "$REPO_ROOT/.githooks/prd-generate" ] && command -v claude >/dev/null 2>&1; then
+  TARGET=$("$REPO_ROOT/.githooks/prd-generate" --plan 2>/dev/null)
+  if [ -n "$TARGET" ]; then
+    printf 'prd: generating %s in the background (several minutes)\n' "$TARGET"
+    nohup "$REPO_ROOT/.githooks/prd-generate" >/dev/null 2>&1 &
+  fi
+fi
+
 exit 0
