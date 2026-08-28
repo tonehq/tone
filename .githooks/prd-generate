@@ -1,0 +1,206 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.parse
+import urllib.request
+
+ENV_KEYS = ("CLICKUP_TOKEN", "CLICKUP_LIST_ID", "CLICKUP_BRANCH_FIELD_ID")
+
+
+def repo_root():
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip()
+    except Exception:
+        return ""
+
+
+def load_env(root):
+    values = {k: os.environ.get(k, "") for k in ENV_KEYS}
+    for rel in (".env", "backend/.env", "frontend/.env"):
+        path = os.path.join(root, rel)
+        if not os.path.isfile(path):
+            continue
+        try:
+            with open(path, errors="ignore") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if not line or line.startswith("#") or "=" not in line:
+                        continue
+                    key, _, val = line.partition("=")
+                    key = key.strip()
+                    if key in ENV_KEYS and not values.get(key):
+                        values[key] = val.strip().strip('"').strip("'")
+        except Exception:
+            continue
+    return values
+
+
+def current_branch():
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return out.stdout.strip()
+    except Exception:
+        return ""
+
+
+def clickup_get(path, token, params=None):
+    url = "https://api.clickup.com/api/v2" + path
+    if params:
+        url += "?" + urllib.parse.urlencode(params)
+    req = urllib.request.Request(url, headers={"Authorization": token})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return json.loads(resp.read().decode())
+    except urllib.error.HTTPError as exc:
+        try:
+            return json.loads(exc.read().decode())
+        except Exception:
+            return {"err": "HTTP " + str(exc.code)}
+    except Exception as exc:
+        return {"err": str(exc)}
+
+
+def resolve_task(env, branch):
+    token = env.get("CLICKUP_TOKEN")
+    list_id = env.get("CLICKUP_LIST_ID")
+    field_id = env.get("CLICKUP_BRANCH_FIELD_ID")
+    if not (token and list_id and field_id):
+        return None
+    flt = json.dumps([{"field_id": field_id, "operator": "=", "value": branch}])
+    data = clickup_get(
+        "/list/" + list_id + "/task",
+        token,
+        {"archived": "false", "include_closed": "true", "custom_fields": flt},
+    )
+    if not isinstance(data, dict) or data.get("err"):
+        return None
+    tasks = data.get("tasks") or []
+    return tasks[0] if tasks else None
+
+
+def slugify(name):
+    slug = re.sub(r"[^a-z0-9]+", "-", (name or "").lower()).strip("-")
+    return slug[:60] or "untitled-feature"
+
+
+def build_prompt(task, branch, out_path):
+    return (
+        "Use the generate_feature_prd_and_implementation skill to write a Feature PRD.\n\n"
+        "Run non-interactively: do NOT ask questions. Where information is missing, write\n"
+        "'TBD - needs product input' rather than inventing requirements.\n\n"
+        "Write the PRD to: " + out_path + "\n\n"
+        "Source ClickUp task\n"
+        "-------------------\n"
+        "id: " + str(task.get("id")) + "\n"
+        "name: " + (task.get("name") or "") + "\n"
+        "status: " + ((task.get("status") or {}).get("status") or "-") + "\n"
+        "url: " + (task.get("url") or "") + "\n"
+        "branch: " + branch + "\n\n"
+        "description:\n" + (task.get("description") or "(empty)") + "\n\n"
+        "Ground every technical section in this repository's actual code and conventions.\n"
+        "Do not modify any file other than the PRD.\n"
+    )
+
+
+def main():
+    root = repo_root()
+    if not root:
+        return 0
+    os.chdir(root)
+
+    branch = current_branch()
+    if not branch or branch == "HEAD":
+        return 0
+
+    env = load_env(root)
+    task = resolve_task(env, branch)
+    if not task:
+        return 0
+
+    slug = slugify(task.get("name"))
+    rel_path = os.path.join("docs", "features", slug + ".md")
+    abs_path = os.path.join(root, rel_path)
+
+    if os.path.exists(abs_path):
+        return 0
+
+    if "--plan" in sys.argv:
+        print(rel_path)
+        return 0
+
+    lock = os.path.join(root, ".git", "prd-" + slug + ".lock")
+    if os.path.exists(lock):
+        return 0
+    try:
+        os.makedirs(os.path.dirname(lock), exist_ok=True)
+        with open(lock, "w") as fh:
+            fh.write(str(os.getpid()))
+    except Exception:
+        return 0
+
+    os.makedirs(os.path.dirname(abs_path), exist_ok=True)
+    log_path = os.path.join(root, ".git", "prd-generate.log")
+
+    started = time.strftime("%Y-%m-%d %H:%M:%S")
+    try:
+        with open(log_path, "a") as log:
+            log.write("\n=== " + started + " " + branch + " -> " + rel_path + " ===\n")
+            log.flush()
+            proc = subprocess.run(
+                ["claude", "-p", "--output-format", "text", "--permission-mode", "acceptEdits"],
+                input=build_prompt(task, branch, rel_path),
+                stdout=log,
+                stderr=log,
+                text=True,
+                timeout=1800,
+            )
+            code = proc.returncode
+    except Exception as exc:
+        code = -1
+        try:
+            with open(log_path, "a") as log:
+                log.write("ERROR: " + str(exc) + "\n")
+        except Exception:
+            pass
+    finally:
+        try:
+            os.remove(lock)
+        except Exception:
+            pass
+
+    ok = os.path.exists(abs_path)
+    try:
+        with open(log_path, "a") as log:
+            log.write(
+                ("OK " if ok else "FAILED ")
+                + rel_path
+                + " (exit=" + str(code) + ")\n"
+            )
+    except Exception:
+        pass
+
+    if not ok:
+        try:
+            with open(os.path.join(root, ".git", "prd-FAILED"), "w") as fh:
+                fh.write(branch + " -> " + rel_path + " (exit=" + str(code) + ")\n")
+        except Exception:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
