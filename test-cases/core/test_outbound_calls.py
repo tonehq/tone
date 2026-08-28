@@ -105,7 +105,7 @@ class TestCreateValidation:
 
 
 @patch("core.services.outbound_call_service.OutboundCallService._prewarm_pipeline", lambda *a, **k: None)
-@patch("core.services.outbound_call_service.get_twilio_credentials",
+@patch("core.services.outbound_call_service.get_provider_credentials",
        return_value={"account_sid": "AC", "auth_token": "tok"})
 class TestCreateSuccess:
     def _db(self):
