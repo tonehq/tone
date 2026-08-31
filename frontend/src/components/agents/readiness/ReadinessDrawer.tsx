@@ -1,7 +1,7 @@
 'use client';
 
 import { useAtom } from 'jotai';
-import { Beaker, RefreshCw } from 'lucide-react';
+import { Beaker } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -11,7 +11,6 @@ import {
 } from '@/atoms/ReadinessAtom';
 import { CustomButton, CustomDrawer, SelectInput } from '@/components/shared';
 import type { ReadinessReport, ReadinessRunListItem, ReadinessTrigger } from '@/types/readiness';
-import { cn } from '@/utils/cn';
 import { formatDate, formatRelative } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -36,7 +35,7 @@ interface ReadinessDrawerProps {
    * of firing its own shallow fetch — keeps the drawer and the header badge
    * in agreement. */
   initialReport?: ReadinessReport | null;
-  /** Lets the drawer inform the parent when the LIVE report changes (Refresh /
+  /** Lets the drawer inform the parent when the LIVE report changes (on open /
    * Run deep test) so the badge and the drawer stay in sync afterwards.
    * Deliberately NOT called when viewing a historical run — the parent badge
    * must keep reflecting the live report. */
@@ -260,21 +259,6 @@ export default function ReadinessDrawer({
                 {...runSelect}
               />
             )}
-            <CustomButton
-              type="text"
-              size="xs"
-              icon={<RefreshCw className={cn('size-3.5', loading && 'animate-spin')} />}
-              // Not forced: re-reads the newest snapshot (the deep one, via the
-              // shallow-accepts-deep fast-path) and only re-runs when the
-              // dependency stamp changed. Forcing here would persist a shallow
-              // event that never shows in the deep-only history and would
-              // supersede a fresh deep result, resetting the badge to "ready".
-              onClick={() => void load('shallow', 'editor_load')}
-              disabled={loading || deepRunning || viewingHistory || !agentId}
-              className="h-7 px-2 text-[11px]"
-            >
-              Refresh
-            </CustomButton>
             <CustomButton
               type="default"
               size="xs"
