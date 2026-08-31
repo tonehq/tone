@@ -22,7 +22,7 @@ still runs, just that tool call won't work.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Iterable, List, Optional, Tuple
+from typing import Any, ClassVar, Iterable, List, Optional
 from urllib.parse import urlparse
 
 import httpx
@@ -34,6 +34,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
@@ -58,15 +59,15 @@ def _url_shape_problem(url: Optional[str]) -> Optional[str]:
     shallow check and only fail during the deep GET probe or a live call.
     """
     if not (url or "").strip():
-        return "no URL"
+        return "it has no URL"
     try:
         parsed = urlparse(url.strip())
     except ValueError:
-        return "malformed URL"
+        return "its URL is malformed"
     if parsed.scheme not in ("http", "https"):
-        return "URL scheme must be http/https"
+        return "its URL must start with http:// or https://"
     if not parsed.netloc:
-        return "URL missing host"
+        return "its URL has no host"
     return None
 
 
@@ -83,26 +84,29 @@ class ToolsUsableCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No tools attached to this agent version."
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        broken: List[str] = []
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+        results: List[CheckResult] = []
         for t in ctx.tools:
+            reason: Optional[str] = None
             if not t.is_active:
-                broken.append(f"'{t.name}' (disabled)")
-                continue
+                reason = "it's turned off"
             # Custom HTTP tools need a well-formed URL; MCP tools ride the MCP
             # server so they don't carry a URL of their own.
-            if t.tool_type == "custom":
-                url_problem = _url_shape_problem(t.url)
-                if url_problem is not None:
-                    broken.append(f"'{t.name}' ({url_problem})")
-        if broken:
-            joined = ", ".join(broken[:3])
-            more = f" and {len(broken) - 3} more" if len(broken) > 3 else ""
-            return self._fail(
-                f"Tool(s) not usable: {joined}{more}.",
-                remediation="Open the Tools tab and fix or detach them.",
+            elif t.tool_type == "custom":
+                reason = _url_shape_problem(t.url)
+            if reason is None:
+                continue
+            results.append(
+                self._fail(
+                    f"{quote(t.name)} can't be used — {reason}.",
+                    remediation="Open the Tools tab to fix or remove it.",
+                    resource_ref=ResourceRef(type="tool", id=str(t.id)),
+                    check_id=self._result_id(str(t.id)),
+                )
             )
-        return self._pass(f"{len(ctx.tools)} tool(s) attached.")
+        if results:
+            return results
+        return [self._pass(f"{len(ctx.tools)} tool(s) attached.")]
 
 
 class ToolOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
@@ -161,15 +165,14 @@ class ToolReachableCheck(DeepCheck):
         return "No probeable or OAuth-linked tools attached."
 
     @with_timeout(_PROBE_TIMEOUT_S)
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
         from core.services.oauth_service import OAuthService
         from core.services.tool_service import ToolService
 
         tool_svc = ToolService(ctx.db, org_id=ctx.org_id)
         oauth_svc = OAuthService(ctx.db, org_id=ctx.org_id)
 
-        failed: List[Tuple[str, str]] = []  # (tool_name, reason)
-        first_failed_id: Optional[str] = None
+        results: List[CheckResult] = []
         checked = 0
 
         # One client, reused across probes for connection pooling. Runtime
@@ -182,39 +185,36 @@ class ToolReachableCheck(DeepCheck):
                 if not self._needs_check(tool):
                     continue
                 checked += 1
+                reason: Optional[str] = None
 
                 # 1) OAuth-connection probe. If a linked connection is broken
                 #    the tool is guaranteed to fail at call time, so we skip
                 #    the HTTP probe to avoid a redundant confusing 401.
                 if self._has_oauth_connection(tool):
-                    reason = self._probe_oauth(tool, tool_svc, oauth_svc)
-                    if reason is not None:
-                        failed.append((tool.name, reason))
-                        if first_failed_id is None:
-                            first_failed_id = str(tool.id)
-                        continue
-
-                # 2) HTTP GET probe for probeable custom tools.
-                if self._is_probeable(tool):
+                    oauth_reason = self._probe_oauth(tool, tool_svc, oauth_svc)
+                    if oauth_reason is not None:
+                        reason = humanize_reason(oauth_reason)
+                # 2) HTTP GET probe for probeable custom tools — runs when the
+                #    OAuth check passed (or the tool has no OAuth connection).
+                if reason is None and self._is_probeable(tool):
                     reason = await self._probe_tool(client, tool)
-                    if reason is not None:
-                        failed.append((tool.name, reason))
-                        if first_failed_id is None:
-                            first_failed_id = str(tool.id)
 
-        if failed:
-            joined = "; ".join(f"'{n}': {r}" for n, r in failed[:2])
-            more = f"; +{len(failed) - 2} more" if len(failed) > 2 else ""
-            return self._fail(
-                f"Tool probe failed: {joined}{more}",
-                remediation=(
-                    "Open the Tools tab and verify the URL, credentials, "
-                    "linked connection, and any custom headers for each "
-                    "failing tool."
-                ),
-                resource_ref=ResourceRef(type="tool", id=first_failed_id) if first_failed_id else None,
-            )
-        return self._pass(f"All {checked} tool(s) reachable.")
+                if reason is not None:
+                    results.append(
+                        self._fail(
+                            f"{quote(tool.name)} can't be used — {reason}.",
+                            remediation=(
+                                "Open the Tools tab and check its URL, "
+                                "credentials, and linked connection."
+                            ),
+                            resource_ref=ResourceRef(type="tool", id=str(tool.id)),
+                            check_id=self._result_id(str(tool.id)),
+                        )
+                    )
+
+        if results:
+            return results
+        return [self._pass(f"All {checked} tool(s) reachable.")]
 
     # ── helpers ─────────────────────────────────────────────────────────────
 
@@ -276,12 +276,20 @@ class ToolReachableCheck(DeepCheck):
             # key) raises here.
             oauth_svc.resolve_connection_auth_header(connection)
         except HTTPException as exc:
+            # ``detail`` is a deliberately user-facing validation message from
+            # the tool/OAuth service — safe to surface.
             detail = exc.detail
             if isinstance(detail, dict):
                 return str(detail.get("message") or detail)
             return str(detail)
-        except Exception as exc:  # noqa: BLE001
-            return str(exc)
+        except Exception:  # noqa: BLE001
+            # Unexpected error — log for debugging, but never surface the raw
+            # exception text (may contain internal detail) to the user.
+            logger.debug(
+                "[readiness] tool OAuth probe unexpected error for tool '{}'",
+                tool.name,
+            )
+            return "its connection couldn't be verified"
         return None
 
     async def _probe_tool(self, client: httpx.AsyncClient, tool) -> Optional[str]:
@@ -289,22 +297,24 @@ class ToolReachableCheck(DeepCheck):
         failure. Never raises — every failure mode maps to a message."""
         try:
             headers = self._build_headers(tool)
-        except Exception as exc:  # noqa: BLE001 — decrypt / OAuth resolver failure
-            return f"credential resolution failed ({exc})"
+        except Exception:  # noqa: BLE001 — decrypt / OAuth resolver failure
+            logger.debug(
+                "[readiness] tool credential prep failed for tool '{}'", tool.name
+            )
+            return "its credentials couldn't be prepared"
 
         try:
             response = await client.get(tool.url, headers=headers)
-        except httpx.RequestError as exc:
+        except httpx.RequestError:
             # DNS, connection refused, TLS handshake — the tool URL is not
-            # reachable. Bubble the exception class since messages differ across
-            # httpx versions.
-            return f"unreachable ({exc.__class__.__name__})"
+            # reachable. The exception class name is noise to end users.
+            return "the server didn't respond"
 
         if 200 <= response.status_code < 300:
             return None
         if response.status_code in (401, 403):
-            return f"auth rejected ({response.status_code})"
-        return f"HTTP {response.status_code}"
+            return f"authentication was rejected (HTTP {response.status_code})"
+        return f"the server returned HTTP {response.status_code}"
 
     def _build_headers(self, tool) -> dict:
         """Assemble outbound HTTP headers exactly the way runtime does.

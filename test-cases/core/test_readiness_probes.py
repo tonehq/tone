@@ -405,7 +405,39 @@ class TestToolReachableProbe:
 
     def test_fail_on_network_error(self):
         reason = self._probe(httpx.ConnectError("dns lookup failed"))
-        assert reason is not None and "unreachable" in reason.lower()
+        assert reason is not None and "respond" in reason.lower()
+
+
+class TestToolsUsablePerTool:
+    """The shallow structural check emits one plain-English row per broken
+    tool (turned off / bad URL), not one joined string."""
+
+    def _check(self):
+        from core.services.readiness.checks.tools import ToolsUsableCheck
+
+        return ToolsUsableCheck()
+
+    def _tool(self, tid, name, *, active=True, url="https://api.example.com", ttype="custom"):
+        return SimpleNamespace(
+            id=tid, name=name, is_active=active, tool_type=ttype, url=url,
+        )
+
+    def test_disabled_and_bad_url_each_get_a_row(self):
+        check = self._check()
+        good = self._tool("g", "Good")
+        off = self._tool("o", "Off", active=False)
+        bad = self._tool("b", "Bad", url="   ")
+        results = asyncio.run(check.run(SimpleNamespace(tools=[good, off, bad])))
+        assert len(results) == 2
+        by_id = {r.check_id: r for r in results}
+        assert by_id["tools.usable:o"].message.lower().count("turned off") == 1
+        assert "Bad" in by_id["tools.usable:b"].message
+        assert all(r.status.value == "fail" for r in results)
+
+    def test_all_usable_single_pass(self):
+        check = self._check()
+        results = asyncio.run(check.run(SimpleNamespace(tools=[self._tool("g", "Good")])))
+        assert len(results) == 1 and results[0].status.value == "pass"
 
 
 class TestToolReachableFilter:
@@ -442,9 +474,10 @@ class TestToolReachableFilter:
 
 
 class TestMcpServerHttpReachable:
-    """Verifies the L4 MCP probe is *lenient* — any HTTP response (even 405)
-    proves the server is up. Only network errors fail. The strict correctness
-    check lives in McpServerReachableCheck (list_tools handshake)."""
+    """Verifies the L4 reachability leg of the merged ``McpServerReachableCheck``
+    is *lenient* — any HTTP response (even 405) proves the server is up. Only a
+    transport error counts as unreachable. The strict correctness check is the
+    handshake leg (``_handshake`` → ``validate_mcp_connection``)."""
 
     def _make_server(self, url="https://mcp.example.com"):
         return SimpleNamespace(
@@ -453,38 +486,119 @@ class TestMcpServerHttpReachable:
             oauth_connection_id=None, app_integration_id=None,
         )
 
-    def _run(self, mocked_client_ctx):
-        from core.services.readiness.checks.mcp_servers import McpServerHttpReachableCheck
-        check = McpServerHttpReachableCheck()
-        ctx = SimpleNamespace(
-            mcp_servers=[self._make_server()], db=None, org_id=None,
-        )
+    def _reachable(self, *, response=None, exc=None):
+        """Run the merged check's HTTP-reachability leg with a mocked client.
 
-        with patch("httpx.AsyncClient", return_value=mocked_client_ctx):
-            return asyncio.run(check.run(ctx))
+        Returns the ``(reachable, reason)`` tuple ``_http_reachable`` produces.
+        """
+        from core.services.readiness.checks.mcp_servers import McpServerReachableCheck
 
-    def _client_ctx(self, *, response=None, exc=None):
-        """Build the async-context-manager stub httpx.AsyncClient() returns."""
+        check = McpServerReachableCheck()
+        svc = MagicMock()
+        svc._resolve_oauth_headers = MagicMock(return_value={})
         client = MagicMock()
         if exc is not None:
             client.get = AsyncMock(side_effect=exc)
         else:
             client.get = AsyncMock(return_value=response)
-        ctx = MagicMock()
-        ctx.__aenter__ = AsyncMock(return_value=client)
-        ctx.__aexit__ = AsyncMock(return_value=None)
-        return ctx
+        return asyncio.run(check._http_reachable(svc, client, self._make_server()))
 
     def test_pass_on_any_http_response(self):
         """SSE endpoints often return 405 to a bare GET — still counts as up."""
         for status in (200, 302, 404, 405, 501):
-            result = self._run(self._client_ctx(response=MagicMock(status_code=status)))
-            assert result.status.value == "pass", f"status {status} should pass"
+            reachable, reason = self._reachable(response=MagicMock(status_code=status))
+            assert reachable is True, f"status {status} should be reachable"
+            assert reason is None
 
     def test_fail_on_connect_error(self):
-        result = self._run(self._client_ctx(exc=httpx.ConnectError("dns fail")))
+        reachable, reason = self._reachable(exc=httpx.ConnectError("dns fail"))
+        assert reachable is False
+        assert reason is not None and "respond" in reason.lower()
+
+
+# ─── MCP per-server messaging (one clear row per server) ──────────────────────
+
+
+class TestMcpServerReachablePerServer:
+    """The merged deep check emits at most ONE plain-English row per server:
+    "Can't reach …" when the box is down, or "responded, but the connection
+    failed …" when it's up but the handshake fails. Each row carries a unique
+    per-server ``check_id`` so the drawer renders them as separate rows."""
+
+    def _check(self):
+        from core.services.readiness.checks.mcp_servers import McpServerReachableCheck
+
+        return McpServerReachableCheck()
+
+    def _server(self, sid="s1", name="Gmail"):
+        return SimpleNamespace(
+            id=sid, name=name, server_url="https://mcp.example.com", is_active=True,
+            transport_type="sse", auth_type="none", auth_config={}, meta_data=None,
+            oauth_connection_id=None, app_integration_id=None,
+        )
+
+    def test_healthy_server_yields_no_row(self):
+        check = self._check()
+        check._http_reachable = AsyncMock(return_value=(True, None))
+        check._handshake = AsyncMock(return_value=None)
+        result = asyncio.run(check._probe_server(MagicMock(), MagicMock(), self._server()))
+        assert result is None
+
+    def test_unreachable_server_single_row(self):
+        check = self._check()
+        check._http_reachable = AsyncMock(return_value=(False, "the server didn't respond"))
+        check._handshake = AsyncMock(return_value=None)
+        result = asyncio.run(
+            check._probe_server(MagicMock(), MagicMock(), self._server(name="Gmail"))
+        )
         assert result.status.value == "fail"
-        assert "unreachable" in result.message.lower()
+        assert "Can't reach" in result.message and "Gmail" in result.message
+        assert result.check_id == "mcp_servers.reachable:s1"
+        assert result.resource_ref.type == "mcp_server" and result.resource_ref.id == "s1"
+
+    def test_handshake_failure_single_row(self):
+        check = self._check()
+        check._http_reachable = AsyncMock(return_value=(True, None))
+        check._handshake = AsyncMock(return_value="invalid credentials")
+        result = asyncio.run(
+            check._probe_server(MagicMock(), MagicMock(), self._server(sid="s2", name="Slack"))
+        )
+        assert result.status.value == "fail"
+        assert "Slack" in result.message and "invalid credentials" in result.message
+        assert result.check_id == "mcp_servers.reachable:s2"
+
+
+class TestMcpServersConfiguredPerServer:
+    """Shallow static check — one row per server that's missing a URL or turned
+    off; healthy servers collapse into a single pass row."""
+
+    def _check(self):
+        from core.services.readiness.checks.mcp_servers import McpServersConfiguredCheck
+
+        return McpServersConfiguredCheck()
+
+    def test_missing_url_flagged_once(self):
+        check = self._check()
+        good = SimpleNamespace(id="g", name="Good", server_url="https://x", is_active=True)
+        bad = SimpleNamespace(id="b", name="Bad", server_url="   ", is_active=True)
+        results = asyncio.run(check.run(SimpleNamespace(mcp_servers=[good, bad])))
+        assert len(results) == 1
+        assert results[0].status.value == "fail"
+        assert "Bad" in results[0].message
+        assert results[0].check_id == "mcp_servers.configured:b"
+
+    def test_inactive_server_flagged(self):
+        check = self._check()
+        off = SimpleNamespace(id="o", name="Off", server_url="https://x", is_active=False)
+        results = asyncio.run(check.run(SimpleNamespace(mcp_servers=[off])))
+        assert len(results) == 1
+        assert results[0].status.value == "fail" and "turned off" in results[0].message
+
+    def test_all_configured_single_pass(self):
+        check = self._check()
+        good = SimpleNamespace(id="g", name="Good", server_url="https://x", is_active=True)
+        results = asyncio.run(check.run(SimpleNamespace(mcp_servers=[good])))
+        assert len(results) == 1 and results[0].status.value == "pass"
 
 
 # ─── Regression tests for the five gaps fixed in this session ────────────────

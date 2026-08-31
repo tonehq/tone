@@ -12,7 +12,9 @@ existing structural checks miss.
 
 from __future__ import annotations
 
-from typing import ClassVar, List, Optional, Tuple
+from typing import Any, ClassVar, List, Optional, Tuple
+
+from loguru import logger
 
 from core.services.readiness.base import (
     CheckContext,
@@ -21,6 +23,7 @@ from core.services.readiness.base import (
     with_retry,
     with_timeout,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -106,16 +109,16 @@ class PhoneChannelReachableCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No phone numbers assigned."
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
         # Local import — Channel model isn't needed by the earlier checks.
         from core.models.channel import Channel
 
         channel_ids = {p.channel_id for p in ctx.phone_numbers if p.channel_id}
         if not channel_ids:
-            return self._fail(
-                "One or more phone numbers are not linked to a call channel.",
-                remediation="Re-attach the numbers via the Channels tab.",
-            )
+            return [self._fail(
+                "Some phone numbers aren't linked to a call channel.",
+                remediation="Re-attach the numbers in the Channels tab.",
+            )]
         channels = (
             ctx.db.query(Channel)
             .filter(
@@ -124,19 +127,19 @@ class PhoneChannelReachableCheck(ShallowCheck):
             )
             .all()
         )
-        missing_creds = [c for c in channels if not c.encrypted_config]
-        if missing_creds:
-            names = ", ".join(c.name for c in missing_creds[:3])
-            return self._fail(
-                f"Channel(s) missing credentials: {names}.",
-                remediation="Open the channel and re-enter credentials.",
-                resource_ref=ResourceRef(
-                    type="channel", id=str(missing_creds[0].id)
-                ),
+        results = [
+            self._fail(
+                f"{quote(c.name)} has no saved credentials.",
+                remediation="Open the channel and re-enter its credentials.",
+                resource_ref=ResourceRef(type="channel", id=str(c.id)),
+                check_id=self._result_id(str(c.id)),
             )
-        return self._pass(
-            f"All {len(channels)} linked channel(s) have credentials."
-        )
+            for c in channels
+            if not c.encrypted_config
+        ]
+        if results:
+            return results
+        return [self._pass(f"All {len(channels)} linked channel(s) have credentials.")]
 
 
 # ── Deep: live transport credit / account probe ──────────────────────────────
@@ -180,7 +183,7 @@ class TransportCreditsReachableCheck(DeepCheck):
     # accounts respond in <500ms; the 15s ceiling keeps a single stuck
     # provider from stalling the report.
     @with_timeout(15.0)
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
         import httpx
 
         from core.services.readiness.probes import (
@@ -196,51 +199,57 @@ class TransportCreditsReachableCheck(DeepCheck):
             if (c.channel_type or "").lower() in _TELEPHONY_CHANNEL_TYPES
         ]
 
-        failed: List[Tuple[str, str]] = []  # (channel_name, reason)
-        first_failed_id: Optional[str] = None
+        results: List[CheckResult] = []
         checked = 0
 
+        remediation = (
+            "Open the channel in Integrations → Channels: check its "
+            "credentials are current and the provider account has enough "
+            "credit to place calls."
+        )
+
         # One client, reused across all channel probes for connection pooling —
-        # same pattern as ``ToolReachableCheck`` and ``McpServerHttpReachableCheck``.
+        # same pattern as ``ToolReachableCheck`` and ``McpServerReachableCheck``.
         async with httpx.AsyncClient(timeout=_TRANSPORT_PROBE_TIMEOUT) as client:
             for channel in telephony_channels:
                 slug = (channel.channel_type or "").lower()
                 try:
                     config = decrypt_json(channel.encrypted_config) or {}
                 except Exception:  # noqa: BLE001 — decrypt failure (rotated secret)
-                    failed.append((channel.name, "credentials could not be decrypted"))
-                    if first_failed_id is None:
-                        first_failed_id = str(channel.id)
+                    logger.debug(
+                        "[readiness] channel credential decrypt failed for '{}'",
+                        channel.name,
+                    )
+                    results.append(self._fail(
+                        f"{quote(channel.name)} can't place calls — its "
+                        "credentials couldn't be read.",
+                        remediation=remediation,
+                        resource_ref=ResourceRef(type="channel", id=str(channel.id)),
+                        check_id=self._result_id(str(channel.id)),
+                    ))
                     continue
 
                 result = await probe_transport(client, config, slug)
                 checked += 1
                 if not result.ok:
-                    failed.append((channel.name, result.message))
-                    if first_failed_id is None:
-                        first_failed_id = str(channel.id)
+                    results.append(self._fail(
+                        f"{quote(channel.name)} can't place calls — "
+                        f"{humanize_reason(result.message)}.",
+                        remediation=remediation,
+                        resource_ref=ResourceRef(type="channel", id=str(channel.id)),
+                        check_id=self._result_id(str(channel.id)),
+                    ))
 
-        if not checked and not failed:
+        if not checked and not results:
             # ``applies()`` guards this, but keep a defensive branch so the
             # method is safe to call directly (tests, ad-hoc reruns).
-            return self._skip("No telephony channel with credentials linked to this agent.")
+            return [self._skip("No telephony channel with credentials linked to this agent.")]
 
-        if failed:
-            joined = "; ".join(f"'{n}': {r}" for n, r in failed[:2])
-            more = f"; +{len(failed) - 2} more" if len(failed) > 2 else ""
-            return self._fail(
-                f"Transport probe failed: {joined}{more}",
-                remediation=(
-                    "Open the failing channel in Integrations → Channels: "
-                    "verify the credentials are current and the provider "
-                    "account has enough credit / balance to place calls."
-                ),
-                resource_ref=ResourceRef(type="channel", id=first_failed_id)
-                if first_failed_id else None,
-            )
-        return self._pass(
+        if results:
+            return results
+        return [self._pass(
             f"All {checked} telephony channel(s) authenticated with sufficient balance."
-        )
+        )]
 
 
 # ── Deep: per-number verification at the provider ─────────────────────────────
@@ -291,7 +300,7 @@ class PhoneNumberVerifiedAtProviderCheck(DeepCheck):
     # ``asyncio.gather`` so the outer budget is effectively bounded by the
     # SLOWEST probe rather than the sum.
     @with_timeout(30.0)
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
         import asyncio
         import httpx
 
@@ -346,49 +355,48 @@ class PhoneNumberVerifiedAtProviderCheck(DeepCheck):
             )
             probe_specs.append((phone, slug, config, webhook_prefix))
 
-        failed: List[Tuple[str, str]] = []  # (number, reason)
-        first_failed_id: Optional[str] = None
+        failures: List[CheckResult] = []
         checked = 0
 
         if probe_specs:
             async with httpx.AsyncClient(timeout=_PHONE_NUMBER_PROBE_TIMEOUT) as client:
-                results = await asyncio.gather(
+                probe_results = await asyncio.gather(
                     *(
                         probe_phone_number(client, cfg, slug, phone.number, webhook_prefix)
                         for phone, slug, cfg, webhook_prefix in probe_specs
                     ),
                     return_exceptions=False,  # probe_phone_number swallows internally
                 )
-            for (phone, _slug, _cfg, _prefix), result in zip(probe_specs, results):
+            for (phone, _slug, _cfg, _prefix), result in zip(probe_specs, probe_results):
                 checked += 1
                 if not result.ok:
-                    failed.append((phone.number, result.message))
-                    if first_failed_id is None:
-                        first_failed_id = str(phone.id)
+                    # Severity is agent-type-aware (BLOCKER on pure inbound), so
+                    # build the result directly rather than via ``_fail``.
+                    failures.append(CheckResult(
+                        check_id=self._result_id(str(phone.id)),
+                        category=self.category,
+                        severity=target_severity,
+                        status=Status.FAIL,
+                        message=(
+                            f"{quote(phone.number)} isn't set up correctly — "
+                            f"{humanize_reason(result.message)}."
+                        ),
+                        remediation=(
+                            "Open the number in the provider console: confirm "
+                            "it's owned by the account, is voice-capable, and "
+                            "its inbound voice webhook points at Tone."
+                        ),
+                        resource_ref=ResourceRef(type="phone_number", id=str(phone.id)),
+                    ))
 
-        if not checked and not failed:
-            return self._skip(
+        if not checked and not failures:
+            return [self._skip(
                 "No telephony phone numbers with credentials linked to this agent."
-            )
+            )]
 
-        if failed:
-            joined = "; ".join(f"'{n}': {r}" for n, r in failed[:2])
-            more = f"; +{len(failed) - 2} more" if len(failed) > 2 else ""
-            return CheckResult(
-                check_id=self.id,
-                category=self.category,
-                severity=target_severity,
-                status=Status.FAIL,
-                message=f"Phone number verification failed: {joined}{more}",
-                remediation=(
-                    "Open the failing number in the provider console: confirm "
-                    "the number is owned by the account, is voice-capable, and "
-                    "its inbound voice webhook points at Tone."
-                ),
-                resource_ref=ResourceRef(type="phone_number", id=first_failed_id)
-                if first_failed_id else None,
-            )
-        return self._pass(
+        if failures:
+            return failures
+        return [self._pass(
             f"All {checked} phone number(s) verified at provider "
             "(owned, voice-capable, webhook routed to Tone)."
-        )
+        )]

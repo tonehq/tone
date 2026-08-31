@@ -722,7 +722,7 @@ async def probe_transport(
 
     Takes a caller-owned ``httpx.AsyncClient`` so a check probing several
     channels reuses one connection pool — same pattern as ``ToolReachableCheck``
-    and ``McpServerHttpReachableCheck``. ``channel_config`` is the decrypted
+    and ``McpServerReachableCheck``. ``channel_config`` is the decrypted
     ``Channel.encrypted_config`` dict — the same shape the transport
     serializers consume at call time. Returns a ``ProbeResult`` where
     ``ok=False`` means a real call would fail (bad credential, suspended

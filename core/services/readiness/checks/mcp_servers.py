@@ -1,25 +1,34 @@
 """Attached MCP servers — configured (shallow) + reachable (deep).
 
-Per-resource sub-checks. A broken MCP server means only that server's tools
-are unavailable — the agent still runs — so WARNING severity throughout.
+A broken MCP server means only that server's tools are unavailable — the agent
+still runs — so WARNING severity throughout.
 
-Deep probes split the "is the server up?" question from the "does MCP work?"
-question:
+**One message per server.** Every check here emits at most **one drawer row per
+MCP server**, in plain language, so a user with two broken servers sees exactly
+two messages (not one confusing joined string, and not the same server repeated
+under four different technical checks). To keep that promise:
 
-* :class:`McpServerHttpReachableCheck` — plain HTTP GET at ``server_url``.
-  L4 reachability only; any response counts as up.
-* :class:`McpServerReachableCheck` — full MCP handshake via
-  :meth:`McpServerService.validate_mcp_connection` (transport + auth +
-  ``list_tools``). Reuses the same code that backs
-  ``POST /mcp-server/validate_mcp_server`` so transport-specific error
-  handling isn't duplicated.
+* :class:`McpServersConfiguredCheck` (shallow) owns the *static* problems —
+  a server with no URL or one that's turned off. It reports those per server.
+* :class:`McpServerReachableCheck` (deep) owns *connectivity* — it first checks
+  the server responds at all, then completes the full MCP handshake (transport +
+  auth + ``list_tools``). It **skips** any server the configured check already
+  flagged, so no server is reported twice. It reuses the same code that backs
+  ``POST /mcp-server/validate_mcp_server`` so transport-specific error handling
+  isn't duplicated.
+
+The two deep concerns (is the box up? does MCP work?) used to be two separate
+checks that both reported the same down server — merging them here is what
+removes that duplication.
 """
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Iterable, List
+import asyncio
+from typing import Any, ClassVar, Iterable, List, Optional, Tuple
 
 import httpx
+from loguru import logger
 
 from core.services.readiness.base import (
     CheckContext,
@@ -27,6 +36,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
@@ -36,13 +46,33 @@ from core.services.readiness.schemas import (
 )
 
 
-# Probe timeout — MCP servers are often self-hosted and slow to warm; matches
-# the timeout the full-handshake probe uses below.
+# Per-server probe budget. MCP servers are often self-hosted and slow to warm.
+# Servers are probed concurrently (see ``run``), so this bounds the slowest
+# single server, not the sum across all of them.
 _PROBE_TIMEOUT_S = 5.0
+# Overall budget for the whole deep check. Generous because each server does a
+# cheap HTTP GET *then* the full handshake sequentially; servers run in
+# parallel, so this is ~one server's worst case plus headroom.
+_DEEP_TIMEOUT_S = 12.0
+
+
+def _is_statically_broken(server: Any) -> Optional[str]:
+    """Return a plain-English reason when a server can't be probed at all
+    (no URL / turned off), or ``None`` when it's worth a live probe.
+
+    Shared by the shallow configured check (which reports it) and the deep
+    reachable check (which skips it) so a server is never reported twice.
+    """
+    if not (server.server_url or "").strip():
+        return "no server URL is set"
+    if not server.is_active:
+        return "the server is turned off"
+    return None
 
 
 class McpServersConfiguredCheck(ShallowCheck):
-    """Every attached MCP server must have a URL and be active."""
+    """Static configuration of each attached MCP server — one row per server
+    that's missing a URL or turned off. Everything else passes."""
 
     id: ClassVar[str] = "mcp_servers.configured"
     category: ClassVar[Category] = Category.MCP_SERVERS
@@ -54,21 +84,25 @@ class McpServersConfiguredCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No MCP servers attached."
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        misconfigured = [
-            s for s in ctx.mcp_servers
-            if not (s.server_url or "").strip() or not s.is_active
-        ]
-        if misconfigured:
-            names = ", ".join(s.name for s in misconfigured[:3])
-            return self._fail(
-                f"MCP server(s) misconfigured: {names}.",
-                remediation="Open the MCP Servers page and fix or detach them.",
-                resource_ref=ResourceRef(
-                    type="mcp_server", id=str(misconfigured[0].id)
-                ),
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+        results: List[CheckResult] = []
+        for server in ctx.mcp_servers:
+            reason = _is_statically_broken(server)
+            if reason is None:
+                continue
+            results.append(
+                self._fail(
+                    f"{quote(server.name)} can't be used — {reason}.",
+                    remediation="Open the MCP Servers page to fix or remove it.",
+                    resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
+                    check_id=self._result_id(str(server.id)),
+                )
             )
-        return self._pass(f"{len(ctx.mcp_servers)} MCP server(s) attached.")
+        if results:
+            return results
+        # All good — one summary row keeps the drawer honest without a green
+        # row per server flooding the list.
+        return [self._pass(f"{len(ctx.mcp_servers)} MCP server(s) configured.")]
 
 
 class McpServerOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
@@ -86,166 +120,175 @@ class McpServerOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
     resource_display: ClassVar[str] = "MCP server"
 
     def _resources(self, ctx: CheckContext) -> Iterable[Any]:
-        # Inactive servers won't be called, so an expired token on one is
-        # noise — ``McpServersConfiguredCheck`` already flags the inactive
-        # state separately.
-        return [s for s in ctx.mcp_servers if s.is_active]
-
-
-class McpServerHttpReachableCheck(DeepCheck):
-    """L4 reachability probe — plain HTTP GET against each server's URL.
-
-    Runs BEFORE :class:`McpServerReachableCheck` in the registry so that if the
-    server is simply unreachable at the network layer, the report attributes
-    the failure to "server down" rather than "MCP handshake broken".
-
-    MCP servers speak SSE or streaming HTTP; a bare ``GET`` legitimately
-    returns 405 / 406 / 501 on many implementations. We treat **any HTTP
-    response** as success — the signal we want is "did the box respond?", not
-    "did it respond correctly". The strict MCP-level check next door is where
-    protocol correctness is asserted.
-    """
-
-    id: ClassVar[str] = "mcp_servers.http_reachable"
-    category: ClassVar[Category] = Category.MCP_SERVERS
-    severity: ClassVar[Severity] = Severity.WARNING
-
-    def applies(self, ctx: CheckContext) -> bool:
-        return bool(ctx.mcp_servers)
-
-    def skip_reason(self, ctx: CheckContext) -> str:
-        return "No MCP servers to probe."
-
-    @with_timeout(_PROBE_TIMEOUT_S)
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        from core.services.mcp_server_service import (
-            McpServerService,
-            build_auth_headers,
-            headers_from_meta,
-        )
-        from core.utils.oauth_resolution import effective_of
-
-        svc = McpServerService(ctx.db, org_id=ctx.org_id)
-        failed: List[str] = []
-        first_failed_id: str | None = None
-
-        async with httpx.AsyncClient(
-            timeout=_PROBE_TIMEOUT_S, follow_redirects=True
-        ) as client:
-            for server in ctx.mcp_servers:
-                url = (server.server_url or "").strip()
-                if not url:
-                    failed.append(f"'{server.name}': missing URL")
-                    if first_failed_id is None:
-                        first_failed_id = str(server.id)
-                    continue
-                try:
-                    # Mirror the runtime request shape: static auth_config
-                    # headers, plus custom meta_data headers, plus the
-                    # OAuth-connection-resolved Authorization header.
-                    # OAuth id resolution: agent-version override wins over the
-                    # entity-level default — same precedence the pipeline uses.
-                    effective_oauth_id = effective_of(server)
-                    headers = {
-                        **build_auth_headers(
-                            server.auth_config, auth_type=server.auth_type
-                        ),
-                        **headers_from_meta(server.meta_data),
-                        **svc._resolve_oauth_headers(effective_oauth_id),
-                    }
-                    await client.get(url, headers=headers)
-                except httpx.RequestError as exc:
-                    failed.append(f"'{server.name}': unreachable ({exc.__class__.__name__})")
-                    if first_failed_id is None:
-                        first_failed_id = str(server.id)
-                except Exception as exc:  # noqa: BLE001 — header build / decrypt / OAuth resolve
-                    failed.append(f"'{server.name}': {exc}")
-                    if first_failed_id is None:
-                        first_failed_id = str(server.id)
-
-        if failed:
-            joined = "; ".join(failed[:2])
-            more = f"; +{len(failed) - 2} more" if len(failed) > 2 else ""
-            return self._fail(
-                f"MCP server HTTP probe failed: {joined}{more}",
-                remediation="Verify each MCP server's URL and network reachability.",
-                resource_ref=ResourceRef(type="mcp_server", id=first_failed_id)
-                if first_failed_id else None,
-            )
-        return self._pass(f"All {len(ctx.mcp_servers)} MCP server(s) responded to HTTP GET.")
+        # Inactive / URL-less servers won't be called, so an expired token on
+        # one is noise — ``McpServersConfiguredCheck`` already flags that state.
+        return [s for s in ctx.mcp_servers if _is_statically_broken(s) is None]
 
 
 class McpServerReachableCheck(DeepCheck):
-    """Live-probe every attached MCP server via the same code path that backs
-    ``POST /mcp-server/validate_mcp_server``."""
+    """Live-probe every attached MCP server and report one plain-English row
+    per unreachable / misbehaving server.
+
+    Per server: first a bare HTTP GET (is the box up at all?), then the full
+    MCP handshake via the same code path that backs
+    ``POST /mcp-server/validate_mcp_server``. Splitting the two lets the message
+    say "we couldn't reach it" vs "it's up but the connection failed" instead of
+    a confusing handshake error for a server that's simply offline.
+
+    Servers the shallow configured check already flagged (no URL / turned off)
+    are skipped so nothing is reported twice.
+    """
 
     id: ClassVar[str] = "mcp_servers.reachable"
     category: ClassVar[Category] = Category.MCP_SERVERS
     severity: ClassVar[Severity] = Severity.WARNING
 
     def applies(self, ctx: CheckContext) -> bool:
-        return bool(ctx.mcp_servers)
+        return any(_is_statically_broken(s) is None for s in ctx.mcp_servers)
 
     def skip_reason(self, ctx: CheckContext) -> str:
-        return "No MCP servers to probe."
+        return "No reachable MCP servers to probe."
 
-    @with_timeout(_PROBE_TIMEOUT_S)
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        from fastapi import HTTPException
+    @with_timeout(_DEEP_TIMEOUT_S)
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+        from core.services.mcp_server_service import McpServerService
 
+        svc = McpServerService(ctx.db, org_id=ctx.org_id)
+        # Only probe servers that are statically OK; the configured check owns
+        # the rest.
+        servers = [s for s in ctx.mcp_servers if _is_statically_broken(s) is None]
+
+        async with httpx.AsyncClient(
+            timeout=_PROBE_TIMEOUT_S, follow_redirects=True
+        ) as client:
+            outcomes = await asyncio.gather(
+                *(self._probe_server(svc, client, s) for s in servers)
+            )
+
+        failures = [r for r in outcomes if r is not None]
+        if failures:
+            return failures
+        return [self._pass(f"All {len(servers)} MCP server(s) are reachable.")]
+
+    # ── per-server probe ─────────────────────────────────────────────────────
+
+    async def _probe_server(
+        self, svc: Any, client: httpx.AsyncClient, server: Any
+    ) -> Optional[CheckResult]:
+        """Probe one server. Returns a FAIL result on any problem, else ``None``."""
+        reachable, unreachable_reason = await self._http_reachable(svc, client, server)
+        if not reachable:
+            return self._fail(
+                f"Can't reach {quote(server.name)} — {unreachable_reason}.",
+                remediation=(
+                    "Check the server's URL and that it's online, then run the "
+                    "check again."
+                ),
+                resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
+                check_id=self._result_id(str(server.id)),
+            )
+
+        handshake_reason = await self._handshake(svc, server)
+        if handshake_reason is not None:
+            return self._fail(
+                f"{quote(server.name)} responded, but the connection failed — "
+                f"{handshake_reason}.",
+                remediation=(
+                    "Check the server's transport type and credentials, or "
+                    "reconnect its account, then run the check again."
+                ),
+                resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
+                check_id=self._result_id(str(server.id)),
+            )
+        return None
+
+    async def _http_reachable(
+        self, svc: Any, client: httpx.AsyncClient, server: Any
+    ) -> Tuple[bool, Optional[str]]:
+        """L4 reachability — a bare HTTP GET. MCP servers speak SSE / streaming
+        HTTP, so 405 / 406 / 501 to a plain GET is fine; **any** response proves
+        the box is up. Only a transport-level error (DNS, refused, timeout) or a
+        failure building the request counts as unreachable.
+
+        Returns ``(True, None)`` when up, or ``(False, reason)`` when not.
+        """
         from core.services.mcp_server_service import (
-            McpServerService,
+            build_auth_headers,
             headers_from_meta,
         )
+        from core.utils.oauth_resolution import effective_of
+
+        url = (server.server_url or "").strip()
+        try:
+            # Mirror the runtime request shape: static auth_config headers, plus
+            # custom meta_data headers, plus the OAuth-connection-resolved
+            # Authorization header. Agent-version OAuth override wins over the
+            # entity default — same precedence the pipeline uses.
+            effective_oauth_id = effective_of(server)
+            headers = {
+                **build_auth_headers(server.auth_config, auth_type=server.auth_type),
+                **headers_from_meta(server.meta_data),
+                **svc._resolve_oauth_headers(effective_oauth_id),
+            }
+            await client.get(url, headers=headers)
+            return True, None
+        except httpx.RequestError:
+            # DNS failure, connection refused, TLS error, timeout, etc. The
+            # exception class name is noise to end users — say what it means.
+            return False, "the server didn't respond"
+        except Exception:  # noqa: BLE001 — header build / decrypt / OAuth resolve
+            # Expected control-flow: a bad config/decrypt is exactly what
+            # readiness surfaces. Log for debugging; never leak the raw error.
+            logger.debug(
+                "[readiness] MCP request-prep failed for server {}", server.name
+            )
+            return False, "its credentials couldn't be prepared"
+
+    async def _handshake(self, svc: Any, server: Any) -> Optional[str]:
+        """Full MCP handshake (transport + auth + ``list_tools``). Returns a
+        short plain-English reason on failure, or ``None`` when it succeeds."""
+        from fastapi import HTTPException
+
+        from core.services.mcp_server_service import headers_from_meta
         from core.services.tool_service import decrypt_auth_config
         from core.utils.oauth_resolution import effective_of
 
-        svc = McpServerService(ctx.db, org_id=ctx.org_id)
-        failed: List[str] = []
-        for server in ctx.mcp_servers:
-            try:
-                # Agent-version override wins over entity default — same
-                # precedence the pipeline reads via ``effective_of``. Reading
-                # ``server.oauth_connection_id`` directly would validate the
-                # wrong connection when an agent config overrides it.
-                effective_oauth_id = effective_of(server)
-                # A linked OAuth connection whose scopes were revoked in the
-                # provider's dashboard still resolves to a valid token — the
-                # MCP handshake below would pass and only the actual tool call
-                # would fail. Validate scopes up-front (in-memory, no I/O) so
-                # the revocation surfaces here instead of mid-conversation.
-                # Same reasoning for the wrong-provider case (e.g. Google
-                # Calendar OAuth linked to a HubSpot MCP) — save-time validation
-                # catches new configs, this catches rows persisted before it existed.
-                svc._validate_oauth_provider_match(
-                    server.app_integration_id, effective_oauth_id
-                )
-                svc._validate_oauth_scopes(effective_oauth_id)
-                # Mirror the runtime path (McpServerService.discover_tools):
-                # decrypt the stored auth_config, then layer the custom
-                # meta_data headers and the OAuth-connection-resolved
-                # Authorization header on top via ``extra_headers``.
-                decrypted_auth = decrypt_auth_config(server.auth_config)
-                extra_headers = {
-                    **headers_from_meta(server.meta_data),
-                    **svc._resolve_oauth_headers(effective_oauth_id),
-                }
-                await svc.validate_mcp_connection(
-                    server_url=server.server_url,
-                    transport_type=server.transport_type,
-                    auth_config=decrypted_auth,
-                    extra_headers=extra_headers,
-                    auth_type=server.auth_type,
-                )
-            except HTTPException as exc:
-                failed.append(f"'{server.name}': {exc.detail}")
-            except Exception as exc:  # noqa: BLE001
-                failed.append(f"'{server.name}': {exc}")
-        if failed:
-            joined = "; ".join(failed[:2])
-            more = f"; +{len(failed) - 2} more" if len(failed) > 2 else ""
-            return self._fail(
-                f"MCP server probe failed: {joined}{more}",
-                remediation="Verify each MCP server's URL, transport, and credentials.",
+        try:
+            effective_oauth_id = effective_of(server)
+            # A linked OAuth connection whose scopes were revoked in the
+            # provider's dashboard still resolves to a valid token — the MCP
+            # handshake would pass and only the actual tool call would fail.
+            # Validate scopes + provider match up-front (in-memory, no I/O) so
+            # revocation / wrong-provider surfaces here, not mid-conversation.
+            svc._validate_oauth_provider_match(
+                server.app_integration_id, effective_oauth_id
             )
-        return self._pass(f"All {len(ctx.mcp_servers)} MCP server(s) reachable.")
+            svc._validate_oauth_scopes(effective_oauth_id)
+            # Mirror the runtime path (McpServerService.discover_tools): decrypt
+            # the stored auth_config, then layer the custom meta_data headers and
+            # the OAuth-resolved Authorization header on top via ``extra_headers``.
+            decrypted_auth = decrypt_auth_config(server.auth_config)
+            extra_headers = {
+                **headers_from_meta(server.meta_data),
+                **svc._resolve_oauth_headers(effective_oauth_id),
+            }
+            await svc.validate_mcp_connection(
+                server_url=server.server_url,
+                transport_type=server.transport_type,
+                auth_config=decrypted_auth,
+                extra_headers=extra_headers,
+                auth_type=server.auth_type,
+            )
+            return None
+        except HTTPException as exc:
+            # ``detail`` is a deliberately user-facing validation message from
+            # the MCP service — safe to surface (humanized).
+            return humanize_reason(exc.detail)
+        except Exception:  # noqa: BLE001
+            # Unexpected error — log for debugging, but never surface the raw
+            # exception text (may contain internal detail) to the user.
+            logger.debug(
+                "[readiness] MCP handshake unexpected error for server {}",
+                server.name,
+            )
+            return "the connection couldn't be established"

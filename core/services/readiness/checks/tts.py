@@ -21,6 +21,7 @@ from core.services.readiness.checks._common import (
     ModelConfiguredCheck,
     ProviderConfiguredCheck,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -172,8 +173,8 @@ class TTSVoiceLanguageMatchCheck(_TTSMixin, ShallowCheck):
             preview = ", ".join(str(c) for c in supported[:6])
             more = f" +{len(supported) - 6} more" if len(supported) > 6 else ""
             return self._fail(
-                f"Selected voice does not support language '{code}'. "
-                f"Voice supports: {preview}{more}.",
+                f"The selected voice doesn't support the “{code}” language "
+                f"(it supports {preview}{more}).",
                 remediation=(
                     "Pick a voice that supports the agent's language, or "
                     "switch the language."
@@ -230,8 +231,8 @@ class TTSModelLanguageMatchCheck(_TTSMixin, ShallowCheck):
         supported = {str(r[0]).strip().lower() for r in rows if r[0]}
         if code.lower() not in supported:
             return self._fail(
-                f"TTS model '{ctx.tts.model.name}' does not support language "
-                f"'{code}'.",
+                f"The TTS model {quote(ctx.tts.model.name)} doesn't support the "
+                f"“{code}” language.",
                 remediation=(
                     "Pick a TTS model that supports the language, or switch "
                     "the language."
@@ -330,8 +331,12 @@ class TTSProviderReachableCheck(DeepCheck):
         from core.services.readiness.probes import probe_tts
 
         result = await probe_tts(ctx)
-        return self._pass(result.message) if result.ok else self._fail(
-            result.message,
+        if result.ok:
+            return self._pass(result.message)
+        provider_name = getattr(ctx.tts.provider, "display_name", None)
+        return self._fail(
+            f"The TTS provider {quote(provider_name)} can't be used — "
+            f"{humanize_reason(result.message)}.",
             remediation=(
                 "Verify the TTS provider status, the API key, and that the "
                 "selected voice still exists in the provider's catalog."

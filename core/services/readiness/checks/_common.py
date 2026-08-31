@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from core.services.readiness.base import CheckContext, ServiceSpec, ShallowCheck
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -73,8 +74,8 @@ class ProviderEnabledCheck(ShallowCheck, _LegCheckMixin):
             return self._skip("Provider not resolved (see provider check).")
         if not spec.provider.is_active:
             return self._fail(
-                f"{self.service_label} provider '{spec.provider.display_name}' "
-                "is disabled.",
+                f"The {self.service_label} provider {quote(spec.provider.display_name)} "
+                "is turned off.",
                 remediation=(
                     "Contact your workspace admin or switch to an active provider."
                 ),
@@ -143,8 +144,8 @@ class ApiKeyPresentCheck(ShallowCheck, _LegCheckMixin):
             return self._skip("Provider not resolved (see provider check).")
         if spec.api_key is None:
             return self._fail(
-                f"No API key saved for {self.service_label} provider "
-                f"'{spec.provider.display_name}'.",
+                f"The {self.service_label} provider {quote(spec.provider.display_name)} "
+                "has no API key saved.",
                 remediation=(
                     f"Open Services → {spec.provider.display_name} and add a key."
                 ),

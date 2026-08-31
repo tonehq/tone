@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 from core.services.readiness.base import CheckContext, ShallowCheck
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -133,7 +134,7 @@ class AgentWorkflowValidCheck(ShallowCheck):
         version = workflow.draft_version
         if version is None:
             return self._fail(
-                f"Workflow '{workflow.name}' has no version to run.",
+                f"The workflow {quote(workflow.name)} has nothing to run yet.",
                 remediation="Open the workflow editor and save a graph.",
                 resource_ref=ResourceRef(type="workflow", id=str(workflow.id)),
             )
@@ -151,7 +152,7 @@ class AgentWorkflowValidCheck(ShallowCheck):
             more = f" +{len(errors) - 2} more" if len(errors) > 2 else ""
             preview = "; ".join(preview_parts) if preview_parts else "no details available"
             return self._fail(
-                f"Workflow '{workflow.name}' is invalid: {preview}{more}.",
+                f"The workflow {quote(workflow.name)} has errors: {preview}{more}.",
                 remediation=(
                     "Open the workflow editor and fix the flagged nodes."
                 ),

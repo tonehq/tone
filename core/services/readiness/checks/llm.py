@@ -21,6 +21,7 @@ from core.services.readiness.checks._common import (
     ProviderConfiguredCheck,
     ProviderEnabledCheck,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -121,8 +122,12 @@ class LLMProviderReachableCheck(DeepCheck):
         from core.services.readiness.probes import probe_llm
 
         result = await probe_llm(ctx)
-        return self._pass(result.message) if result.ok else self._fail(
-            result.message,
+        if result.ok:
+            return self._pass(result.message)
+        provider_name = getattr(ctx.llm.provider, "display_name", None)
+        return self._fail(
+            f"The LLM provider {quote(provider_name)} can't be used — "
+            f"{humanize_reason(result.message)}.",
             remediation=(
                 "Verify the provider status, that the API key is still valid, "
                 "and that the model name is current."

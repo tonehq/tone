@@ -66,17 +66,55 @@ export const mergeReadinessReports = (
   if (!prev) return next;
 
   const prevByCheckId = new Map(prev.checks.map((c) => [c.check_id, c]));
-  const mergedChecks = next.checks.map((c) => {
-    const wasFilteredOut =
-      c.status === 'skipped' &&
-      (c.skip_reason ?? c.message ?? '').includes(TARGETED_DEEP_SKIP_MARKER);
-    if (!wasFilteredOut) return c;
+  const nextIds = new Set(next.checks.map((c) => c.check_id));
+
+  const isFilteredMarker = (c: ReadinessReport['checks'][number]): boolean =>
+    c.status === 'skipped' &&
+    (c.skip_reason ?? c.message ?? '').includes(TARGETED_DEEP_SKIP_MARKER);
+
+  // Bare check_ids the new run left unprobed (targeted-deep save that didn't
+  // touch that category). A per-resource check (e.g. one row per MCP server)
+  // emits rows keyed `${bareId}:${resourceId}` when it DOES run, but only the
+  // bare marker row when it's filtered — so we match prior per-resource rows
+  // by prefix, not exact id.
+  const filteredBareIds = next.checks.filter(isFilteredMarker).map((c) => c.check_id);
+  const belongsToFilteredCheck = (id: string): boolean =>
+    filteredBareIds.some((bare) => id === bare || id.startsWith(`${bare}:`));
+
+  const mergedChecks: ReadinessReport['checks'] = [];
+  for (const c of next.checks) {
+    if (!isFilteredMarker(c)) {
+      mergedChecks.push(c);
+      continue;
+    }
+    // Stable-id check whose category was untouched: restore the prior real
+    // outcome under the SAME id.
     const prior = prevByCheckId.get(c.check_id);
-    // Only preserve when the prior entry had a "real" outcome — a prior
-    // SKIPPED entry carries no new information.
-    if (prior && prior.status !== 'skipped') return prior;
-    return c;
-  });
+    if (prior && prior.status !== 'skipped') {
+      mergedChecks.push(prior);
+      continue;
+    }
+    // Per-resource check (dynamic ids): drop the bare marker only when the
+    // prior report actually has per-resource rows to carry forward below —
+    // otherwise keep the marker so the category isn't silently empty.
+    const hasPriorResourceRows = prev.checks.some(
+      (p) =>
+        p.status !== 'skipped' &&
+        !nextIds.has(p.check_id) &&
+        p.check_id.startsWith(`${c.check_id}:`),
+    );
+    if (!hasPriorResourceRows) mergedChecks.push(c);
+  }
+
+  // Carry forward prior per-resource rows whose check was filtered out this
+  // run and that have no counterpart in the new report. Without this, a
+  // targeted-deep save that didn't touch MCP would drop previously-failing
+  // per-server MCP rows from the badge until the next deep test.
+  for (const p of prev.checks) {
+    if (p.status !== 'skipped' && !nextIds.has(p.check_id) && belongsToFilteredCheck(p.check_id)) {
+      mergedChecks.push(p);
+    }
+  }
 
   let blockers = 0;
   let warnings = 0;

@@ -140,19 +140,35 @@ class BaseCheck(ABC):
         return "Not applicable to this configuration."
 
     @abstractmethod
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> "CheckResult | List[CheckResult]":
         """Perform the check. Must always return a ``CheckResult`` — never raise
         for expected failure modes (empty config, revoked key, etc.). Use the
-        ``_pass`` / ``_fail`` / ``_skip`` helpers below to build the result."""
+        ``_pass`` / ``_fail`` / ``_skip`` helpers below to build the result.
+
+        A check MAY instead return a ``List[CheckResult]`` when one logical
+        check reports on several independent resources and each deserves its
+        own drawer row (e.g. one message per attached MCP server). The runner
+        flattens the list; every entry must carry a unique ``check_id`` (use
+        the ``check_id`` override on ``_pass`` / ``_fail``) so UIs can key on it.
+        """
 
     # ── result constructors (keep individual checks DRY) ────────────────────
 
-    def _pass(self, message: str) -> CheckResult:
+    def _result_id(self, suffix: str) -> str:
+        """Per-resource ``check_id`` derived from this check's stable id, e.g.
+        ``mcp_servers.reachable:<server-uuid>``. Lets a single check emit one
+        row per resource while keeping ids unique + stable across runs (the
+        prefix is the analytics key; the suffix scopes it to one resource)."""
+        return f"{self.id}:{suffix}"
+
+    def _pass(self, message: str, *, check_id: Optional[str] = None) -> CheckResult:
         """Build a PASS result. ``message`` is REQUIRED — a generic default
         would flood the drawer with meaningless "OK" rows. Say what the check
-        actually verified so the UI can render each row informatively."""
+        actually verified so the UI can render each row informatively.
+
+        ``check_id`` overrides the default (``self.id``) for per-resource rows."""
         return CheckResult(
-            check_id=self.id,
+            check_id=check_id or self.id,
             category=self.category,
             severity=self.severity,
             status=Status.PASS,
@@ -166,9 +182,10 @@ class BaseCheck(ABC):
         remediation: Optional[str] = None,
         deep_link: Optional[str] = None,
         resource_ref: Optional[ResourceRef] = None,
+        check_id: Optional[str] = None,
     ) -> CheckResult:
         return CheckResult(
-            check_id=self.id,
+            check_id=check_id or self.id,
             category=self.category,
             severity=self.severity,
             status=Status.FAIL,
