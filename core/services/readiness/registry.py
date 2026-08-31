@@ -107,9 +107,10 @@ def _build_registry() -> List[BaseCheck]:
         # transport-credits check so a broken account attributes to the
         # right layer.
         phone.PhoneNumberVerifiedAtProviderCheck(),
-        # MCP: order matters — L4 HTTP probe first so an unreachable server
-        # attributes to `http_reachable`, not to a confusing handshake failure.
-        mcp_servers.McpServerHttpReachableCheck(),
+        # MCP: one deep check per server — probes HTTP reachability first, then
+        # the full handshake, and emits a single plain-English row per broken
+        # server (see mcp_servers.py). Servers the shallow configured check
+        # already flagged are skipped so nothing is reported twice.
         mcp_servers.McpServerReachableCheck(),
         # Tools: live GET probe. Non-GET tools are skipped inside the check.
         tools.ToolReachableCheck(),

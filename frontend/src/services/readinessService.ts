@@ -44,6 +44,41 @@ export const reportToSummary = (report: ReadinessReport): ReadinessSummary => ({
 const TARGETED_DEEP_SKIP_MARKER = 'Not re-probed on this save';
 
 /**
+ * Pairs of (shallow heads-up check-id, authoritative deep check-id). When the
+ * deep check produced a real result for a resource, the shallow heads-up is
+ * redundant and dropped. MIRRORS `core/services/readiness/consolidation.py`
+ * (`_SUPERSEDED_BY_DEEP`) — the backend already de-duplicates fresh reports;
+ * this is applied again after a targeted-deep MERGE (which can re-introduce a
+ * carried-forward deep row next to a fresh shallow heads-up). Keep in sync with
+ * the backend copy. check-ids are matched by prefix so per-resource ids match.
+ */
+const DEEP_SUPERSEDES_SHALLOW: ReadonlyArray<readonly [string, string]> = [
+  ['mcp_servers.oauth_token_valid', 'mcp_servers.reachable'],
+  ['tools.oauth_token_valid', 'tools.reachable'],
+];
+
+const matchesCheckId = (id: string, prefix: string): boolean =>
+  id === prefix || id.startsWith(`${prefix}:`);
+
+/** Drop shallow heads-up rows the deep probe has already answered. Pure. */
+const suppressRedundantShallowChecks = (
+  checks: ReadinessReport['checks'],
+): ReadinessReport['checks'] => {
+  const ranDeep = new Set<string>();
+  for (const c of checks) {
+    if (c.status === 'skipped') continue;
+    for (const [, deep] of DEEP_SUPERSEDES_SHALLOW) {
+      if (matchesCheckId(c.check_id, deep)) ranDeep.add(deep);
+    }
+  }
+  if (ranDeep.size === 0) return checks;
+  const superseded = DEEP_SUPERSEDES_SHALLOW.filter(([, deep]) => ranDeep.has(deep)).map(
+    ([headsup]) => headsup,
+  );
+  return checks.filter((c) => !superseded.some((prefix) => matchesCheckId(c.check_id, prefix)));
+};
+
+/**
  * Merge a fresh targeted-deep report with the previous one.
  *
  * The targeted-deep flow (see `refreshReadinessAfterSave` in
@@ -66,24 +101,68 @@ export const mergeReadinessReports = (
   if (!prev) return next;
 
   const prevByCheckId = new Map(prev.checks.map((c) => [c.check_id, c]));
-  const mergedChecks = next.checks.map((c) => {
-    const wasFilteredOut =
-      c.status === 'skipped' &&
-      (c.skip_reason ?? c.message ?? '').includes(TARGETED_DEEP_SKIP_MARKER);
-    if (!wasFilteredOut) return c;
+  const nextIds = new Set(next.checks.map((c) => c.check_id));
+
+  const isFilteredMarker = (c: ReadinessReport['checks'][number]): boolean =>
+    c.status === 'skipped' &&
+    (c.skip_reason ?? c.message ?? '').includes(TARGETED_DEEP_SKIP_MARKER);
+
+  // Bare check_ids the new run left unprobed (targeted-deep save that didn't
+  // touch that category). A per-resource check (e.g. one row per MCP server)
+  // emits rows keyed `${bareId}:${resourceId}` when it DOES run, but only the
+  // bare marker row when it's filtered — so we match prior per-resource rows
+  // by prefix, not exact id.
+  const filteredBareIds = next.checks.filter(isFilteredMarker).map((c) => c.check_id);
+  const belongsToFilteredCheck = (id: string): boolean =>
+    filteredBareIds.some((bare) => id === bare || id.startsWith(`${bare}:`));
+
+  const mergedChecks: ReadinessReport['checks'] = [];
+  for (const c of next.checks) {
+    if (!isFilteredMarker(c)) {
+      mergedChecks.push(c);
+      continue;
+    }
+    // Stable-id check whose category was untouched: restore the prior real
+    // outcome under the SAME id.
     const prior = prevByCheckId.get(c.check_id);
-    // Only preserve when the prior entry had a "real" outcome — a prior
-    // SKIPPED entry carries no new information.
-    if (prior && prior.status !== 'skipped') return prior;
-    return c;
-  });
+    if (prior && prior.status !== 'skipped') {
+      mergedChecks.push(prior);
+      continue;
+    }
+    // Per-resource check (dynamic ids): drop the bare marker only when the
+    // prior report actually has per-resource rows to carry forward below —
+    // otherwise keep the marker so the category isn't silently empty.
+    const hasPriorResourceRows = prev.checks.some(
+      (p) =>
+        p.status !== 'skipped' &&
+        !nextIds.has(p.check_id) &&
+        p.check_id.startsWith(`${c.check_id}:`),
+    );
+    if (!hasPriorResourceRows) mergedChecks.push(c);
+  }
+
+  // Carry forward prior per-resource rows whose check was filtered out this
+  // run and that have no counterpart in the new report. Without this, a
+  // targeted-deep save that didn't touch MCP would drop previously-failing
+  // per-server MCP rows from the badge until the next deep test.
+  for (const p of prev.checks) {
+    if (p.status !== 'skipped' && !nextIds.has(p.check_id) && belongsToFilteredCheck(p.check_id)) {
+      mergedChecks.push(p);
+    }
+  }
+
+  // Re-apply the backend's cross-check de-duplication: a carried-forward deep
+  // row (e.g. "MCP can't be reached") next to a fresh shallow heads-up
+  // ("token may be expired") for the same resource would show the same problem
+  // twice. Run BEFORE counting so the badge numbers match what's rendered.
+  const dedupedChecks = suppressRedundantShallowChecks(mergedChecks);
 
   let blockers = 0;
   let warnings = 0;
   let info = 0;
   let passed = 0;
   let skipped = 0;
-  for (const c of mergedChecks) {
+  for (const c of dedupedChecks) {
     if (c.status === 'pass') passed += 1;
     else if (c.status === 'skipped') skipped += 1;
     else if (c.status === 'fail') {
@@ -99,7 +178,7 @@ export const mergeReadinessReports = (
     ...next,
     overall_status,
     summary: { blockers, warnings, info, passed, skipped },
-    checks: mergedChecks,
+    checks: dedupedChecks,
   };
 };
 
