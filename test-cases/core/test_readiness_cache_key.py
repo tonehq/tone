@@ -55,3 +55,23 @@ class TestDeepCheckCacheKey:
         assert DeepCheckCache.key("org-slug", AGENT, CONFIG) == DeepCheckCache.key(
             "org-slug", str(AGENT), str(CONFIG)
         )
+
+    def test_different_stamp_yields_different_key(self):
+        """A dependency change (new fingerprint) must produce a new key so the
+        stale entry is skipped and a fresh deep check runs."""
+        assert DeepCheckCache.key(ORG, AGENT, CONFIG, "stamp-A") != DeepCheckCache.key(
+            ORG, AGENT, CONFIG, "stamp-B"
+        )
+
+    def test_same_stamp_same_key_across_id_formats(self):
+        """Unchanged fingerprint → same key (cache still serves the fast path),
+        and UUID vs raw-string ids still canonicalise to one key."""
+        assert DeepCheckCache.key(ORG, AGENT, CONFIG, "stamp-A") == DeepCheckCache.key(
+            str(ORG), str(AGENT), str(CONFIG), "stamp-A"
+        )
+
+    def test_missing_stamp_uses_stable_sentinel(self):
+        """Omitting the stamp is equivalent to passing None (back-compatible)."""
+        assert DeepCheckCache.key(ORG, AGENT, CONFIG) == DeepCheckCache.key(
+            ORG, AGENT, CONFIG, None
+        )

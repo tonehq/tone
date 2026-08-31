@@ -654,6 +654,71 @@ class TestMcpServersConfiguredPerServer:
         assert len(results) == 1 and results[0].status.value == "pass"
 
 
+# ─── Timeout → WARNING (a slow provider must not hard-block publish) ──────────
+
+
+class TestTimeoutDowngradesToWarning:
+    """A deep probe that TIMES OUT means "couldn't confirm", not "confirmed
+    broken", so the timeout decorators must return a WARNING even when the
+    check's class severity is BLOCKER. A real (fast) failure keeps BLOCKER."""
+
+    def test_with_timeout_downgrades_timeout_to_warning(self):
+        from core.services.readiness.base import DeepCheck, with_timeout
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _Slow(DeepCheck):
+            id = "test.slow"
+            category = Category.LLM
+            severity = Severity.BLOCKER
+
+            @with_timeout(0.05)
+            async def run(self, ctx):
+                await asyncio.sleep(5)
+                return self._pass("unreachable in test")
+
+        result = asyncio.run(_Slow().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.WARNING  # downgraded from BLOCKER
+        assert "slow" in result.message.lower()
+
+    def test_with_timeout_and_retry_downgrades_timeout_to_warning(self):
+        from core.services.readiness.base import DeepCheck, with_timeout_and_retry
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _Slow(DeepCheck):
+            id = "test.slow2"
+            category = Category.STT
+            severity = Severity.BLOCKER
+
+            @with_timeout_and_retry(0.05, attempts=2)
+            async def run(self, ctx):
+                await asyncio.sleep(5)
+                return self._pass("unreachable in test")
+
+        result = asyncio.run(_Slow().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.WARNING
+
+    def test_real_failure_keeps_blocker_severity(self):
+        """A fast FAIL (e.g. bad key) is NOT a timeout — it must keep the
+        check's BLOCKER weight so it still blocks publish."""
+        from core.services.readiness.base import DeepCheck, with_timeout
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _BadKey(DeepCheck):
+            id = "test.badkey"
+            category = Category.LLM
+            severity = Severity.BLOCKER
+
+            @with_timeout(1.0)
+            async def run(self, ctx):
+                return self._fail("invalid api key")
+
+        result = asyncio.run(_BadKey().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.BLOCKER  # NOT downgraded
+
+
 # ─── Regression tests for the five gaps fixed in this session ────────────────
 
 
