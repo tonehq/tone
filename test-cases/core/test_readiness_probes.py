@@ -408,6 +408,59 @@ class TestToolReachableProbe:
         assert reason is not None and "respond" in reason.lower()
 
 
+class TestOAuthFailureReason:
+    """`oauth_failure_reason` maps verbose provider token errors to a short,
+    action-oriented clause; unknown text falls back to `humanize_reason`."""
+
+    def _fn(self):
+        from core.services.readiness.checks._messages import oauth_failure_reason
+
+        return oauth_failure_reason
+
+    def test_invalid_grant_maps_to_expired(self):
+        fn = self._fn()
+        raw = (
+            "token refresh failed for 'google_calendar' (invalid_grant: Token "
+            "has been expired or revoked.). Refresh token expired — reconnect."
+        )
+        assert fn(raw) == "its login has expired, reconnect the account"
+
+    def test_scope_error_maps_to_permissions(self):
+        assert "permissions" in self._fn()("insufficient scope: missing calendar")
+
+    def test_unauthorized_maps_to_denied(self):
+        assert "denied" in self._fn()("401 Unauthorized invalid_client")
+
+    def test_unknown_error_falls_back_to_humanized(self):
+        # A plain transport error isn't an OAuth case — humanized, not mapped.
+        assert self._fn()("Connection refused") == "connection refused"
+
+
+class TestHumanizeReasonNoMidWordCut:
+    """`humanize_reason` must never chop a word mid-way (the "publish the…"
+    bug) — it prefers the first sentence and cuts at a word boundary."""
+
+    def _fn(self):
+        from core.services.readiness.checks._messages import humanize_reason
+
+        return humanize_reason
+
+    def test_prefers_first_sentence(self):
+        raw = (
+            "the upstream provider rejected the request and returned an "
+            "unexpected error code. Please retry later and contact support "
+            "if the problem continues."
+        )
+        out = self._fn()(raw)
+        assert out.startswith("the upstream provider rejected the request")
+        assert "Please retry" not in out
+
+    def test_long_single_sentence_cuts_on_word_boundary(self):
+        raw = "word " * 60  # ~300 chars, no sentence break
+        out = self._fn()(raw)
+        assert out.endswith("…") and not out.endswith("wor…")
+
+
 class TestToolsUsablePerTool:
     """The shallow structural check emits one plain-English row per broken
     tool (turned off / bad URL), not one joined string."""

@@ -55,11 +55,41 @@ def humanize_reason(
     text = str(detail or "").strip()
     if not text:
         return fallback
-    text = text.splitlines()[0].strip().rstrip(".").strip()
+    # First line only — validators sometimes append stack-ish context.
+    text = text.splitlines()[0].strip()
+    # Prefer the first sentence when the line is long and rambly (provider
+    # errors often tack their own remediation on after the first sentence).
+    if len(text) > 120 and ". " in text:
+        text = text.split(". ", 1)[0]
+    text = text.strip().rstrip(".").strip()
     if not text:
         return fallback
     if len(text) > 160:
-        text = text[:157].rstrip() + "…"  # …
+        # Cut at a word boundary so we never chop a word mid-way ("publish
+        # the…"), then drop a trailing separator before the ellipsis.
+        text = (text[:160].rsplit(" ", 1)[0].rstrip() or text[:160]).rstrip(",;:—- ") + "…"
     if text[:2].isupper():
         return text
     return text[0].lower() + text[1:]
+
+
+def oauth_failure_reason(detail: Any) -> str:
+    """Map a raw OAuth/connection error into a clean, action-oriented clause.
+
+    Provider token errors (``invalid_grant``, missing scopes, rejected client)
+    are verbose and jargon-y; users only need to know *what to do*. Known cases
+    map to a short "…— reconnect the account" clause; anything unrecognised
+    falls back to :func:`humanize_reason` so we never lose signal.
+    """
+    text = str(detail or "").lower()
+    if not text:
+        return "its login couldn't be verified, reconnect the account"
+    if "invalid_grant" in text or "expired or revoked" in text or (
+        "token" in text and "expired" in text
+    ):
+        return "its login has expired, reconnect the account"
+    if "scope" in text and ("insufficient" in text or "missing" in text or "denied" in text):
+        return "it's missing required permissions, reconnect the account"
+    if "invalid_client" in text or "unauthorized" in text or "access_denied" in text:
+        return "its access was denied, reconnect the account"
+    return humanize_reason(detail)

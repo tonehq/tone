@@ -44,6 +44,41 @@ export const reportToSummary = (report: ReadinessReport): ReadinessSummary => ({
 const TARGETED_DEEP_SKIP_MARKER = 'Not re-probed on this save';
 
 /**
+ * Pairs of (shallow heads-up check-id, authoritative deep check-id). When the
+ * deep check produced a real result for a resource, the shallow heads-up is
+ * redundant and dropped. MIRRORS `core/services/readiness/consolidation.py`
+ * (`_SUPERSEDED_BY_DEEP`) — the backend already de-duplicates fresh reports;
+ * this is applied again after a targeted-deep MERGE (which can re-introduce a
+ * carried-forward deep row next to a fresh shallow heads-up). Keep in sync with
+ * the backend copy. check-ids are matched by prefix so per-resource ids match.
+ */
+const DEEP_SUPERSEDES_SHALLOW: ReadonlyArray<readonly [string, string]> = [
+  ['mcp_servers.oauth_token_valid', 'mcp_servers.reachable'],
+  ['tools.oauth_token_valid', 'tools.reachable'],
+];
+
+const matchesCheckId = (id: string, prefix: string): boolean =>
+  id === prefix || id.startsWith(`${prefix}:`);
+
+/** Drop shallow heads-up rows the deep probe has already answered. Pure. */
+const suppressRedundantShallowChecks = (
+  checks: ReadinessReport['checks'],
+): ReadinessReport['checks'] => {
+  const ranDeep = new Set<string>();
+  for (const c of checks) {
+    if (c.status === 'skipped') continue;
+    for (const [, deep] of DEEP_SUPERSEDES_SHALLOW) {
+      if (matchesCheckId(c.check_id, deep)) ranDeep.add(deep);
+    }
+  }
+  if (ranDeep.size === 0) return checks;
+  const superseded = DEEP_SUPERSEDES_SHALLOW.filter(([, deep]) => ranDeep.has(deep)).map(
+    ([headsup]) => headsup,
+  );
+  return checks.filter((c) => !superseded.some((prefix) => matchesCheckId(c.check_id, prefix)));
+};
+
+/**
  * Merge a fresh targeted-deep report with the previous one.
  *
  * The targeted-deep flow (see `refreshReadinessAfterSave` in
@@ -116,12 +151,18 @@ export const mergeReadinessReports = (
     }
   }
 
+  // Re-apply the backend's cross-check de-duplication: a carried-forward deep
+  // row (e.g. "MCP can't be reached") next to a fresh shallow heads-up
+  // ("token may be expired") for the same resource would show the same problem
+  // twice. Run BEFORE counting so the badge numbers match what's rendered.
+  const dedupedChecks = suppressRedundantShallowChecks(mergedChecks);
+
   let blockers = 0;
   let warnings = 0;
   let info = 0;
   let passed = 0;
   let skipped = 0;
-  for (const c of mergedChecks) {
+  for (const c of dedupedChecks) {
     if (c.status === 'pass') passed += 1;
     else if (c.status === 'skipped') skipped += 1;
     else if (c.status === 'fail') {
@@ -137,7 +178,7 @@ export const mergeReadinessReports = (
     ...next,
     overall_status,
     summary: { blockers, warnings, info, passed, skipped },
-    checks: mergedChecks,
+    checks: dedupedChecks,
   };
 };
 

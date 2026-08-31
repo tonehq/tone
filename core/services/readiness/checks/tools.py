@@ -34,7 +34,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
-from core.services.readiness.checks._messages import humanize_reason, quote
+from core.services.readiness.checks._messages import oauth_failure_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
@@ -193,7 +193,7 @@ class ToolReachableCheck(DeepCheck):
                 if self._has_oauth_connection(tool):
                     oauth_reason = self._probe_oauth(tool, tool_svc, oauth_svc)
                     if oauth_reason is not None:
-                        reason = humanize_reason(oauth_reason)
+                        reason = oauth_failure_reason(oauth_reason)
                 # 2) HTTP GET probe for probeable custom tools — runs when the
                 #    OAuth check passed (or the tool has no OAuth connection).
                 if reason is None and self._is_probeable(tool):

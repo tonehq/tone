@@ -20,6 +20,7 @@ import anyio
 from loguru import logger
 
 from core.services.readiness.base import BaseCheck, CheckContext
+from core.services.readiness.consolidation import suppress_redundant_shallow_checks
 from core.services.readiness.registry import get_checks
 from core.services.readiness.schemas import (
     Category,
@@ -54,6 +55,10 @@ class Runner:
         """
         checks = get_checks(ctx.depth)
         results = await self._execute_all(checks, ctx, deep_categories=deep_categories)
+        # Collapse shallow heads-up rows the deep probe has already answered
+        # (e.g. "token may be expired" once "connection failed" is confirmed),
+        # BEFORE aggregation so the summary counts reflect what's shown.
+        results = suppress_redundant_shallow_checks(results)
         return self._aggregate(
             results,
             depth=ctx.depth,

@@ -26,11 +26,12 @@ from __future__ import annotations
 
 import time
 from abc import abstractmethod
-from typing import Any, ClassVar, Dict, Iterable, List, Optional, Tuple
+from typing import Any, ClassVar, Dict, Iterable, List, Optional
 from uuid import UUID
 
 from core.models.oauth_connection import OAuthConnection
 from core.services.readiness.base import CheckContext, ShallowCheck
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import CheckResult, ResourceRef
 from core.utils.oauth_resolution import effective_of
 
@@ -91,7 +92,7 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
 
     # ── main body ─────────────────────────────────────────────────────────
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
         from core.services.oauth_service import OAuthService
 
         oauth_svc = OAuthService(ctx.db, org_id=ctx.org_id)
@@ -104,12 +105,7 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
         })
         connections_by_id = self._load_connections(oauth_svc, oauth_ids)
 
-        expired: List[Tuple[str, str, str]] = []  # (resource_name, connection_label, reason)
-        first_failed_id: Optional[str] = None
-        # Track the OAuth connection id for the first failure so the drawer's
-        # per-row "Refresh token" button knows which connection to refresh
-        # without a follow-up lookup by tool/MCP id.
-        first_failed_oauth_id: Optional[str] = None
+        results: List[CheckResult] = []
         checked = 0
 
         for resource in resources:
@@ -128,49 +124,36 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
             reason = self._evaluate_expiry(connection)
             if reason is None:
                 continue
-            expired.append(
-                (self._resource_name(resource), self._connection_label(connection), reason)
+            # One plain-English row per resource. This is a heads-up (runtime
+            # may still refresh the token) — the deep reachable check gives the
+            # confirmed answer and SUPERSEDES this row when it runs (see
+            # ``consolidation.py``), so the same resource never shows twice.
+            results.append(
+                self._fail(
+                    f"{quote(self._resource_name(resource))} — its login {reason}. "
+                    f"Run a deep test to confirm it can still refresh.",
+                    remediation=(
+                        f"If the deep test reports 'reconnect required', open the "
+                        f"{self.resource_display} and reconnect the account."
+                    ),
+                    resource_ref=ResourceRef(
+                        type=self.resource_type_ref,
+                        id=str(resource.id),
+                        oauth_connection_id=str(connection.id),
+                    ),
+                    check_id=self._result_id(str(resource.id)),
+                )
             )
-            if first_failed_id is None:
-                first_failed_id = str(resource.id)
-                first_failed_oauth_id = str(connection.id)
 
         if checked == 0:
-            return self._skip(
+            return [self._skip(
                 f"No time-based OAuth {self.resource_display} connections attached."
-            )
-        if expired:
-            # Message format matches the user-requested phrasing: quote the
-            # affected connection(s) verbatim so users can find them in the
-            # provider dashboard, and point to "Run Deep Test" so anyone
-            # unsure whether the runtime refresh will succeed can confirm
-            # in-place without clicking through to the provider first.
-            joined = "; ".join(
-                f"'{label}' ({name})"
-                for name, label, _reason in expired[:2]
-            )
-            more = f"; +{len(expired) - 2} more" if len(expired) > 2 else ""
-            return self._fail(
-                (
-                    f"OAuth token for {joined}{more} has expired. Runtime will "
-                    f"attempt to refresh on the next call — click 'Run Deep "
-                    f"Test' to verify now."
-                ),
-                remediation=(
-                    f"Click 'Run Deep Test' in the drawer to trigger a refresh "
-                    f"and confirm the token is still usable. If the deep test "
-                    f"reports 'reconnect required', open the {self.resource_display} "
-                    f"and reconnect the OAuth account."
-                ),
-                resource_ref=ResourceRef(
-                    type=self.resource_type_ref,
-                    id=first_failed_id,
-                    oauth_connection_id=first_failed_oauth_id,
-                ) if first_failed_id else None,
-            )
-        return self._pass(
+            )]
+        if results:
+            return results
+        return [self._pass(
             f"All {checked} OAuth-linked {self.resource_display}(s) have valid tokens."
-        )
+        )]
 
     # ── helpers (small, focused, unit-testable) ──────────────────────────
 
@@ -231,14 +214,6 @@ class OAuthTokenExpiryShallowCheck(ShallowCheck):
         if remaining <= _EXPIRY_BUFFER_SECONDS:
             return f"expires in {_humanize_seconds(remaining)}"
         return None
-
-    @staticmethod
-    def _connection_label(connection: OAuthConnection) -> str:
-        return (
-            connection.label
-            or connection.provider_slug
-            or "OAuth connection"
-        )
 
 
 def _humanize_seconds(seconds: int) -> str:

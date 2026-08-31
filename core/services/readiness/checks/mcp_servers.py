@@ -36,7 +36,7 @@ from core.services.readiness.base import (
     ShallowCheck,
     with_timeout,
 )
-from core.services.readiness.checks._messages import humanize_reason, quote
+from core.services.readiness.checks._messages import oauth_failure_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
 from core.services.readiness.schemas import (
     Category,
@@ -282,8 +282,10 @@ class McpServerReachableCheck(DeepCheck):
             return None
         except HTTPException as exc:
             # ``detail`` is a deliberately user-facing validation message from
-            # the MCP service — safe to surface (humanized).
-            return humanize_reason(exc.detail)
+            # the MCP service — safe to surface. ``oauth_failure_reason`` maps
+            # token/scope errors to a clean "reconnect" clause and falls back
+            # to a humanized version for transport errors.
+            return oauth_failure_reason(exc.detail)
         except Exception:  # noqa: BLE001
             # Unexpected error — log for debugging, but never surface the raw
             # exception text (may contain internal detail) to the user.
