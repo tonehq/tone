@@ -2,7 +2,6 @@
 
 import { useAtom } from 'jotai';
 import { Beaker, RefreshCw } from 'lucide-react';
-import { useRouter } from 'next/navigation';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -11,12 +10,7 @@ import {
   fetchAgentReadinessRunsAtom,
 } from '@/atoms/ReadinessAtom';
 import { CustomButton, CustomDrawer, SelectInput } from '@/components/shared';
-import type {
-  ReadinessCheckResult,
-  ReadinessReport,
-  ReadinessRunListItem,
-  ReadinessTrigger,
-} from '@/types/readiness';
+import type { ReadinessReport, ReadinessRunListItem, ReadinessTrigger } from '@/types/readiness';
 import { cn } from '@/utils/cn';
 import { formatDate, formatRelative } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
@@ -63,7 +57,6 @@ export default function ReadinessDrawer({
   initialReport = null,
   onReportChange,
 }: ReadinessDrawerProps) {
-  const router = useRouter();
   const [, runReadiness] = useAtom(fetchAgentReadinessAtom);
   const [, fetchRuns] = useAtom(fetchAgentReadinessRunsAtom);
   const [, fetchRun] = useAtom(fetchAgentReadinessRunAtom);
@@ -211,15 +204,6 @@ export default function ReadinessDrawer({
     [agentId, fetchRun],
   );
 
-  const handleFix = useCallback(
-    (check: ReadinessCheckResult) => {
-      if (!check.deep_link) return;
-      onClose();
-      router.push(check.deep_link);
-    },
-    [onClose, router],
-  );
-
   // The report actually rendered: the selected past run, or the live report.
   const shown = viewingHistory ? (history?.report ?? null) : report;
   const overallStatus = shown?.overall_status;
@@ -339,10 +323,7 @@ export default function ReadinessDrawer({
         {showingLoader ? (
           <p className="py-8 text-center text-[13px] text-muted-foreground">Checking…</p>
         ) : shown ? (
-          <ReadinessCheckList
-            checks={shown.checks}
-            onFix={viewingHistory ? undefined : handleFix}
-          />
+          <ReadinessCheckList checks={shown.checks} />
         ) : (
           <div className="space-y-3 py-4 text-center">
             <p className="text-[13px] text-muted-foreground">Readiness unavailable.</p>

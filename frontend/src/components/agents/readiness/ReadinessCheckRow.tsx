@@ -1,15 +1,7 @@
 'use client';
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  CircleAlert,
-  ExternalLink,
-  MinusCircle,
-  ShieldAlert,
-} from 'lucide-react';
+import { AlertTriangle, CheckCircle2, CircleAlert, MinusCircle, ShieldAlert } from 'lucide-react';
 
-import { CustomButton } from '@/components/shared';
 import type { ReadinessCheckResult } from '@/types/readiness';
 import { cn } from '@/utils/cn';
 
@@ -17,13 +9,11 @@ import { SEVERITY_TEXT_CLASS } from './readinessConstants';
 
 interface ReadinessCheckRowProps {
   check: ReadinessCheckResult;
-  onFix?: (check: ReadinessCheckResult) => void;
 }
 
 /**
  * One row in the check list. Icon on the left encodes both severity and
- * status; the message + remediation stack vertically. A "Fix it" affordance
- * appears only when the backend supplied a `deep_link`.
+ * status; the message + remediation stack vertically.
  *
  * OAuth expiry checks intentionally have NO per-row refresh button — the
  * check's own message points to "Run Deep Test" which triggers a real
@@ -32,7 +22,7 @@ interface ReadinessCheckRowProps {
  * Tools / MCP pages surface a "Reconnect" button when the token is
  * genuinely broken and user action is required.
  */
-export default function ReadinessCheckRow({ check, onFix }: ReadinessCheckRowProps) {
+export default function ReadinessCheckRow({ check }: ReadinessCheckRowProps) {
   const { Icon, tone } = iconFor(check);
   const isFail = check.status === 'fail';
 
@@ -58,18 +48,6 @@ export default function ReadinessCheckRow({ check, onFix }: ReadinessCheckRowPro
           </p>
         )}
       </div>
-
-      {isFail && check.deep_link && onFix && (
-        <CustomButton
-          type="text"
-          size="xs"
-          onClick={() => onFix(check)}
-          className="h-6 shrink-0 gap-1 px-2 text-[11px]"
-          icon={<ExternalLink className="size-3" />}
-        >
-          Fix it
-        </CustomButton>
-      )}
     </div>
   );
 }

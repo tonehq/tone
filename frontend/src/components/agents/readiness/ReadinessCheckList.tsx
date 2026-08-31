@@ -11,7 +11,6 @@ import { CATEGORY_LABEL, CATEGORY_ORDER, SEVERITY_RANK } from './readinessConsta
 
 interface ReadinessCheckListProps {
   checks: ReadinessCheckResult[];
-  onFix?: (check: ReadinessCheckResult) => void;
 }
 
 /**
@@ -20,7 +19,7 @@ interface ReadinessCheckListProps {
  * checks, then skipped. Skipped checks live inside a collapsed disclosure so
  * "everything is fine" doesn't drown out the actionable rows.
  */
-export default function ReadinessCheckList({ checks, onFix }: ReadinessCheckListProps) {
+export default function ReadinessCheckList({ checks }: ReadinessCheckListProps) {
   const groups = useMemo(() => buildGroups(checks), [checks]);
 
   if (checks.length === 0) {
@@ -34,7 +33,7 @@ export default function ReadinessCheckList({ checks, onFix }: ReadinessCheckList
   return (
     <div className="space-y-5">
       {groups.map((group) => (
-        <CategorySection key={group.category} group={group} onFix={onFix} />
+        <CategorySection key={group.category} group={group} />
       ))}
     </div>
   );
@@ -49,13 +48,7 @@ interface CategoryGroup {
   skipped: ReadinessCheckResult[]; // collapsed by default
 }
 
-function CategorySection({
-  group,
-  onFix,
-}: {
-  group: CategoryGroup;
-  onFix?: (check: ReadinessCheckResult) => void;
-}) {
+function CategorySection({ group }: { group: CategoryGroup }) {
   const [showSkipped, setShowSkipped] = useState(false);
 
   const failCounts = group.actionable.reduce(
@@ -100,10 +93,10 @@ function CategorySection({
 
       <div className="space-y-1.5">
         {group.actionable.map((c) => (
-          <ReadinessCheckRow key={c.check_id} check={c} onFix={onFix} />
+          <ReadinessCheckRow key={c.check_id} check={c} />
         ))}
         {group.passed.map((c) => (
-          <ReadinessCheckRow key={c.check_id} check={c} onFix={onFix} />
+          <ReadinessCheckRow key={c.check_id} check={c} />
         ))}
 
         {group.skipped.length > 0 && (
@@ -119,7 +112,7 @@ function CategorySection({
             {showSkipped && (
               <div className="mt-1.5 space-y-1.5">
                 {group.skipped.map((c) => (
-                  <ReadinessCheckRow key={c.check_id} check={c} onFix={onFix} />
+                  <ReadinessCheckRow key={c.check_id} check={c} />
                 ))}
               </div>
             )}
