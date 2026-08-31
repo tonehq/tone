@@ -329,8 +329,17 @@ class MetricsCollectorProcessor(FrameProcessor):
         # UserStarted are VAD/STT false detections mid-sentence and must not
         # anchor the timer, otherwise time the user was still speaking gets
         # counted as bot latency. _mark_user_started() resets this to None
-        # on a resume; subsequent stops overwrite freely.
-        buffer.user_stopped_at = now
+        # on a resume; subsequent stops overwrite freely — but only until the
+        # bot has started.
+        #
+        # Once bot_started_at is set for this turn, freeze the anchor: a later
+        # user-stop is the caller *interrupting* the bot (the start of the
+        # next exchange), not this turn's question. Letting it overwrite would
+        # place user_stopped_at AFTER bot_started_at, making end_to_end
+        # negative — the root cause of the "missing" (negative) latencies on
+        # interrupted turns.
+        if buffer.bot_started_at is None:
+            buffer.user_stopped_at = now
         # Reserve one pending slot per user-stop, not just the first of the
         # turn. STT services emit one TTFB per stop, so a 1:1 mapping keeps
         # ``_attribute_stt_ttfb`` correct under VAD flapping or multiple
@@ -346,7 +355,13 @@ class MetricsCollectorProcessor(FrameProcessor):
         buffer = self._active_buffer()
         if buffer.turn_number < 0:
             return
-        buffer.user_stopped_at = None
+        # ...but only before the bot has started. Once bot_started_at is set,
+        # a UserStarted is the caller interrupting the bot's reply — the
+        # anchor is already frozen at the real pre-response stop and must be
+        # preserved (clearing it here would drop end_to_end to null on every
+        # interrupted turn). Pairs with the same guard in _mark_user_stopped.
+        if buffer.bot_started_at is None:
+            buffer.user_stopped_at = None
 
     def _mark_bot_started(self) -> None:
         buffer = self._active_buffer()
