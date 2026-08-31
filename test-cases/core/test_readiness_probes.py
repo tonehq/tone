@@ -75,20 +75,20 @@ class TestUrlShapeProblem:
     def test_empty_urls_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
         for empty in (None, "", "   "):
-            assert _url_shape_problem(empty) == "no URL"
+            assert _url_shape_problem(empty) == "it has no URL"
 
     def test_missing_scheme_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("foo.com") == "URL scheme must be http/https"
+        assert _url_shape_problem("foo.com") == "its URL must start with http:// or https://"
 
     def test_wrong_scheme_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("htps://foo.com") == "URL scheme must be http/https"
-        assert _url_shape_problem("ftp://foo.com") == "URL scheme must be http/https"
+        assert _url_shape_problem("htps://foo.com") == "its URL must start with http:// or https://"
+        assert _url_shape_problem("ftp://foo.com") == "its URL must start with http:// or https://"
 
     def test_missing_host_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("http://") == "URL missing host"
+        assert _url_shape_problem("http://") == "its URL has no host"
 
     def test_wellformed_returns_none(self):
         from core.services.readiness.checks.tools import _url_shape_problem
