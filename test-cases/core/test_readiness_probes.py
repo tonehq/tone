@@ -654,6 +654,36 @@ class TestMcpServersConfiguredPerServer:
         assert len(results) == 1 and results[0].status.value == "pass"
 
 
+# ─── Context loaders must not filter on a non-existent column ─────────────────
+
+
+class TestContextLoaderColumns:
+    """Regression guard: a soft-delete filter (``deleted_at.is_(None)``) was
+    added to the tool / MCP context loaders, but ``Tool`` and ``McpServer``
+    extend ``OrgScopedModel`` — NOT ``SoftDeleteMixin`` — so they have no
+    ``deleted_at`` column. Referencing it raised ``AttributeError`` at
+    query-build time and 500'd every readiness run for an agent with a tool or
+    MCP server attached. These tests fail if the filter is ever re-added."""
+
+    def test_tool_and_mcp_have_no_deleted_at_column(self):
+        from core.models.mcp_server import McpServer
+        from core.models.tool import Tool
+
+        assert not hasattr(Tool, "deleted_at")
+        assert not hasattr(McpServer, "deleted_at")
+
+    def test_loaders_do_not_reference_deleted_at(self):
+        import inspect
+
+        from core.services.readiness.context import ContextBuilder
+
+        for loader in (
+            ContextBuilder._fetch_linked_tools,
+            ContextBuilder._fetch_linked_mcp_servers,
+        ):
+            assert "deleted_at" not in inspect.getsource(loader), loader.__name__
+
+
 # ─── Timeout → WARNING (a slow provider must not hard-block publish) ──────────
 
 
