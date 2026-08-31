@@ -21,7 +21,6 @@ from core.services.readiness.checks._common import (
     ProviderConfiguredCheck,
     ProviderEnabledCheck,
 )
-from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -124,10 +123,11 @@ class LLMProviderReachableCheck(DeepCheck):
         result = await probe_llm(ctx)
         if result.ok:
             return self._pass(result.message)
-        provider_name = getattr(ctx.llm.provider, "display_name", None)
+        # ``result.message`` is already a clean, provider-named sentence
+        # (probes classify auth / credit / model / rate / outage and extract the
+        # human message from anything else) — surface it as-is.
         return self._fail(
-            f"The LLM provider {quote(provider_name)} can't be used — "
-            f"{humanize_reason(result.message)}.",
+            result.message,
             remediation=(
                 "Verify the provider status, that the API key is still valid, "
                 "and that the model name is current."

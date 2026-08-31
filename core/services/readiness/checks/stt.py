@@ -22,7 +22,7 @@ from core.services.readiness.checks._common import (
     ModelConfiguredCheck,
     ProviderConfiguredCheck,
 )
-from core.services.readiness.checks._messages import humanize_reason, quote
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -220,9 +220,9 @@ class STTProviderReachableCheck(DeepCheck):
         result = await probe_stt(ctx)
         if result.ok:
             return self._pass(result.message)
-        provider_name = getattr(ctx.stt.provider, "display_name", None)
+        # ``result.message`` is already a clean, provider-named sentence — see
+        # the LLM deep check for the reasoning.
         return self._fail(
-            f"The STT provider {quote(provider_name)} can't be used — "
-            f"{humanize_reason(result.message)}.",
+            result.message,
             remediation="Verify the STT provider status and that the API key is valid.",
         )

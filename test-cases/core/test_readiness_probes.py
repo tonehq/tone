@@ -75,20 +75,20 @@ class TestUrlShapeProblem:
     def test_empty_urls_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
         for empty in (None, "", "   "):
-            assert _url_shape_problem(empty) == "no URL"
+            assert _url_shape_problem(empty) == "it has no URL"
 
     def test_missing_scheme_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("foo.com") == "URL scheme must be http/https"
+        assert _url_shape_problem("foo.com") == "its URL must start with http:// or https://"
 
     def test_wrong_scheme_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("htps://foo.com") == "URL scheme must be http/https"
-        assert _url_shape_problem("ftp://foo.com") == "URL scheme must be http/https"
+        assert _url_shape_problem("htps://foo.com") == "its URL must start with http:// or https://"
+        assert _url_shape_problem("ftp://foo.com") == "its URL must start with http:// or https://"
 
     def test_missing_host_flagged(self):
         from core.services.readiness.checks.tools import _url_shape_problem
-        assert _url_shape_problem("http://") == "URL missing host"
+        assert _url_shape_problem("http://") == "its URL has no host"
 
     def test_wellformed_returns_none(self):
         from core.services.readiness.checks.tools import _url_shape_problem
@@ -325,7 +325,9 @@ class TestProbeStt:
         service.run_stt = MagicMock(return_value=_FakeAsyncStream([err]))
         result = self._run(service)
         assert result.ok is False
-        assert "invalid api key" in result.message.lower()
+        # ErrorFrame text is now cleaned + bucketed: an "invalid api key" body
+        # classifies as an auth failure ("rejected the API key").
+        assert "api key" in result.message.lower()
 
     def test_fail_on_no_frames_with_real_audio(self):
         """WAV was present but provider returned nothing → clear FAIL."""
@@ -654,6 +656,101 @@ class TestMcpServersConfiguredPerServer:
         assert len(results) == 1 and results[0].status.value == "pass"
 
 
+# ─── Context loaders must not filter on a non-existent column ─────────────────
+
+
+class TestContextLoaderColumns:
+    """Regression guard: a soft-delete filter (``deleted_at.is_(None)``) was
+    added to the tool / MCP context loaders, but ``Tool`` and ``McpServer``
+    extend ``OrgScopedModel`` — NOT ``SoftDeleteMixin`` — so they have no
+    ``deleted_at`` column. Referencing it raised ``AttributeError`` at
+    query-build time and 500'd every readiness run for an agent with a tool or
+    MCP server attached. These tests fail if the filter is ever re-added."""
+
+    def test_tool_and_mcp_have_no_deleted_at_column(self):
+        from core.models.mcp_server import McpServer
+        from core.models.tool import Tool
+
+        assert not hasattr(Tool, "deleted_at")
+        assert not hasattr(McpServer, "deleted_at")
+
+    def test_loaders_do_not_reference_deleted_at(self):
+        import inspect
+
+        from core.services.readiness.context import ContextBuilder
+
+        for loader in (
+            ContextBuilder._fetch_linked_tools,
+            ContextBuilder._fetch_linked_mcp_servers,
+        ):
+            assert "deleted_at" not in inspect.getsource(loader), loader.__name__
+
+
+# ─── Timeout → WARNING (a slow provider must not hard-block publish) ──────────
+
+
+class TestTimeoutDowngradesToWarning:
+    """A deep probe that TIMES OUT means "couldn't confirm", not "confirmed
+    broken", so the timeout decorators must return a WARNING even when the
+    check's class severity is BLOCKER. A real (fast) failure keeps BLOCKER."""
+
+    def test_with_timeout_downgrades_timeout_to_warning(self):
+        from core.services.readiness.base import DeepCheck, with_timeout
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _Slow(DeepCheck):
+            id = "test.slow"
+            category = Category.LLM
+            severity = Severity.BLOCKER
+
+            @with_timeout(0.05)
+            async def run(self, ctx):
+                await asyncio.sleep(5)
+                return self._pass("unreachable in test")
+
+        result = asyncio.run(_Slow().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.WARNING  # downgraded from BLOCKER
+        assert "slow" in result.message.lower()
+
+    def test_with_timeout_and_retry_downgrades_timeout_to_warning(self):
+        from core.services.readiness.base import DeepCheck, with_timeout_and_retry
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _Slow(DeepCheck):
+            id = "test.slow2"
+            category = Category.STT
+            severity = Severity.BLOCKER
+
+            @with_timeout_and_retry(0.05, attempts=2)
+            async def run(self, ctx):
+                await asyncio.sleep(5)
+                return self._pass("unreachable in test")
+
+        result = asyncio.run(_Slow().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.WARNING
+
+    def test_real_failure_keeps_blocker_severity(self):
+        """A fast FAIL (e.g. bad key) is NOT a timeout — it must keep the
+        check's BLOCKER weight so it still blocks publish."""
+        from core.services.readiness.base import DeepCheck, with_timeout
+        from core.services.readiness.schemas import Category, Severity, Status
+
+        class _BadKey(DeepCheck):
+            id = "test.badkey"
+            category = Category.LLM
+            severity = Severity.BLOCKER
+
+            @with_timeout(1.0)
+            async def run(self, ctx):
+                return self._fail("invalid api key")
+
+        result = asyncio.run(_BadKey().run(None))
+        assert result.status == Status.FAIL
+        assert result.severity == Severity.BLOCKER  # NOT downgraded
+
+
 # ─── Regression tests for the five gaps fixed in this session ────────────────
 
 
@@ -762,3 +859,57 @@ class TestReadinessGapsRegression:
         # Sanity: quota phrasing still routes to the credit bucket.
         groq_msg = _summarise_error("groq", Exception("You exceeded your current quota"))
         assert "credit" in groq_msg.lower() or "quota" in groq_msg.lower()
+
+
+# ─── Provider ErrorFrame cleaning (LLM/STT/TTS deep-probe messages) ───────────
+
+
+class TestErrorFrameCleaning:
+    """The pipeline harness surfaces provider 4xx/5xx as ErrorFrames whose text
+    is the RAW provider payload (Python-dict / JSON). ``_summarise_error_text``
+    must bucket the known cases and otherwise extract the human ``message`` —
+    never leak raw JSON to the drawer (the bug in the screenshots)."""
+
+    # The exact strings seen in the live deep test.
+    ANTHROPIC_CREDIT = (
+        "Unknown error occurred: Error code: 400 - {'type': 'error', 'error': "
+        "{'type': 'invalid_request_error', 'message': 'Your credit balance is too "
+        "low to access the Anthropic API. Please go to Plans & Billing to upgrade.'}}"
+    )
+    OPENAI_LANGUAGE = (
+        "Unknown error occurred: Error code: 400 - {'error': {'message': "
+        "\"Invalid language 'english'. Please provide a supported ISO-639-1 code.\", "
+        "'type': 'invalid_request_error'}}"
+    )
+
+    def _fn(self):
+        from core.services.readiness.probes import _summarise_error_text
+
+        return _summarise_error_text
+
+    def test_credit_error_frame_buckets_to_billing(self):
+        out = self._fn()("anthropic", self.ANTHROPIC_CREDIT)
+        assert "credit" in out.lower() or "quota" in out.lower()
+        assert "{" not in out and "'message'" not in out  # no raw JSON
+
+    def test_unbucketed_error_frame_extracts_human_message(self):
+        out = self._fn()("openai", self.OPENAI_LANGUAGE)
+        assert "invalid language 'english'" in out.lower()
+        assert "{" not in out and "error code" not in out.lower()  # noise stripped
+
+    def test_extract_error_message_pulls_inner_message(self):
+        from core.services.readiness.probes import _extract_error_message
+
+        assert _extract_error_message(self.OPENAI_LANGUAGE).startswith(
+            "Invalid language 'english'"
+        )
+
+    def test_parse_status_code_from_free_text(self):
+        from core.services.readiness.probes import _parse_status_code
+
+        assert _parse_status_code("Error code: 429 - too many") == 429
+        assert _parse_status_code("no status here") is None
+
+    def test_empty_error_frame_is_safe(self):
+        out = self._fn()("openai", "")
+        assert out and "{" not in out

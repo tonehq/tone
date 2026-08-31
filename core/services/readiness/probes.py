@@ -36,6 +36,7 @@ from __future__ import annotations
 import audioop
 import inspect
 import io
+import re
 import uuid
 import wave
 from dataclasses import dataclass
@@ -275,7 +276,7 @@ async def probe_llm(ctx) -> ProbeResult:
             True, f"{provider} LLM completed the round-trip (no visible text within budget)."
         )
     if err_msg:
-        return ProbeResult(False, f"{provider} LLM error: {err_msg[:180]}")
+        return ProbeResult(False, _summarise_error_text(provider, err_msg))
     return ProbeResult(
         False,
         f"{provider} LLM returned no response frame within budget — check model/key/quota.",
@@ -435,7 +436,7 @@ async def probe_stt(ctx) -> ProbeResult:
         return ProbeResult(True, f"{provider} STT transcribed: '{snippet}'")
 
     if err_msg:
-        return ProbeResult(False, f"{provider} STT error: {err_msg[:180]}")
+        return ProbeResult(False, _summarise_error_text(provider, err_msg))
 
     if not using_real_audio:
         # Silence-only probe cannot prove the provider actually works — a
@@ -678,7 +679,7 @@ async def probe_tts(ctx) -> ProbeResult:
     if ok:
         return ProbeResult(True, f"{provider} synthesised a sentence.")
     if err_msg:
-        return ProbeResult(False, f"{provider} TTS error: {err_msg[:180]}")
+        return ProbeResult(False, _summarise_error_text(provider, err_msg))
     # A healthy TTS must emit at least one audio frame for a real sentence.
     return ProbeResult(
         False,
@@ -1136,19 +1137,18 @@ async def _probe_exotel_number(
 # ── error summariser ─────────────────────────────────────────────────────────
 
 
-def _summarise_error(provider: str, exc: BaseException) -> str:
-    """Turn a raw provider exception into a one-liner the drawer can render."""
-    msg = str(exc)
-    lower = msg.lower()
-    status = getattr(exc, "status_code", None) or getattr(exc, "http_status", None)
+def _classify_by_bucket(provider: str, lower: str, status: Optional[int]) -> Optional[str]:
+    """Map a lower-cased provider error + optional HTTP status onto ONE clear,
+    user-facing sentence, or ``None`` when it fits no known bucket.
 
-    # Auth failure — 401/403 are the canonical statuses, but providers ship
-    # plenty of variants that don't set a status attribute the SDK surfaces
-    # (some raise plain ``ValueError``, some wrap in provider-specific
-    # exception classes with only a text body). Match on the most common
-    # credential phrasings so a wrong key doesn't fall through to the
-    # generic "[provider_error]" bucket where the UI can't render it as an
-    # auth issue.
+    Single source of truth for provider-error copy: reused by both the
+    raised-exception path (:func:`_summarise_error`) and the ErrorFrame-message
+    path (:func:`_summarise_error_text`) so a wrong key / out-of-credit / dead
+    model reads identically no matter which path surfaced it.
+    """
+    # Auth failure — 401/403 are canonical, but providers ship plenty of
+    # variants with only a text body. Match the common credential phrasings so
+    # a wrong key doesn't fall through to the raw bucket.
     auth_hints = (
         "unauthorized", "invalid api key", "invalid_api_key",
         "invalid token", "invalid_token", "incorrect api key",
@@ -1163,12 +1163,10 @@ def _summarise_error(provider: str, exc: BaseException) -> str:
         return f"{provider} says the model doesn't exist (maybe deprecated)."
     if status == 429 or "rate limit" in lower or "too many requests" in lower:
         return f"{provider} rate-limited this test — retry in a minute."
-    # Credit / quota exhaustion — providers spell this many ways and it's a
-    # common real-world cause of "readiness was green yesterday, calls fail
-    # today". Explicit bucket so the drawer shows a clear billing signal
-    # instead of the raw provider JSON. Deepseek returns HTTP 402; Anthropic
-    # returns HTTP 400 with a text hint; OpenAI/Groq return 429 with a
-    # "quota" keyword; some newer providers use "credit"/"balance"/"payment".
+    # Credit / quota exhaustion — providers spell this many ways; a common
+    # cause of "green yesterday, fails today". Deepseek → 402; Anthropic → 400
+    # with a text hint; OpenAI/Groq → 429 + "quota"; others use "credit"/
+    # "balance"/"payment".
     credit_hints = (
         "insufficient balance", "credit balance", "credit_balance",
         "insufficient_quota", "quota exceeded", "exceeded your current quota",
@@ -1181,17 +1179,83 @@ def _summarise_error(provider: str, exc: BaseException) -> str:
         )
     if status and status >= 500:
         return f"{provider} returned {status} — provider outage or transient error."
-    # Framework-side quirks — pipecat / tone internals rather than a provider
-    # health issue. Prefix with a marker so the UI can style these as
-    # "please file a bug" instead of "please fix your provider account".
-    # Add new patterns here as they're observed in live sweeps.
-    framework_bug_patterns = (
-        "range() arg 3 must not be zero",              # OpenAI TTS chunk-size default
-        "invalid value: integer `0`",                  # Deepgram TTS query-param default
-        "taskmanager is not initialized",              # Should not fire post-harness
-    )
-    if any(p in lower for p in framework_bug_patterns):
+    return None
+
+
+# Framework-side quirks — pipecat / tone internals rather than a provider
+# health issue. The marker lets the UI style these as "please file a bug".
+_FRAMEWORK_BUG_PATTERNS = (
+    "range() arg 3 must not be zero",              # OpenAI TTS chunk-size default
+    "invalid value: integer `0`",                  # Deepgram TTS query-param default
+    "taskmanager is not initialized",              # Should not fire post-harness
+)
+
+
+def _summarise_error(provider: str, exc: BaseException) -> str:
+    """Turn a raw provider exception into a one-liner the drawer can render."""
+    msg = str(exc)
+    lower = msg.lower()
+    status = getattr(exc, "status_code", None) or getattr(exc, "http_status", None)
+
+    bucketed = _classify_by_bucket(provider, lower, status)
+    if bucketed is not None:
+        return bucketed
+    if any(p in lower for p in _FRAMEWORK_BUG_PATTERNS):
         logger.warning("[readiness] {} framework-bug pattern in probe error: {}", provider, exc)
-        return f"[framework_bug] {provider} probe failed: {msg[:180]}"
+        return f"[framework_bug] {provider} probe failed: {_extract_error_message(msg)}"
     logger.warning("[readiness] {} probe error: {}", provider, exc)
-    return f"[provider_error] {provider} probe failed: {msg[:180]}"
+    return f"[provider_error] {provider} probe failed: {_extract_error_message(msg)}"
+
+
+def _summarise_error_text(provider: str, text: str) -> str:
+    """Clean an ErrorFrame message (a raw provider error body) the same way
+    :func:`_summarise_error` cleans an exception.
+
+    The pipeline harness surfaces provider 4xx/5xx as ErrorFrames whose text is
+    the raw provider payload (e.g. ``Unknown error occurred: Error code: 400 -
+    {'error': {'message': "Invalid language 'english'"}}``). Route it through
+    the shared buckets; when nothing matches, extract the human ``message``
+    field so the drawer shows the real reason instead of raw JSON.
+    """
+    lower = (text or "").lower()
+    status = _parse_status_code(text)
+    bucketed = _classify_by_bucket(provider, lower, status)
+    if bucketed is not None:
+        return bucketed
+    if any(p in lower for p in _FRAMEWORK_BUG_PATTERNS):
+        return f"[framework_bug] {provider} probe failed: {_extract_error_message(text)}"
+    return f"{provider} returned an error: {_extract_error_message(text)}"
+
+
+def _parse_status_code(text: Optional[str]) -> Optional[int]:
+    """Pull an HTTP status out of a free-text error (``Error code: 400``,
+    ``status: 429``) so bucketing works on ErrorFrame text that has no status
+    attribute. Returns ``None`` when no 3-digit code is present."""
+    if not text:
+        return None
+    m = re.search(r"(?i)(?:error code|status(?:[ _]code)?|http)\D{0,3}(\d{3})", text)
+    return int(m.group(1)) if m else None
+
+
+def _extract_error_message(text: Optional[str]) -> str:
+    """Extract the human-readable reason from a raw provider error string.
+
+    Provider errors usually embed the real message in a ``'message': '...'``
+    field of a serialised dict/JSON; pull that out. Otherwise strip the
+    ``Unknown error occurred:`` / ``Error code: NNN -`` noise and return the
+    remainder. Always bounded so one row never dumps a wall of JSON.
+    """
+    raw = (text or "").strip()
+    if not raw:
+        return "the provider returned an error with no details."
+    # Prefer the inner ``message`` field — capture up to the matching quote so
+    # apostrophes inside the message (``'english'``) don't cut it short.
+    m = re.search(r"""['"]message['"]\s*:\s*(['"])(.*?)\1""", raw, re.DOTALL)
+    candidate = m.group(2) if m else raw
+    # Strip common noise prefixes from the non-message path.
+    candidate = re.sub(r"(?i)^\s*unknown error occurred:\s*", "", candidate)
+    candidate = re.sub(r"(?i)^\s*error code:\s*\d+\s*-\s*", "", candidate)
+    candidate = candidate.splitlines()[0].strip()
+    if len(candidate) > 180:
+        candidate = candidate[:177].rstrip() + "…"
+    return candidate or "the provider returned an error."

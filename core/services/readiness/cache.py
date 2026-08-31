@@ -55,16 +55,25 @@ class DeepCheckCache:
         self._lock = asyncio.Lock()
 
     @staticmethod
-    def key(org_id, agent_id, config_id) -> str:
+    def key(org_id, agent_id, config_id, stamp=None) -> str:
         """Build a cache key. ``config_id`` may be None (means "the resolved
         active config") — its sentinel is kept distinct from any real id so the
         resolved-vs-explicit distinction never collapses two logically distinct
         checks onto one entry.
 
-        Each component is canonicalised (see ``_norm``) so a ``UUID`` and its
+        ``stamp`` is the agent's dependency fingerprint (see
+        ``ReadinessService._compute_stamp``) — it changes whenever ANY input a
+        deep check reads changes (config, API keys, OAuth connections, tools,
+        KBs, MCP servers, phone). Folding it into the key means a change the
+        user makes WITHOUT republishing (e.g. reconnecting an OAuth account or
+        adding a key) produces a NEW key, so the stale entry is skipped and a
+        fresh check runs — the cache self-invalidates instead of serving a
+        5-minute-stale result. ``None`` (no resolvable stamp) uses a sentinel.
+
+        Each id component is canonicalised (see ``_norm``) so a ``UUID`` and its
         raw string form map to the same key — this is what lets the publish
         flow's ``invalidate`` reliably match the entry the deep run wrote."""
-        return f"{_norm(org_id)}:{_norm(agent_id)}:{_norm(config_id)}"
+        return f"{_norm(org_id)}:{_norm(agent_id)}:{_norm(config_id)}:{stamp or 'nostamp'}"
 
     async def get_or_compute(
         self,

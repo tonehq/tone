@@ -143,8 +143,13 @@ class ReadinessService(BaseService):
             )
 
         # Deep path: rate-limit + in-memory coalesce (a second belt over
-        # the DB fast-path for the "click Test agent twice fast" case).
-        cache_key = DeepCheckCache.key(self.org_id, agent.id, effective_config_id)
+        # the DB fast-path for the "click Test agent twice fast" case). The
+        # dependency stamp is part of the key so a change made WITHOUT
+        # republishing (reconnect OAuth, add a key) misses the cache and
+        # re-probes instead of serving a stale result (see DeepCheckCache.key).
+        cache_key = DeepCheckCache.key(
+            self.org_id, agent.id, effective_config_id, stamp
+        )
 
         async def _compute() -> ReadinessReport:
             allowed = await _rate_limiter.try_acquire(
@@ -364,8 +369,19 @@ class ReadinessService(BaseService):
                 },
             )
 
+        # Invalidate the exact entry the gated deep run cached. The key now
+        # includes the dependency stamp, so recompute it the same way ``check``
+        # did (the active-version FK hasn't flipped yet, so the stamp still
+        # matches the one the deep run wrote under). Missing a match is
+        # harmless — a stamp change already self-invalidates — but matching
+        # keeps the post-publish read fresh, preserving prior behavior.
+        agent = self._require_agent(agent_id)
+        stamp, resolved_config = self._compute_stamp(agent)
+        effective_config_id = self._effective_config_id(config_id, resolved_config)
         _deep_cache.invalidate(
-            DeepCheckCache.key(self.org_id, agent_id, config_id)
+            DeepCheckCache.key(
+                self.org_id, agent.id, effective_config_id, stamp
+            )
         )
 
     # ── internals ──────────────────────────────────────────────────────────
