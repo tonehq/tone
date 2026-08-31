@@ -325,7 +325,9 @@ class TestProbeStt:
         service.run_stt = MagicMock(return_value=_FakeAsyncStream([err]))
         result = self._run(service)
         assert result.ok is False
-        assert "invalid api key" in result.message.lower()
+        # ErrorFrame text is now cleaned + bucketed: an "invalid api key" body
+        # classifies as an auth failure ("rejected the API key").
+        assert "api key" in result.message.lower()
 
     def test_fail_on_no_frames_with_real_audio(self):
         """WAV was present but provider returned nothing → clear FAIL."""
@@ -857,3 +859,57 @@ class TestReadinessGapsRegression:
         # Sanity: quota phrasing still routes to the credit bucket.
         groq_msg = _summarise_error("groq", Exception("You exceeded your current quota"))
         assert "credit" in groq_msg.lower() or "quota" in groq_msg.lower()
+
+
+# ─── Provider ErrorFrame cleaning (LLM/STT/TTS deep-probe messages) ───────────
+
+
+class TestErrorFrameCleaning:
+    """The pipeline harness surfaces provider 4xx/5xx as ErrorFrames whose text
+    is the RAW provider payload (Python-dict / JSON). ``_summarise_error_text``
+    must bucket the known cases and otherwise extract the human ``message`` —
+    never leak raw JSON to the drawer (the bug in the screenshots)."""
+
+    # The exact strings seen in the live deep test.
+    ANTHROPIC_CREDIT = (
+        "Unknown error occurred: Error code: 400 - {'type': 'error', 'error': "
+        "{'type': 'invalid_request_error', 'message': 'Your credit balance is too "
+        "low to access the Anthropic API. Please go to Plans & Billing to upgrade.'}}"
+    )
+    OPENAI_LANGUAGE = (
+        "Unknown error occurred: Error code: 400 - {'error': {'message': "
+        "\"Invalid language 'english'. Please provide a supported ISO-639-1 code.\", "
+        "'type': 'invalid_request_error'}}"
+    )
+
+    def _fn(self):
+        from core.services.readiness.probes import _summarise_error_text
+
+        return _summarise_error_text
+
+    def test_credit_error_frame_buckets_to_billing(self):
+        out = self._fn()("anthropic", self.ANTHROPIC_CREDIT)
+        assert "credit" in out.lower() or "quota" in out.lower()
+        assert "{" not in out and "'message'" not in out  # no raw JSON
+
+    def test_unbucketed_error_frame_extracts_human_message(self):
+        out = self._fn()("openai", self.OPENAI_LANGUAGE)
+        assert "invalid language 'english'" in out.lower()
+        assert "{" not in out and "error code" not in out.lower()  # noise stripped
+
+    def test_extract_error_message_pulls_inner_message(self):
+        from core.services.readiness.probes import _extract_error_message
+
+        assert _extract_error_message(self.OPENAI_LANGUAGE).startswith(
+            "Invalid language 'english'"
+        )
+
+    def test_parse_status_code_from_free_text(self):
+        from core.services.readiness.probes import _parse_status_code
+
+        assert _parse_status_code("Error code: 429 - too many") == 429
+        assert _parse_status_code("no status here") is None
+
+    def test_empty_error_frame_is_safe(self):
+        out = self._fn()("openai", "")
+        assert out and "{" not in out

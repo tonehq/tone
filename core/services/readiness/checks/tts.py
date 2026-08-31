@@ -21,7 +21,7 @@ from core.services.readiness.checks._common import (
     ModelConfiguredCheck,
     ProviderConfiguredCheck,
 )
-from core.services.readiness.checks._messages import humanize_reason, quote
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -333,10 +333,10 @@ class TTSProviderReachableCheck(DeepCheck):
         result = await probe_tts(ctx)
         if result.ok:
             return self._pass(result.message)
-        provider_name = getattr(ctx.tts.provider, "display_name", None)
+        # ``result.message`` is already a clean, provider-named sentence — see
+        # the LLM deep check for the reasoning.
         return self._fail(
-            f"The TTS provider {quote(provider_name)} can't be used — "
-            f"{humanize_reason(result.message)}.",
+            result.message,
             remediation=(
                 "Verify the TTS provider status, the API key, and that the "
                 "selected voice still exists in the provider's catalog."
