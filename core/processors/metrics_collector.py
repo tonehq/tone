@@ -230,6 +230,14 @@ class MetricsCollectorProcessor(FrameProcessor):
         # metric arrives. See ``_attribute_stt_ttfb`` for why this is needed.
         self._pending_stt: Deque[_PendingSTT] = deque()
 
+        # A user-stop that arrived while no turn was active (the brief window
+        # between on_turn_ended and the next on_turn_started, where the
+        # turn-start event hasn't yet reached this tail processor). Held here
+        # so the next on_turn_started can seed its buffer's user_stopped_at,
+        # instead of dropping it — the inter-turn-gap drop that previously
+        # left that turn's end_to_end null. See ``_mark_user_stopped``.
+        self._carry_user_stopped_at: Optional[float] = None
+
     # ------------------------------------------------------------------
     # Turn-tracking hooks (called by the runner from TurnTrackingObserver)
     # ------------------------------------------------------------------
@@ -248,6 +256,15 @@ class MetricsCollectorProcessor(FrameProcessor):
             )
         elif existing.started_at is None:
             existing.started_at = time.time()
+        # Seed the anchor from a user-stop that landed in the inter-turn gap
+        # (stashed by _mark_user_stopped when no turn was active). Only when
+        # this turn has no stop of its own yet, so a real in-turn user-stop
+        # always wins. Cleared unconditionally: a carried stop is consumed by
+        # at most the next turn and must never leak into a later one.
+        buffer = self._buffers[turn_number]
+        if self._carry_user_stopped_at is not None and buffer.user_stopped_at is None:
+            buffer.user_stopped_at = self._carry_user_stopped_at
+        self._carry_user_stopped_at = None
 
     def on_turn_ended(
         self,
@@ -321,9 +338,19 @@ class MetricsCollectorProcessor(FrameProcessor):
 
     def _mark_user_stopped(self) -> None:
         buffer = self._active_buffer()
-        if buffer.turn_number < 0:
-            return
         now = time.time()
+        if buffer.turn_number < 0:
+            # No turn is active — we're between on_turn_ended (which cleared
+            # _current_turn) and the next on_turn_started that hasn't reached
+            # this tail processor yet. A user-stop here is the caller finishing
+            # the utterance the NEXT turn's bot will answer. Stash it for that
+            # turn's buffer instead of dropping it (the inter-turn-gap drop
+            # that left end_to_end null on otherwise-measurable turns). Latest
+            # gap-stop wins. Deliberately NOT added to _pending_stt: STT TTFB
+            # attribution is unchanged and still falls back to the active
+            # buffer for a stop with no pending slot.
+            self._carry_user_stopped_at = now
+            return
         # end_to_end uses the latest user-stop before the bot starts — the
         # real user-felt edge. Earlier stops that were followed by a
         # UserStarted are VAD/STT false detections mid-sentence and must not
