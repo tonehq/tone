@@ -77,7 +77,7 @@ export default function IngestionConfigsTab() {
       },
       {
         key: 'tokeniser',
-        title: 'Tokeniser',
+        title: 'Chunker',
         dataIndex: 'tokeniser',
         render: (value) => <span className="text-sm text-foreground">{value as string}</span>,
       },
@@ -160,7 +160,7 @@ export default function IngestionConfigsTab() {
         <div>
           <h2 className="text-lg font-semibold text-foreground">Ingestion configs</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Save reusable pipeline recipes (parser, tokeniser, embedder, vector store) and pick one
+            Save reusable pipeline recipes (parser, chunker, embedder, vector store) and pick one
             when starting a new ingestion run.
           </p>
         </div>
