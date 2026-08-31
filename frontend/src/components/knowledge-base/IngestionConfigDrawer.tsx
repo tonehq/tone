@@ -182,7 +182,7 @@ export default function IngestionConfigDrawer({
       setParamsEditor({
         section,
         option: form.tokeniser,
-        title: `Tokeniser params — ${form.tokeniser}`,
+        title: `Chunker params — ${form.tokeniser}`,
         initial: form.tokeniser_config,
         contextValues: { embeddingModel: form.embedding_model },
         apply: (next) =>
@@ -292,7 +292,7 @@ export default function IngestionConfigDrawer({
         open={open}
         onClose={pending ? () => {} : onClose}
         title={isEdit ? 'Edit ingestion config' : 'New ingestion config'}
-        description="Save a reusable pipeline recipe (parser, tokeniser, embedder, vector store). Configure per-option params with the Configure buttons."
+        description="Save a reusable pipeline recipe (parser, chunker, embedder, vector store). Configure per-option params with the Configure buttons."
         side="right"
         width="sm:max-w-2xl"
         footer={footer}
@@ -426,7 +426,7 @@ export default function IngestionConfigDrawer({
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-[1fr_auto] sm:items-start">
               <SelectInput
                 name="tokeniser"
-                label="Tokeniser"
+                label="Chunker"
                 labelHint={<HintIcon text={INGESTION_FIELD_HINTS.tokeniser} />}
                 isRequired
                 options={tokeniserOptions}
@@ -436,7 +436,7 @@ export default function IngestionConfigDrawer({
                     v === f.tokeniser ? f : { ...f, tokeniser: v, tokeniser_config: null },
                   )
                 }
-                placeholder="Select a tokeniser"
+                placeholder="Select a chunker"
                 disabled={pending}
                 helperText={getCompatibilityHint('tokeniser', form.tokeniser)}
               />
