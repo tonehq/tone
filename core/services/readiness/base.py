@@ -183,11 +183,17 @@ class BaseCheck(ABC):
         deep_link: Optional[str] = None,
         resource_ref: Optional[ResourceRef] = None,
         check_id: Optional[str] = None,
+        severity: Optional[Severity] = None,
     ) -> CheckResult:
+        """Build a FAIL result. ``severity`` overrides the check's class-level
+        severity for the rare case where the *same* check wants a different
+        weight for a specific failure mode — notably a timeout, which is
+        "couldn't confirm" rather than "confirmed broken" and must not hard-block
+        publish (see the timeout decorators below)."""
         return CheckResult(
             check_id=check_id or self.id,
             category=self.category,
-            severity=self.severity,
+            severity=severity or self.severity,
             status=Status.FAIL,
             message=message,
             remediation=remediation,
@@ -240,13 +246,20 @@ def with_timeout(seconds: float, message: Optional[str] = None) -> Callable:
             try:
                 return await asyncio.wait_for(fn(self, ctx), timeout=seconds)
             except asyncio.TimeoutError:
+                # A timeout means "couldn't confirm in time", NOT "confirmed
+                # broken" — a healthy-but-slow provider must not hard-block
+                # publish. Always WARNING, regardless of the check's class
+                # severity. Real failures (bad key, 4xx) come back as a
+                # ProbeResult and keep the check's own (possibly BLOCKER) weight.
                 return self._fail(
                     message
-                    or f"Provider did not respond within {seconds:g}s.",
+                    or f"Couldn't verify the provider within {seconds:g}s — it "
+                    "may just be slow.",
                     remediation=(
-                        "The provider may be temporarily slow or unreachable. "
-                        "Try again in a moment."
+                        "This is usually a temporary slowdown, not a broken "
+                        "provider. Re-run the check in a moment."
                     ),
+                    severity=Severity.WARNING,
                 )
 
         return wrapper
@@ -317,16 +330,22 @@ def with_timeout_and_retry(
                     return await asyncio.wait_for(fn(self, ctx), timeout=seconds)
                 except asyncio.TimeoutError:
                     if attempt == attempts:
+                        # Timeout after every attempt = "couldn't confirm",
+                        # not "confirmed broken". Downgrade to WARNING so a
+                        # slow-but-healthy provider doesn't hard-block publish;
+                        # a real bad-key/4xx failure returns a ProbeResult and
+                        # keeps the check's BLOCKER weight. See ``with_timeout``.
                         return self._fail(
                             message
                             or (
-                                f"Provider did not respond within {seconds:g}s "
-                                f"across {attempts} attempts."
+                                f"Couldn't verify the provider within {seconds:g}s "
+                                f"across {attempts} attempts — it may just be slow."
                             ),
                             remediation=(
-                                "The provider may be temporarily slow or "
-                                "unreachable. Try again in a moment."
+                                "This is usually a temporary slowdown, not a "
+                                "broken provider. Re-run the check in a moment."
                             ),
+                            severity=Severity.WARNING,
                         )
             # unreachable — the loop either returns or falls through the
             # final-attempt branch above.
