@@ -152,7 +152,8 @@ Thumbs.db
 
 .claude/settings.local.json
 
-docs/
+docs/*
+!docs/features/
 /scripts
 files/
 .claude/skills/code-review

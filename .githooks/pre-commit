@@ -1,0 +1,65 @@
+#!/bin/sh
+
+REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null)
+if [ -z "$REPO_ROOT" ]; then
+  exit 0
+fi
+
+if [ "${TONE_HOOKS_DISABLE:-0}" = "1" ]; then
+  exit 0
+fi
+
+STAGED_ALL=$(git diff --cached --name-only --diff-filter=ACMR 2>/dev/null)
+if [ -z "$STAGED_ALL" ]; then
+  exit 0
+fi
+
+if [ -d "$REPO_ROOT/frontend" ]; then
+  STAGED_FE=$(printf '%s\n' "$STAGED_ALL" | grep -E '^frontend/.*\.(ts|tsx|js|jsx)$')
+  if [ -n "$STAGED_FE" ] && [ -d "$REPO_ROOT/frontend/node_modules" ]; then
+    cd "$REPO_ROOT/frontend" || exit 0
+    HAS_LINT_STAGED=$(node -e "try{const p=require('./package.json');process.stdout.write(p['lint-staged']?'1':'')}catch(e){}" 2>/dev/null)
+    if [ -n "$HAS_LINT_STAGED" ]; then
+      npx lint-staged || exit $?
+    else
+      REL=$(printf '%s\n' "$STAGED_FE" | sed 's#^frontend/##')
+      # shellcheck disable=SC2086
+      npx eslint --fix $REL
+      STATUS=$?
+      if [ "$STATUS" -eq 1 ]; then
+        exit 1
+      fi
+      if [ "$STATUS" -ge 2 ]; then
+        printf 'pre-commit: eslint could not run (exit %s) — skipping lint\n' "$STATUS"
+      fi
+      cd "$REPO_ROOT" || exit 0
+      printf '%s\n' "$STAGED_FE" | while IFS= read -r f; do
+        if [ -n "$f" ] && [ -f "$f" ]; then
+          git add -- "$f"
+        fi
+      done
+    fi
+    cd "$REPO_ROOT" || exit 0
+  fi
+fi
+
+if [ "${TONE_GITNEXUS_DISABLE:-0}" = "1" ] || ! command -v gitnexus >/dev/null 2>&1; then
+  exit 0
+fi
+
+CODE_STAGED=$(printf '%s\n' "$STAGED_ALL" | grep -E '\.(py|ts|tsx|js|jsx|go|rs|java|rb|sql)$')
+if [ -z "$CODE_STAGED" ]; then
+  exit 0
+fi
+
+printf 'gitnexus: re-indexing staged code…\n'
+gitnexus analyze --force >/dev/null 2>&1
+
+for f in AGENTS.md CLAUDE.md; do
+  if [ -f "$REPO_ROOT/$f" ] && ! git diff --quiet -- "$f" 2>/dev/null; then
+    git add -- "$f"
+    printf 'gitnexus: %s refreshed and staged\n' "$f"
+  fi
+done
+
+exit 0

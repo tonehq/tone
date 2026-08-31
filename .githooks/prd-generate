@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import hooklib
+
+
+def build_prompt(task, branch, out_path):
+    return (
+        "Use the generate_feature_prd_and_implementation skill to write a Feature PRD.\n\n"
+        "Run non-interactively: do NOT ask questions. Where information is missing, write\n"
+        "'TBD - needs product input' rather than inventing requirements.\n\n"
+        "Write the PRD to: " + out_path + "\n\n"
+        "Source ClickUp task\n"
+        "-------------------\n"
+        "id: " + str(task.get("id")) + "\n"
+        "name: " + (task.get("name") or "") + "\n"
+        "status: " + ((task.get("status") or {}).get("status") or "-") + "\n"
+        "url: " + (task.get("url") or "") + "\n"
+        "branch: " + branch + "\n\n"
+        "description:\n" + (task.get("description") or "(empty)") + "\n\n"
+        "Ground every technical section in this repository's actual code and conventions.\n"
+        "Do not modify any file other than the PRD.\n"
+    )
+
+
+def main():
+    root = hooklib.repo_root()
+    if not root:
+        return 0
+    os.chdir(root)
+
+    branch = hooklib.current_branch()
+    if not branch or branch == "HEAD":
+        return 0
+
+    env = hooklib.load_env(root)
+    task = hooklib.resolve_task(env, branch)
+    if not task:
+        return 0
+
+    slug = hooklib.slugify(task.get("name"))
+    rel_path = os.path.join("docs", "features", slug + ".md")
+    if os.path.exists(os.path.join(root, rel_path)):
+        return 0
+
+    if "--plan" in sys.argv:
+        print(rel_path)
+        return 0
+
+    lock = hooklib.acquire_lock(root, "prd-" + slug)
+    if not lock:
+        return 0
+
+    os.makedirs(os.path.dirname(os.path.join(root, rel_path)), exist_ok=True)
+
+    try:
+        ok, _ = hooklib.run_claude(
+            root,
+            build_prompt(task, branch, rel_path),
+            "prd-generate.log",
+            branch + " -> " + rel_path,
+            [rel_path],
+        )
+    finally:
+        try:
+            os.remove(lock)
+        except Exception:
+            pass
+
+    if not ok:
+        try:
+            with open(os.path.join(root, ".git", "prd-FAILED"), "w") as fh:
+                fh.write(branch + " -> " + rel_path + "\n")
+        except Exception:
+            pass
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

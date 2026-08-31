@@ -1,0 +1,150 @@
+name: ClickUp task
+
+on:
+  push:
+    branches-ignore:
+      - main
+      - dev
+      - staging
+      - "staging-*"
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: clickup-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve ClickUp task for this branch
+        id: task
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          CLICKUP_TOKEN: ${{ secrets.CLICKUP_TOKEN }}
+          CLICKUP_LIST_ID: ${{ vars.CLICKUP_LIST_ID }}
+          CLICKUP_BRANCH_FIELD_ID: ${{ vars.CLICKUP_BRANCH_FIELD_ID }}
+        shell: python
+        run: |
+          import json
+          import os
+          import re
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+
+          BRANCH = os.environ.get("BRANCH", "")
+          TOKEN = os.environ.get("CLICKUP_TOKEN", "")
+          LIST_ID = os.environ.get("CLICKUP_LIST_ID", "")
+          FIELD_ID = os.environ.get("CLICKUP_BRANCH_FIELD_ID", "")
+
+          summary_path = os.environ.get("GITHUB_STEP_SUMMARY", os.devnull)
+          out_path = os.environ.get("GITHUB_OUTPUT", os.devnull)
+
+          def emit_summary(text):
+              with open(summary_path, "a") as fh:
+                  fh.write(text + "\n")
+
+          def emit_output(key, value):
+              with open(out_path, "a") as fh:
+                  if "\n" in value:
+                      fh.write(key + "<<CLICKUP_EOF\n" + value + "\nCLICKUP_EOF\n")
+                  else:
+                      fh.write(key + "=" + value + "\n")
+
+          def finish(found, summary):
+              print(summary)
+              emit_summary(summary)
+              emit_output("found", "1" if found else "0")
+              raise SystemExit(0)
+
+          def api(path, params=None):
+              url = "https://api.clickup.com/api/v2" + path
+              if params:
+                  url += "?" + urllib.parse.urlencode(params)
+              req = urllib.request.Request(url, headers={"Authorization": TOKEN})
+              try:
+                  with urllib.request.urlopen(req, timeout=20) as resp:
+                      return json.loads(resp.read().decode())
+              except urllib.error.HTTPError as exc:
+                  try:
+                      return json.loads(exc.read().decode())
+                  except Exception:
+                      return {"err": "HTTP " + str(exc.code)}
+              except Exception as exc:
+                  return {"err": str(exc)}
+
+          if not TOKEN:
+              finish(False, "CLICKUP_TOKEN secret is not configured.")
+
+          if not LIST_ID or not FIELD_ID:
+              finish(False, "Set the CLICKUP_LIST_ID and CLICKUP_BRANCH_FIELD_ID repository variables.")
+
+          tasks = []
+
+          field_filter = json.dumps([{"field_id": FIELD_ID, "operator": "=", "value": BRANCH}])
+          data = api(
+              "/list/" + LIST_ID + "/task",
+              {
+                  "archived": "false",
+                  "include_closed": "true",
+                  "custom_fields": field_filter,
+              },
+          )
+
+          if isinstance(data, dict) and data.get("err"):
+              finish(False, "ClickUp error: " + str(data.get("err")))
+
+          tasks = data.get("tasks") or []
+
+          if not tasks:
+              m = re.search(r"[Cc][Uu][-_]([0-9A-Za-z]{5,})", BRANCH)
+              if m:
+                  single = api("/task/" + m.group(1))
+                  if isinstance(single, dict) and single.get("id"):
+                      tasks = [single]
+
+          if not tasks:
+              finish(
+                  False,
+                  "No ClickUp task is linked to branch `" + BRANCH + "`.\n\n"
+                  "Set the **Branch Name** field on the task to `" + BRANCH + "`.",
+              )
+
+          blocks = ["## ClickUp"]
+          for task in tasks:
+              lst = task.get("list") or {}
+              status = (task.get("status") or {}).get("status") or "-"
+              people = [a.get("username") or "" for a in (task.get("assignees") or [])]
+              assignees = ", ".join([p for p in people if p]) or "unassigned"
+              blocks.append("")
+              blocks.append("**[" + (task.get("name") or "") + "](" + (task.get("url") or "") + ")**")
+              blocks.append("")
+              blocks.append("| | |")
+              blocks.append("|---|---|")
+              blocks.append("| Task | `" + str(task.get("id")) + "` |")
+              blocks.append("| Status | " + status + " |")
+              blocks.append("| Assignees | " + assignees + " |")
+              blocks.append("| List | " + (lst.get("name") or "-") + " |")
+
+          blocks.append("")
+          blocks.append("_Matched on branch_ `" + BRANCH + "`")
+
+          body = "\n".join(blocks)
+          print(body)
+          emit_summary(body)
+          emit_output("found", "1")
+          emit_output("body", body)
+
+      - name: Comment on the pull request
+        if: github.event_name == 'pull_request' && steps.task.outputs.found == '1'
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: clickup-task
+          message: ${{ steps.task.outputs.body }}

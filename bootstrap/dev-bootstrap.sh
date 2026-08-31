@@ -54,6 +54,12 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$PROJECT_ROOT"
 
+if [ -d "$PROJECT_ROOT/.githooks" ]; then
+    git config core.hooksPath .githooks
+    chmod +x "$PROJECT_ROOT"/.githooks/* 2>/dev/null || true
+    echo "    git hooks enabled (core.hooksPath=.githooks)"
+fi
+
 VENV_DIR="$PROJECT_ROOT/venv"
 
 # ── Preflight: Cloudsmith URL ──────────────────────────────────────
