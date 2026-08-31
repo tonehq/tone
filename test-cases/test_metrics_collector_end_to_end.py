@@ -132,3 +132,48 @@ class TestEndToEndLatency:
         ])
         turn = processor.get_turn_metrics()[0]
         assert turn["end_to_end"] is None
+
+    def test_interruption_stop_does_not_overwrite_anchor(self, processor):
+        """User interrupts the bot mid-reply — the interruption's stop must
+        NOT become this turn's user_stopped_at.
+
+        Regression for the negative-end_to_end bug: on interrupted turns the
+        caller barges in after the bot has started speaking (user_started →
+        user_stopped). That trailing stop landed in the same turn buffer and
+        overwrote user_stopped_at to a time AFTER bot_started_at, so
+        end_to_end came out negative (e.g. -0.7s). The anchor must freeze at
+        the real pre-response stop once the bot has started.
+        """
+        _feed(processor, [
+            (9.0,  "turn_start"),
+            (10.0, "user_stopped"),   # real question ends here
+            (10.6, "bot_started"),    # bot replies -> anchor must freeze
+            (11.2, "user_started"),   # caller interrupts the bot
+            (11.8, "user_stopped"),   # interruption stop — must be ignored here
+            (12.0, "turn_end"),
+        ])
+        turn = processor.get_turn_metrics()[0]
+        assert turn["user_stopped_at"] == 10.0
+        assert turn["bot_started_at"] == 10.6
+        assert turn["end_to_end"] == 0.6  # positive, not -1.2
+
+    def test_flap_before_bot_still_overwrites_then_freezes(self, processor):
+        """Pre-bot flaps still take the latest stop; post-bot stops are frozen.
+
+        Guards that the freeze does not regress the VAD-flap handling: the
+        latest stop *before* bot-start still wins, and only stops *after*
+        bot-start are ignored.
+        """
+        _feed(processor, [
+            (9.0,  "turn_start"),
+            (10.0, "user_stopped"),   # false stop mid-sentence
+            (10.3, "user_started"),   # resumed
+            (11.0, "user_stopped"),   # real stop before bot -> should win
+            (12.5, "bot_started"),    # anchor freezes at 11.0
+            (13.0, "user_started"),   # interruption
+            (13.4, "user_stopped"),   # ignored
+            (14.0, "turn_end"),
+        ])
+        turn = processor.get_turn_metrics()[0]
+        assert turn["user_stopped_at"] == 11.0
+        assert turn["end_to_end"] == 1.5
