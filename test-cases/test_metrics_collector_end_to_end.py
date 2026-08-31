@@ -177,3 +177,101 @@ class TestEndToEndLatency:
         turn = processor.get_turn_metrics()[0]
         assert turn["user_stopped_at"] == 11.0
         assert turn["end_to_end"] == 1.5
+
+
+def _drive(processor, turn_number, action, now):
+    """Invoke one processor hook at a patched wall-clock ``now``.
+
+    Unlike ``_feed`` (which is hard-wired to turn 1), this takes an explicit
+    turn number so multi-turn / inter-turn-gap scenarios can be scripted.
+    """
+    with patch.object(mc.time, "time", return_value=now):
+        if action == "turn_start":
+            processor.on_turn_started(turn_number)
+        elif action == "turn_end":
+            processor.on_turn_ended(turn_number)
+        elif action == "user_stopped":
+            processor._mark_user_stopped()
+        elif action == "user_started":
+            processor._mark_user_started()
+        elif action == "bot_started":
+            processor._mark_bot_started()
+        else:
+            raise ValueError(f"unknown action: {action}")
+
+
+class TestInterTurnGapCarry:
+    """A user-stop that lands between turns (no turn active) must seed the
+    next turn's anchor instead of being dropped.
+
+    Regression for the "missing" (null) end_to_end on turns where the bot did
+    reply: turn-start/turn-end events arrive on a different channel than the
+    speech frames, so a user-stop can hit the collector while _current_turn is
+    None. It used to be routed to a throwaway buffer and lost, leaving the
+    next turn with no user_stopped_at.
+    """
+
+    @pytest.fixture
+    def processor(self):
+        return MetricsCollectorProcessor()
+
+    def test_gap_stop_seeds_next_turn(self, processor):
+        _drive(processor, 1, "turn_start", 9.0)
+        _drive(processor, 1, "user_stopped", 9.5)
+        _drive(processor, 1, "bot_started", 10.0)
+        _drive(processor, 1, "turn_end", 11.0)      # _current_turn -> None
+        # Caller's next utterance ends in the gap, BEFORE turn 2 starts here.
+        _drive(processor, 2, "user_stopped", 11.5)  # would have been dropped
+        _drive(processor, 2, "turn_start", 11.7)    # seeds anchor from 11.5
+        _drive(processor, 2, "bot_started", 12.1)
+        _drive(processor, 2, "turn_end", 12.5)
+        turns = {t["turn"]: t for t in processor.get_turn_metrics()}
+        assert turns[2]["user_stopped_at"] == 11.5
+        assert turns[2]["end_to_end"] == 0.6   # was null before the fix
+        # Turn 1 unaffected.
+        assert turns[1]["end_to_end"] == 0.5
+
+    def test_gap_carry_never_goes_negative(self, processor):
+        """Seeded anchor is always before the next turn's bot-start."""
+        _drive(processor, 1, "turn_start", 9.0)     # a turn has been seen
+        _drive(processor, 1, "bot_started", 9.4)
+        _drive(processor, 1, "turn_end", 10.0)      # _current_turn -> None
+        _drive(processor, 2, "user_stopped", 10.2)  # gap stop
+        _drive(processor, 2, "turn_start", 10.3)
+        _drive(processor, 2, "bot_started", 10.9)
+        _drive(processor, 2, "turn_end", 11.2)
+        turn = {t["turn"]: t for t in processor.get_turn_metrics()}[2]
+        assert turn["end_to_end"] == 0.7
+        assert turn["end_to_end"] > 0
+
+    def test_in_turn_stop_wins_over_carry(self, processor):
+        """A real user-stop inside the turn overrides any carried gap-stop."""
+        _drive(processor, 1, "turn_start", 9.0)
+        _drive(processor, 1, "bot_started", 9.4)
+        _drive(processor, 1, "turn_end", 10.0)
+        _drive(processor, 2, "user_stopped", 10.2)  # stale gap stop
+        _drive(processor, 2, "turn_start", 10.3)    # seeds 10.2...
+        _drive(processor, 2, "user_stopped", 10.8)  # ...but real stop wins
+        _drive(processor, 2, "bot_started", 11.3)
+        _drive(processor, 2, "turn_end", 11.6)
+        turn = {t["turn"]: t for t in processor.get_turn_metrics()}[2]
+        assert turn["user_stopped_at"] == 10.8
+        assert turn["end_to_end"] == 0.5
+
+    def test_carry_does_not_leak_past_one_turn(self, processor):
+        """An unconsumed carried stop must not anchor a later turn."""
+        _drive(processor, 1, "turn_start", 9.0)
+        _drive(processor, 1, "bot_started", 9.4)
+        _drive(processor, 1, "turn_end", 10.0)
+        _drive(processor, 2, "user_stopped", 10.2)  # gap stop
+        _drive(processor, 2, "turn_start", 10.3)    # consumes/clears carry
+        _drive(processor, 2, "bot_started", 10.9)
+        _drive(processor, 2, "turn_end", 11.2)
+        # Turn 3 has its own clean stop; must not reuse turn-2's carry.
+        _drive(processor, 3, "turn_start", 12.0)
+        _drive(processor, 3, "user_stopped", 12.4)
+        _drive(processor, 3, "bot_started", 12.9)
+        _drive(processor, 3, "turn_end", 13.2)
+        turns = {t["turn"]: t for t in processor.get_turn_metrics()}
+        assert turns[3]["user_stopped_at"] == 12.4
+        assert turns[3]["end_to_end"] == 0.5
