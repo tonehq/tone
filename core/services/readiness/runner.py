@@ -20,6 +20,7 @@ import anyio
 from loguru import logger
 
 from core.services.readiness.base import BaseCheck, CheckContext
+from core.services.readiness.consolidation import suppress_redundant_shallow_checks
 from core.services.readiness.registry import get_checks
 from core.services.readiness.schemas import (
     Category,
@@ -54,6 +55,10 @@ class Runner:
         """
         checks = get_checks(ctx.depth)
         results = await self._execute_all(checks, ctx, deep_categories=deep_categories)
+        # Collapse shallow heads-up rows the deep probe has already answered
+        # (e.g. "token may be expired" once "connection failed" is confirmed),
+        # BEFORE aggregation so the summary counts reflect what's shown.
+        results = suppress_redundant_shallow_checks(results)
         return self._aggregate(
             results,
             depth=ctx.depth,
@@ -74,37 +79,44 @@ class Runner:
         the report — its slot returns a FAIL result explaining the crash so ops
         can find it in the response instead of a swallowed 500."""
 
-        async def run_one(check: BaseCheck) -> CheckResult:
+        async def run_one(check: BaseCheck) -> List[CheckResult]:
+            # A check may return a single CheckResult or a list of per-resource
+            # results (e.g. one row per MCP server). Everything below is
+            # normalised to a list so the aggregator sees a flat stream.
+            #
             # Targeted-deep filter: shallow checks always run; deep checks
             # outside the requested category set short-circuit to SKIPPED so
-            # the report shape stays identical to a full-deep run.
+            # the report shape stays identical to a full-deep run. The single
+            # marker row is enough for the frontend merge to detect that the
+            # whole category was left unprobed on this save.
             if (
                 deep_categories is not None
                 and check.depth == Depth.DEEP
                 and check.category not in deep_categories
             ):
-                return check._skip(
+                return [check._skip(
                     f"Not re-probed on this save ({check.category.value} unchanged)."
-                )
+                )]
             if not check.applies(ctx):
-                return check._skip(check.skip_reason(ctx))
+                return [check._skip(check.skip_reason(ctx))]
             try:
-                return await check.run(ctx)
+                outcome = await check.run(ctx)
             except Exception as exc:  # noqa: BLE001
                 logger.exception(
                     "[readiness] check {} crashed for agent {}",
                     check.id,
                     getattr(ctx.agent, "id", None),
                 )
-                return check._fail(
+                return [check._fail(
                     f"Internal error running check: {exc}",
                     remediation=(
                         "Please retry. If it persists, contact support with "
                         f"check id '{check.id}'."
                     ),
-                )
+                )]
+            return outcome if isinstance(outcome, list) else [outcome]
 
-        results: List[Optional[CheckResult]] = [None] * len(checks)
+        results: List[Optional[List[CheckResult]]] = [None] * len(checks)
 
         async def _wrapper(index: int, chk: BaseCheck) -> None:
             results[index] = await run_one(chk)
@@ -113,7 +125,7 @@ class Runner:
             for i, c in enumerate(checks):
                 tg.start_soon(_wrapper, i, c)
 
-        return [r for r in results if r is not None]
+        return [r for sub in results if sub for r in sub]
 
     # ── aggregation ────────────────────────────────────────────────────────
 

@@ -19,9 +19,30 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Awaitable, Callable, Dict, Optional, Tuple
+from typing import Any, Awaitable, Callable, Dict, Optional, Tuple
+from uuid import UUID
 
 from core.services.readiness.schemas import ReadinessReport
+
+
+def _norm(value: Any) -> str:
+    """Canonicalise a key component so callers that pass a ``UUID`` and callers
+    that pass its raw (possibly upper-cased / differently-formatted) string
+    build the SAME key.
+
+    Without this, the write path (which passes resolved ``UUID`` objects) and
+    the publish-invalidation path (which passes the raw request strings) could
+    produce different keys — so ``invalidate`` would silently miss and a stale
+    deep report could be served for up to the TTL after a publish. UUID-shaped
+    values normalise to their canonical lowercase form; ``None`` maps to a
+    stable sentinel; anything else falls back to ``str`` unchanged.
+    """
+    if value is None:
+        return "none"
+    try:
+        return str(UUID(str(value)))
+    except (ValueError, AttributeError, TypeError):
+        return str(value)
 
 
 class DeepCheckCache:
@@ -36,10 +57,14 @@ class DeepCheckCache:
     @staticmethod
     def key(org_id, agent_id, config_id) -> str:
         """Build a cache key. ``config_id`` may be None (means "the resolved
-        active config") — we include it verbatim so the resolved-vs-explicit
-        distinction is preserved and never collapses two logically distinct
-        checks onto one entry."""
-        return f"{org_id}:{agent_id}:{config_id}"
+        active config") — its sentinel is kept distinct from any real id so the
+        resolved-vs-explicit distinction never collapses two logically distinct
+        checks onto one entry.
+
+        Each component is canonicalised (see ``_norm``) so a ``UUID`` and its
+        raw string form map to the same key — this is what lets the publish
+        flow's ``invalidate`` reliably match the entry the deep run wrote."""
+        return f"{_norm(org_id)}:{_norm(agent_id)}:{_norm(config_id)}"
 
     async def get_or_compute(
         self,

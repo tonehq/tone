@@ -23,7 +23,10 @@ from __future__ import annotations
 
 from typing import Any, ClassVar, Dict, List, Optional, Tuple
 
+from loguru import logger
+
 from core.services.readiness.base import CheckContext, ShallowCheck
+from core.services.readiness.checks._messages import quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -45,30 +48,26 @@ class KnowledgeBasesReadyCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No knowledge bases attached."
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        not_ready: List[Tuple[Any, str]] = []
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+        results: List[CheckResult] = []
         for kb in ctx.knowledge_bases:
             reason = _kb_not_ready_reason(ctx.db, kb)
-            if reason is not None:
-                not_ready.append((kb, reason))
-
-        if not_ready:
-            # Include per-KB reasons so the drawer can show "processing" vs
-            # "failed" vs "no document uploaded" instead of one flat error.
-            parts = [f"{kb.name} ({reason})" for kb, reason in not_ready[:3]]
-            if len(not_ready) > 3:
-                parts.append(f"+{len(not_ready) - 3} more")
-            return self._fail(
-                f"Knowledge base(s) not ready: {', '.join(parts)}.",
-                remediation=(
-                    "Wait for ingestion to finish, re-upload failed documents, "
-                    "or upload content to empty knowledge bases."
-                ),
-                resource_ref=ResourceRef(
-                    type="knowledge_base", id=str(not_ready[0][0].id)
-                ),
+            if reason is None:
+                continue
+            results.append(
+                self._fail(
+                    f"{quote(kb.name)} isn't ready to use — {reason}.",
+                    remediation=(
+                        "Wait for ingestion to finish, or re-upload the "
+                        "document if it failed."
+                    ),
+                    resource_ref=ResourceRef(type="knowledge_base", id=str(kb.id)),
+                    check_id=self._result_id(str(kb.id)),
+                )
             )
-        return self._pass(f"{len(ctx.knowledge_bases)} knowledge base(s) attached.")
+        if results:
+            return results
+        return [self._pass(f"{len(ctx.knowledge_bases)} knowledge base(s) attached.")]
 
 
 class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
@@ -98,12 +97,10 @@ class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No knowledge bases attached — embedding model not required."
 
-    async def run(self, ctx: CheckContext) -> CheckResult:
-        # Per-KB "incomplete ingestion" collector. A KB is INCOMPLETE when
-        # its active_run doesn't declare an embedding_model — the retrieval
-        # groupby key (``vector_store, provider, model, dims``) would blow up
-        # or silently drop the KB from search.
-        incomplete: List[Tuple[Any, str]] = []
+    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+        # A KB is INCOMPLETE when its active_run doesn't declare an
+        # embedding_model — retrieval can't embed the query without it.
+        results: List[CheckResult] = []
         for kb in ctx.knowledge_bases:
             active_run = kb.active_run() if hasattr(kb, "active_run") else None
             if active_run is None:
@@ -112,27 +109,23 @@ class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
                 continue
             model_slug = (getattr(active_run, "embedding_model", None) or "").strip()
             if not model_slug:
-                incomplete.append((kb, "no embedding model recorded"))
-                continue
-
-        if incomplete:
-            parts = [f"'{kb.name}' ({reason})" for kb, reason in incomplete[:3]]
-            if len(incomplete) > 3:
-                parts.append(f"+{len(incomplete) - 3} more")
-            return self._fail(
-                f"KB ingestion is incomplete: {', '.join(parts)}. Retrieval "
-                f"cannot embed the query without the ingestion's embedding model.",
-                remediation=(
-                    "Re-run ingestion for the affected KB(s) with a valid "
-                    "embedding provider + model."
-                ),
-                resource_ref=ResourceRef(
-                    type="knowledge_base", id=str(incomplete[0][0].id)
-                ),
-            )
-        return self._pass(
+                results.append(
+                    self._fail(
+                        f"{quote(kb.name)} can't be searched — its ingestion "
+                        "didn't record an embedding model.",
+                        remediation=(
+                            "Re-run ingestion for this knowledge base with a "
+                            "valid embedding provider and model."
+                        ),
+                        resource_ref=ResourceRef(type="knowledge_base", id=str(kb.id)),
+                        check_id=self._result_id(str(kb.id)),
+                    )
+                )
+        if results:
+            return results
+        return [self._pass(
             f"All {len(ctx.knowledge_bases)} KB(s) declare an embedding model."
-        )
+        )]
 
 
 class KnowledgeBaseEmbeddingKeyUsableCheck(ShallowCheck):
@@ -174,43 +167,44 @@ class KnowledgeBaseEmbeddingKeyUsableCheck(ShallowCheck):
             kbs_by_provider.setdefault(provider, []).append(kb)
 
         if not kbs_by_provider:
-            return self._skip(
+            return [self._skip(
                 "No attached KB has a complete ingestion run to check the key for."
-            )
+            )]
 
-        missing: List[Tuple[str, List[Any]]] = []  # (provider, kbs)
+        results: List[CheckResult] = []
         for provider, kbs in kbs_by_provider.items():
             try:
                 key = ProviderKeyService.get_key(ctx.db, ctx.org_id, provider)
             except Exception:  # noqa: BLE001 — decrypt failure inside get_key
                 # get_key returns None on missing key; a raise here means the
-                # ciphertext itself is un-decryptable (rotated JWT_SECRET_KEY),
-                # which is a different actionable failure worth flagging.
-                missing.append((provider, kbs))
+                # ciphertext itself is un-decryptable (rotated JWT_SECRET_KEY).
+                # Both surface the same "no usable key" row; log for debugging.
+                logger.debug(
+                    "[readiness] embedding key lookup/decrypt failed for provider '{}'",
+                    provider,
+                )
+                key = None
+            if key:
                 continue
-            if not key:
-                missing.append((provider, kbs))
-
-        if missing:
-            parts = []
-            for provider, kbs in missing[:3]:
-                kb_names = ", ".join(kb.name for kb in kbs[:2])
-                more_kbs = f" +{len(kbs) - 2} more" if len(kbs) > 2 else ""
-                parts.append(f"'{provider}' (used by {kb_names}{more_kbs})")
-            if len(missing) > 3:
-                parts.append(f"+{len(missing) - 3} more providers")
-            return self._fail(
-                f"Embedding provider API key missing or unreadable: "
-                f"{'; '.join(parts)}. Retrieval will fail for these KBs.",
-                remediation=(
-                    "Open Services → the affected provider and add (or "
-                    "re-enter) an active API key."
-                ),
+            kb_names = ", ".join(quote(kb.name) for kb in kbs[:2])
+            more_kbs = f" and {len(kbs) - 2} more" if len(kbs) > 2 else ""
+            results.append(
+                self._fail(
+                    f"The “{provider}” embedding provider has no usable API "
+                    f"key — search won't work for {kb_names}{more_kbs}.",
+                    remediation=(
+                        f"Open Services → {provider} and add (or re-enter) an "
+                        "active API key."
+                    ),
+                    check_id=self._result_id(provider),
+                )
             )
-        return self._pass(
+        if results:
+            return results
+        return [self._pass(
             f"API key available for all {len(kbs_by_provider)} KB embedding "
             f"provider(s)."
-        )
+        )]
 
 
 class KnowledgeBaseEmbeddingMatchCheck(ShallowCheck):
@@ -265,22 +259,15 @@ class KnowledgeBaseEmbeddingMatchCheck(ShallowCheck):
                 f"space: {provider}/{model}."
             )
 
-        # Two or more distinct spaces — surface the groups so the operator
-        # can decide whether to re-ingest one KB with the other's model.
-        parts = [
-            f"{provider}/{model} ({', '.join(kb.name for kb in kbs[:2])}"
-            f"{' +' + str(len(kbs) - 2) + ' more' if len(kbs) > 2 else ''})"
-            for (provider, model, _dims), kbs in list(by_space.items())[:3]
-        ]
-        if len(by_space) > 3:
-            parts.append(f"+{len(by_space) - 3} more spaces")
+        # Two or more distinct spaces — one set-level warning (this is a
+        # comparison across all KBs, not a per-KB problem).
         return self._fail(
-            f"Attached KBs use different embedding spaces: {'; '.join(parts)}. "
-            f"Retrieval will embed the query once per space (extra latency + "
-            f"cost) and results are only comparable within each space.",
+            f"Your knowledge bases were built with {len(by_space)} different "
+            "embedding models, so search runs separately for each group — "
+            "slower and more expensive, and results can't be ranked together.",
             remediation=(
-                "Re-ingest KBs so they all share one embedding provider + "
-                "model, or detach the KBs whose space differs from the rest."
+                "Re-ingest the knowledge bases so they all use one embedding "
+                "provider and model, or detach the ones that differ."
             ),
         )
 
@@ -312,22 +299,26 @@ def _kb_not_ready_reason(db, kb) -> Optional[str]:
     # 1. KB row's own status.
     kb_status = (getattr(kb, "status", None) or "").strip().lower()
     if kb_status and kb_status != "ready":
-        return kb_status  # e.g. "processing", "failed"
+        if kb_status == "failed":
+            return "ingestion failed"
+        return f"it's still {kb_status}"
 
     # 2. Must have an upload attached.
     upload_id = getattr(kb, "upload_id", None)
     if not upload_id:
-        return "no document uploaded"
+        return "no document has been uploaded"
 
     # 3. Upload row must exist and be ready.
     upload = db.query(Upload).filter(Upload.id == upload_id).first()
     if upload is None:
-        return "upload row missing"
+        return "its uploaded document is missing"
     upload_status = (getattr(upload, "status", None) or "").strip().lower()
     if upload_status != "ready":
         # Preserve the raw provider-side status so the user knows whether to
         # wait (processing) or act (failed).
-        return f"upload {upload_status or 'unknown'}"
+        if upload_status == "failed":
+            return "its document failed to process"
+        return f"its document is still {upload_status or 'processing'}"
 
     # 4. Chunks must exist for retrieval to return anything. Cheap presence
     # check — LIMIT 1 via ``first()`` on the indexed ``upload_id`` FK.
@@ -338,6 +329,6 @@ def _kb_not_ready_reason(db, kb) -> Optional[str]:
         is not None
     )
     if not has_chunk:
-        return "no chunks indexed"
+        return "nothing was indexed from its document"
 
     return None

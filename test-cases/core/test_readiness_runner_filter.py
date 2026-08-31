@@ -73,7 +73,6 @@ class TestTargetedDeepFilter:
             "stt.provider_reachable",
             "tts.provider_reachable",
             "tools.reachable",
-            "mcp_servers.http_reachable",
             "mcp_servers.reachable",
         ]
         for cid in non_filtered_deep_ids:

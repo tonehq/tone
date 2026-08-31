@@ -269,6 +269,12 @@ class ContextBuilder:
             .filter(
                 AgentTool.agent_id == agent_id,
                 AgentTool.agent_config_id == config_id,
+                # Defensive: never probe a soft-deleted tool even if a stale
+                # link lingers. Tools are hard-deleted today (delete_tool also
+                # removes AgentTool rows), so this is future-proofing that
+                # changes nothing now — mirrors the AgentConfig.deleted_at guard
+                # in resolve_config.
+                Tool.deleted_at.is_(None),
             )
             .all()
         )
@@ -290,6 +296,9 @@ class ContextBuilder:
             .filter(
                 AgentKnowledgeBase.agent_id == agent_id,
                 AgentKnowledgeBase.agent_config_id == config_id,
+                # Defensive soft-delete guard (see _fetch_linked_tools). KB
+                # entities aren't deleted today, so this is a no-op now.
+                KnowledgeBase.deleted_at.is_(None),
             )
             .all()
         )
@@ -308,6 +317,9 @@ class ContextBuilder:
             .filter(
                 AgentMcpServer.agent_id == agent_id,
                 AgentMcpServer.agent_config_id == config_id,
+                # Defensive soft-delete guard (see _fetch_linked_tools). MCP
+                # servers are hard-deleted today, so this is a no-op now.
+                McpServer.deleted_at.is_(None),
             )
             .all()
         )

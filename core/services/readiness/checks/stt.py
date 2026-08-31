@@ -22,6 +22,7 @@ from core.services.readiness.checks._common import (
     ModelConfiguredCheck,
     ProviderConfiguredCheck,
 )
+from core.services.readiness.checks._messages import humanize_reason, quote
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -156,8 +157,8 @@ class STTModelLanguageMatchCheck(_STTMixin, ShallowCheck):
         supported = {str(r[0]).strip().lower() for r in rows if r[0]}
         if code.lower() not in supported:
             return self._fail(
-                f"STT model '{ctx.stt.model.name}' does not support language "
-                f"'{code}'.",
+                f"The STT model {quote(ctx.stt.model.name)} doesn't support the "
+                f"“{code}” language.",
                 remediation=(
                     "Pick an STT model that supports the language, or switch "
                     "the language."
@@ -217,7 +218,11 @@ class STTProviderReachableCheck(DeepCheck):
         from core.services.readiness.probes import probe_stt
 
         result = await probe_stt(ctx)
-        return self._pass(result.message) if result.ok else self._fail(
-            result.message,
+        if result.ok:
+            return self._pass(result.message)
+        provider_name = getattr(ctx.stt.provider, "display_name", None)
+        return self._fail(
+            f"The STT provider {quote(provider_name)} can't be used — "
+            f"{humanize_reason(result.message)}.",
             remediation="Verify the STT provider status and that the API key is valid.",
         )
