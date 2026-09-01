@@ -742,35 +742,50 @@ class TestMcpServerReachablePerServer:
             oauth_connection_id=None, app_integration_id=None,
         )
 
-    def test_healthy_server_yields_no_row(self):
+    def test_healthy_server_yields_no_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(True, None))
         check._handshake = AsyncMock(return_value=None)
-        result = asyncio.run(check._probe_server(MagicMock(), MagicMock(), self._server()))
-        assert result is None
+        problem = asyncio.run(
+            check._check_one(None, self._server(), (MagicMock(), MagicMock()))
+        )
+        assert problem is None
 
-    def test_unreachable_server_single_row(self):
+    def test_unreachable_server_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(False, "the server didn't respond"))
         check._handshake = AsyncMock(return_value=None)
-        result = asyncio.run(
-            check._probe_server(MagicMock(), MagicMock(), self._server(name="Gmail"))
+        problem = asyncio.run(
+            check._check_one(None, self._server(name="Gmail"), (MagicMock(), MagicMock()))
         )
-        assert result.status.value == "fail"
-        assert "Can't reach" in result.message and "Gmail" in result.message
-        assert result.check_id == "mcp_servers.reachable:s1"
-        assert result.resource_ref.type == "mcp_server" and result.resource_ref.id == "s1"
+        assert problem is not None
+        assert "Can't reach" in problem.message and "Gmail" in problem.message
 
-    def test_handshake_failure_single_row(self):
+    def test_handshake_failure_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(True, None))
         check._handshake = AsyncMock(return_value="invalid credentials")
-        result = asyncio.run(
-            check._probe_server(MagicMock(), MagicMock(), self._server(sid="s2", name="Slack"))
+        problem = asyncio.run(
+            check._check_one(None, self._server(name="Slack"), (MagicMock(), MagicMock()))
         )
-        assert result.status.value == "fail"
-        assert "Slack" in result.message and "invalid credentials" in result.message
-        assert result.check_id == "mcp_servers.reachable:s2"
+        assert problem is not None
+        assert "Slack" in problem.message and "invalid credentials" in problem.message
+
+    def test_run_builds_per_server_check_id_and_ref(self):
+        # The PerResourceCheck base turns a ResourceProblem into a per-server
+        # CheckResult with a unique check_id + resource_ref.
+        check = self._check()
+        check._http_reachable = AsyncMock(return_value=(False, "the server didn't respond"))
+        check._handshake = AsyncMock(return_value=None)
+        ctx = SimpleNamespace(
+            mcp_servers=[self._server(sid="s1", name="Gmail")], db=None, org_id=None
+        )
+        results = asyncio.run(check.run(ctx))
+        assert len(results) == 1
+        r = results[0]
+        assert r.status.value == "fail"
+        assert r.check_id == "mcp_servers.reachable:s1"
+        assert r.resource_ref.type == "mcp_server" and r.resource_ref.id == "s1"
 
 
 class TestMcpServersConfiguredPerServer:

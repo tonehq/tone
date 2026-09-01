@@ -24,26 +24,20 @@ removes that duplication.
 
 from __future__ import annotations
 
-import asyncio
-from typing import Any, ClassVar, Iterable, List, Optional, Tuple
+import contextlib
+from typing import Any, AsyncIterator, ClassVar, Iterable, Optional, Tuple
 
 import httpx
 from loguru import logger
 
-from core.services.readiness.base import (
-    CheckContext,
-    DeepCheck,
-    ShallowCheck,
-    with_timeout,
-)
+from core.services.readiness.base import CheckContext, DeepCheck, ShallowCheck
 from core.services.readiness.checks._messages import oauth_failure_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
-from core.services.readiness.schemas import (
-    Category,
-    CheckResult,
-    ResourceRef,
-    Severity,
+from core.services.readiness.checks._per_resource import (
+    PerResourceCheck,
+    ResourceProblem,
 )
+from core.services.readiness.schemas import Category, Severity
 
 
 # Per-server probe budget. MCP servers are often self-hosted and slow to warm.
@@ -70,13 +64,14 @@ def _is_statically_broken(server: Any) -> Optional[str]:
     return None
 
 
-class McpServersConfiguredCheck(ShallowCheck):
+class McpServersConfiguredCheck(PerResourceCheck, ShallowCheck):
     """Static configuration of each attached MCP server — one row per server
     that's missing a URL or turned off. Everything else passes."""
 
     id: ClassVar[str] = "mcp_servers.configured"
     category: ClassVar[Category] = Category.MCP_SERVERS
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "mcp_server"
 
     def applies(self, ctx: CheckContext) -> bool:
         return bool(ctx.mcp_servers)
@@ -84,25 +79,22 @@ class McpServersConfiguredCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No MCP servers attached."
 
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
-        results: List[CheckResult] = []
-        for server in ctx.mcp_servers:
-            reason = _is_statically_broken(server)
-            if reason is None:
-                continue
-            results.append(
-                self._fail(
-                    f"{quote(server.name)} can't be used — {reason}.",
-                    remediation="Open the MCP Servers page to fix or remove it.",
-                    resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
-                    check_id=self._result_id(str(server.id)),
-                )
-            )
-        if results:
-            return results
-        # All good — one summary row keeps the drawer honest without a green
-        # row per server flooding the list.
-        return [self._pass(f"{len(ctx.mcp_servers)} MCP server(s) configured.")]
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        return ctx.mcp_servers
+
+    def _summary_message(self, count: int) -> str:
+        return f"{count} MCP server(s) configured."
+
+    async def _check_one(
+        self, ctx: CheckContext, server: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        reason = _is_statically_broken(server)
+        if reason is None:
+            return None
+        return ResourceProblem(
+            f"{quote(server.name)} can't be used — {reason}.",
+            remediation="Open the MCP Servers page to fix or remove it.",
+        )
 
 
 class McpServerOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
@@ -125,7 +117,7 @@ class McpServerOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
         return [s for s in ctx.mcp_servers if _is_statically_broken(s) is None]
 
 
-class McpServerReachableCheck(DeepCheck):
+class McpServerReachableCheck(PerResourceCheck, DeepCheck):
     """Live-probe every attached MCP server and report one plain-English row
     per unreachable / misbehaving server.
 
@@ -142,6 +134,8 @@ class McpServerReachableCheck(DeepCheck):
     id: ClassVar[str] = "mcp_servers.reachable"
     category: ClassVar[Category] = Category.MCP_SERVERS
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "mcp_server"
+    probe_timeout: ClassVar[float] = _DEEP_TIMEOUT_S
 
     def applies(self, ctx: CheckContext) -> bool:
         return any(_is_statically_broken(s) is None for s in ctx.mcp_servers)
@@ -149,56 +143,50 @@ class McpServerReachableCheck(DeepCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No reachable MCP servers to probe."
 
-    @with_timeout(_DEEP_TIMEOUT_S)
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        # Only probe servers that are statically OK; the configured check owns
+        # the rest, so nothing is reported twice.
+        return [s for s in ctx.mcp_servers if _is_statically_broken(s) is None]
+
+    def _summary_message(self, count: int) -> str:
+        return f"All {count} MCP server(s) are reachable."
+
+    def _timeout_message(self, count: int) -> str:
+        return "Couldn't reach some MCP servers in time — they may be slow. Run the check again."
+
+    @contextlib.asynccontextmanager
+    async def _shared(self, ctx: CheckContext) -> AsyncIterator[Any]:
+        """One MCP service + pooled HTTP client, reused across all servers."""
         from core.services.mcp_server_service import McpServerService
 
         svc = McpServerService(ctx.db, org_id=ctx.org_id)
-        # Only probe servers that are statically OK; the configured check owns
-        # the rest.
-        servers = [s for s in ctx.mcp_servers if _is_statically_broken(s) is None]
-
         async with httpx.AsyncClient(
             timeout=_PROBE_TIMEOUT_S, follow_redirects=True
         ) as client:
-            outcomes = await asyncio.gather(
-                *(self._probe_server(svc, client, s) for s in servers)
-            )
+            yield (svc, client)
 
-        failures = [r for r in outcomes if r is not None]
-        if failures:
-            return failures
-        return [self._pass(f"All {len(servers)} MCP server(s) are reachable.")]
-
-    # ── per-server probe ─────────────────────────────────────────────────────
-
-    async def _probe_server(
-        self, svc: Any, client: httpx.AsyncClient, server: Any
-    ) -> Optional[CheckResult]:
-        """Probe one server. Returns a FAIL result on any problem, else ``None``."""
+    async def _check_one(
+        self, ctx: CheckContext, server: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        svc, client = shared
         reachable, unreachable_reason = await self._http_reachable(svc, client, server)
         if not reachable:
-            return self._fail(
+            return ResourceProblem(
                 f"Can't reach {quote(server.name)} — {unreachable_reason}.",
                 remediation=(
                     "Check the server's URL and that it's online, then run the "
                     "check again."
                 ),
-                resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
-                check_id=self._result_id(str(server.id)),
             )
-
         handshake_reason = await self._handshake(svc, server)
         if handshake_reason is not None:
-            return self._fail(
+            return ResourceProblem(
                 f"{quote(server.name)} responded, but the connection failed — "
                 f"{handshake_reason}.",
                 remediation=(
                     "Check the server's transport type and credentials, or "
                     "reconnect its account, then run the check again."
                 ),
-                resource_ref=ResourceRef(type="mcp_server", id=str(server.id)),
-                check_id=self._result_id(str(server.id)),
             )
         return None
 
