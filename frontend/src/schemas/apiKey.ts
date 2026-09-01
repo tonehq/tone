@@ -6,26 +6,28 @@ import type { ApiKeyRole } from '@/types/settings/apiKey';
  * The org roles a key can carry, highest authority first. A request made with a
  * key is authorized exactly like a person of this role. The backend caps the
  * chosen role at the creating user's own role.
+ *
+ * "observer" is intentionally omitted: it isn't enforced as read-only (an
+ * observer behaves like a member), so offering it as a key role would mislead —
+ * mirrors the backend `_ROLE_RANK`.
  */
-export const API_KEY_ROLES = ['owner', 'admin', 'member', 'observer'] as const;
+export const API_KEY_ROLES = ['owner', 'admin', 'member'] as const;
 
 export const API_KEY_ROLE_LABELS: Record<ApiKeyRole, string> = {
   owner: 'Owner',
   admin: 'Admin',
   member: 'Member',
-  observer: 'Observer',
 };
 
 export const API_KEY_ROLE_DESCRIPTIONS: Record<ApiKeyRole, string> = {
   owner: 'Full access, including owner-only actions',
   admin: 'Admin-level actions',
   member: 'Standard user actions only',
-  observer: 'Read-only access',
 };
 
 // Authority ranking, mirrors the backend `_ROLE_RANK`. Used to hide roles above
 // the creator's own so the client never offers a key it can't mint.
-const ROLE_RANK: Record<string, number> = { observer: 0, member: 1, admin: 2, owner: 3 };
+const ROLE_RANK: Record<string, number> = { member: 0, admin: 1, owner: 2 };
 
 /** Roles the given creator role is allowed to mint a key for (its own and below). */
 export function apiKeyRolesForCreator(creatorRole: string): ApiKeyRole[] {

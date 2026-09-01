@@ -37,11 +37,15 @@ KEY_PREFIX = "tone_sk_"
 # escalate by issuing an admin/owner key. Kept here (rather than a shared guard)
 # because API-key capping is the only place today that needs a role *ordering*
 # — the route guards only need set membership.
+#
+# ``observer`` is intentionally excluded: it isn't enforced as read-only at the
+# API layer (an observer behaves like a member), so offering it as a key role
+# would be misleading. Existing observer keys keep working (the auth path reads
+# the stored role); this only blocks minting NEW observer keys.
 _ROLE_RANK = {
-    Role.OBSERVER.value: 0,
-    Role.MEMBER.value: 1,
-    Role.ADMIN.value: 2,
-    Role.OWNER.value: 3,
+    Role.MEMBER.value: 0,
+    Role.ADMIN.value: 1,
+    Role.OWNER.value: 2,
 }
 VALID_API_KEY_ROLES = set(_ROLE_RANK)
 # How many characters of the full key are safe to persist for display/masking.
@@ -79,7 +83,7 @@ class GeneratedApiKeyService(BaseService):
         Raises 422 for an unknown role and 403 when the caller tries to mint a key
         stronger than their own role (privilege escalation). ``creator_role`` may
         be ``None`` for a legacy/unknown caller — treated as the lowest authority
-        so it can only ever mint an observer key.
+        so it can only ever mint a member key.
         """
         requested = (role or "").strip().lower()
         if requested not in _ROLE_RANK:

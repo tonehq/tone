@@ -29,9 +29,10 @@ router = APIRouter()
 
 class CreateApiKeyRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
-    # The org role this key acts as: "owner" | "admin" | "member" | "observer".
-    # The service caps it at the creating user's own role. Defaults to "member"
-    # (least-privilege) when the client omits it.
+    # The org role this key acts as: "owner" | "admin" | "member". The service
+    # caps it at the creating user's own role. Defaults to "member"
+    # (least-privilege) when the client omits it. ("observer" is not offered —
+    # it isn't enforced as read-only, so it would be misleading on a key.)
     role: str = Field(default="member")
     # ``None`` = never expires. When set, must be a future timestamp; the
     # service normalizes naive datetimes to UTC before comparing.
