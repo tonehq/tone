@@ -689,3 +689,20 @@ def test_delete_eval_set_for_upload_bulk_deletes_and_returns_count():
         synchronize_session=False
     )
     db.commit.assert_called_once()
+
+
+def test_delete_results_for_ingestion_run_deletes_and_returns_count():
+    """Deleting one ingestion run purges ONLY that run's eval_results
+    (org-scoped); the question set is left intact. eval_results.ingestion_run_id
+    is ON DELETE SET NULL, so this explicit delete is what actually removes
+    them."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.delete.return_value = 4
+    n = EvalService().delete_results_for_ingestion_run(
+        db, ingestion_run_id="run-1", org_id="o"
+    )
+    assert n == 4
+    db.query.return_value.filter.return_value.delete.assert_called_once_with(
+        synchronize_session=False
+    )
+    db.commit.assert_called_once()

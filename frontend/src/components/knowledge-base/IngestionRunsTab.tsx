@@ -1,16 +1,21 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, Trash2, XCircle } from 'lucide-react';
 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
+import CustomModal from '@/components/shared/CustomModal';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
 import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDrawer';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
 import { useEvalSummariesByIngestion, useTriggerEvalRun } from '@/lib/api/evals';
-import { useActivateIngestionRun, useIngestionRuns } from '@/lib/api/ingestion-runs';
+import {
+  useActivateIngestionRun,
+  useDeleteIngestionRun,
+  useIngestionRuns,
+} from '@/lib/api/ingestion-runs';
 import type { EvalRunSummary, EvalRunSummaryTotals } from '@/types/eval';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { IngestionRun, IngestionRunStatus } from '@/types/ingestionRun';
@@ -113,6 +118,11 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const activate = useActivateIngestionRun(uploadId);
   const [activatingId, setActivatingId] = useState<string | null>(null);
 
+  const deleteRun = useDeleteIngestionRun(uploadId);
+  // The run awaiting delete confirmation (drives the confirm modal). Null when
+  // the modal is closed.
+  const [deleteTarget, setDeleteTarget] = useState<IngestionRun | null>(null);
+
   const runEvalsMutation = useTriggerEvalRun(uploadId);
   // Track which row is currently kicking off an eval so per-row loading state
   // is per-row (the mutation is shared across all rows via the hook binding).
@@ -169,6 +179,21 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
       handleApiError(error);
     } finally {
       setRunningEvalId(null);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await deleteRun.mutateAsync(deleteTarget.id);
+      showToast.success(
+        'Run deleted',
+        `Run #${deleteTarget.run_number} and its chunks and evaluation results were removed.`,
+      );
+      setDeleteTarget(null);
+    } catch (error) {
+      // Surfaces the backend 409 message ("activate another run first") too.
+      handleApiError(error);
     }
   };
 
@@ -406,7 +431,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         key: 'actions',
         title: '',
         align: 'right',
-        width: 'w-[190px]',
+        width: 'w-[240px]',
         render: (_v, r) => {
           const isActive = resolvedActiveRunId === r.id;
           const activateDisabled = r.status !== 'ready' || isActive || !!activatingId;
@@ -450,6 +475,28 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
               >
                 {isActive ? 'Serving' : 'Set active'}
               </CustomButton>
+              <CustomTooltip
+                content={
+                  isActive
+                    ? "Active run can't be deleted — activate another first."
+                    : 'Delete this run'
+                }
+              >
+                {/* Span wrapper keeps the tooltip working while the button is
+                    disabled (a disabled button fires no pointer events). */}
+                <span className="inline-flex">
+                  <CustomButton
+                    type="text"
+                    size="icon-xs"
+                    aria-label="Delete this run"
+                    disabled={isActive}
+                    onClick={() => setDeleteTarget(r)}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    <Trash2 className="size-3.5" />
+                  </CustomButton>
+                </span>
+              </CustomTooltip>
             </div>
           );
         },
@@ -542,6 +589,18 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         open={newRunOpen}
         onClose={() => setNewRunOpen(false)}
         uploadId={uploadId}
+      />
+
+      <CustomModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        title="Delete ingestion run?"
+        description="This permanently deletes this run's chunks and its evaluation results. The document's eval questions are kept. This can't be undone."
+        confirmText="Delete run"
+        cancelText="Cancel"
+        confirmType="danger"
+        confirmLoading={deleteRun.isPending}
+        onConfirm={handleConfirmDelete}
       />
     </div>
   );
