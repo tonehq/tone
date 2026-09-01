@@ -50,8 +50,13 @@ async def probe_in_pipeline(
 
     Returns ``(ok, target_frame, error_message)``:
       * ``ok=True, frame, None`` — target observed within budget.
-      * ``ok=False, None, msg`` — provider ErrorFrame in the stream (msg is
-        the error text) OR timeout (msg describes the timeout).
+      * ``ok=False, None, msg`` — a REAL failure: a provider ErrorFrame in the
+        stream (``msg`` is the error text) or the runner raised (``msg`` is the
+        exception text).
+      * ``ok=False, None, None`` — a pure TIMEOUT (no frame, no error, no
+        exception). ``error_message is None`` is the signal callers use to
+        classify this as "slow, couldn't confirm" (a WARNING) rather than a
+        confirmed provider failure (a BLOCKER).
 
     Cleanup is guaranteed: ``task.cancel()`` runs even on timeout / exception,
     wrapped in ``asyncio.shield`` so a caller-side timeout doesn't strand
@@ -277,7 +282,10 @@ async def probe_in_pipeline(
         # Surface the provider's real exception. ``_summarise_error`` in
         # probes.py buckets this into auth / quota / rate-limit / etc.
         return False, None, str(runner_exc)
-    return False, None, f"no target frame observed within {timeout_s:.0f}s"
+    # Pure timeout — no frame, no ErrorFrame, no exception. Return ``None`` as
+    # the error so callers can tell "slow, couldn't confirm" (WARNING) apart
+    # from a confirmed provider failure (BLOCKER). See ProbeResult.timed_out.
+    return False, None, None
 
 
 async def _teardown(

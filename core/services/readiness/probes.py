@@ -66,6 +66,11 @@ _HTTP_STT_SERVICE_CLASSES = frozenset({
 
 _LLM_PROBE_PROMPT = "Reply with the single word OK."
 _TTS_PROBE_TEXT = "This is a readiness test."
+# Hard cap on the probe's completion length — the probe only needs to prove the
+# provider streamed a token, so keep it tiny to bound cost. Small enough that a
+# reasoning model spends its budget on reasoning and closes with an
+# LLMFullResponseEndFrame (still a valid round-trip), which the probe accepts.
+_LLM_PROBE_TOKEN_CAP = 32
 
 # Bundled STT audio asset — native rate the WAV is encoded at. Resampled per
 # provider at probe time via `audioop.ratecv` when the STT service is
@@ -76,10 +81,17 @@ _STT_PROBE_ASSET = "probe_sample.wav"
 
 @dataclass
 class ProbeResult:
-    """Outcome of a live probe. ``message`` is the user-visible one-line summary."""
+    """Outcome of a live probe. ``message`` is the user-visible one-line summary.
+
+    ``timed_out`` distinguishes "the provider didn't answer within the budget"
+    (slow / warming up — a WARNING, must NOT block publish) from a confirmed
+    failure like a bad key or exhausted credit (a BLOCKER). Deep checks read
+    this to pick the severity.
+    """
 
     ok: bool
     message: str
+    timed_out: bool = False
 
 
 # Speech-to-speech LLMs — probing requires an actual audio session which we
@@ -199,9 +211,9 @@ async def probe_llm(ctx) -> ProbeResult:
         "xai", "grok", "novita", "qwen", "inception",
     }
     if provider in _OPENAI_FAMILY:
-        token_cap: Dict[str, Any] = {"max_completion_tokens": 1024}
+        token_cap: Dict[str, Any] = {"max_completion_tokens": _LLM_PROBE_TOKEN_CAP}
     else:
-        token_cap = {"max_tokens": 1024}
+        token_cap = {"max_tokens": _LLM_PROBE_TOKEN_CAP}
     spec["metadata"] = {**(spec["metadata"] or {}), **token_cap}
 
     try:
@@ -277,9 +289,14 @@ async def probe_llm(ctx) -> ProbeResult:
         )
     if err_msg:
         return ProbeResult(False, _summarise_error_text(provider, err_msg))
+    # err_msg is None → pure timeout: no frame, no ErrorFrame, no exception.
+    # Slow / warming up, NOT confirmed-broken → flag it so the check renders a
+    # WARNING instead of a publish-blocking BLOCKER.
     return ProbeResult(
         False,
-        f"{provider} LLM returned no response frame within budget — check model/key/quota.",
+        f"{provider} didn't respond within the time limit — it may be slow or "
+        "warming up. Run the deep test again in a moment.",
+        timed_out=True,
     )
 
 
@@ -450,9 +467,14 @@ async def probe_stt(ctx) -> ProbeResult:
             f"redeploy with core/services/readiness/assets/probe_sample.wav.",
         )
 
+    # Real audio was sent but no transcript arrived within budget. We can't
+    # tell "slow provider" from "silently broken", so treat it as a timeout
+    # (WARNING) — the missing-WAV deploy bug above is the only hard STT failure.
     return ProbeResult(
         False,
-        f"{provider} STT returned no transcript within budget — check language/model settings.",
+        f"{provider} didn't return a transcript in time — it may be slow. Run "
+        "the deep test again in a moment.",
+        timed_out=True,
     )
 
 
@@ -680,10 +702,13 @@ async def probe_tts(ctx) -> ProbeResult:
         return ProbeResult(True, f"{provider} synthesised a sentence.")
     if err_msg:
         return ProbeResult(False, _summarise_error_text(provider, err_msg))
-    # A healthy TTS must emit at least one audio frame for a real sentence.
+    # err_msg is None → pure timeout: no audio frame within budget. Slow /
+    # warming up, not confirmed-broken → WARNING, not a publish blocker.
     return ProbeResult(
         False,
-        f"{provider} TTS returned no audio for the probe sentence — provider likely rejected the request.",
+        f"{provider} didn't return audio in time — it may be slow or warming "
+        "up. Run the deep test again in a moment.",
+        timed_out=True,
     )
 
 

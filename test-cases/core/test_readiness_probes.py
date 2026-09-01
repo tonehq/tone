@@ -212,15 +212,115 @@ class TestErrorFrameExtractor:
         assert _extract_error_frame_message(SimpleNamespace(text="hi"), None) is None
 
 
+# ─── Real pipecat harness coverage ────────────────────────────────────────────
+
+
+def _pipeline_params():
+    from pipecat.pipeline.task import PipelineParams
+
+    return PipelineParams(
+        audio_in_sample_rate=16000, audio_out_sample_rate=24000, enable_metrics=False
+    )
+
+
+def _make_stub_service(*, emit_frame=None, error_text=None):
+    """A REAL pipecat FrameProcessor standing in for a provider service.
+
+    Once the pipeline has started (it sees the ``StartFrame`` every processor
+    gets), it reacts on a scheduled task so the pipeline is fully running:
+      * ``emit_frame`` → pushed downstream (simulates provider output).
+      * ``error_text`` → pushed upstream as an ErrorFrame (simulates a 4xx).
+      * neither → emits nothing (simulates a slow/hung provider → timeout).
+
+    This drives the actual ``probe_in_pipeline`` harness, unlike the old tests
+    that mocked ``run_tts``/``run_stt`` — methods the probe no longer calls.
+    """
+    from pipecat.frames.frames import StartFrame
+    from pipecat.processors.frame_processor import FrameProcessor
+
+    class _Stub(FrameProcessor):
+        def __init__(self):
+            super().__init__()
+            self._reacted = False
+
+        async def process_frame(self, frame, direction):
+            await super().process_frame(frame, direction)
+            await self.push_frame(frame, direction)
+            if not self._reacted and isinstance(frame, StartFrame):
+                self._reacted = True
+                asyncio.create_task(self._react())
+
+        async def _react(self):
+            from pipecat.frames.frames import ErrorFrame
+            from pipecat.processors.frame_processor import FrameDirection
+
+            await asyncio.sleep(0.15)  # let StartFrame propagate + pipeline settle
+            if error_text is not None:
+                await self.push_frame(ErrorFrame(error=error_text), FrameDirection.UPSTREAM)
+            elif emit_frame is not None:
+                await self.push_frame(emit_frame, FrameDirection.DOWNSTREAM)
+
+    return _Stub()
+
+
+class TestProbeInPipelineHarness:
+    """Real coverage of ``probe_in_pipeline`` — drives an actual pipecat
+    Pipeline with a stub FrameProcessor. Covers the pass / provider-error /
+    timeout branches and the ``err is None`` timeout contract (B2)."""
+
+    def _run(self, service, input_frames, is_target, timeout_s=3.0):
+        from core.services.readiness.probe_pipeline import probe_in_pipeline
+
+        return asyncio.run(
+            probe_in_pipeline(
+                service, input_frames, is_target,
+                params=_pipeline_params(), timeout_s=timeout_s, provider="test",
+            )
+        )
+
+    def test_pass_when_target_frame_emitted(self):
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        audio = TTSAudioRawFrame(audio=b"\x00\x01", sample_rate=24000, num_channels=1)
+        stub = _make_stub_service(emit_frame=audio)
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")], lambda f: isinstance(f, TTSAudioRawFrame)
+        )
+        assert ok is True and err is None
+        assert isinstance(frame, TTSAudioRawFrame)
+
+    def test_provider_error_frame_surfaces(self):
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        stub = _make_stub_service(error_text="server rejected: HTTP 402")
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")], lambda f: isinstance(f, TTSAudioRawFrame)
+        )
+        assert ok is False and frame is None
+        assert err is not None and "402" in err
+
+    def test_timeout_signals_none_error(self):
+        # Silent stub → no target, no ErrorFrame, no exception → pure timeout,
+        # which the harness MUST signal with err=None (the B2 contract).
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        stub = _make_stub_service()  # emits nothing
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")],
+            lambda f: isinstance(f, TTSAudioRawFrame), timeout_s=1.0,
+        )
+        assert ok is False and frame is None and err is None
+
+
 # ─── TTS probe (the primary regression surface) ───────────────────────────────
 
 
 class TestProbeTts:
-    """Exercise every branch of probe_tts. Mocks pipecat via
-    ``service_factory.build_tts`` so no live provider is required."""
+    """Exercise probe_tts against a REAL pipecat pipeline driven by a stub
+    FrameProcessor (see _make_stub_service) — no live provider required."""
 
     def _run(self, service):
-        """Call probe_tts against a fake service. Returns ProbeResult."""
+        """Call probe_tts against a stub service. Returns ProbeResult."""
         from core.services.readiness import probes
         ctx = _fake_spec_ctx("tts")
         with patch.object(probes, "_build_spec", return_value={
@@ -238,31 +338,36 @@ class TestProbeTts:
         """Healthy TTS emits a TTSAudioRawFrame with audio bytes → PASS."""
         from pipecat.frames.frames import TTSAudioRawFrame
         audio_frame = TTSAudioRawFrame(audio=b"\x00\x01", sample_rate=24000, num_channels=1)
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([audio_frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=audio_frame))
         assert result.ok is True
         assert "synthesised" in result.message.lower()
 
     def test_fail_on_error_frame(self):
-        """Regression: Fish Audio HTTP 402 arrives as an ErrorFrame in the
-        stream; probe MUST fail with the provider's message, not soft-pass."""
-        from pipecat.frames.frames import ErrorFrame
-        err = ErrorFrame(error="server rejected WebSocket connection: HTTP 402")
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([err]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "402" in result.message
+        """A provider ErrorFrame (HTTP 402) → FAIL, cleaned + credit-bucketed
+        (not a raw dump, not a timeout)."""
+        result = self._run(_make_stub_service(
+            error_text="server rejected WebSocket connection: HTTP 402"))
+        assert result.ok is False and result.timed_out is False
+        assert "credit" in result.message.lower() or "quota" in result.message.lower()
 
-    def test_fail_on_no_audio(self):
-        """Regression: previously returned a soft PASS on an empty stream —
-        now a real sentence probe MUST produce audio to be considered healthy."""
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no audio" in result.message.lower()
+    def test_timeout_maps_to_timed_out(self):
+        """A pure timeout (harness returns err=None) → timed_out=True (WARNING),
+        NOT a confirmed provider failure."""
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("tts")
+        with patch.object(probes, "_build_spec", return_value={
+            "provider_name": "fake_tts", "api_key": "k", "model_name": "m",
+            "metadata": {}, "model_meta_data": {},
+        }):
+            from core.services.pipeline import service_factory
+            with patch.object(service_factory, "build_tts", return_value=object()):
+                with patch(
+                    "core.services.readiness.probe_pipeline.probe_in_pipeline",
+                    new=AsyncMock(return_value=(False, None, None)),
+                ):
+                    result = asyncio.run(probes.probe_tts(ctx))
+        assert result.ok is False and result.timed_out is True
+        assert "slow" in result.message.lower() or "in time" in result.message.lower()
 
     def test_fail_when_construction_raises(self):
         """A broken client construction (bad API key at init time) → clear FAIL."""
@@ -296,13 +401,36 @@ class TestProbeStt:
             with patch.object(service_factory, "build_stt", return_value=service):
                 return asyncio.run(probes.probe_stt(ctx))
 
+    def _run_with_timeout_harness(self, *, wav_present=True):
+        """Run probe_stt with the harness patched to a pure timeout (err=None),
+        optionally simulating the bundled WAV being absent."""
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("stt")
+        stack = [
+            patch.object(probes, "_build_spec", return_value={
+                "provider_name": "fake_stt", "api_key": "k", "model_name": "m",
+                "metadata": {}, "model_meta_data": {},
+            }),
+        ]
+        from core.services.pipeline import service_factory
+        stack.append(patch.object(service_factory, "build_stt", return_value=object()))
+        stack.append(patch(
+            "core.services.readiness.probe_pipeline.probe_in_pipeline",
+            new=AsyncMock(return_value=(False, None, None)),
+        ))
+        if not wav_present:
+            stack.append(patch("core.services.readiness.probes._load_probe_pcm16", return_value=None))
+        import contextlib
+        with contextlib.ExitStack() as es:
+            for cm in stack:
+                es.enter_context(cm)
+            return asyncio.run(probes.probe_stt(ctx))
+
     def test_pass_on_transcription_frame(self):
         """Healthy STT emits TranscriptionFrame with real text → PASS with snippet."""
         from pipecat.frames.frames import TranscriptionFrame
         frame = TranscriptionFrame(text="the quick brown fox", user_id="u", timestamp="t")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=frame))
         assert result.ok is True
         assert "transcribed" in result.message.lower()
         assert "the quick brown fox" in result.message
@@ -311,43 +439,65 @@ class TestProbeStt:
         """Providers that only emit interims (streaming-only) still pass."""
         from pipecat.frames.frames import InterimTranscriptionFrame
         frame = InterimTranscriptionFrame(text="hello world", user_id="u", timestamp="t")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=frame))
         assert result.ok is True
         assert "hello world" in result.message
 
     def test_fail_on_error_frame(self):
-        """Regression: WS-STT auth/quota failures arrive as ErrorFrame."""
-        from pipecat.frames.frames import ErrorFrame
-        err = ErrorFrame(error="invalid api key")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([err]))
-        result = self._run(service)
-        assert result.ok is False
-        # ErrorFrame text is now cleaned + bucketed: an "invalid api key" body
-        # classifies as an auth failure ("rejected the API key").
+        """A WS-STT auth failure arrives as an ErrorFrame → cleaned + bucketed
+        to an auth message (not a timeout)."""
+        result = self._run(_make_stub_service(error_text="invalid api key"))
+        assert result.ok is False and result.timed_out is False
         assert "api key" in result.message.lower()
 
-    def test_fail_on_no_frames_with_real_audio(self):
-        """WAV was present but provider returned nothing → clear FAIL."""
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no frames" in result.message.lower()
+    def test_timeout_maps_to_timed_out(self):
+        """Real audio sent, nothing back in time (harness err=None) → timed_out
+        WARNING, not a confirmed failure."""
+        result = self._run_with_timeout_harness(wav_present=True)
+        assert result.ok is False and result.timed_out is True
 
-    def test_fail_on_frames_without_transcript(self):
-        """Frames arrived but none carried text (whitespace-only) → FAIL with
-        language/model hint since that's the usual culprit."""
-        service = MagicMock()
-        # Non-error, non-transcript frames — e.g. audio ack frames with empty
-        # text — must not fool the assertion.
-        frame = SimpleNamespace(text=" ")
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame, frame]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no transcript" in result.message.lower()
+    def test_missing_wav_is_hard_fail_not_timeout(self):
+        """A missing bundled WAV is a deploy bug → a real FAIL (NOT a timeout
+        warning), because the probe itself can't run."""
+        result = self._run_with_timeout_harness(wav_present=False)
+        assert result.ok is False and result.timed_out is False
+        assert "wav" in result.message.lower() or "missing" in result.message.lower()
+
+
+# ─── Probe timeout → WARNING at the check layer (B2 end-to-end) ───────────────
+
+
+class TestProbeTimeoutSeverity:
+    """B2 at the check layer: a probe TIMEOUT surfaces as WARNING (does NOT
+    block publish); a confirmed failure keeps the check's BLOCKER severity."""
+
+    def _run_llm_check(self, probe_result):
+        from core.services.readiness import probes
+        from core.services.readiness.checks.llm import LLMProviderReachableCheck
+
+        ctx = SimpleNamespace(
+            llm=SimpleNamespace(provider=SimpleNamespace(display_name="OpenAI"))
+        )
+        with patch.object(probes, "probe_llm", new=AsyncMock(return_value=probe_result)):
+            return asyncio.run(LLMProviderReachableCheck().run(ctx))
+
+    def test_timeout_probe_is_warning(self):
+        from core.services.readiness.probes import ProbeResult
+        from core.services.readiness.schemas import Severity
+
+        r = self._run_llm_check(
+            ProbeResult(False, "OpenAI didn't respond in time", timed_out=True)
+        )
+        assert r.status.value == "fail"
+        assert r.severity == Severity.WARNING
+
+    def test_real_failure_probe_is_blocker(self):
+        from core.services.readiness.probes import ProbeResult
+        from core.services.readiness.schemas import Severity
+
+        r = self._run_llm_check(ProbeResult(False, "OpenAI rejected the API key"))
+        assert r.status.value == "fail"
+        assert r.severity == Severity.BLOCKER
 
 
 # ─── Tool GET probe (deep tools.reachable) ────────────────────────────────────

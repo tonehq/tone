@@ -220,9 +220,10 @@ class STTProviderReachableCheck(DeepCheck):
         result = await probe_stt(ctx)
         if result.ok:
             return self._pass(result.message)
-        # ``result.message`` is already a clean, provider-named sentence — see
-        # the LLM deep check for the reasoning.
+        # Clean provider-named sentence; a TIMEOUT is a WARNING, a confirmed
+        # failure stays BLOCKER — see the LLM deep check for the reasoning.
         return self._fail(
             result.message,
             remediation="Verify the STT provider status and that the API key is valid.",
+            severity=Severity.WARNING if result.timed_out else None,
         )

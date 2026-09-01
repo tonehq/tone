@@ -333,14 +333,15 @@ class TTSProviderReachableCheck(DeepCheck):
         result = await probe_tts(ctx)
         if result.ok:
             return self._pass(result.message)
-        # ``result.message`` is already a clean, provider-named sentence — see
-        # the LLM deep check for the reasoning.
+        # Clean provider-named sentence; a TIMEOUT is a WARNING, a confirmed
+        # failure stays BLOCKER — see the LLM deep check for the reasoning.
         return self._fail(
             result.message,
             remediation=(
                 "Verify the TTS provider status, the API key, and that the "
                 "selected voice still exists in the provider's catalog."
             ),
+            severity=Severity.WARNING if result.timed_out else None,
         )
 
 
