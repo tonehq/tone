@@ -159,7 +159,9 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const uploading = uploadMutation.isPending || progress != null;
 
   const handleUpload = async () => {
-    if (files.length === 0 || !selectedAgentId) return;
+    // Agent is optional — a KB can be uploaded unassigned (backend accepts a
+    // missing agent_id). Only the files are required.
+    if (files.length === 0) return;
     const queue = files;
     const total = queue.length;
     const failed: File[] = [];
@@ -173,7 +175,8 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     for (let i = 0; i < queue.length; i += 1) {
       try {
         await uploadMutation.mutateAsync({
-          agentId: selectedAgentId,
+          // Empty selection → null so no agent_id is sent (unassigned upload).
+          agentId: selectedAgentId || null,
           file: queue[i],
           ingestionConfigId: configForUpload,
         });
@@ -228,7 +231,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         onValueChange={setSelectedAgentId}
         loading={agentsLoading}
         disabled={agentOptions.length === 0}
-        isRequired
+        helperText="Optional — leave empty to upload without assigning to an agent."
       />
 
       <SelectInput
@@ -342,7 +345,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
         type="primary"
         fullWidth
         loading={uploading}
-        disabled={files.length === 0 || !selectedAgentId}
+        disabled={files.length === 0}
         onClick={handleUpload}
         icon={<Upload className="size-4" />}
       >

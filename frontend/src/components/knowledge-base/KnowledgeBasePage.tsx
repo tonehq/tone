@@ -565,7 +565,7 @@ export default function KnowledgeBasePage() {
         open={uploadModalOpen}
         onClose={() => setUploadModalOpen(false)}
         title="Add sources"
-        description="Pick an agent, drop in one or more files."
+        description="Drop in one or more files. Assigning an agent is optional."
         width="sm:max-w-lg"
         hideFooter
       >
