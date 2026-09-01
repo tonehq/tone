@@ -42,7 +42,7 @@ import wave
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from loguru import logger
 
@@ -725,11 +725,10 @@ async def probe_tts(ctx) -> ProbeResult:
 # One dispatcher, one branch per provider. Every telephony provider we
 # support exposes a small, cheap "account status / balance" endpoint that
 # (a) fails fast with 401/403 on a revoked or wrong credential, and
-# (b) returns a balance we can inspect to decide "out of credit". Rather
-# than duplicate per-provider adapters (like the LLM probe does for
-# OpenAI-family vs Anthropic vs Google), the shape is uniform enough to
-# keep as one function that switches on ``channel_type``. Add a provider
-# by adding one branch.
+# (b) returns a balance we can inspect to decide "out of credit". The shape is
+# uniform enough that the request → error → balance-floor skeleton lives once
+# in ``_run_transport_probe`` and each provider is one ``_TransportProbe`` entry
+# in ``_TRANSPORT_PROBES``. Add a provider by adding one registry entry.
 #
 # Provider reference:
 # * Twilio  — GET /2010-04-01/Accounts/{sid}/Balance.json  (Basic sid:token)
@@ -749,6 +748,128 @@ _TRANSPORT_PROBE_TIMEOUT = 6.0
 _LOW_BALANCE_FLOOR = 1.0
 
 
+@dataclass(frozen=True)
+class _TransportProbe:
+    """Per-provider config for the shared transport-credit probe skeleton.
+
+    The skeleton (validate creds → GET → 401/403 → ≥400 → low-balance floor →
+    OK) lives once in :func:`_run_transport_probe`; each provider supplies only
+    the parts that differ. Adding a telephony provider is one registry entry —
+    never a new copy of the request/error/balance flow (OCP).
+    """
+
+    # Human label for the "rejected the credentials — {cred_label} invalid" line.
+    cred_label: str
+    # Returns a "missing …" message when required creds are absent, else None.
+    missing_reason: Callable[[Dict[str, Any]], Optional[str]]
+    # Returns ``(url, httpx-get-kwargs)`` (auth tuple or headers).
+    build_request: Callable[[Dict[str, Any]], Tuple[str, Dict[str, Any]]]
+    # Returns ``(balance, currency)`` from the successful response.
+    parse_balance: Callable[[Any], Tuple[Optional[float], Optional[str]]]
+    # Renders the "out of credit" line — Plivo phrases it differently.
+    low_balance_message: Callable[[float, Optional[str]], str]
+    # Forced currency for the OK line when the endpoint omits it (Plivo → USD).
+    ok_currency: Optional[str] = None
+
+
+def _require(cfg: Dict[str, Any], *keys: str) -> bool:
+    return all((cfg.get(k) or "").strip() for k in keys)
+
+
+def _default_low_balance(slug: str) -> Callable[[float, Optional[str]], str]:
+    return (
+        lambda bal, cur:
+        f"{slug} account balance is {bal:.2f} {cur or ''} — top up before making calls."
+    )
+
+
+_TRANSPORT_PROBES: Dict[str, _TransportProbe] = {
+    "twilio": _TransportProbe(
+        cred_label="account_sid / auth_token",
+        missing_reason=lambda c: (
+            None if _require(c, "account_sid", "auth_token")
+            else "twilio: account_sid / auth_token missing on the channel."
+        ),
+        build_request=lambda c: (
+            f"https://api.twilio.com/2010-04-01/Accounts/"
+            f"{(c.get('account_sid') or '').strip()}/Balance.json",
+            {"auth": ((c.get("account_sid") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        parse_balance=lambda resp: _parse_amount(resp, "balance", "currency"),
+        low_balance_message=_default_low_balance("twilio"),
+    ),
+    "telnyx": _TransportProbe(
+        cred_label="api_key",
+        missing_reason=lambda c: (
+            None if _require(c, "api_key")
+            else "telnyx: api_key missing on the channel."
+        ),
+        build_request=lambda c: (
+            "https://api.telnyx.com/v2/balance",
+            {"headers": {"Authorization": f"Bearer {(c.get('api_key') or '').strip()}"}},
+        ),
+        parse_balance=lambda resp: _parse_telnyx_balance(resp),
+        low_balance_message=_default_low_balance("telnyx"),
+    ),
+    "plivo": _TransportProbe(
+        cred_label="auth_id / auth_token",
+        missing_reason=lambda c: (
+            None if _require(c, "auth_id", "auth_token")
+            else "plivo: auth_id / auth_token missing on the channel."
+        ),
+        build_request=lambda c: (
+            f"https://api.plivo.com/v1/Account/{(c.get('auth_id') or '').strip()}/",
+            {"auth": ((c.get("auth_id") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        # Plivo reports credits in USD by convention (no currency field).
+        parse_balance=lambda resp: (
+            _to_float(_json_or_empty(resp).get("cash_credits")
+                      or _json_or_empty(resp).get("credit_limit")),
+            None,
+        ),
+        low_balance_message=(
+            lambda bal, cur:
+            f"plivo cash credits are {bal:.2f} USD — top up before making calls."
+        ),
+        ok_currency="USD",
+    ),
+    "exotel": _TransportProbe(
+        cred_label="api_key / api_token",
+        missing_reason=lambda c: (
+            None
+            if _require(c, "api_key", "api_token")
+            and ((c.get("account_sid") or c.get("sid") or "").strip())
+            else "exotel: api_key / api_token / account_sid missing on the channel."
+        ),
+        # Exotel uses (api_key, api_token) as HTTP Basic and (account_sid,
+        # subdomain) to route; ``subdomain`` defaults to the primary region so
+        # accounts on regional shards can override without a code change.
+        build_request=lambda c: (
+            f"https://{(c.get('subdomain') or 'api.exotel.com').strip()}"
+            f"/v1/Accounts/{(c.get('account_sid') or c.get('sid') or '').strip()}/Balance.json",
+            {"auth": ((c.get("api_key") or "").strip(), (c.get("api_token") or "").strip())},
+        ),
+        parse_balance=lambda resp: _parse_exotel_balance(resp),
+        low_balance_message=_default_low_balance("exotel"),
+    ),
+}
+
+
+def _parse_telnyx_balance(resp) -> Tuple[Optional[float], Optional[str]]:
+    data = _json_or_empty(resp).get("data") or {}
+    return _to_float(data.get("balance") or data.get("available_credit")), data.get("currency")
+
+
+def _parse_exotel_balance(resp) -> Tuple[Optional[float], Optional[str]]:
+    # Exotel wraps the payload as ``{"Balance": {"Balance": "10.00", ...}}``.
+    body = _json_or_empty(resp)
+    payload = body.get("Balance") if isinstance(body.get("Balance"), dict) else body
+    return (
+        _to_float(payload.get("Balance") or payload.get("balance")),
+        payload.get("Currency") or payload.get("currency"),
+    )
+
+
 async def probe_transport(
     client, channel_config: Dict[str, Any], channel_type: str
 ) -> ProbeResult:
@@ -760,22 +881,21 @@ async def probe_transport(
     ``Channel.encrypted_config`` dict — the same shape the transport
     serializers consume at call time. Returns a ``ProbeResult`` where
     ``ok=False`` means a real call would fail (bad credential, suspended
-    account, empty balance, or unreachable API).
+    account, empty balance, or unreachable API). Dispatches to a per-provider
+    ``_TransportProbe`` in ``_TRANSPORT_PROBES`` (add a provider = one entry).
     """
     import httpx
 
     slug = (channel_type or "").strip().lower()
-    cfg = channel_config or {}
+    probe = _TRANSPORT_PROBES.get(slug)
+    if probe is None:
+        return ProbeResult(
+            True,
+            f"{slug or 'transport'}: no credit probe implemented for this channel type.",
+        )
 
     try:
-        if slug == "twilio":
-            return await _probe_twilio(client, cfg)
-        if slug == "telnyx":
-            return await _probe_telnyx(client, cfg)
-        if slug == "plivo":
-            return await _probe_plivo(client, cfg)
-        if slug == "exotel":
-            return await _probe_exotel(client, cfg)
+        return await _run_transport_probe(client, slug, channel_config or {}, probe)
     except httpx.HTTPError as exc:
         logger.warning("[readiness] {} transport probe network error: {}", slug, exc)
         return ProbeResult(False, _summarise_error(slug, exc))
@@ -783,114 +903,28 @@ async def probe_transport(
         logger.exception("[readiness] {} transport probe unexpected error", slug)
         return ProbeResult(False, _summarise_error(slug, exc))
 
-    return ProbeResult(
-        True,
-        f"{slug or 'transport'}: no credit probe implemented for this channel type.",
-    )
 
+async def _run_transport_probe(
+    client, slug: str, cfg: Dict[str, Any], probe: _TransportProbe
+) -> ProbeResult:
+    """The shared credit-probe skeleton — one place for the request → error →
+    balance-floor logic every telephony provider uses identically."""
+    missing = probe.missing_reason(cfg)
+    if missing:
+        return ProbeResult(False, missing)
 
-async def _probe_twilio(client, cfg: Dict[str, Any]) -> ProbeResult:
-    account_sid = (cfg.get("account_sid") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not account_sid or not auth_token:
-        return ProbeResult(False, "twilio: account_sid / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Balance.json",
-        auth=(account_sid, auth_token),
-    )
+    url, kwargs = probe.build_request(cfg)
+    resp = await client.get(url, **kwargs)
+
     if resp.status_code in (401, 403):
-        return ProbeResult(False, "twilio rejected the credentials — account_sid / auth_token invalid.")
+        return ProbeResult(False, f"{slug} rejected the credentials — {probe.cred_label} invalid.")
     if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("twilio", resp))
-    balance, currency = _parse_amount(resp, "balance", "currency")
+        return ProbeResult(False, _summarise_http(slug, resp))
+
+    balance, currency = probe.parse_balance(resp)
     if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"twilio account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("twilio", balance, currency))
-
-
-async def _probe_telnyx(client, cfg: Dict[str, Any]) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    if not api_key:
-        return ProbeResult(False, "telnyx: api_key missing on the channel.")
-    resp = await client.get(
-        "https://api.telnyx.com/v2/balance",
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "telnyx rejected the credentials — api_key invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("telnyx", resp))
-    data = _json_or_empty(resp).get("data") or {}
-    balance = _to_float(data.get("balance") or data.get("available_credit"))
-    currency = data.get("currency")
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"telnyx account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("telnyx", balance, currency))
-
-
-async def _probe_plivo(client, cfg: Dict[str, Any]) -> ProbeResult:
-    auth_id = (cfg.get("auth_id") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not auth_id or not auth_token:
-        return ProbeResult(False, "plivo: auth_id / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.plivo.com/v1/Account/{auth_id}/",
-        auth=(auth_id, auth_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "plivo rejected the credentials — auth_id / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("plivo", resp))
-    data = _json_or_empty(resp)
-    # Plivo reports credits in USD by convention (no currency field on this endpoint).
-    balance = _to_float(data.get("cash_credits") or data.get("credit_limit"))
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"plivo cash credits are {balance:.2f} USD — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("plivo", balance, "USD"))
-
-
-async def _probe_exotel(client, cfg: Dict[str, Any]) -> ProbeResult:
-    # Exotel uses (api_key, api_token) as HTTP Basic and (account_sid,
-    # subdomain) to route the request. ``subdomain`` defaults to the primary
-    # region so accounts on regional shards (e.g. ``sg.exotel.com``) can
-    # override without a code change.
-    api_key = (cfg.get("api_key") or "").strip()
-    api_token = (cfg.get("api_token") or "").strip()
-    account_sid = (cfg.get("account_sid") or cfg.get("sid") or "").strip()
-    subdomain = (cfg.get("subdomain") or "api.exotel.com").strip()
-    if not api_key or not api_token or not account_sid:
-        return ProbeResult(
-            False,
-            "exotel: api_key / api_token / account_sid missing on the channel.",
-        )
-    resp = await client.get(
-        f"https://{subdomain}/v1/Accounts/{account_sid}/Balance.json",
-        auth=(api_key, api_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "exotel rejected the credentials — api_key / api_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("exotel", resp))
-    # Exotel wraps the payload as ``{"Balance": {"Balance": "10.00", ...}}``.
-    body = _json_or_empty(resp)
-    payload = body.get("Balance") if isinstance(body.get("Balance"), dict) else body
-    balance = _to_float(payload.get("Balance") or payload.get("balance"))
-    currency = payload.get("Currency") or payload.get("currency")
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"exotel account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("exotel", balance, currency))
+        return ProbeResult(False, probe.low_balance_message(balance, currency))
+    return ProbeResult(True, _balance_ok_message(slug, balance, probe.ok_currency or currency))
 
 
 def _json_or_empty(resp) -> Dict[str, Any]:

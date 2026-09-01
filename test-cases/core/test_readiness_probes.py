@@ -1078,3 +1078,127 @@ class TestErrorFrameCleaning:
     def test_empty_error_frame_is_safe(self):
         out = self._fn()("openai", "")
         assert out and "{" not in out
+
+
+# ─── Transport credit probe (probe_transport, per-provider) ───────────────────
+
+
+class _FakeResp:
+    """Duck-typed httpx.Response for probe_transport tests."""
+
+    def __init__(self, status_code, json_data=None, text=""):
+        self.status_code = status_code
+        self._json = json_data
+        self.text = text
+
+    def json(self):
+        if self._json is None:
+            raise ValueError("no json body")
+        return self._json
+
+
+def _fake_transport_client(resp=None, *, raise_exc=None):
+    client = MagicMock()
+    if raise_exc is not None:
+        client.get = AsyncMock(side_effect=raise_exc)
+    else:
+        client.get = AsyncMock(return_value=resp)
+    return client
+
+
+class TestProbeTransport:
+    """Behavior lock for the per-provider transport credit probe. Written
+    BEFORE the registry refactor so the shared skeleton (missing-creds / 401 /
+    >=400 / low-balance / ok) and each provider's request shape are pinned."""
+
+    def _run(self, cfg, slug, resp=None, *, raise_exc=None):
+        from core.services.readiness.probes import probe_transport
+
+        client = _fake_transport_client(resp, raise_exc=raise_exc)
+        result = asyncio.run(probe_transport(client, cfg, slug))
+        return client, result
+
+    # ── shared skeleton ──────────────────────────────────────────────────────
+
+    def test_missing_credentials_fails_without_call(self):
+        client, result = self._run({}, "twilio")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_401_reports_rejected_credentials(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", _FakeResp(401)
+        )
+        assert result.ok is False and "rejected" in result.message.lower()
+
+    def test_5xx_routes_through_summariser(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(500, text="boom"),
+        )
+        assert result.ok is False and "500" in result.message
+
+    def test_low_balance_fails(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(200, {"balance": "0.50", "currency": "USD"}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+
+    def test_healthy_balance_passes(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(200, {"balance": "42.00", "currency": "USD"}),
+        )
+        assert result.ok is True and "valid" in result.message.lower()
+
+    def test_unknown_slug_is_a_noop_pass(self):
+        _, result = self._run({}, "vonage")
+        assert result.ok is True and "no credit probe" in result.message.lower()
+
+    def test_network_error_is_a_fail(self):
+        import httpx
+
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            raise_exc=httpx.ConnectError("dns"),
+        )
+        assert result.ok is False
+
+    # ── per-provider request shape + parsing ─────────────────────────────────
+
+    def test_twilio_request_shape(self):
+        client, result = self._run(
+            {"account_sid": "AC123", "auth_token": "tok"}, "twilio",
+            _FakeResp(200, {"balance": "5", "currency": "USD"}),
+        )
+        assert result.ok is True
+        url = client.get.call_args.args[0]
+        assert "api.twilio.com" in url and "AC123" in url
+        assert client.get.call_args.kwargs["auth"] == ("AC123", "tok")
+
+    def test_telnyx_bearer_and_data_balance(self):
+        client, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            _FakeResp(200, {"data": {"balance": "0.10", "currency": "USD"}}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+        assert client.get.call_args.kwargs["headers"]["Authorization"] == "Bearer key"
+
+    def test_plivo_cash_credits(self):
+        client, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            _FakeResp(200, {"cash_credits": "10.0"}),
+        )
+        assert result.ok is True
+        assert client.get.call_args.kwargs["auth"] == ("id", "tok")
+
+    def test_exotel_nested_balance_and_subdomain(self):
+        client, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid",
+             "subdomain": "sg.exotel.com"},
+            "exotel",
+            _FakeResp(200, {"Balance": {"Balance": "0.20", "Currency": "INR"}}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+        assert "sg.exotel.com" in client.get.call_args.args[0]
