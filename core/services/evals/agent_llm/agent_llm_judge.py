@@ -46,6 +46,7 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
 from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
+from core.services.rag.errors import humanize_provider_error  # noqa: E402
 
 
 class AgentLlmJudgeService:
@@ -215,7 +216,7 @@ class AgentLlmJudgeService:
                 )
                 return {
                     "verdict": "FAIL",
-                    "reasoning": f"judge error: {type(e).__name__}: {e}",
+                    "reasoning": f"Judge error: {humanize_provider_error(e)}",
                     "metric_scores": {},
                 }
 

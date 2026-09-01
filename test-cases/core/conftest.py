@@ -50,6 +50,12 @@ REAL_USER_ID = _get_real_user_id()
 
 
 @pytest.fixture
+def org_id():
+    """The organization id the authed test clients operate under."""
+    return ORG_ID
+
+
+@pytest.fixture
 def db_session():
     """Per-test real database session with rollback for cleanup."""
     connection = engine.connect()

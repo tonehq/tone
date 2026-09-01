@@ -16,11 +16,15 @@ const PROVIDER_HINTS: Array<{ match: RegExp; message: string }> = [
     message: 'Invalid API key for the embedding provider. Update the provider key and retry.',
   },
   {
-    match: /insufficient_quota|exceeded your current quota|billing/i,
-    message: 'Embedding provider quota exhausted. Check your billing and retry.',
+    // OpenAI ("insufficient_quota" / "exceeded your current quota") AND
+    // Google/Vertex ("RESOURCE_EXHAUSTED" / "Quota exceeded for
+    // …requests_per_minute…" / "submit a quota increase").
+    match:
+      /insufficient_quota|exceeded your current quota|quota exceeded|resource_?exhausted|quota increase|requests_per_minute|billing/i,
+    message: "Embedding provider quota exceeded. Check the provider's quota/billing and retry.",
   },
   {
-    match: /rate_?limit|too many requests/i,
+    match: /rate_?limit|too many requests|\b429\b/i,
     message: 'Embedding provider rate limit hit. Retry in a moment.',
   },
   {
@@ -61,20 +65,29 @@ export function formatIngestionError(raw: unknown): string | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
-  // Already-humanized strings don't contain the raw dict marker — pass through.
+  // Known provider failures → a short, safe, actionable message. Checked FIRST
+  // regardless of the string's shape, so a raw provider string that reached the
+  // row (a legacy row stored before backend humanization, or a non-ingestion
+  // failure) is cleaned here too.
+  for (const { match, message } of PROVIDER_HINTS) {
+    if (match.test(trimmed)) return message;
+  }
+
+  // Structured provider dumps — OpenAI "Error code: NNN - {…}", a bare
+  // {'error': …} envelope, or a Google/Vertex "ClientError: 4xx … {…}" — carry
+  // internal dicts / URLs we must not surface. Pull the inner message only when
+  // it is itself clean; otherwise keep a short code prefix or a generic line.
   const looksStructured =
-    /Error code:\s*\d+\s*-\s*\{/i.test(trimmed) || /^\{.*['"]error['"]/.test(trimmed);
+    /Error code:\s*\d+\s*-\s*\{/i.test(trimmed) ||
+    /\{\s*['"]error['"]/.test(trimmed) ||
+    /RESOURCE_EXHAUSTED|ClientError|[A-Za-z.]+googleapis\.com/i.test(trimmed);
 
   if (looksStructured) {
-    for (const { match, message } of PROVIDER_HINTS) {
-      if (match.test(trimmed)) return message;
-    }
     const inner = extractProviderMessage(trimmed);
-    if (inner) return truncate(inner);
-    // Unknown structured shape — at least drop the trailing dict dump and
-    // keep the "Error code: NNN" prefix if present.
-    const codeOnly = trimmed.match(/^(Error code:\s*\d+)/i);
+    if (inner && !/https?:\/\/|googleapis\.com|\{/i.test(inner)) return truncate(inner);
+    const codeOnly = trimmed.match(/^([A-Za-z]*Error(?:\s*code)?:\s*\d+)/i);
     if (codeOnly) return codeOnly[1];
+    return 'Processing failed due to a provider error. Please retry — if it persists, contact support.';
   }
 
   return truncate(trimmed);

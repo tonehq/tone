@@ -49,6 +49,7 @@ from core.services.llm.chat_complete import (
     chat_complete,
     chat_complete_with_tools,
 )
+from core.services.rag.errors import humanize_provider_error
 from shared.config import settings
 
 
@@ -328,7 +329,7 @@ class AgentLlmEvalService:
                 scenarios=scenarios,
                 scored_rows=scored_rows,
                 judge_model=judge_model,
-                error=f"{type(e).__name__}: {e}",
+                error=humanize_provider_error(e),
             )
 
         return run_summary
@@ -898,7 +899,7 @@ class AgentLlmEvalService:
                 "[agent-llm-eval] agent LLM failed scenario={} model={} use_tools={}",
                 scenario.name, agent_config.llm_model, use_tools,
             )
-            answer_error = f"{type(e).__name__}: {e}"
+            answer_error = humanize_provider_error(e)
 
         # Judge only when we have an actual answer — a failed LLM call yields
         # an empty string and every metric would trivially FAIL, obscuring
@@ -948,7 +949,7 @@ class AgentLlmEvalService:
                 logger.exception(
                     "[agent-llm-eval] judge failed scenario={}", scenario.name,
                 )
-                judge_error = f"{type(e).__name__}: {e}"
+                judge_error = humanize_provider_error(e)
 
         latency_ms = int((time.monotonic() - t0) * 1000)
 

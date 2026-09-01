@@ -262,7 +262,10 @@ def test_run_eval_fail_soft_on_llm_error():
     assert summary.status == "completed"  # run itself didn't crash
     by_key = {r["scenario_key"]: r for r in persisted}
     assert by_key["bad"]["status"] == "failed"
-    assert "RuntimeError" in by_key["bad"]["answer_error"]
+    # answer_error is humanized (humanize_provider_error) before it reaches the
+    # UI — "upstream 429" maps to the user-safe rate-limit one-liner, not the
+    # raw "RuntimeError: upstream 429".
+    assert "rate limit" in by_key["bad"]["answer_error"].lower()
     assert by_key["good"]["status"] == "completed"
 
 

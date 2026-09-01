@@ -45,6 +45,7 @@ from core.services.evals.errors import (
     CallTranscriptEvalConfigError,
     EvalConfigurationError,
 )
+from core.services.rag.errors import humanize_provider_error
 
 _JUDGE_ENGINE = "deepeval"
 _MODE_FULL_CALL = "full_call"
@@ -257,7 +258,7 @@ class CallTranscriptEvalService(BaseService):
                 call_id, judge_model,
             )
             status = "failed"
-            judge_error = f"{type(e).__name__}: {e}"
+            judge_error = humanize_provider_error(e)
 
         completed_at = datetime.now(timezone.utc)
         latency_ms = int((time.monotonic() - t0) * 1000)

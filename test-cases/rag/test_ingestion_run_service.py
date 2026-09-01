@@ -119,6 +119,22 @@ def test_fail_run_does_not_change_is_active():
     assert run.error == "boom"
 
 
+def test_fail_run_returns_run_marked_failed():
+    """A failed ingestion run must land ``status='failed'`` on the returned
+    row so the API / UI can surface the failure. Mirrors the MagicMock-session
+    style above: ``db.query(...).filter(...).first()`` yields the run."""
+    db = MagicMock()
+    run = MagicMock()
+    run.id = "r1"
+    run.is_active = False  # begin_pending_run always writes False
+    db.query.return_value.filter.return_value.first.return_value = run
+
+    result = IngestionRunService.fail_run(db, "r1", error="ingestion blew up")
+
+    assert result is run
+    assert result.status == "failed"
+
+
 def test_complete_run_missing_raises_value_error():
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
@@ -131,3 +147,16 @@ def test_fail_run_missing_raises_value_error():
     db.query.return_value.filter.return_value.first.return_value = None
     with pytest.raises(ValueError):
         IngestionRunService.fail_run(db, "missing", error="x")
+
+
+def test_delete_runs_for_upload_bulk_deletes_and_returns_count():
+    """File-replace purge: deletes every run for the upload (org-scoped) and
+    returns the count. Chunks + embeddings go via DB FK ON DELETE CASCADE."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.delete.return_value = 3
+    n = IngestionRunService.delete_runs_for_upload(db, upload_id="u", org_id="o")
+    assert n == 3
+    db.query.return_value.filter.return_value.delete.assert_called_once_with(
+        synchronize_session=False
+    )
+    db.commit.assert_called_once()
