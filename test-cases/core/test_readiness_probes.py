@@ -1202,3 +1202,164 @@ class TestProbeTransport:
         )
         assert result.ok is False and "top up" in result.message.lower()
         assert "sg.exotel.com" in client.get.call_args.args[0]
+
+
+class TestProbePhoneNumber:
+    """Behavior lock for the per-provider number-verification probe. Written
+    BEFORE the registry refactor so the shared skeleton (empty-number /
+    missing-creds / 401 / >=400 / unknown-slug) and each provider's request
+    shape + ownership/voice/webhook checks are pinned against the live code."""
+
+    def _run(self, cfg, slug, number="+15551234567", *, prefix=None, resp=None, raise_exc=None):
+        from core.services.readiness.probes import probe_phone_number
+
+        client = _fake_transport_client(resp, raise_exc=raise_exc)
+        result = asyncio.run(
+            probe_phone_number(client, cfg, slug, number, expected_webhook_prefix=prefix)
+        )
+        return client, result
+
+    # ── shared skeleton ──────────────────────────────────────────────────────
+
+    def test_empty_number_fails_without_call(self):
+        client, result = self._run({"account_sid": "AC", "auth_token": "t"}, "twilio", number="")
+        assert result.ok is False and "empty" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_missing_credentials_fails_without_call(self):
+        client, result = self._run({}, "twilio")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_401_reports_rejected_credentials(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", resp=_FakeResp(401)
+        )
+        assert result.ok is False and "invalid" in result.message.lower()
+
+    def test_5xx_routes_through_summariser(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(500, text="boom"),
+        )
+        assert result.ok is False and "500" in result.message
+
+    def test_unknown_slug_is_a_noop_pass(self):
+        _, result = self._run({}, "vonage")
+        assert result.ok is True and "no number-verification probe" in result.message.lower()
+
+    def test_network_error_is_a_fail(self):
+        import httpx
+
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            raise_exc=httpx.ConnectError("dns"),
+        )
+        assert result.ok is False
+
+    # ── twilio ───────────────────────────────────────────────────────────────
+
+    def test_twilio_not_owned(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(200, {"incoming_phone_numbers": []}),
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_twilio_not_voice_capable(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [{"capabilities": {"voice": False}}]}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_twilio_webhook_mismatch(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", prefix="https://tone.app",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [
+                {"capabilities": {"voice": True}, "voice_url": "https://evil.example"}]}),
+        )
+        assert result.ok is False and "webhook" in result.message.lower()
+
+    def test_twilio_ok_with_matching_webhook(self):
+        client, result = self._run(
+            {"account_sid": "AC123", "auth_token": "tok"}, "twilio", prefix="https://tone.app",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [
+                {"capabilities": {"voice": True}, "voice_url": "https://tone.app/inbound"}]}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        url = client.get.call_args.args[0]
+        assert "api.twilio.com" in url and "AC123" in url
+        assert client.get.call_args.kwargs["auth"] == ("AC123", "tok")
+        assert client.get.call_args.kwargs["params"] == {"PhoneNumber": "+15551234567"}
+
+    # ── telnyx ───────────────────────────────────────────────────────────────
+
+    def test_telnyx_not_owned(self):
+        _, result = self._run(
+            {"api_key": "key"}, "telnyx", resp=_FakeResp(200, {"data": []})
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_telnyx_not_voice_enabled(self):
+        _, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            resp=_FakeResp(200, {"data": [{"features": [{"name": "sms"}]}]}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_telnyx_ok_and_bearer_header(self):
+        client, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            resp=_FakeResp(200, {"data": [{"features": ["voice"]}]}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        assert client.get.call_args.kwargs["headers"]["Authorization"] == "Bearer key"
+
+    # ── plivo ────────────────────────────────────────────────────────────────
+
+    def test_plivo_404_not_owned(self):
+        _, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo", resp=_FakeResp(404)
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_plivo_not_voice_enabled(self):
+        _, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            resp=_FakeResp(200, {"voice_enabled": False}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_plivo_ok_strips_plus_in_path(self):
+        client, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            resp=_FakeResp(200, {"voice_enabled": True}),
+        )
+        assert result.ok is True
+        assert client.get.call_args.args[0].endswith("/Number/15551234567/")
+        assert client.get.call_args.kwargs["auth"] == ("id", "tok")
+
+    # ── exotel ───────────────────────────────────────────────────────────────
+
+    def test_exotel_missing_any_of_three_creds(self):
+        client, result = self._run({"api_key": "k", "api_token": "t"}, "exotel")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_exotel_404_not_owned(self):
+        _, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid"}, "exotel",
+            resp=_FakeResp(404),
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_exotel_ok_uses_subdomain_and_strips_plus(self):
+        client, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid",
+             "subdomain": "sg.exotel.com"},
+            "exotel", resp=_FakeResp(200, {"IncomingPhoneNumber": {}}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        url = client.get.call_args.args[0]
+        assert "sg.exotel.com" in url and url.endswith("/IncomingPhoneNumbers/15551234567.json")

@@ -974,9 +974,11 @@ def _summarise_http(provider: str, resp) -> str:
 #   (c) for inbound-capable providers with webhook routing (Twilio, Telnyx),
 #       the inbound webhook prefix points at Tone (``BASE_CALL_URL``).
 #
-# Same dispatcher shape as ``probe_transport`` above — one branch per provider.
-# Plivo/Exotel don't have first-class inbound routes in Tone today, so the
-# webhook prefix argument is optional and those branches only check (a) and (b).
+# Same registry shape as ``probe_transport`` above — the shared skeleton lives
+# in ``_run_number_probe`` and each provider is one ``_NumberProbe`` entry in
+# ``_PHONE_NUMBER_PROBES`` (add a provider = one entry). Plivo/Exotel don't have
+# first-class inbound routes in Tone today, so the webhook prefix argument is
+# optional and their ``verify`` only checks (a) ownership and (b) voice.
 #
 # Provider endpoints:
 #   * Twilio  — GET /2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json
@@ -1014,15 +1016,15 @@ async def probe_phone_number(
     if not number:
         return ProbeResult(False, f"{slug}: phone number is empty on the record.")
 
+    probe = _PHONE_NUMBER_PROBES.get(slug)
+    if probe is None:
+        return ProbeResult(
+            True,
+            f"{slug or 'transport'}: no number-verification probe implemented for this channel type.",
+        )
+
     try:
-        if slug == "twilio":
-            return await _probe_twilio_number(client, cfg, number, expected_webhook_prefix)
-        if slug == "telnyx":
-            return await _probe_telnyx_number(client, cfg, number, expected_webhook_prefix)
-        if slug == "plivo":
-            return await _probe_plivo_number(client, cfg, number)
-        if slug == "exotel":
-            return await _probe_exotel_number(client, cfg, number)
+        return await _run_number_probe(client, slug, cfg, number, expected_webhook_prefix, probe)
     except httpx.HTTPError as exc:
         logger.warning("[readiness] {} number probe network error: {}", slug, exc)
         return ProbeResult(False, _summarise_error(slug, exc))
@@ -1030,40 +1032,41 @@ async def probe_phone_number(
         logger.exception("[readiness] {} number probe unexpected error", slug)
         return ProbeResult(False, _summarise_error(slug, exc))
 
-    return ProbeResult(
-        True,
-        f"{slug or 'transport'}: no number-verification probe implemented for this channel type.",
-    )
+
+@dataclass(frozen=True)
+class _NumberProbe:
+    """Per-provider config for the shared number-verification skeleton.
+
+    The skeleton (validate creds → GET → 404-not-owned → 401/403 → ≥400 →
+    per-provider ``verify``) lives once in :func:`_run_number_probe`. Each
+    provider supplies only what differs: credential validation, the request,
+    the "invalid credentials" copy, whether a 404 means "not owned", and how a
+    2xx body proves ownership / voice-capability / webhook routing. Adding a
+    telephony provider is one registry entry (OCP) — never a new copy of the
+    request/error flow. Mirrors ``_TransportProbe`` above.
+    """
+
+    # Returns a "missing …" message when required creds are absent, else None.
+    missing_reason: Callable[[Dict[str, Any]], Optional[str]]
+    # Returns ``(url, httpx-get-kwargs)`` for the per-number lookup.
+    build_request: Callable[[Dict[str, Any], str], Tuple[str, Dict[str, Any]]]
+    # The "rejected the credentials — … invalid" line for a 401/403.
+    invalid_creds_message: str
+    # Turns a successful (2xx) response into a verified/failed ``ProbeResult``.
+    verify: Callable[[Any, str, Optional[str]], ProbeResult]
+    # Providers whose per-number endpoint 404s when the number isn't owned
+    # (Plivo/Exotel look up by path segment; Twilio/Telnyx filter a list).
+    not_owned_on_404: bool = False
 
 
-async def _probe_twilio_number(
-    client, cfg: Dict[str, Any], number: str, expected_prefix: Optional[str]
-) -> ProbeResult:
-    account_sid = (cfg.get("account_sid") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not account_sid or not auth_token:
-        return ProbeResult(False, "twilio: account_sid / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/IncomingPhoneNumbers.json",
-        params={"PhoneNumber": number},
-        auth=(account_sid, auth_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "twilio rejected the credentials — account_sid / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("twilio", resp))
+def _twilio_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     numbers = _json_or_empty(resp).get("incoming_phone_numbers") or []
     if not numbers:
-        return ProbeResult(
-            False,
-            f"twilio: number {number} is not owned by this account.",
-        )
+        return ProbeResult(False, f"twilio: number {number} is not owned by this account.")
     entry = numbers[0]
-    capabilities = entry.get("capabilities") or {}
-    if not capabilities.get("voice"):
+    if not (entry.get("capabilities") or {}).get("voice"):
         return ProbeResult(
-            False,
-            f"twilio: number {number} is not voice-capable (SMS/MMS only).",
+            False, f"twilio: number {number} is not voice-capable (SMS/MMS only)."
         )
     if expected_prefix:
         voice_url = (entry.get("voice_url") or "").strip()
@@ -1076,34 +1079,16 @@ async def _probe_twilio_number(
     return ProbeResult(True, f"twilio: {number} verified (owned, voice-capable, webhook routed).")
 
 
-async def _probe_telnyx_number(
-    client, cfg: Dict[str, Any], number: str, expected_prefix: Optional[str]
-) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    if not api_key:
-        return ProbeResult(False, "telnyx: api_key missing on the channel.")
-    resp = await client.get(
-        "https://api.telnyx.com/v2/phone_numbers",
-        params={"filter[phone_number]": number},
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "telnyx rejected the credentials — api_key invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("telnyx", resp))
+def _telnyx_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     data = _json_or_empty(resp).get("data") or []
     if not data:
-        return ProbeResult(
-            False,
-            f"telnyx: number {number} is not owned by this account.",
-        )
+        return ProbeResult(False, f"telnyx: number {number} is not owned by this account.")
     entry = data[0]
-    features = entry.get("features") or []
     # Telnyx feature entries can be strings or objects — normalize both, and
     # skip anything that doesn't resolve to a non-empty string (a dict with
     # ``{"name": None, ...}`` would otherwise crash on ``None.lower()``).
     feature_names: set[str] = set()
-    for f in features:
+    for f in entry.get("features") or []:
         if not f:
             continue
         raw = f.get("name") if isinstance(f, dict) else f
@@ -1111,19 +1096,15 @@ async def _probe_telnyx_number(
             continue
         feature_names.add(raw.lower())
     if "voice" not in feature_names:
-        return ProbeResult(
-            False,
-            f"telnyx: number {number} is not voice-enabled.",
-        )
+        return ProbeResult(False, f"telnyx: number {number} is not voice-enabled.")
     # Webhook routing on Telnyx lives on the linked "voice connection"
-    # (connection_id) rather than the number row itself. We surface the
-    # coarser signal — the number is voice-enabled and owned — and let
-    # inbound wire-up failures show up in call logs. Verifying the
-    # connection's webhook_event_url would need a second API call per
-    # number, which is heavy for the readiness path.
+    # (connection_id) rather than the number row itself. We surface the coarser
+    # signal — voice-enabled and owned — and let inbound wire-up failures show
+    # up in call logs. Verifying the connection's webhook_event_url would need a
+    # second API call per number, which is heavy for the readiness path. Some
+    # account setups expose ``voice_url`` on the number itself; validate it when
+    # present, skip silently when absent.
     if expected_prefix:
-        # Best-effort: some Telnyx account setups expose ``voice_url`` on the
-        # number itself; if present, validate; if absent, skip silently.
         voice_url = (entry.get("voice_url") or "").strip()
         if voice_url and not voice_url.startswith(expected_prefix):
             return ProbeResult(
@@ -1134,71 +1115,113 @@ async def _probe_telnyx_number(
     return ProbeResult(True, f"telnyx: {number} verified (owned, voice-enabled).")
 
 
-async def _probe_plivo_number(
-    client, cfg: Dict[str, Any], number: str
-) -> ProbeResult:
-    auth_id = (cfg.get("auth_id") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not auth_id or not auth_token:
-        return ProbeResult(False, "plivo: auth_id / auth_token missing on the channel.")
-    # Plivo number lookup uses the raw E.164 without the leading '+'.
-    plivo_number = number.lstrip("+")
-    resp = await client.get(
-        f"https://api.plivo.com/v1/Account/{auth_id}/Number/{plivo_number}/",
-        auth=(auth_id, auth_token),
-    )
-    if resp.status_code == 404:
-        return ProbeResult(
-            False,
-            f"plivo: number {number} is not owned by this account.",
-        )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "plivo rejected the credentials — auth_id / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("plivo", resp))
-    data = _json_or_empty(resp)
+def _plivo_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     # Plivo returns ``voice_enabled`` (bool) on the number resource.
-    if data.get("voice_enabled") is False:
-        return ProbeResult(
-            False,
-            f"plivo: number {number} is not voice-enabled.",
-        )
+    if _json_or_empty(resp).get("voice_enabled") is False:
+        return ProbeResult(False, f"plivo: number {number} is not voice-enabled.")
     return ProbeResult(True, f"plivo: {number} verified (owned, voice-enabled).")
 
 
-async def _probe_exotel_number(
-    client, cfg: Dict[str, Any], number: str
-) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    api_token = (cfg.get("api_token") or "").strip()
-    account_sid = (cfg.get("account_sid") or cfg.get("sid") or "").strip()
-    subdomain = (cfg.get("subdomain") or "api.exotel.com").strip()
-    if not api_key or not api_token or not account_sid:
-        return ProbeResult(
-            False,
-            "exotel: api_key / api_token / account_sid missing on the channel.",
-        )
-    # Exotel forked from Twilio; both reject percent-encoded '+' ('%2B') in
-    # phone-number path segments. Strip the leading '+' the same way the Plivo
-    # branch does so httpx doesn't encode it in the URL path.
-    exotel_number = number.lstrip("+")
-    resp = await client.get(
-        f"https://{subdomain}/v1/Accounts/{account_sid}/IncomingPhoneNumbers/{exotel_number}.json",
-        auth=(api_key, api_token),
-    )
-    if resp.status_code == 404:
-        return ProbeResult(
-            False,
-            f"exotel: number {number} is not owned by this account.",
-        )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "exotel rejected the credentials — api_key / api_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("exotel", resp))
+def _exotel_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     # Exotel wraps as ``{"IncomingPhoneNumber": {...}}``; the presence of the
-    # row is enough to prove ownership, and voice is the default capability
-    # for Exotel virtual numbers.
+    # row (a non-404) is enough to prove ownership, and voice is the default
+    # capability for Exotel virtual numbers.
     return ProbeResult(True, f"exotel: {number} verified (owned).")
+
+
+_PHONE_NUMBER_PROBES: Dict[str, _NumberProbe] = {
+    "twilio": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "account_sid", "auth_token")
+            else "twilio: account_sid / auth_token missing on the channel."
+        ),
+        build_request=lambda c, n: (
+            f"https://api.twilio.com/2010-04-01/Accounts/"
+            f"{(c.get('account_sid') or '').strip()}/IncomingPhoneNumbers.json",
+            {
+                "params": {"PhoneNumber": n},
+                "auth": (
+                    (c.get("account_sid") or "").strip(),
+                    (c.get("auth_token") or "").strip(),
+                ),
+            },
+        ),
+        invalid_creds_message="twilio rejected the credentials — account_sid / auth_token invalid.",
+        verify=_twilio_number_verify,
+    ),
+    "telnyx": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "api_key")
+            else "telnyx: api_key missing on the channel."
+        ),
+        build_request=lambda c, n: (
+            "https://api.telnyx.com/v2/phone_numbers",
+            {
+                "params": {"filter[phone_number]": n},
+                "headers": {"Authorization": f"Bearer {(c.get('api_key') or '').strip()}"},
+            },
+        ),
+        invalid_creds_message="telnyx rejected the credentials — api_key invalid.",
+        verify=_telnyx_number_verify,
+    ),
+    "plivo": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "auth_id", "auth_token")
+            else "plivo: auth_id / auth_token missing on the channel."
+        ),
+        # Plivo number lookup uses the raw E.164 without the leading '+'.
+        build_request=lambda c, n: (
+            f"https://api.plivo.com/v1/Account/{(c.get('auth_id') or '').strip()}"
+            f"/Number/{n.lstrip('+')}/",
+            {"auth": ((c.get("auth_id") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        invalid_creds_message="plivo rejected the credentials — auth_id / auth_token invalid.",
+        verify=_plivo_number_verify,
+        not_owned_on_404=True,
+    ),
+    "exotel": _NumberProbe(
+        missing_reason=lambda c: (
+            None
+            if _require(c, "api_key", "api_token")
+            and ((c.get("account_sid") or c.get("sid") or "").strip())
+            else "exotel: api_key / api_token / account_sid missing on the channel."
+        ),
+        # Exotel forked from Twilio; both reject percent-encoded '+' ('%2B') in
+        # phone-number path segments, so strip the leading '+' like Plivo does.
+        build_request=lambda c, n: (
+            f"https://{(c.get('subdomain') or 'api.exotel.com').strip()}"
+            f"/v1/Accounts/{(c.get('account_sid') or c.get('sid') or '').strip()}"
+            f"/IncomingPhoneNumbers/{n.lstrip('+')}.json",
+            {"auth": ((c.get("api_key") or "").strip(), (c.get("api_token") or "").strip())},
+        ),
+        invalid_creds_message="exotel rejected the credentials — api_key / api_token invalid.",
+        verify=_exotel_number_verify,
+        not_owned_on_404=True,
+    ),
+}
+
+
+async def _run_number_probe(
+    client, slug: str, cfg: Dict[str, Any], number: str,
+    expected_prefix: Optional[str], probe: _NumberProbe,
+) -> ProbeResult:
+    """The shared number-verification skeleton — one place for the request →
+    404 → 401/403 → ≥400 flow every provider uses before its own ``verify``."""
+    missing = probe.missing_reason(cfg)
+    if missing:
+        return ProbeResult(False, missing)
+
+    url, kwargs = probe.build_request(cfg, number)
+    resp = await client.get(url, **kwargs)
+
+    if probe.not_owned_on_404 and resp.status_code == 404:
+        return ProbeResult(False, f"{slug}: number {number} is not owned by this account.")
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, probe.invalid_creds_message)
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http(slug, resp))
+
+    return probe.verify(resp, number, expected_prefix)
 
 
 # ── error summariser ─────────────────────────────────────────────────────────
