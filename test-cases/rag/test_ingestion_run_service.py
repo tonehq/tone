@@ -15,6 +15,11 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
+from core.services.ingestion_errors import (
+    IngestionRunActiveError,
+    IngestionRunInProgressError,
+    IngestionRunNotFoundError,
+)
 from core.services.ingestion_run_service import IngestionRunService
 
 
@@ -160,3 +165,83 @@ def test_delete_runs_for_upload_bulk_deletes_and_returns_count():
         synchronize_session=False
     )
     db.commit.assert_called_once()
+
+
+# ── delete a single ingestion run: guard ───────────────────────────────────
+
+
+def test_get_deletable_run_missing_raises_not_found():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.first.return_value = None
+    with pytest.raises(IngestionRunNotFoundError):
+        IngestionRunService.get_deletable_run(db, upload_id="u", run_id="r", org_id="o")
+
+
+def test_get_deletable_run_active_raises_active_error():
+    """The active run (serving live retrieval) must NOT be deletable → 409."""
+    db = MagicMock()
+    run = MagicMock()
+    run.is_active = True
+    db.query.return_value.filter.return_value.first.return_value = run
+    with pytest.raises(IngestionRunActiveError):
+        IngestionRunService.get_deletable_run(db, upload_id="u", run_id="r", org_id="o")
+
+
+def test_get_deletable_run_returns_inactive_terminal_run():
+    """A non-active, terminal ('ready'/'failed') run is deletable."""
+    db = MagicMock()
+    run = MagicMock()
+    run.is_active = False
+    run.status = "failed"
+    db.query.return_value.filter.return_value.first.return_value = run
+    assert (
+        IngestionRunService.get_deletable_run(db, upload_id="u", run_id="r", org_id="o")
+        is run
+    )
+
+
+def test_get_deletable_run_in_progress_raises():
+    """A still-in-flight ('running'/'pending') run must NOT be deletable — the
+    worker may still be writing its chunks → 409, not a delete."""
+    db = MagicMock()
+    run = MagicMock()
+    run.is_active = False
+    run.status = "running"
+    db.query.return_value.filter.return_value.first.return_value = run
+    with pytest.raises(IngestionRunInProgressError):
+        IngestionRunService.get_deletable_run(db, upload_id="u", run_id="r", org_id="o")
+
+
+# ── reaper: stranded 'running' runs → failed ────────────────────────────────
+
+
+def test_reap_stuck_runs_marks_running_run_failed():
+    """A run stuck in 'running' past the cutoff is flipped to 'failed' and its
+    still-'processing' upload is flipped to 'failed' with a user-safe message."""
+    db = MagicMock()
+    run = MagicMock()
+    run.status = "running"
+    run.upload_id = "u1"
+    run.organization_id = "o1"
+    upload = MagicMock()
+    upload.status = "processing"
+    upload.meta_data = {}
+    db.query.return_value.filter.return_value.all.return_value = [run]
+    db.query.return_value.filter.return_value.first.return_value = upload
+
+    n = IngestionRunService.reap_stuck_runs(db, older_than_seconds=3600)
+
+    assert n == 1
+    assert run.status == "failed"
+    assert run.error  # a message was set
+    assert upload.status == "failed"
+    assert "error" in upload.meta_data
+    db.commit.assert_called_once()
+
+
+def test_reap_stuck_runs_none_found_returns_zero():
+    db = MagicMock()
+    db.query.return_value.filter.return_value.all.return_value = []
+    n = IngestionRunService.reap_stuck_runs(db, older_than_seconds=3600)
+    assert n == 0
+    db.commit.assert_not_called()

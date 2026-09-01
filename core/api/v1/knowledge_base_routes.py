@@ -42,6 +42,8 @@ from core.services.ingestion_errors import (
     AgentKnowledgeBaseNotFoundError,
     IngestionConfigInactiveError,
     IngestionConfigNotFoundError,
+    IngestionRunActiveError,
+    IngestionRunInProgressError,
     IngestionRunKbMismatchError,
     IngestionRunNotFoundError,
     IngestionRunNotReadyError,
@@ -158,6 +160,8 @@ _INGESTION_ERROR_HTTP_MAP: tuple[tuple[type, int], ...] = (
     (AgentHasNoPublishedConfigError, status.HTTP_404_NOT_FOUND),
     (AgentKnowledgeBaseNotFoundError, status.HTTP_404_NOT_FOUND),
     (IngestionRunNotReadyError, status.HTTP_400_BAD_REQUEST),
+    (IngestionRunActiveError, status.HTTP_409_CONFLICT),
+    (IngestionRunInProgressError, status.HTTP_409_CONFLICT),
     (IngestionRunKbMismatchError, status.HTTP_400_BAD_REQUEST),
     (IngestionConfigInactiveError, status.HTTP_400_BAD_REQUEST),
     (UnknownRagComponentError, status.HTTP_400_BAD_REQUEST),
@@ -960,6 +964,47 @@ def build_knowledge_base_router(
             )
         activated = IngestionRunService.activate_run(db, run.id, org_id=org_id)
         return activated.to_dict()
+
+    @router.delete("/{upload_id}/runs/{run_id}", status_code=status.HTTP_200_OK)
+    def delete_pipeline_run(
+        upload_id: str,
+        run_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Delete one ingestion run and everything derived from it: its chunks +
+        embeddings (FK cascade) and its eval RESULTS. The upload's eval QUESTION
+        set is kept (questions belong to the document, not the run).
+
+        The ACTIVE run cannot be deleted — it serves live retrieval; the service
+        raises ``IngestionRunActiveError`` (→ 409) so the caller activates
+        another run first. Org + upload scoped (cross-tenant → 404)."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            rid = UUID(run_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id"
+            )
+        try:
+            # Guard first (404 / 409-if-active) so nothing is deleted on reject.
+            IngestionRunService.get_deletable_run(
+                db, upload_id=upload.id, run_id=rid, org_id=org_id
+            )
+            # Results reference the run via ON DELETE SET NULL, so remove them
+            # explicitly BEFORE dropping the run; questions are untouched.
+            EvalService().delete_results_for_ingestion_run(
+                db, ingestion_run_id=rid, org_id=org_id
+            )
+            IngestionRunService.delete_run(db, rid, org_id=org_id)
+        except (
+            IngestionRunNotFoundError,
+            IngestionRunActiveError,
+            IngestionRunInProgressError,
+        ) as exc:
+            _raise_http_for_ingestion_error(exc)
+        return {"ok": True}
 
     @router.get("/{upload_id}/runs/{run_id}/chunks")
     def list_pipeline_run_chunks(

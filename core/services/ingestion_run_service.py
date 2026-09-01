@@ -31,6 +31,8 @@ from core.services.ingestion_errors import (
     AgentHasNoPublishedConfigError,
     AgentKnowledgeBaseNotFoundError,
     IngestionConfigInactiveError,
+    IngestionRunActiveError,
+    IngestionRunInProgressError,
     IngestionRunKbMismatchError,
     IngestionRunNotFoundError,
     IngestionRunNotReadyError,
@@ -540,6 +542,105 @@ class IngestionRunService:
             return
         db.delete(run)
         db.commit()
+
+    @staticmethod
+    def get_deletable_run(
+        db: Session, *, upload_id: Any, run_id: Any, org_id: Any
+    ) -> IngestionPipelineRun:
+        """Resolve one ingestion run for deletion, org+upload scoped, and refuse
+        to delete the ACTIVE run.
+
+        Raises :class:`IngestionRunNotFoundError` (→ 404) when the run doesn't
+        exist for this (org, upload, id), and :class:`IngestionRunActiveError`
+        (→ 409) when it's the live run driving retrieval — the caller must
+        activate another run first. Read-only: does NOT delete; the caller then
+        removes the run's eval results + the run itself.
+        """
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.upload_id == upload_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .first()
+        )
+        if run is None:
+            raise IngestionRunNotFoundError(
+                f"Ingestion run {run_id} not found for this upload"
+            )
+        if run.is_active:
+            raise IngestionRunActiveError(
+                "This ingestion run is active and serving live retrieval. "
+                "Activate another run first, then delete this one."
+            )
+        # Only terminal runs are deletable — a pending/running run's worker may
+        # still be writing chunks, so deleting now would race the ingestion.
+        if run.status not in ("ready", "failed"):
+            raise IngestionRunInProgressError(
+                f"This ingestion run is still {run.status!r}. Wait for it to "
+                "finish (or fail) before deleting."
+            )
+        return run
+
+    @staticmethod
+    def reap_stuck_runs(db: Session, older_than_seconds: int = 3600) -> int:
+        """Safety net for ingestion runs stranded in ``running`` because their
+        worker was killed mid-ingestion (pod reclaim, OOM, deploy that outran
+        the job). Without this the run sits ``running`` and the document shows
+        "Processing" forever with no way to recover but a manual retry.
+
+        Marks every ``running`` run whose ``started_at`` is older than the
+        cutoff as ``failed`` (with a user-safe message), and flips its parent
+        ``Upload`` to ``failed`` so the UI shows Failed + Retry. Idempotent —
+        only touches rows past the cutoff; a still-alive slow run finishes
+        normally as long as ``older_than_seconds`` is set above the longest
+        real ingestion. ``is_active`` is left untouched so the previously-active
+        run keeps serving retrieval.
+        """
+        from datetime import timedelta
+
+        from core.models.upload import Upload
+
+        cutoff = datetime.now(timezone.utc) - timedelta(seconds=older_than_seconds)
+        stuck = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.status == "running",
+                IngestionPipelineRun.started_at.isnot(None),
+                IngestionPipelineRun.started_at < cutoff,
+            )
+            .all()
+        )
+        if not stuck:
+            return 0
+
+        message = (
+            "Ingestion was interrupted (worker restart or timeout) and did not "
+            "finish. Please retry."
+        )
+        now = datetime.now(timezone.utc)
+        for run in stuck:
+            run.status = "failed"
+            run.error = message
+            run.completed_at = now
+            upload = (
+                db.query(Upload)
+                .filter(
+                    Upload.id == run.upload_id,
+                    Upload.organization_id == run.organization_id,
+                )
+                .first()
+            )
+            if upload is not None and upload.status == "processing":
+                upload.status = "failed"
+                upload.meta_data = {**(upload.meta_data or {}), "error": message}
+        db.commit()
+        logger.warning(
+            "[reaper] marked {} stuck ingestion run(s) failed (older than {}s)",
+            len(stuck), older_than_seconds,
+        )
+        return len(stuck)
 
     @staticmethod
     def delete_runs_for_upload(db: Session, *, upload_id: Any, org_id: Any) -> int:
