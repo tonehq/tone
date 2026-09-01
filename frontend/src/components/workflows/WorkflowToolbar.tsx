@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { ChevronLeft, CircleAlert, CircleCheck, FileDown, Sparkles } from 'lucide-react';
 
 import { cn } from '@/utils/cn';
+import ProfileVariablesDrawer from '@/components/agents/profile-variables/ProfileVariablesDrawer';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomPopover from '@/components/shared/CustomPopover';
 import type { ValidationIssue } from '@/types/workflow';
@@ -14,6 +15,10 @@ interface Props {
   dirty: boolean;
   lastSavedAt: number | null;
   issues: ValidationIssue[];
+  /** Owning agent — enables the "Profile variables" drawer. The workflow
+   * builder is only reached from an agent, so this is present in practice; it
+   * stays optional so a standalone (agent-less) mount just hides the button. */
+  agentId?: string | null;
   onBack: () => void;
   onSave: () => void;
   onOpenGlobalPrompt: () => void;
@@ -27,6 +32,7 @@ const WorkflowToolbar: React.FC<Props> = ({
   dirty,
   lastSavedAt,
   issues,
+  agentId,
   onBack,
   onSave,
   onOpenGlobalPrompt,
@@ -129,6 +135,8 @@ const WorkflowToolbar: React.FC<Props> = ({
         </CustomPopover>
 
         <div className="mx-0.5 h-6 w-px bg-border" />
+
+        {agentId && <ProfileVariablesDrawer agentId={agentId} />}
 
         <CustomButton
           type="default"
