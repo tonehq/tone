@@ -9,7 +9,7 @@ is a single source of truth for the route logic.
 """
 
 from typing import Any, Callable, List, Optional
-from uuid import UUID, uuid4
+from uuid import UUID
 
 from fastapi import (
     APIRouter,
@@ -32,7 +32,6 @@ from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.models.agent import Agent
 from core.models.agent_config import AgentConfig
-from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
@@ -62,13 +61,11 @@ from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
 from core.services.r2_storage_service import (
-    KB_DOCUMENT,
     R2StorageService,
-    build_r2_object_key,
     signed_url_or_none,
 )
 from core.services.upload_service import UploadService
-from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
+from core.utils.faceted_query import build_facets, distinct_values
 from core.utils.list_params import resolve_sort
 from shared.config import settings
 
@@ -183,26 +180,6 @@ def _raise_http_for_ingestion_error(exc: Exception) -> None:
     code = _http_status_for_ingestion_error(exc)
     if code is not None:
         raise HTTPException(status_code=code, detail=str(exc)) from exc
-
-
-def _kb_column_map() -> dict:
-    """Scalar columns exposed for filtering / sorting / faceting on documents."""
-    return {
-        "file_name": Upload.file_name,
-        "status": Upload.status,
-        "size_bytes": Upload.size_bytes,
-        "created_at": Upload.created_at,
-        "updated_at": Upload.updated_at,
-    }
-
-
-def _kb_base_query(db: Session, org_id: UUID):
-    """Org-scoped base query for kb documents (excludes soft-deleted rows)."""
-    return db.query(Upload).filter(
-        Upload.organization_id == org_id,
-        Upload.purpose == "kb_document",
-        Upload.deleted_at.is_(None),
-    )
 
 
 def _upload_to_payload(upload: Upload, r2: R2StorageService | None = None) -> dict:
@@ -326,15 +303,14 @@ def build_knowledge_base_router(
         page = max(int(body.get("page") or 1), 1)
         page_size = min(max(int(body.get("page_size") or 20), 1), 100)
         search = body.get("search")
-        agent_id = body.get("agent_id")
         status_filter = body.get("status")
+        sort_by, sort_order = resolve_sort(body, "updated_at")
 
-        column_map = _kb_column_map()
-        query = _kb_base_query(db, org_id)
-
-        # Named params (back-compat): free-text search, owning-agent and status.
-        if search:
-            query = query.filter(Upload.file_name.ilike(f"%{search}%"))
+        # ``agent_id`` (first-attached, historic single-value field) is kept in
+        # the response for backwards compatibility with any FE code that still
+        # reads it. ``agent_ids`` is the full list — new consumers prefer it.
+        agent_id = body.get("agent_id")
+        agent_uuid: UUID | None = None
         if agent_id:
             try:
                 agent_uuid = UUID(str(agent_id))
@@ -342,55 +318,18 @@ def build_knowledge_base_router(
                 raise HTTPException(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id"
                 )
-            upload_ids_q = (
-                db.query(KnowledgeBase.upload_id)
-                .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-                .filter(
-                    AgentKnowledgeBase.agent_id == agent_uuid,
-                    AgentKnowledgeBase.organization_id == org_id,
-                )
-            )
-            query = query.filter(Upload.id.in_(upload_ids_q))
-        if status_filter:
-            query = query.filter(Upload.status == status_filter)
 
-        # Generic faceted filters + sort.
-        query = apply_filters(query, body.get("filters"), column_map)
-        total = query.count()
-        sort_by, sort_order = resolve_sort(body, "updated_at")
-        query = apply_sort(query, column_map, sort_by, sort_order, Upload.updated_at)
-
-        offset = (page - 1) * page_size
-        items = query.offset(offset).limit(page_size).all()
+        items, total, agents_by_upload = UploadService(db, org_id=org_id).list_kb_documents(
+            search=search,
+            agent_id=agent_uuid,
+            status_filter=status_filter,
+            filters=body.get("filters"),
+            sort_by=sort_by,
+            sort_order=sort_order,
+            page=page,
+            page_size=page_size,
+        )
         r2 = R2StorageService()
-
-        # Map each upload to its linked agents (if any) so the UI can show
-        # every owning agent. Uploads created from the agent form before
-        # save are standalone and have no link yet.
-        #
-        # ``agent_id`` (first-attached, historic single-value field) is kept
-        # for backwards compatibility with any FE code that still reads it.
-        # ``agent_ids`` is the full list — new consumers should prefer it.
-        upload_ids = [i.id for i in items]
-        agents_by_upload: dict[UUID, list[str]] = {}
-        seen_pairs: set[tuple[UUID, str]] = set()
-        if upload_ids:
-            links = (
-                db.query(KnowledgeBase.upload_id, AgentKnowledgeBase.agent_id)
-                .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-                .filter(
-                    KnowledgeBase.upload_id.in_(upload_ids),
-                    AgentKnowledgeBase.organization_id == org_id,
-                )
-                .all()
-            )
-            for link_upload_id, link_agent_id in links:
-                agent_str = str(link_agent_id)
-                key = (link_upload_id, agent_str)
-                if key in seen_pairs:
-                    continue
-                seen_pairs.add(key)
-                agents_by_upload.setdefault(link_upload_id, []).append(agent_str)
 
         def _payload_with_agent(upload: Upload) -> dict:
             payload = _upload_to_payload(upload, r2)
@@ -581,15 +520,12 @@ def build_knowledge_base_router(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="file_name too long (max 512)"
             )
 
-        upload = (
-            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
-        )
-        if not upload:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
-
-        upload.file_name = new_name
-        db.commit()
-        db.refresh(upload)
+        try:
+            upload = UploadService(db, org_id=org_id).rename_upload(uid, new_name)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
         return _upload_to_payload(upload)
 
     @router.patch("/{upload_id}/file")
@@ -607,6 +543,9 @@ def build_knowledge_base_router(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
+        # Resolve first so the 404 for a missing upload takes precedence over
+        # the empty-file 400 (preserving the original error ordering) and so the
+        # requested-name fallback can reference the current file name.
         upload = (
             db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
         )
@@ -619,51 +558,29 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
-        new_name = (file_name or "").strip() or file.filename or upload.file_name
-        if len(new_name) > 512:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="file_name too long (max 512)"
-            )
+        # Requested name (form value wins, else the uploaded filename); the
+        # service falls back to the upload's current name when both are empty.
+        requested_name = (file_name or "").strip() or file.filename
         content_type = file.content_type or "application/octet-stream"
 
-        logger.info(
-            "[upload] replace requested upload={} org={} old_name={} new_name={} new_size={}",
-            upload.id, org_id, upload.file_name, new_name, size_bytes,
-        )
-
-        new_object_key = build_r2_object_key(
-            org_id=org_id,
-            kind=KB_DOCUMENT,
-            subpath=f"{uuid4()}/{new_name}",
-        )
+        # The service validates (size + type contract), uploads to R2, updates
+        # the row, and cleans up an orphan blob on a failed commit. It raises
+        # IngestionValidationError (→ 400) for a too-long name / bad type /
+        # oversize file, and ValueError (→ 404) for a missing upload.
         try:
-            R2StorageService().upload_fileobj(file.file, new_object_key, content_type=content_type)
-        except Exception:
-            logger.exception(
-                "[upload] R2 replace upload failed upload={} key={}",
-                upload.id, new_object_key,
+            upload = UploadService(db, org_id=org_id).replace_upload_file(
+                upload_id=uid,
+                fileobj=file.file,
+                file_name=requested_name,
+                content_type=content_type,
+                size_bytes=size_bytes,
             )
-            raise
-
-        old_path = upload.file_path
-
-        upload.file_path = new_object_key
-        upload.file_name = new_name
-        upload.file_type = content_type
-        upload.size_bytes = size_bytes
-        # Both editions intentionally re-run the pipeline on replace: the new
-        # blob must be re-embedded, so flip back to "processing" and re-queue
-        # rather than marking "ready" (which would leave stale embeddings).
-        upload.status = "processing"
-        db.commit()
-        db.refresh(upload)
-
-        # Best-effort delete of the old R2 blob
-        if old_path and old_path != new_object_key:
-            try:
-                R2StorageService().delete_file(old_path)
-            except Exception as exc:
-                logger.debug("Best-effort delete of old R2 blob {} failed: {}", old_path, exc)
+        except IngestionValidationError as exc:
+            _raise_http_for_ingestion_error(exc)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
 
         kb = _kb_for_upload(db, org_id, upload.id)
         await _start_ingestion_run(
@@ -747,25 +664,12 @@ def build_knowledge_base_router(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
-        upload = (
-            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
-        )
-        if not upload:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
-
-        file_path = upload.file_path
-
-        db.query(KnowledgeBase).filter(
-            KnowledgeBase.upload_id == uid, KnowledgeBase.organization_id == org_id
-        ).delete(synchronize_session=False)
-        db.delete(upload)
-        db.commit()
-
-        if file_path:
-            try:
-                R2StorageService().delete_file(file_path)
-            except Exception as exc:
-                logger.debug("Best-effort R2 delete of {} failed: {}", file_path, exc)
+        try:
+            UploadService(db, org_id=org_id).delete_upload(uid)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
 
         return {"ok": True}
 
@@ -778,7 +682,10 @@ def build_knowledge_base_router(
         org_id = resolve_org_id(claims)
         filters = [f.model_dump() for f in body.filters] if body.filters else None
         return build_facets(
-            lambda: _kb_base_query(db, org_id), _kb_column_map(), KB_FACET_FIELDS, filters
+            lambda: UploadService.kb_base_query(db, org_id),
+            UploadService.kb_column_map(),
+            KB_FACET_FIELDS,
+            filters,
         )
 
     @router.get("/filter-values")
@@ -788,9 +695,9 @@ def build_knowledge_base_router(
         db: Session = Depends(get_db),
     ):
         org_id = resolve_org_id(claims)
-        column_map = _kb_column_map()
+        column_map = UploadService.kb_column_map()
         allowed = {k: column_map[k] for k in ("status", "file_name")}
-        return distinct_values(_kb_base_query(db, org_id), allowed, column_name)
+        return distinct_values(UploadService.kb_base_query(db, org_id), allowed, column_name)
 
     # ── RAG pipeline runs (parser / tokeniser / embedder / vector store) ────
     # Endpoints for A/B-ing the ingestion pipeline: one upload can carry many
@@ -840,7 +747,7 @@ def build_knowledge_base_router(
     ):
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
-        runs = IngestionRunService.list_runs(db, upload.id)
+        runs = IngestionRunService.list_runs(db, upload.id, org_id=org_id)
         return {"items": [r.to_dict() for r in runs]}
 
     @router.post("/{upload_id}/runs/list")
@@ -1042,7 +949,7 @@ def build_knowledge_base_router(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Cannot activate a run with status={run.status!r}; only 'ready' is allowed",
             )
-        activated = IngestionRunService.activate_run(db, run.id)
+        activated = IngestionRunService.activate_run(db, run.id, org_id=org_id)
         return activated.to_dict()
 
     @router.get("/{upload_id}/runs/{run_id}/chunks")

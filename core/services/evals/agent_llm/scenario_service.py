@@ -32,7 +32,7 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
-from loguru import logger
+from core.services.evals.csv_decode import decode_csv_bytes
 from sqlalchemy import String, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.exc import IntegrityError
@@ -803,19 +803,6 @@ def _clean_string_list(value: Any) -> Optional[list[str]]:
     return None
 
 
-def _decode_csv_bytes(raw: bytes) -> str:
-    """Tolerant CSV decoding — UTF-8 (BOM-aware for Excel exports), then
-    cp1252 / latin-1 so a spreadsheet with a stray non-UTF-8 byte doesn't
-    hard-fail. Mirror of the tolerant decoder in ``core/services/evals/csv_import.py``.
-    """
-    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            logger.debug("[agent-llm-eval] CSV not decodable as %s", encoding)
-    return raw.decode("utf-8", errors="replace")
-
-
 def _normalize_header(name: Optional[str]) -> Optional[str]:
     if name is None:
         return None
@@ -824,7 +811,7 @@ def _normalize_header(name: Optional[str]) -> Optional[str]:
 
 
 def _parse_scenarios_csv(raw: bytes) -> list[dict]:
-    text = _decode_csv_bytes(raw)
+    text = decode_csv_bytes(raw, log_tag="[agent-llm-eval]")
     reader = csv.DictReader(io.StringIO(text))
     fieldnames = reader.fieldnames or []
     normalized = {_normalize_header(f) for f in fieldnames if f is not None}

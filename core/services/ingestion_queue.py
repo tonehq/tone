@@ -48,6 +48,29 @@ def _defer_sync(task, **kwargs) -> int:
             return task.defer(**kwargs)
 
 
+def _defer_via_ephemeral_app(*, task_name: str, queue: str, **kwargs) -> int:
+    """Defer a job BY NAME from a sync request/worker thread using a one-shot
+    ``SyncPsycopgConnector``-backed app.
+
+    Why not the module-level async ``app``: its psycopg pool is bound to the
+    worker's main event loop; opening the SAME connector from a fresh
+    ``asyncio.run`` loop inside a threadpool thread creates cross-loop futures
+    and closes the shared pool. This spins up a fully-isolated one-shot app just
+    for the defer, then closes it. The task need not be registered on this
+    ephemeral app — the worker resolves ``task_name`` against its own registry
+    when it picks the job up. ``max_size=1`` because the pool lives only long
+    enough to defer one job.
+    """
+    from procrastinate import App as _App
+    from procrastinate import SyncPsycopgConnector
+
+    ephemeral = _App(
+        connector=SyncPsycopgConnector(conninfo=_conninfo(), min_size=1, max_size=1)
+    )
+    with ephemeral.open():
+        return ephemeral.configure_task(name=task_name, queue=queue).defer(**kwargs)
+
+
 @app.task(name="ingest_upload", queue="ingestion")
 def ingest_upload(
     upload_id: str,
@@ -542,28 +565,18 @@ def enqueue_agent_llm_eval_sync(
     module-level async ``app`` from a threadpool thread (that would create
     cross-loop futures and close the shared psycopg pool).
     """
-    from procrastinate import App as _App
-    from procrastinate import SyncPsycopgConnector
-
-    ephemeral = _App(
-        connector=SyncPsycopgConnector(
-            conninfo=_conninfo(), min_size=1, max_size=1
-        )
+    return _defer_via_ephemeral_app(
+        task_name="run_agent_llm_eval",
+        queue="agent_eval",
+        agent_id=str(agent_id),
+        triggered_by=triggered_by,
+        scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
+        tags=list(tags) if tags else None,
+        folder_id=str(folder_id) if folder_id else None,
+        folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
+        judge_model=judge_model,
+        run_id=str(run_id) if run_id else None,
     )
-    with ephemeral.open():
-        return ephemeral.configure_task(
-            name="run_agent_llm_eval",
-            queue="agent_eval",
-        ).defer(
-            agent_id=str(agent_id),
-            triggered_by=triggered_by,
-            scenario_ids=[str(s) for s in scenario_ids] if scenario_ids else None,
-            tags=list(tags) if tags else None,
-            folder_id=str(folder_id) if folder_id else None,
-            folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
-            judge_model=judge_model,
-            run_id=str(run_id) if run_id else None,
-        )
 
 
 def enqueue_eval_for_ingestion_run_sync(
@@ -582,25 +595,12 @@ def enqueue_eval_for_ingestion_run_sync(
     on ``pool 'pool-1' is already closed``). Instead, spin up a one-shot
     ``SyncPsycopgConnector``-backed app just for the defer, then close it.
     Fully isolated — cannot touch the shared async pool."""
-    from procrastinate import App as _App
-    from procrastinate import SyncPsycopgConnector
-
-    # ``kwargs`` on ``SyncPsycopgConnector`` are forwarded to psycopg's sync
-    # ``ConnectionPool``. Cap it small — this pool exists only long enough to
-    # defer one job, so we don't want to hold more than a single connection.
-    ephemeral = _App(
-        connector=SyncPsycopgConnector(
-            conninfo=_conninfo(), min_size=1, max_size=1
-        )
+    return _defer_via_ephemeral_app(
+        task_name="eval_ingestion_run",
+        queue="eval",
+        ingestion_run_id=str(ingestion_run_id),
+        triggered_by=triggered_by,
     )
-    with ephemeral.open():
-        # Defer by task name — the task doesn't need to be registered on this
-        # ephemeral app; the worker (running with the shared ``app``) resolves
-        # the name against its own registry when it picks the job up.
-        return ephemeral.configure_task(
-            name="eval_ingestion_run",
-            queue="eval",
-        ).defer(ingestion_run_id=str(ingestion_run_id), triggered_by=triggered_by)
 
 
 @app.task(name="execute_outbound_call", queue="outbound_calls")
@@ -893,21 +893,11 @@ def enqueue_call_transcript_eval_sync(
     async ``app`` from a threadpool thread (that would create cross-loop
     futures and close the shared psycopg pool).
     """
-    from procrastinate import App as _App
-    from procrastinate import SyncPsycopgConnector
-
-    ephemeral = _App(
-        connector=SyncPsycopgConnector(
-            conninfo=_conninfo(), min_size=1, max_size=1,
-        )
+    return _defer_via_ephemeral_app(
+        task_name="score_call_transcript",
+        queue="call_transcript_eval",
+        call_id=str(call_id),
+        org_id=str(org_id),
+        force=bool(force),
+        triggered_by=triggered_by,
     )
-    with ephemeral.open():
-        return ephemeral.configure_task(
-            name="score_call_transcript",
-            queue="call_transcript_eval",
-        ).defer(
-            call_id=str(call_id),
-            org_id=str(org_id),
-            force=bool(force),
-            triggered_by=triggered_by,
-        )

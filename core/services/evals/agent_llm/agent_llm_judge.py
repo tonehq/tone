@@ -43,15 +43,9 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
     build_metrics,
 )
+from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
-
-
-# Metrics where a HIGHER score is WORSE (bias/toxicity/hallucination all
-# report the offending fraction). DeepEval's ``.success`` handles the
-# direction correctly for the metric itself; this set is used ONLY by the
-# fallback verdict path when the metric didn't set ``.success``.
-_INVERTED_METRICS: frozenset[str] = frozenset({"hallucination", "bias", "toxicity"})
 
 
 class AgentLlmJudgeService:
@@ -205,7 +199,14 @@ class AgentLlmJudgeService:
             )
 
             try:
-                scorecard = asyncio.run(_run_all(named_metrics, test_case))
+                # Agent-LLM measures every metric against the same test case.
+                scorecard = asyncio.run(
+                    run_metrics(
+                        named_metrics,
+                        lambda _name: test_case,
+                        log_tag="[agent-llm-eval]",
+                    )
+                )
             except EvalConfigurationError:
                 raise
             except Exception as e:  # noqa: BLE001
@@ -238,55 +239,3 @@ class AgentLlmJudgeService:
             "reasoning": reasoning,
             "metric_scores": scores,
         }
-
-
-async def _run_all(
-    named_metrics: List[Tuple[str, BaseMetric]],
-    tc: LLMTestCase,
-) -> dict:
-    """Fire every metric concurrently; capture per-metric exceptions as FAIL
-    entries so peers still contribute."""
-    results = await asyncio.gather(
-        *[_safe_measure(name, metric, tc) for name, metric in named_metrics],
-        return_exceptions=False,
-    )
-    scorecard: dict = {}
-    for name, score, verdict, reason in results:
-        scorecard[name] = {"score": score, "verdict": verdict, "reason": reason}
-    return scorecard
-
-
-async def _safe_measure(name: str, metric: BaseMetric, tc: LLMTestCase):
-    try:
-        await metric.a_measure(tc)
-        score = _to_float(getattr(metric, "score", None))
-        verdict = _verdict_for(name, metric, score)
-        reason = getattr(metric, "reason", None) or ""
-        return name, score, verdict, reason
-    except Exception as e:  # noqa: BLE001
-        logger.exception("[agent-llm-eval] metric {} raised", name)
-        return name, 0.0, "fail", f"{type(e).__name__}: {e}"
-
-
-def _verdict_for(name: str, metric: BaseMetric, score: float) -> str:
-    """Trust the metric's own ``.success`` (DeepEval sets it with the
-    right score direction for each metric, including bias/toxicity/
-    hallucination where higher = worse). Fall back to a direction-aware
-    threshold comparison only when ``.success`` is genuinely absent."""
-    success = getattr(metric, "success", None)
-    if success is not None:
-        return "pass" if bool(success) else "fail"
-    threshold = getattr(metric, "threshold", None)
-    if threshold is None:
-        return "fail"
-    if name in _INVERTED_METRICS:
-        return "pass" if score < float(threshold) else "fail"
-    return "pass" if score >= float(threshold) else "fail"
-
-
-def _to_float(v) -> float:
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, f))

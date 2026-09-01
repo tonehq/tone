@@ -468,28 +468,39 @@ class IngestionRunService:
         return run
 
     @staticmethod
-    def list_runs(db: Session, upload_id: Any) -> List[IngestionPipelineRun]:
-        return (
-            db.query(IngestionPipelineRun)
-            .filter(IngestionPipelineRun.upload_id == upload_id)
-            .order_by(IngestionPipelineRun.run_number.asc())
-            .all()
+    def list_runs(
+        db: Session, upload_id: Any, org_id: Optional[Any] = None
+    ) -> List[IngestionPipelineRun]:
+        # ``org_id`` is optional for backward compatibility with worker/CLI
+        # callers that already operate inside a trusted scope; router callers
+        # pass it so the query is tenant-scoped (defense-in-depth against IDOR).
+        q = db.query(IngestionPipelineRun).filter(
+            IngestionPipelineRun.upload_id == upload_id
         )
+        if org_id is not None:
+            q = q.filter(IngestionPipelineRun.organization_id == org_id)
+        return q.order_by(IngestionPipelineRun.run_number.asc()).all()
 
     @staticmethod
-    def get_active_run(db: Session, upload_id: Any) -> Optional[IngestionPipelineRun]:
-        return (
-            db.query(IngestionPipelineRun)
-            .filter(
-                IngestionPipelineRun.upload_id == upload_id,
-                IngestionPipelineRun.is_active.is_(True),
-            )
-            .first()
+    def get_active_run(
+        db: Session, upload_id: Any, org_id: Optional[Any] = None
+    ) -> Optional[IngestionPipelineRun]:
+        q = db.query(IngestionPipelineRun).filter(
+            IngestionPipelineRun.upload_id == upload_id,
+            IngestionPipelineRun.is_active.is_(True),
         )
+        if org_id is not None:
+            q = q.filter(IngestionPipelineRun.organization_id == org_id)
+        return q.first()
 
     @staticmethod
-    def activate_run(db: Session, run_id: Any) -> IngestionPipelineRun:
-        run = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id).first()
+    def activate_run(
+        db: Session, run_id: Any, org_id: Optional[Any] = None
+    ) -> IngestionPipelineRun:
+        q = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id)
+        if org_id is not None:
+            q = q.filter(IngestionPipelineRun.organization_id == org_id)
+        run = q.first()
         if run is None:
             raise ValueError(f"IngestionPipelineRun {run_id} not found")
         (
@@ -519,9 +530,12 @@ class IngestionRunService:
         return run
 
     @staticmethod
-    def delete_run(db: Session, run_id: Any) -> None:
+    def delete_run(db: Session, run_id: Any, org_id: Optional[Any] = None) -> None:
         """Cascades to chunks + embeddings via FK ON DELETE CASCADE."""
-        run = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id).first()
+        q = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id)
+        if org_id is not None:
+            q = q.filter(IngestionPipelineRun.organization_id == org_id)
+        run = q.first()
         if run is None:
             return
         db.delete(run)
