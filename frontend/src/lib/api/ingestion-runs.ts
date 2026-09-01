@@ -4,6 +4,7 @@ import { KNOWLEDGE_BASE_QUERY_KEY } from '@/lib/api/knowledge-base';
 import {
   activateIngestionRun,
   createCustomIngestionRun,
+  deleteIngestionRun,
   getPipelineOptions,
   listIngestionRunChunks,
   listIngestionRuns,
@@ -52,6 +53,19 @@ export function useActivateIngestionRun(uploadId: string) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: [INGESTION_RUNS_QUERY_KEY, uploadId] });
       // KB row exposes the active pointer; refresh list/detail consumers too.
+      qc.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] });
+    },
+  });
+}
+
+export function useDeleteIngestionRun(uploadId: string) {
+  const qc = useQueryClient();
+  return useMutation<{ ok: boolean }, unknown, string>({
+    mutationFn: (runId: string) => deleteIngestionRun(uploadId, runId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [INGESTION_RUNS_QUERY_KEY, uploadId] });
+      // The KB row exposes the active-run pointer; keep list/detail consumers
+      // in sync too (mirrors useActivateIngestionRun).
       qc.invalidateQueries({ queryKey: [KNOWLEDGE_BASE_QUERY_KEY] });
     },
   });

@@ -662,6 +662,22 @@ def drain_outbound_calls(timestamp: int) -> None:
         OutboundCallService(db).drain_outbound_capacity()
 
 
+@app.periodic(cron="*/5 * * * *")
+@app.task(name="reap_stuck_ingestion_runs", queue="pod_sync")
+def reap_stuck_ingestion_runs(timestamp: int) -> None:
+    """Safety net for ingestion runs stranded in ``running`` because their
+    worker was SIGKILLed mid-ingestion (spot reclaim, OOM, deploy). Without this
+    the document shows 'Processing' forever with no auto-recovery. Marks such
+    runs (and their uploads) ``failed`` so the UI shows Failed + Retry.
+    Idempotent; only touches runs older than the timeout. Mirrors
+    ``reap_orphaned_calls``."""
+    from core.database.session import get_db_context
+    from core.services.ingestion_run_service import IngestionRunService
+
+    with get_db_context() as db:
+        IngestionRunService.reap_stuck_runs(db)
+
+
 def enqueue_outbound_calls_batch(items):
     """Defer one or many scheduled outbound calls over a single Procrastinate connection.
 
