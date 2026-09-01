@@ -209,26 +209,20 @@ class TTSModelLanguageMatchCheck(_TTSMixin, ShallowCheck):
         return "TTS model not resolved."
 
     async def run(self, ctx: CheckContext) -> CheckResult:
-        from core.models.model_language import ModelLanguage
-        from core.services.readiness.checks._language import resolve_language_code
+        from core.services.readiness.checks._language import (
+            resolve_language_code,
+            resolve_supported_languages,
+        )
 
         code = resolve_language_code(ctx, "tts")
         if not code:
             return self._skip("Language not configured (see language check).")
 
-        rows = (
-            ctx.db.query(ModelLanguage.name)
-            .filter(
-                ModelLanguage.model_id == ctx.tts.model.id,
-                ModelLanguage.is_active.is_(True),
-            )
-            .all()
-        )
-        if not rows:
+        supported = resolve_supported_languages(ctx, "tts")
+        if supported is None:
             return self._skip(
                 "TTS model does not declare supported languages (metadata not seeded)."
             )
-        supported = {str(r[0]).strip().lower() for r in rows if r[0]}
         if code.lower() not in supported:
             return self._fail(
                 f"The TTS model {quote(ctx.tts.model.name)} doesn't support the "
