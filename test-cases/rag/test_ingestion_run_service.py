@@ -119,6 +119,22 @@ def test_fail_run_does_not_change_is_active():
     assert run.error == "boom"
 
 
+def test_fail_run_returns_run_marked_failed():
+    """A failed ingestion run must land ``status='failed'`` on the returned
+    row so the API / UI can surface the failure. Mirrors the MagicMock-session
+    style above: ``db.query(...).filter(...).first()`` yields the run."""
+    db = MagicMock()
+    run = MagicMock()
+    run.id = "r1"
+    run.is_active = False  # begin_pending_run always writes False
+    db.query.return_value.filter.return_value.first.return_value = run
+
+    result = IngestionRunService.fail_run(db, "r1", error="ingestion blew up")
+
+    assert result is run
+    assert result.status == "failed"
+
+
 def test_complete_run_missing_raises_value_error():
     db = MagicMock()
     db.query.return_value.filter.return_value.first.return_value = None
