@@ -938,16 +938,16 @@ def _seed_snapshot(
     run_number=1,
     computed_at=None,
 ):
-    """Insert one AgentReadinessSnapshot row so the list endpoint's embedded
+    """Insert one AgentReadinessRun row so the list endpoint's embedded
     readiness field can be asserted deterministically without running a live
-    check. The (agent_id, config_id, depth) uniqueness constraint means each
-    depth is its own slot for a config_id=None agent."""
+    check. The list badge reads the most recent run per agent, so a single
+    seeded row per depth is enough for a config_id=None agent."""
     from datetime import datetime, timezone
 
-    from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
+    from core.models.agent_readiness_run import AgentReadinessRun
 
     now = computed_at or datetime.now(timezone.utc)
-    row = AgentReadinessSnapshot(
+    row = AgentReadinessRun(
         organization_id=org_id,
         agent_id=agent_id,
         config_id=None,

@@ -473,13 +473,13 @@ class TestGetReadinessRun:
 # ─── ReadinessService.list_runs / get_run — seeded, deterministic ───
 
 def _seed_event(db, *, org_id, agent_id, run_number, depth, checks=None):
-    """Insert one AgentReadinessEvent row directly so run-history behaviour can
+    """Insert one AgentReadinessRun row directly so run-history behaviour can
     be asserted deterministically (deep runs are rate-limited + probe live
     providers, so driving them through the API is flaky)."""
-    from core.models.agent_readiness_event import AgentReadinessEvent
+    from core.models.agent_readiness_run import AgentReadinessRun
 
     now = datetime.now(timezone.utc)
-    row = AgentReadinessEvent(
+    row = AgentReadinessRun(
         organization_id=org_id,
         agent_id=agent_id,
         config_id=None,
