@@ -23,6 +23,14 @@ class GeneratedApiKey(OrgScopedModel, SoftDeleteMixin):
     name = Column(String(120), nullable=False)
     key_hash = Column(String(64), nullable=False)
     key_prefix = Column(String(20), nullable=False)
+    # The org role this key acts as when it authenticates a request. One of the
+    # ``Role`` values ("owner" | "admin" | "member" | "observer"). A request made
+    # with this key is treated exactly like a person of this role — this is what
+    # ``core.middleware.auth.try_resolve_api_key`` reads to build the request's
+    # claims. Capped at the creating user's own role at mint time so a key can
+    # never grant more authority than its creator has. Server-default "admin"
+    # preserves the pre-migration behavior (every key was implicitly admin).
+    role = Column(String(20), nullable=False, server_default="admin")
     created_by_user_id = Column(
         UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
     )
@@ -44,6 +52,7 @@ class GeneratedApiKey(OrgScopedModel, SoftDeleteMixin):
         return {
             "id": str(self.id),
             "name": self.name,
+            "role": self.role,
             "key_prefix": self.key_prefix,
             "masked": self.masked(),
             "status": self.status(),

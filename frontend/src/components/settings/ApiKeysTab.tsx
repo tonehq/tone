@@ -19,6 +19,7 @@ import {
   useDeleteApiKey,
   useRevokeApiKey,
 } from '@/lib/api/apiKeys';
+import { API_KEY_ROLE_LABELS } from '@/schemas/apiKey';
 import { useAuthStore } from '@/stores/auth';
 import type { CustomTableColumn } from '@/types/components';
 import type { ApiKeyRow, ApiKeyStatus, CreateApiKeyPayload } from '@/types/settings/apiKey';
@@ -130,6 +131,16 @@ export default function ApiKeysTab() {
         title: 'Key',
         render: (_v, row) => (
           <code className="font-mono text-[12px] text-muted-foreground">{row.masked}</code>
+        ),
+      },
+      {
+        key: 'role',
+        title: 'Permission',
+        width: 'w-28',
+        render: (_v, row) => (
+          <Badge variant="secondary" className="bg-muted text-muted-foreground">
+            {API_KEY_ROLE_LABELS[row.role] ?? row.role}
+          </Badge>
         ),
       },
       {
@@ -272,6 +283,7 @@ export default function ApiKeysTab() {
         open={createOpen}
         onClose={() => setCreateOpen(false)}
         onSubmit={handleCreate}
+        creatorRole={role}
       />
 
       <RevealApiKeyModal

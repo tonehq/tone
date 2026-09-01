@@ -9,9 +9,13 @@
 
 export type ApiKeyStatus = 'active' | 'expired' | 'revoked';
 
+/** The org role a key acts as when it authenticates a request. */
+export type ApiKeyRole = 'owner' | 'admin' | 'member' | 'observer';
+
 export interface ApiKeyRow {
   id: string;
   name: string;
+  role: ApiKeyRole;
   key_prefix: string;
   masked: string;
   status: ApiKeyStatus;
@@ -32,6 +36,8 @@ export interface CreateApiKeyResponse extends ApiKeyRow {
 
 export interface CreateApiKeyPayload {
   name: string;
+  /** The role the key should act as. Capped server-side at the creator's role. */
+  role: ApiKeyRole;
   /** ISO 8601 UTC. `null` = never expires. */
   expires_at: string | null;
 }
