@@ -1,6 +1,5 @@
 import {
   Book,
-  Braces,
   CalendarClock,
   Clock,
   Gauge,
@@ -31,16 +30,16 @@ export interface AgentSection {
 // the agent's workflows behind a Prompt/Workflow toggle (they're two ways to
 // drive the same conversation), so there is no separate Workflow entry.
 //
+// Profile variables have no rail entry of their own — they're managed from a
+// right-side drawer ("Profile variables") opened from the Prompt step and the
+// workflow builder toolbar (see ProfileVariablesDrawer), right where the
+// `{{profile.<key>}}` placeholders are actually used.
+//
 // "Setup" bundles the read-only Overview (edit mode only), Basics, and AI
 // sections into a single page — they're all the "who is this agent + which
 // brain drives it" concerns and read cleanly stacked.
 export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'setup', label: 'Setup', icon: Settings2 },
-  // Profile sits between Setup and Prompt — the natural discovery order is
-  // "who is this agent → what variables can it use → how does it use them".
-  // Available in BOTH modes: in create mode, entries are staged as local
-  // drafts and flushed to the new agent id on save (see AgentEditorShell).
-  { key: 'profile', label: 'Profile', icon: Braces },
   { key: 'prompt', label: 'Prompt', icon: MessageSquare },
   { key: 'voice', label: 'Voice', icon: Volume2 },
   { key: 'tools', label: 'Tools & MCP', icon: Wrench },
@@ -58,9 +57,7 @@ export const AGENT_SECTIONS: AgentSection[] = [
 /**
  * Sections shown only for a saved agent (edit mode) — omitted while creating.
  * `contacts`/`schedule` (C-5): they need a persisted `agent_id`, which only exists
- * after the agent is saved, so the tabs must not render in create mode. `profile`
- * is intentionally NOT in this set — CRUD-in-create is buffered as drafts (see
- * `ProfileStep`) and flushed on agent-create; the tab renders in both modes.
+ * after the agent is saved, so the tabs must not render in create mode.
  */
 const EDIT_ONLY_SECTION_KEYS = new Set<string>(['call-history', 'contacts', 'schedule']);
 
