@@ -1,13 +1,13 @@
-"""Shared column set for the two readiness tables.
+"""Shared column set for the readiness runs table.
 
-Both ``AgentReadinessSnapshot`` (latest state) and ``AgentReadinessEvent``
-(append-only history) carry identical columns — the only difference is the
-uniqueness constraint. Defining the columns once here means schema changes
-propagate to both tables automatically and the two can never drift.
+Defines every column that describes one readiness run. Kept as a mixin (rather
+than inlined on the model) so the column definitions stay in one documented
+place and any future readiness table reuses the exact same shape — mirrors the
+``SoftDeleteMixin`` pattern already used in ``core/models/base.py``.
 
-Mirrors the ``SoftDeleteMixin`` pattern already used in ``core/models/base.py``
-— plain ``Column`` definitions inside a mixin class; SQLAlchemy handles the
-per-subclass instantiation.
+Consumed by :class:`~core.models.agent_readiness_run.AgentReadinessRun`, the
+single append-only table holding both the latest state and the full history
+(it replaced the former snapshot + event two-table split).
 """
 
 from datetime import datetime, timezone
@@ -78,9 +78,8 @@ class ReadinessRowMixin:
         default=lambda: datetime.now(timezone.utc),
     )
     # Per-agent run counter, monotonically increasing across all configs and
-    # depths. Snapshot rows always carry the *latest* run number (row is
-    # UPSERTed); event rows form the full 1..N sequence. UI can read
-    # snapshot.run_number for a "Run #10" badge without a subquery.
+    # depths — the rows form the full 1..N sequence. The latest row's
+    # run_number drives the "Run #10" badge without a subquery.
     run_number = Column(Integer, nullable=False, default=1)
     # Optional human-readable label for the run. Nullable; no writers yet.
     name = Column(String(255), nullable=True)

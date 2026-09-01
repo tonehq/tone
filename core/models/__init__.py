@@ -31,8 +31,7 @@ from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_profile_variable import AgentProfileVariable
-from core.models.agent_readiness_event import AgentReadinessEvent
-from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
+from core.models.agent_readiness_run import AgentReadinessRun
 from core.models.agent_tool import AgentTool
 
 # Workflows (org-level, reusable node-based pathways)

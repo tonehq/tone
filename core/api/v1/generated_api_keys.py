@@ -29,6 +29,10 @@ router = APIRouter()
 
 class CreateApiKeyRequest(BaseModel):
     name: str = Field(min_length=1, max_length=120)
+    # The org role this key acts as: "owner" | "admin" | "member" | "observer".
+    # The service caps it at the creating user's own role. Defaults to "member"
+    # (least-privilege) when the client omits it.
+    role: str = Field(default="member")
     # ``None`` = never expires. When set, must be a future timestamp; the
     # service normalizes naive datetimes to UTC before comparing.
     expires_at: Optional[datetime] = None
@@ -66,7 +70,12 @@ def create_api_key(
     the client MUST show it to the user immediately and drop it. After this
     response the key is unrecoverable."""
     svc = _get_service(claims, db)
-    row, full_key = svc.create_api_key(name=body.name, expires_at=body.expires_at)
+    row, full_key = svc.create_api_key(
+        name=body.name,
+        role=body.role,
+        creator_role=claims.role,
+        expires_at=body.expires_at,
+    )
     response = svc.api_key_response(row)
     response["key"] = full_key
     return response
