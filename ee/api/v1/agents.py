@@ -235,8 +235,9 @@ async def switch_active_version(
     db: Session = Depends(get_db),
 ):
     # Publish gate: verify the target version is safe to promote before we
-    # flip the FK. Raises HTTPException(400) on blockers or unforced warnings,
-    # which happens before any DB write so the transaction stays clean.
+    # flip the FK. Raises a PublishGateError on blockers or unforced warnings
+    # (mapped to HTTP 400 by the api_v1 readiness error handler) before any DB
+    # write, so the transaction stays clean.
     from core.services.readiness import ReadinessService
 
     readiness = ReadinessService(
