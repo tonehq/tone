@@ -38,7 +38,12 @@ def create_api_key(
     db: Session = Depends(get_db),
 ):
     svc = _get_service(claims, db)
-    row, full_key = svc.create_api_key(name=body.name, expires_at=body.expires_at)
+    row, full_key = svc.create_api_key(
+        name=body.name,
+        role=body.role,
+        creator_role=claims.role,
+        expires_at=body.expires_at,
+    )
     response = svc.api_key_response(row)
     response["key"] = full_key
     return response

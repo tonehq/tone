@@ -22,6 +22,7 @@ from loguru import logger
 from sqlalchemy import func
 from sqlalchemy.exc import IntegrityError
 
+from core.models.enums import Role
 from core.models.generated_api_key import GeneratedApiKey
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
@@ -30,6 +31,19 @@ from core.services.common.list_query import apply_search_sort_pagination
 # Prefix carried by every key we mint — lets the auth path route on the shape of
 # the incoming Bearer without a wasted JWT decode.
 KEY_PREFIX = "tone_sk_"
+
+# Authority ordering of the org roles a key can carry. A key can never be minted
+# with a higher-ranked role than the creating user's own role, so a member can't
+# escalate by issuing an admin/owner key. Kept here (rather than a shared guard)
+# because API-key capping is the only place today that needs a role *ordering*
+# — the route guards only need set membership.
+_ROLE_RANK = {
+    Role.OBSERVER.value: 0,
+    Role.MEMBER.value: 1,
+    Role.ADMIN.value: 2,
+    Role.OWNER.value: 3,
+}
+VALID_API_KEY_ROLES = set(_ROLE_RANK)
 # How many characters of the full key are safe to persist for display/masking.
 DISPLAY_PREFIX_LEN = 12
 # Coalesce ``last_used_at`` writes to at most one per interval per key so hot
@@ -59,14 +73,44 @@ class GeneratedApiKeyService(BaseService):
     # CRUD
     # ------------------------------------------------------------------
 
+    def _resolve_key_role(self, role: str, creator_role: Optional[str]) -> str:
+        """Validate the requested key ``role`` and cap it at ``creator_role``.
+
+        Raises 422 for an unknown role and 403 when the caller tries to mint a key
+        stronger than their own role (privilege escalation). ``creator_role`` may
+        be ``None`` for a legacy/unknown caller — treated as the lowest authority
+        so it can only ever mint an observer key.
+        """
+        requested = (role or "").strip().lower()
+        if requested not in _ROLE_RANK:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=f"Invalid role. Must be one of: {', '.join(sorted(_ROLE_RANK))}.",
+            )
+        creator = (creator_role or "").strip().lower()
+        creator_rank = _ROLE_RANK.get(creator, min(_ROLE_RANK.values()))
+        if _ROLE_RANK[requested] > creator_rank:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="You cannot create an API key with more privileges than your own role.",
+            )
+        return requested
+
     def create_api_key(
         self,
         *,
         name: str,
+        role: str,
+        creator_role: Optional[str],
         expires_at: Optional[datetime] = None,
     ) -> Tuple[GeneratedApiKey, str]:
         """Mint a new key. Returns ``(orm_row, full_plaintext_key)`` — the router
-        includes the plaintext in the one-time create response and drops it."""
+        includes the plaintext in the one-time create response and drops it.
+
+        ``role`` is the authority the minted key will carry; it is validated
+        against the known roles and **capped at ``creator_role``** so a caller can
+        never issue a key more powerful than themselves.
+        """
         clean_name = (name or "").strip()
         if not clean_name:
             raise HTTPException(
@@ -78,6 +122,7 @@ class GeneratedApiKeyService(BaseService):
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="Name must be 120 characters or fewer.",
             )
+        key_role = self._resolve_key_role(role, creator_role)
         if expires_at is not None:
             # Normalize naive datetimes to UTC so the ``> utcnow()`` check below
             # is comparing apples to apples.
@@ -94,6 +139,7 @@ class GeneratedApiKeyService(BaseService):
             organization_id=self.org_id,
             created_by_user_id=self.user_id,
             name=clean_name,
+            role=key_role,
             key_hash=key_hash,
             key_prefix=key_prefix,
             expires_at=expires_at,

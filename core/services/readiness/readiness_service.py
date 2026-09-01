@@ -20,7 +20,7 @@ from __future__ import annotations
 
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, Optional, Set, Union
+from typing import Dict, List, Optional, Set
 from uuid import UUID
 
 from loguru import logger
@@ -28,8 +28,7 @@ from loguru import logger
 from sqlalchemy import func, select
 
 from core.models.agent import Agent
-from core.models.agent_readiness_event import AgentReadinessEvent
-from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
+from core.models.agent_readiness_run import AgentReadinessRun
 from core.models.phone_number import PhoneNumber
 from core.services.base import BaseService
 from core.services.readiness.errors import (
@@ -77,7 +76,7 @@ _rate_limiter = RateLimiter(max_per_window=1, window_seconds=60)
 # 300s matches the in-memory ``DeepCheckCache`` TTL above so both cache
 # layers share a single freshness window: within 5 minutes of any external
 # drift the runner re-executes live, bringing the failure into the report.
-_DEEP_SNAPSHOT_TTL_SECONDS = 300
+_DEEP_RUN_TTL_SECONDS = 300
 
 
 # Canonical trigger strings. Free-form so callers can pass anything, but
@@ -117,10 +116,10 @@ class ReadinessService(BaseService):
         full-deep runs, not user-driven save-time probes.
 
         ``force`` is for an **explicit, user-initiated run** (the "Run deep
-        test" button). It skips the read-through snapshot fast-path AND the
-        in-memory coalesce cache so the run actually executes and appends a
-        fresh ``agent_readiness_events`` row — otherwise a repeat deep test on
-        an unchanged agent returns the stored snapshot and the run-history list
+        test" button). It skips the read-through fast-path AND the in-memory
+        coalesce cache so the run actually executes and appends a fresh
+        ``agent_readiness_runs`` row — otherwise a repeat deep test on an
+        unchanged agent returns the stored latest run and the run-history list
         never grows. The rate limiter still applies (1/min).
         """
         agent = self._require_agent(agent_id)
@@ -136,7 +135,7 @@ class ReadinessService(BaseService):
         # A forced run skips the read-through fast-path so it always executes
         # and records a new event (see docstring).
         if not force:
-            fresh = self._read_fresh_snapshot(agent.id, effective_config_id, depth, stamp)
+            fresh = self._read_fresh_run(agent.id, effective_config_id, depth, stamp)
             if fresh is not None:
                 return fresh
 
@@ -198,12 +197,17 @@ class ReadinessService(BaseService):
     def latest_for_agents(self, agent_ids: List[UUID]) -> Dict[UUID, Dict]:
         """Batch-fetch the latest readiness snapshot per agent for the list badge.
 
-        Read-only: returns the most recently computed stored snapshot (any
-        config / depth) verbatim — no recompute, no dependency-stamp
-        re-validation. Powers the agent-list badge in a single query instead of
-        one live readiness call per row (the old N+1); the editor drawer still
-        recomputes accurately when opened. An agent with no stored run yet is
-        simply absent from the map (badge renders "unavailable").
+        Read-only: returns the most recently computed stored run (any config /
+        depth) verbatim — no recompute, no dependency-stamp re-validation.
+        Powers the agent-list badge in a single query instead of one live
+        readiness call per row (the old N+1); the editor drawer still recomputes
+        accurately when opened. An agent with no stored run yet is simply absent
+        from the map (badge renders "unavailable").
+
+        The ``agent_readiness_runs`` table is append-only, so we pick the latest
+        row per agent with ``DISTINCT ON (agent_id) … ORDER BY agent_id,
+        computed_at DESC`` (backed by ``ix_readiness_runs_agent_time``) rather
+        than scanning every historical row.
 
         Org-scoped by ``self.org_id``. Projects only the badge columns (skips the
         heavy ``checks`` blob) and reuses ``_counts_from_mapping`` so the count
@@ -216,24 +220,27 @@ class ReadinessService(BaseService):
             return {}
         rows = (
             self.db.query(
-                AgentReadinessSnapshot.agent_id,
-                AgentReadinessSnapshot.overall_status,
-                AgentReadinessSnapshot.counts,
-                AgentReadinessSnapshot.run_number,
-                AgentReadinessSnapshot.computed_at,
+                AgentReadinessRun.agent_id,
+                AgentReadinessRun.overall_status,
+                AgentReadinessRun.counts,
+                AgentReadinessRun.run_number,
+                AgentReadinessRun.computed_at,
             )
             .filter(
-                AgentReadinessSnapshot.organization_id == self.org_id,
-                AgentReadinessSnapshot.agent_id.in_(agent_ids),
+                AgentReadinessRun.organization_id == self.org_id,
+                AgentReadinessRun.agent_id.in_(agent_ids),
             )
-            .order_by(AgentReadinessSnapshot.computed_at.desc())
+            # One row per agent — the newest. DISTINCT ON needs the leading
+            # ORDER BY column to match the DISTINCT column.
+            .distinct(AgentReadinessRun.agent_id)
+            .order_by(
+                AgentReadinessRun.agent_id,
+                AgentReadinessRun.computed_at.desc(),
+            )
             .all()
         )
         latest: Dict[UUID, Dict] = {}
         for agent_id, overall_status, counts, run_number, computed_at in rows:
-            # Rows arrive newest-first; keep only the first (latest) per agent.
-            if agent_id in latest:
-                continue
             tallies = _counts_from_mapping(counts)
             latest[agent_id] = {
                 "overall_status": overall_status,
@@ -262,20 +269,20 @@ class ReadinessService(BaseService):
         agent = self._require_agent(agent_id)
         capped = max(1, min(limit, self._MAX_RUNS_LIMIT))
         rows = (
-            self.db.query(AgentReadinessEvent)
+            self.db.query(AgentReadinessRun)
             .filter(
-                AgentReadinessEvent.organization_id == self.org_id,
-                AgentReadinessEvent.agent_id == agent.id,
-                AgentReadinessEvent.depth == Depth.DEEP.value,
+                AgentReadinessRun.organization_id == self.org_id,
+                AgentReadinessRun.agent_id == agent.id,
+                AgentReadinessRun.depth == Depth.DEEP.value,
             )
-            .order_by(AgentReadinessEvent.run_number.desc())
+            .order_by(AgentReadinessRun.run_number.desc())
             .limit(capped)
             .all()
         )
         items: List[ReadinessRunListItem] = []
         for row in rows:
             try:
-                items.append(_event_to_list_item(row))
+                items.append(_run_to_list_item(row))
             except (ValueError, KeyError):
                 # One legacy/partial row with an out-of-enum status/counts must
                 # not 500 the whole history list — skip it (with a traceback).
@@ -294,19 +301,19 @@ class ReadinessService(BaseService):
         """
         agent = self._require_agent(agent_id)
         row = (
-            self.db.query(AgentReadinessEvent)
+            self.db.query(AgentReadinessRun)
             .filter(
-                AgentReadinessEvent.organization_id == self.org_id,
-                AgentReadinessEvent.agent_id == agent.id,
+                AgentReadinessRun.organization_id == self.org_id,
+                AgentReadinessRun.agent_id == agent.id,
                 # Deep-only, mirroring ``list_runs`` — a shallow run_number that
                 # never appears in the dropdown must 404, not return a report.
-                AgentReadinessEvent.depth == Depth.DEEP.value,
-                AgentReadinessEvent.run_number == run_number,
+                AgentReadinessRun.depth == Depth.DEEP.value,
+                AgentReadinessRun.run_number == run_number,
             )
             # Defensive: run_number is monotonic + concurrency-guarded so it's
             # effectively unique per agent, but there's no DB uniqueness
             # constraint — take the most recent row if two ever collide.
-            .order_by(AgentReadinessEvent.computed_at.desc())
+            .order_by(AgentReadinessRun.computed_at.desc())
             .first()
         )
         if row is None:
@@ -472,7 +479,7 @@ class ReadinessService(BaseService):
                 return None
         return resolved_config.id if resolved_config is not None else None
 
-    def _read_fresh_snapshot(
+    def _read_fresh_run(
         self,
         agent_id: UUID,
         config_id: Optional[UUID],
@@ -494,25 +501,25 @@ class ReadinessService(BaseService):
         run, and vice-versa."""
         if not stamp:
             return None
-        q = self.db.query(AgentReadinessSnapshot).filter(
-            AgentReadinessSnapshot.organization_id == self.org_id,
-            AgentReadinessSnapshot.agent_id == agent_id,
-            AgentReadinessSnapshot.dependency_stamp == stamp,
+        q = self.db.query(AgentReadinessRun).filter(
+            AgentReadinessRun.organization_id == self.org_id,
+            AgentReadinessRun.agent_id == agent_id,
+            AgentReadinessRun.dependency_stamp == stamp,
         )
         # Deep reads must not be satisfied by a shallow snapshot; shallow reads
         # accept either depth (see docstring).
         if depth == Depth.DEEP:
-            q = q.filter(AgentReadinessSnapshot.depth == Depth.DEEP.value)
+            q = q.filter(AgentReadinessRun.depth == Depth.DEEP.value)
         # SQLAlchemy translates ``== None`` to ``IS NULL`` — needed so a
         # brand-new-agent snapshot (config_id NULL) can still fast-path.
         if config_id is None:
-            q = q.filter(AgentReadinessSnapshot.config_id.is_(None))
+            q = q.filter(AgentReadinessRun.config_id.is_(None))
         else:
-            q = q.filter(AgentReadinessSnapshot.config_id == config_id)
-        row = q.order_by(AgentReadinessSnapshot.computed_at.desc()).first()
+            q = q.filter(AgentReadinessRun.config_id == config_id)
+        row = q.order_by(AgentReadinessRun.computed_at.desc()).first()
         if row is None:
             return None
-        if depth == Depth.DEEP and _deep_snapshot_expired(row):
+        if depth == Depth.DEEP and _deep_run_expired(row):
             return None
         return _row_to_report(row)
 
@@ -564,8 +571,8 @@ class ReadinessService(BaseService):
         practice. Falls back to 1 for the very first run.
         """
         current = self.db.execute(
-            select(func.max(AgentReadinessEvent.run_number))
-            .where(AgentReadinessEvent.agent_id == agent_id)
+            select(func.max(AgentReadinessRun.run_number))
+            .where(AgentReadinessRun.agent_id == agent_id)
         ).scalar()
         return (current or 0) + 1
 
@@ -586,17 +593,17 @@ class ReadinessService(BaseService):
 # ── module-private helpers ─────────────────────────────────────────────────
 
 
-def _deep_snapshot_expired(row: AgentReadinessSnapshot) -> bool:
-    """True when a stored Deep snapshot is older than the wall-clock TTL.
+def _deep_run_expired(row: AgentReadinessRun) -> bool:
+    """True when a stored Deep run is older than the wall-clock TTL.
 
     A missing ``computed_at`` is defensively treated as expired — that would
     only happen for hand-inserted rows, and we'd rather re-run than serve a
-    snapshot with no provenance.
+    run with no provenance.
     """
     if row.computed_at is None:
         return True
     age = datetime.now(timezone.utc) - row.computed_at
-    return age > timedelta(seconds=_DEEP_SNAPSHOT_TTL_SECONDS)
+    return age > timedelta(seconds=_DEEP_RUN_TTL_SECONDS)
 
 
 def _counts_from_mapping(stored: Optional[Dict]) -> Dict[str, int]:
@@ -615,21 +622,19 @@ def _counts_from_mapping(stored: Optional[Dict]) -> Dict[str, int]:
     }
 
 
-def _counts_from_row(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> Dict[str, int]:
+def _counts_from_row(row: AgentReadinessRun) -> Dict[str, int]:
     """Tallies for a full row — delegates to ``_counts_from_mapping``."""
     return _counts_from_mapping(row.counts)
 
 
-def _row_to_report(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> ReadinessReport:
-    """Turn a stored readiness row back into a ``ReadinessReport``.
+def _row_to_report(row: AgentReadinessRun) -> ReadinessReport:
+    """Turn a stored ``agent_readiness_runs`` row back into a ``ReadinessReport``.
 
-    Accepts either an ``AgentReadinessSnapshot`` (latest state) or an
-    ``AgentReadinessEvent`` (history) — both carry the identical
-    ``ReadinessRowMixin`` columns, so one mapper serves both. Both JSONB
-    columns (``counts`` and ``checks``) already carry the exact wire shape so
-    there's no field-by-field mapping — just hand them to the Pydantic
-    models. Any missing count key falls back to 0 so an older row predating a
-    new severity level still renders."""
+    The row is the same whether it's being read as "latest state" or as a
+    history entry — both JSONB columns (``counts`` and ``checks``) already carry
+    the exact wire shape, so there's no field-by-field mapping — just hand them
+    to the Pydantic models. Any missing count key falls back to 0 so an older
+    row predating a new severity level still renders."""
     checks: List[CheckResult] = [
         CheckResult.model_validate(c) for c in (row.checks or [])
     ]
@@ -646,8 +651,8 @@ def _row_to_report(row: Union[AgentReadinessSnapshot, AgentReadinessEvent]) -> R
     )
 
 
-def _event_to_list_item(row: AgentReadinessEvent) -> ReadinessRunListItem:
-    """Flatten a history event row into a lightweight dropdown item.
+def _run_to_list_item(row: AgentReadinessRun) -> ReadinessRunListItem:
+    """Flatten a history run row into a lightweight dropdown item.
 
     Reuses ``_counts_from_row`` for the same defensive tallies as
     ``_row_to_report`` but drops the heavy ``checks`` list — the dropdown only
