@@ -72,6 +72,33 @@ _TTS_PROBE_TEXT = "This is a readiness test."
 # LLMFullResponseEndFrame (still a valid round-trip), which the probe accepts.
 _LLM_PROBE_TOKEN_CAP = 32
 
+# The OpenAI-compatible provider family — the providers whose SDK accepts (and,
+# for reasoning models, requires) ``max_completion_tokens`` rather than
+# ``max_tokens``. Defined ONCE here (was rebuilt inside ``probe_llm`` on every
+# call). Keep aligned with the OpenAI-compat providers ``service_factory``
+# routes through ``BaseOpenAILLMService``.
+_LLM_MAX_COMPLETION_TOKEN_PROVIDERS = frozenset({
+    "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
+    "fireworks", "perplexity", "sambanova", "nebius", "together",
+    "xai", "grok", "novita", "qwen", "inception",
+})
+
+
+def _llm_probe_token_cap(provider: str) -> dict:
+    """The probe's completion-length cap as EXACTLY ONE metadata key.
+
+    Sending both ``max_tokens`` and ``max_completion_tokens`` is rejected
+    (OpenAI HTTP 400, Cohere HTTP 422), so we pick one per provider family:
+    OpenAI-compatible → ``max_completion_tokens``; everyone else (Anthropic,
+    Google, Bedrock, Cohere, Mistral, …) → ``max_tokens``.
+    """
+    key = (
+        "max_completion_tokens"
+        if provider in _LLM_MAX_COMPLETION_TOKEN_PROVIDERS
+        else "max_tokens"
+    )
+    return {key: _LLM_PROBE_TOKEN_CAP}
+
 # Bundled STT audio asset — native rate the WAV is encoded at. Resampled per
 # provider at probe time via `audioop.ratecv` when the STT service is
 # configured for a different rate.
@@ -191,30 +218,11 @@ async def probe_llm(ctx) -> ProbeResult:
     # false-flags a healthy provider. Overriding the user's own
     # ``max_tokens`` is intentional: probe cost must stay bounded even
     # when the agent's model is configured with a large budget.
-    # Provider-aware token cap: send EXACTLY ONE cap key per provider family.
-    # Sending BOTH ``max_tokens`` and ``max_completion_tokens`` is rejected by
-    # both Cohere (HTTP 422) and OpenAI (HTTP 400 "Setting 'max_tokens' and
-    # 'max_completion_tokens' at the same time is not supported"). Pipecat's
-    # ``InputParams`` for OpenAI-family services declares BOTH fields — so
-    # ``build_input_params`` doesn't filter either out — but the underlying
-    # SDK/API server insists we pick one. We pick:
-    #   * OpenAI-family (openai, azure, groq, openrouter, deepseek, cerebras,
-    #     fireworks, perplexity, sambanova, nebius, together, xai, grok,
-    #     novita, qwen, inception) → ``max_completion_tokens`` (the newer,
-    #     non-deprecated field; required by reasoning models o1/o3/o4/gpt-5
-    #     and accepted by legacy chat models on modern SDK versions).
-    #   * Everyone else (Anthropic, Google, Bedrock, Cohere, Mistral, Nvidia,
-    #     Sarvam, Ollama) → ``max_tokens`` (their SDKs only declare this).
-    _OPENAI_FAMILY = {
-        "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
-        "fireworks", "perplexity", "sambanova", "nebius", "together",
-        "xai", "grok", "novita", "qwen", "inception",
-    }
-    if provider in _OPENAI_FAMILY:
-        token_cap: Dict[str, Any] = {"max_completion_tokens": _LLM_PROBE_TOKEN_CAP}
-    else:
-        token_cap = {"max_tokens": _LLM_PROBE_TOKEN_CAP}
-    spec["metadata"] = {**(spec["metadata"] or {}), **token_cap}
+    # Provider-aware token cap (single source: _llm_probe_token_cap). Pipecat's
+    # ``InputParams`` for OpenAI-family services declares BOTH max_tokens and
+    # max_completion_tokens, so ``build_input_params`` won't filter either — but
+    # the underlying SDK/API insists on exactly one, so we choose per family.
+    spec["metadata"] = {**(spec["metadata"] or {}), **_llm_probe_token_cap(provider)}
 
     try:
         service = service_factory.build_llm(spec)
