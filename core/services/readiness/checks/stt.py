@@ -135,26 +135,20 @@ class STTModelLanguageMatchCheck(_STTMixin, ShallowCheck):
         return "STT model not resolved."
 
     async def run(self, ctx: CheckContext) -> CheckResult:
-        from core.models.model_language import ModelLanguage
-        from core.services.readiness.checks._language import resolve_language_code
+        from core.services.readiness.checks._language import (
+            resolve_language_code,
+            resolve_supported_languages,
+        )
 
         code = resolve_language_code(ctx, "stt")
         if not code:
             return self._skip("Language not configured (see language check).")
 
-        rows = (
-            ctx.db.query(ModelLanguage.name)
-            .filter(
-                ModelLanguage.model_id == ctx.stt.model.id,
-                ModelLanguage.is_active.is_(True),
-            )
-            .all()
-        )
-        if not rows:
+        supported = resolve_supported_languages(ctx, "stt")
+        if supported is None:
             return self._skip(
                 "STT model does not declare supported languages (metadata not seeded)."
             )
-        supported = {str(r[0]).strip().lower() for r in rows if r[0]}
         if code.lower() not in supported:
             return self._fail(
                 f"The STT model {quote(ctx.stt.model.name)} doesn't support the "
@@ -220,9 +214,10 @@ class STTProviderReachableCheck(DeepCheck):
         result = await probe_stt(ctx)
         if result.ok:
             return self._pass(result.message)
-        # ``result.message`` is already a clean, provider-named sentence — see
-        # the LLM deep check for the reasoning.
+        # Clean provider-named sentence; a TIMEOUT is a WARNING, a confirmed
+        # failure stays BLOCKER — see the LLM deep check for the reasoning.
         return self._fail(
             result.message,
             remediation="Verify the STT provider status and that the API key is valid.",
+            severity=Severity.WARNING if result.timed_out else None,
         )

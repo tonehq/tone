@@ -116,6 +116,62 @@ api_v1.add_middleware(
 # api_v1 sub-app is mounted under it, so the outer middleware already wraps
 # every /api/v1/* request. Adding it here would double-set the context.
 
+
+# ── Readiness service errors → HTTP ──────────────────────────────────────────
+# ``ReadinessService`` is transport-agnostic (raises typed errors from
+# ``core.services.readiness.errors``, never ``HTTPException``) so it can be
+# reused from a CLI / job / other service. This one handler on the api_v1
+# sub-app maps that error family to the SAME HTTP responses the routes returned
+# before, for every readiness + publish-gate route across both editions — so no
+# per-route try/except is needed. Registered on ``api_v1`` (not the outer app)
+# because mounted sub-apps resolve their own exception handlers.
+from fastapi.encoders import jsonable_encoder  # noqa: E402
+
+from core.services.readiness.errors import (  # noqa: E402
+    AgentNotFoundError,
+    InvalidAgentIdError,
+    PublishGateError,
+    ReadinessError,
+    ReadinessRateLimitedError,
+    ReadinessRunNotFoundError,
+)
+
+_READINESS_ERROR_STATUS = {
+    InvalidAgentIdError: 400,
+    AgentNotFoundError: 404,
+    ReadinessRateLimitedError: 429,
+    ReadinessRunNotFoundError: 404,
+}
+
+
+async def _readiness_error_handler(_request: Request, exc: ReadinessError) -> JSONResponse:
+    """Map a readiness service error onto the HTTP response its route used to
+    raise directly, keeping the wire contract byte-for-byte identical."""
+    if isinstance(exc, PublishGateError):
+        # Structured body the publish flow switches on (reason + full report).
+        return JSONResponse(
+            status_code=400,
+            content=jsonable_encoder(
+                {
+                    "detail": {
+                        "reason": exc.reason,
+                        "message": exc.message,
+                        "report": exc.report.model_dump(),
+                    }
+                }
+            ),
+        )
+    # Exact-type lookup; any future subclass falls back to 400 rather than 500.
+    status_code = _READINESS_ERROR_STATUS.get(type(exc), 400)
+    return JSONResponse(
+        status_code=status_code,
+        content=jsonable_encoder({"detail": str(exc)}),
+    )
+
+
+api_v1.add_exception_handler(ReadinessError, _readiness_error_handler)
+
+
 if ee_enabled:
     # EE routers are imported individually because ``ee/api/v1/__init__.py``
     # no longer eagerly imports siblings (some still reference dropped
