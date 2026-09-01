@@ -9,8 +9,10 @@
 
 export type ApiKeyStatus = 'active' | 'expired' | 'revoked';
 
-/** The org role a key acts as when it authenticates a request. */
-export type ApiKeyRole = 'owner' | 'admin' | 'member' | 'observer';
+/** The org role a key acts as when it authenticates a request. "observer" is
+ *  intentionally excluded — it isn't enforced as read-only, so it isn't offered
+ *  as a key role (mirrors the backend `_ROLE_RANK`). */
+export type ApiKeyRole = 'owner' | 'admin' | 'member';
 
 export interface ApiKeyRow {
   id: string;

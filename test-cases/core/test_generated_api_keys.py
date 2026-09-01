@@ -97,6 +97,25 @@ class TestCreateApiKey:
         )
         assert resp.status_code == 422
 
+    def test_create_observer_role_rejected(self, client_as_admin):
+        """``observer`` is not a mintable key role — it isn't enforced as
+        read-only, so it's excluded from _ROLE_RANK and rejected at 422."""
+        resp = client_as_admin.post(
+            f"{BASE}/create_api_key",
+            json={"name": _unique_name(), "role": "observer", "expires_at": None},
+        )
+        assert resp.status_code == 422
+        assert "invalid role" in resp.json()["detail"].lower()
+
+    def test_create_member_role_allowed(self, client_as_admin):
+        """The remaining roles (owner/admin/member) still mint successfully."""
+        resp = client_as_admin.post(
+            f"{BASE}/create_api_key",
+            json={"name": _unique_name(), "role": "member", "expires_at": None},
+        )
+        assert resp.status_code in (200, 201)
+        assert resp.json()["role"] == "member"
+
     def test_create_duplicate_active_name_conflicts(self, client_as_admin):
         name = _unique_name()
         first = client_as_admin.post(
