@@ -41,6 +41,19 @@ export const activateIngestionRun = async (
   return res.data;
 };
 
+// Deletes a run + its chunks + that run's eval RESULTS (eval questions are
+// kept). Backend returns 409 if the run is the active one — surface that
+// message via `handleApiError` at the call site.
+export const deleteIngestionRun = async (
+  uploadId: string,
+  runId: string,
+): Promise<{ ok: boolean }> => {
+  const res = await axiosInstance.delete<{ ok: boolean }>(
+    `/knowledge-base/${uploadId}/runs/${runId}`,
+  );
+  return res.data;
+};
+
 export interface AgentKbActiveRunPayload {
   active_ingestion_pipeline_run_id: string | null;
 }

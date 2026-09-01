@@ -598,6 +598,33 @@ class EvalService:
         )
         return n
 
+    def delete_results_for_ingestion_run(
+        self, db: Session, *, ingestion_run_id: Any, org_id: Any
+    ) -> int:
+        """Delete every ``eval_results`` row scored against one ingestion run
+        (org-scoped), returning the count. The eval QUESTION set (``evals``) is
+        left intact — questions belong to the upload, not the run.
+
+        Used when a specific ingestion run is deleted: its scores are stale
+        (the run's chunks are gone) so they're removed, but the questions
+        survive for the remaining/next runs. Note ``eval_results.ingestion_run_id``
+        is ``ON DELETE SET NULL``, so deleting the run alone would orphan (not
+        remove) these rows — this makes the removal explicit."""
+        n = (
+            db.query(EvalResult)
+            .filter(
+                EvalResult.ingestion_run_id == ingestion_run_id,
+                EvalResult.organization_id == org_id,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        logger.info(
+            "[eval] purged {} result row(s) for ingestion_run={} org={} (questions kept)",
+            n, ingestion_run_id, org_id,
+        )
+        return n
+
     def list_questions(
         self, db: Session, *, upload_id: Any, org_id: Any
     ) -> List[Eval]:

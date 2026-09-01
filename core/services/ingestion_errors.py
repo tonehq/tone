@@ -87,6 +87,19 @@ class IngestionRunNotReadyError(IngestionError):
         self.action = action
 
 
+class IngestionRunActiveError(IngestionError):
+    """Attempted to DELETE the ACTIVE ingestion run — the one currently serving
+    live retrieval. Maps to HTTP 409. The caller must activate another run
+    first, then delete this one."""
+
+
+class IngestionRunInProgressError(IngestionError):
+    """Attempted to DELETE a run that is still in-flight (``pending`` /
+    ``running``) — the worker may still be writing its chunks, so deleting now
+    would race the ingestion. Maps to HTTP 409. Only terminal runs
+    (``ready`` / ``failed``) are deletable."""
+
+
 class IngestionRunKbMismatchError(IngestionError):
     """Attempted to pin a run whose ``knowledge_base_id`` differs from the
     ``AgentKnowledgeBase`` row being pinned. Maps to HTTP 400."""
