@@ -23,7 +23,6 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Set, Union
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from loguru import logger
 
 from sqlalchemy import func, select
@@ -33,6 +32,14 @@ from core.models.agent_readiness_event import AgentReadinessEvent
 from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
 from core.models.phone_number import PhoneNumber
 from core.services.base import BaseService
+from core.services.readiness.errors import (
+    AgentNotFoundError,
+    InvalidAgentIdError,
+    ReadinessBlockedError,
+    ReadinessRateLimitedError,
+    ReadinessRunNotFoundError,
+    ReadinessWarningsError,
+)
 from core.services.pipeline.service_resolver import (
     compute_agent_cache_version,
     get_active_agent_config,
@@ -156,12 +163,9 @@ class ReadinessService(BaseService):
                 RateLimiter.key(self.org_id, agent.id)
             )
             if not allowed:
-                raise HTTPException(
-                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                    detail=(
-                        "Deep readiness check rate-limited. "
-                        "Please wait a minute and try again."
-                    ),
+                raise ReadinessRateLimitedError(
+                    "Deep readiness check rate-limited. "
+                    "Please wait a minute and try again."
                 )
             return await self._run_and_persist(
                 agent=agent,
@@ -306,7 +310,7 @@ class ReadinessService(BaseService):
             .first()
         )
         if row is None:
-            raise HTTPException(status_code=404, detail="Readiness run not found")
+            raise ReadinessRunNotFoundError("Readiness run not found")
         try:
             return _row_to_report(row)
         except (ValueError, KeyError):
@@ -316,7 +320,7 @@ class ReadinessService(BaseService):
             logger.exception(
                 "[readiness] run {} unmappable for agent {}", run_number, agent_id
             )
-            raise HTTPException(status_code=404, detail="Readiness run not found")
+            raise ReadinessRunNotFoundError("Readiness run not found")
 
     async def gate_publish(
         self,
@@ -342,31 +346,19 @@ class ReadinessService(BaseService):
         )
 
         if report.overall_status == OverallStatus.NOT_READY:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "reason": "readiness_blocked",
-                    "message": (
-                        f"{report.summary.get('blockers', 0)} blocker(s) prevent "
-                        "publishing this version."
-                    ),
-                    "report": report.model_dump(),
-                },
+            raise ReadinessBlockedError(
+                f"{report.summary.get('blockers', 0)} blocker(s) prevent "
+                "publishing this version.",
+                report,
             )
         if (
             report.overall_status == OverallStatus.READY_WITH_WARNINGS
             and not force_warnings
         ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "reason": "readiness_warnings",
-                    "message": (
-                        f"{report.summary.get('warnings', 0)} warning(s) present. "
-                        "Re-submit with force_warnings=true to publish anyway."
-                    ),
-                    "report": report.model_dump(),
-                },
+            raise ReadinessWarningsError(
+                f"{report.summary.get('warnings', 0)} warning(s) present. "
+                "Re-submit with force_warnings=true to publish anyway.",
+                report,
             )
 
         # Invalidate the exact entry the gated deep run cached. The key now
@@ -391,7 +383,7 @@ class ReadinessService(BaseService):
         try:
             aid = UUID(str(agent_id))
         except (ValueError, TypeError):
-            raise HTTPException(status_code=400, detail="Invalid agent id")
+            raise InvalidAgentIdError("Invalid agent id")
         agent = (
             self.db.query(Agent)
             .filter(
@@ -402,7 +394,7 @@ class ReadinessService(BaseService):
             .first()
         )
         if agent is None:
-            raise HTTPException(status_code=404, detail="Agent not found")
+            raise AgentNotFoundError("Agent not found")
         return agent
 
     def _compute_stamp(self, agent: Agent):

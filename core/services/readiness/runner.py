@@ -33,6 +33,15 @@ from core.services.readiness.schemas import (
 )
 
 
+# Exact prefix of the skip-reason a deep check receives when a targeted-deep run
+# didn't include its category. The frontend substring-matches this
+# (``TARGETED_DEEP_SKIP_MARKER`` in ``frontend/src/services/readinessService.ts``)
+# to carry a category's prior status forward across successive saves. This is a
+# cross-language contract locked by ``test_readiness_frontend_contract.py`` — if
+# you change the wording, update the frontend constant (and that test) too.
+TARGETED_DEEP_SKIP_PREFIX = "Not re-probed on this save"
+
+
 class Runner:
     """Executes a set of checks against a pre-built context and aggregates."""
 
@@ -95,7 +104,7 @@ class Runner:
                 and check.category not in deep_categories
             ):
                 return [check._skip(
-                    f"Not re-probed on this save ({check.category.value} unchanged)."
+                    f"{TARGETED_DEEP_SKIP_PREFIX} ({check.category.value} unchanged)."
                 )]
             if not check.applies(ctx):
                 return [check._skip(check.skip_reason(ctx))]

@@ -125,11 +125,14 @@ class LLMProviderReachableCheck(DeepCheck):
             return self._pass(result.message)
         # ``result.message`` is already a clean, provider-named sentence
         # (probes classify auth / credit / model / rate / outage and extract the
-        # human message from anything else) — surface it as-is.
+        # human message from anything else) — surface it as-is. A TIMEOUT
+        # ("slow / warming up") is downgraded to WARNING so a healthy-but-slow
+        # provider never hard-blocks publish; a confirmed failure keeps BLOCKER.
         return self._fail(
             result.message,
             remediation=(
                 "Verify the provider status, that the API key is still valid, "
                 "and that the model name is current."
             ),
+            severity=Severity.WARNING if result.timed_out else None,
         )

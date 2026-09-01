@@ -69,18 +69,33 @@ class ServiceSpec:
 
 @dataclass
 class CheckContext:
-    """Everything a check needs, pre-fetched once by the runner.
+    """Everything a check needs, pre-fetched once by the ``ContextBuilder``.
 
-    The runner builds this in a few batched queries; each check reads fields off
-    it in memory. This is the DRY hub — no check touches the DB directly.
+    The builder issues a few batched queries; each check then reads fields off
+    this bag in memory. This is the DRY hub: the common pipeline data (service
+    specs, keys, attachments) is prefetched so the hot, per-resource checks
+    never re-query.
+
+    ``db`` (+ ``org_id``) is still exposed for the bounded set of checks that
+    legitimately need it, and only those:
+
+    * checks that delegate to a shared service (``ToolService``,
+      ``McpServerService``, ``OAuthService``, ``ProviderKeyService``) — reuse,
+      not a duplicated query;
+    * checks whose query is intrinsically per-run and not worth prefetching
+      (workflow-graph validate, outbound contact/scheduled-call counts, the
+      per-number channel-credentials lookup).
+
+    Shared *derived* lookups that more than one check needs (the config
+    language code, a model's supported-language set) live behind cached
+    resolvers in ``checks/_language.py`` — never re-issued inline per check.
     """
 
     agent: Any                       # Agent row
     config: Optional[Any]            # AgentConfig row (may be None: brand-new agent)
     org_id: UUID
-    db: Session                      # Session is here for the two checks that
-    depth: Depth                     # legitimately need extra queries (workflow
-                                     # graph validate, MCP live-probe delegate).
+    db: Session                      # See the class docstring for the bounded
+    depth: Depth                     # set of checks that may use this directly.
 
     # Config-derived
     is_s2s: bool = False

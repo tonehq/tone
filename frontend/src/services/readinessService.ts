@@ -38,8 +38,9 @@ export const reportToSummary = (report: ReadinessReport): ReadinessSummary => ({
 
 /** Marker the backend runner sets as the skip reason for deep checks it
  * filtered out because the caller only requested a subset of categories.
- * Duplicated in `core/services/readiness/runner.py::_execute_all`. Kept in
- * sync manually — if the backend copy changes, this constant must follow.
+ * Mirrors `TARGETED_DEEP_SKIP_PREFIX` in `core/services/readiness/runner.py`.
+ * The coupling is enforced by `test_readiness_frontend_contract.py` — that test
+ * fails if the backend value changes, so this copy can't silently drift.
  * Substring-matched to avoid coupling to the exact templated category name. */
 const TARGETED_DEEP_SKIP_MARKER = 'Not re-probed on this save';
 
@@ -49,8 +50,10 @@ const TARGETED_DEEP_SKIP_MARKER = 'Not re-probed on this save';
  * redundant and dropped. MIRRORS `core/services/readiness/consolidation.py`
  * (`_SUPERSEDED_BY_DEEP`) — the backend already de-duplicates fresh reports;
  * this is applied again after a targeted-deep MERGE (which can re-introduce a
- * carried-forward deep row next to a fresh shallow heads-up). Keep in sync with
- * the backend copy. check-ids are matched by prefix so per-resource ids match.
+ * carried-forward deep row next to a fresh shallow heads-up). The coupling is
+ * enforced by `test_readiness_frontend_contract.py`, which fails if the backend
+ * pairs change, so this copy can't silently drift. check-ids are matched by
+ * prefix so per-resource ids match.
  */
 const DEEP_SUPERSEDES_SHALLOW: ReadonlyArray<readonly [string, string]> = [
   ['mcp_servers.oauth_token_valid', 'mcp_servers.reachable'],

@@ -17,7 +17,7 @@ they consume the leg spec + the agent config + a DB session.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Set
 
 from core.services.readiness.base import CheckContext
 
@@ -80,3 +80,54 @@ def resolve_language_code(ctx: CheckContext, settings_attr: str) -> Optional[str
     cached[language_id] = code
 
     return code
+
+
+def resolve_supported_languages(ctx: CheckContext, leg: str) -> Optional[Set[str]]:
+    """Return the set of language names (lowercased) the leg's model declares
+    support for, ``None`` when the model has NO seeded language metadata (no
+    ``ModelLanguage`` rows), or ``None`` when the leg has no resolved model.
+
+    ``leg`` is ``"stt"`` or ``"tts"``. This is the single source for the
+    "which languages does this model support?" lookup shared by the STT and TTS
+    ``model_language_match`` checks — previously each check issued the identical
+    ``SELECT name FROM model_languages WHERE model_id = … AND is_active`` query
+    inline (DRY + the checks-touch-the-DB concern). Mirrors
+    :func:`resolve_language_code`: rows are read once per model and cached on
+    ``ctx`` so both checks in one readiness run share a single query per model.
+
+    The ``None`` vs empty-set distinction is deliberate and preserves the
+    callers' original behavior: ``None`` means "metadata not seeded → skip"
+    (the old ``if not rows`` branch), while a returned set (membership test)
+    drives the pass/fail decision.
+    """
+    spec = getattr(ctx, leg, None)
+    model = getattr(spec, "model", None) if spec is not None else None
+    if model is None:
+        return None
+
+    cache = getattr(ctx, "_readiness_model_langs_cache", None)
+    if cache is not None and model.id in cache:
+        return cache[model.id]
+
+    from core.models.model_language import ModelLanguage
+
+    rows = (
+        ctx.db.query(ModelLanguage.name)
+        .filter(
+            ModelLanguage.model_id == model.id,
+            ModelLanguage.is_active.is_(True),
+        )
+        .all()
+    )
+    # No rows at all ⇒ metadata not seeded (skip). Rows present ⇒ the supported
+    # set (may be empty only if names are blank, which the schema disallows).
+    supported: Optional[Set[str]] = (
+        {str(r[0]).strip().lower() for r in rows if r[0]} if rows else None
+    )
+
+    if cache is None:
+        cache = {}
+        ctx._readiness_model_langs_cache = cache  # type: ignore[attr-defined]
+    cache[model.id] = supported
+
+    return supported

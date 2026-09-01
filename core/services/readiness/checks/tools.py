@@ -22,26 +22,21 @@ still runs, just that tool call won't work.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Iterable, List, Optional
+import contextlib
+from typing import Any, AsyncIterator, ClassVar, Iterable, Optional
 from urllib.parse import urlparse
 
 import httpx
 from loguru import logger
 
-from core.services.readiness.base import (
-    CheckContext,
-    DeepCheck,
-    ShallowCheck,
-    with_timeout,
-)
+from core.services.readiness.base import CheckContext, DeepCheck, ShallowCheck
 from core.services.readiness.checks._messages import oauth_failure_reason, quote
 from core.services.readiness.checks._oauth_expiry import OAuthTokenExpiryShallowCheck
-from core.services.readiness.schemas import (
-    Category,
-    CheckResult,
-    ResourceRef,
-    Severity,
+from core.services.readiness.checks._per_resource import (
+    PerResourceCheck,
+    ResourceProblem,
 )
+from core.services.readiness.schemas import Category, Severity
 from core.utils.auth_types import AUTH_TYPE_OAUTH, normalize_auth_type
 
 
@@ -71,12 +66,13 @@ def _url_shape_problem(url: Optional[str]) -> Optional[str]:
     return None
 
 
-class ToolsUsableCheck(ShallowCheck):
+class ToolsUsableCheck(PerResourceCheck, ShallowCheck):
     """Every attached tool must exist, be active, and (for HTTP tools) have a URL."""
 
     id: ClassVar[str] = "tools.usable"
     category: ClassVar[Category] = Category.TOOLS
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "tool"
 
     def applies(self, ctx: CheckContext) -> bool:
         return bool(ctx.tools)
@@ -84,29 +80,28 @@ class ToolsUsableCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No tools attached to this agent version."
 
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
-        results: List[CheckResult] = []
-        for t in ctx.tools:
-            reason: Optional[str] = None
-            if not t.is_active:
-                reason = "it's turned off"
-            # Custom HTTP tools need a well-formed URL; MCP tools ride the MCP
-            # server so they don't carry a URL of their own.
-            elif t.tool_type == "custom":
-                reason = _url_shape_problem(t.url)
-            if reason is None:
-                continue
-            results.append(
-                self._fail(
-                    f"{quote(t.name)} can't be used — {reason}.",
-                    remediation="Open the Tools tab to fix or remove it.",
-                    resource_ref=ResourceRef(type="tool", id=str(t.id)),
-                    check_id=self._result_id(str(t.id)),
-                )
-            )
-        if results:
-            return results
-        return [self._pass(f"{len(ctx.tools)} tool(s) attached.")]
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        return ctx.tools
+
+    def _summary_message(self, count: int) -> str:
+        return f"{count} tool(s) attached."
+
+    async def _check_one(
+        self, ctx: CheckContext, tool: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        reason: Optional[str] = None
+        if not tool.is_active:
+            reason = "it's turned off"
+        # Custom HTTP tools need a well-formed URL; MCP tools ride the MCP
+        # server so they don't carry a URL of their own.
+        elif tool.tool_type == "custom":
+            reason = _url_shape_problem(tool.url)
+        if reason is None:
+            return None
+        return ResourceProblem(
+            f"{quote(tool.name)} can't be used — {reason}.",
+            remediation="Open the Tools tab to fix or remove it.",
+        )
 
 
 class ToolOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
@@ -130,7 +125,7 @@ class ToolOAuthTokenValidCheck(OAuthTokenExpiryShallowCheck):
         return [t for t in ctx.tools if t.is_active and t.tool_type != "mcp"]
 
 
-class ToolReachableCheck(DeepCheck):
+class ToolReachableCheck(PerResourceCheck, DeepCheck):
     """Live-probe every attached, active tool the way runtime would.
 
     Two flows share this check because they answer complementary halves of
@@ -157,6 +152,8 @@ class ToolReachableCheck(DeepCheck):
     id: ClassVar[str] = "tools.reachable"
     category: ClassVar[Category] = Category.TOOLS
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "tool"
+    probe_timeout: ClassVar[float] = _PROBE_TIMEOUT_S
 
     def applies(self, ctx: CheckContext) -> bool:
         return any(self._needs_check(t) for t in ctx.tools)
@@ -164,57 +161,57 @@ class ToolReachableCheck(DeepCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No probeable or OAuth-linked tools attached."
 
-    @with_timeout(_PROBE_TIMEOUT_S)
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+    def _resources(self, ctx: CheckContext) -> Iterable[Any]:
+        return [t for t in ctx.tools if self._needs_check(t)]
+
+    def _summary_message(self, count: int) -> str:
+        return f"All {count} tool(s) reachable."
+
+    def _timeout_message(self, count: int) -> str:
+        return "Couldn't reach some tools in time — they may be slow. Run the check again."
+
+    @contextlib.asynccontextmanager
+    async def _shared(self, ctx: CheckContext) -> AsyncIterator[Any]:
+        """Tool + OAuth services and a pooled HTTP client, reused per tool.
+        Runtime tool calls don't follow redirects — match that so "URL moved"
+        fails here rather than silently succeeding."""
         from core.services.oauth_service import OAuthService
         from core.services.tool_service import ToolService
 
         tool_svc = ToolService(ctx.db, org_id=ctx.org_id)
         oauth_svc = OAuthService(ctx.db, org_id=ctx.org_id)
-
-        results: List[CheckResult] = []
-        checked = 0
-
-        # One client, reused across probes for connection pooling. Runtime
-        # tool calls don't follow redirects — match that so "URL moved" fails
-        # here rather than silently succeeding.
         async with httpx.AsyncClient(
             timeout=_PROBE_TIMEOUT_S, follow_redirects=False
         ) as client:
-            for tool in ctx.tools:
-                if not self._needs_check(tool):
-                    continue
-                checked += 1
-                reason: Optional[str] = None
+            yield (tool_svc, oauth_svc, client)
 
-                # 1) OAuth-connection probe. If a linked connection is broken
-                #    the tool is guaranteed to fail at call time, so we skip
-                #    the HTTP probe to avoid a redundant confusing 401.
-                if self._has_oauth_connection(tool):
-                    oauth_reason = self._probe_oauth(tool, tool_svc, oauth_svc)
-                    if oauth_reason is not None:
-                        reason = oauth_failure_reason(oauth_reason)
-                # 2) HTTP GET probe for probeable custom tools — runs when the
-                #    OAuth check passed (or the tool has no OAuth connection).
-                if reason is None and self._is_probeable(tool):
-                    reason = await self._probe_tool(client, tool)
+    async def _check_one(
+        self, ctx: CheckContext, tool: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        tool_svc, oauth_svc, client = shared
+        reason: Optional[str] = None
 
-                if reason is not None:
-                    results.append(
-                        self._fail(
-                            f"{quote(tool.name)} can't be used — {reason}.",
-                            remediation=(
-                                "Open the Tools tab and check its URL, "
-                                "credentials, and linked connection."
-                            ),
-                            resource_ref=ResourceRef(type="tool", id=str(tool.id)),
-                            check_id=self._result_id(str(tool.id)),
-                        )
-                    )
+        # 1) OAuth-connection probe. If a linked connection is broken the tool is
+        #    guaranteed to fail at call time, so we skip the HTTP probe to avoid
+        #    a redundant confusing 401.
+        if self._has_oauth_connection(tool):
+            oauth_reason = self._probe_oauth(tool, tool_svc, oauth_svc)
+            if oauth_reason is not None:
+                reason = oauth_failure_reason(oauth_reason)
+        # 2) HTTP GET probe for probeable custom tools — runs when the OAuth
+        #    check passed (or the tool has no OAuth connection).
+        if reason is None and self._is_probeable(tool):
+            reason = await self._probe_tool(client, tool)
 
-        if results:
-            return results
-        return [self._pass(f"All {checked} tool(s) reachable.")]
+        if reason is None:
+            return None
+        return ResourceProblem(
+            f"{quote(tool.name)} can't be used — {reason}.",
+            remediation=(
+                "Open the Tools tab and check its URL, credentials, and "
+                "linked connection."
+            ),
+        )
 
     # ── helpers ─────────────────────────────────────────────────────────────
 

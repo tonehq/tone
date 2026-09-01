@@ -42,7 +42,7 @@ import wave
 from dataclasses import dataclass
 from functools import lru_cache
 from importlib.resources import files
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, Optional, Tuple
 
 from loguru import logger
 
@@ -66,6 +66,38 @@ _HTTP_STT_SERVICE_CLASSES = frozenset({
 
 _LLM_PROBE_PROMPT = "Reply with the single word OK."
 _TTS_PROBE_TEXT = "This is a readiness test."
+# Hard cap on the probe's completion length — the probe only needs to prove the
+# provider streamed a token, so keep it tiny to bound cost. Small enough that a
+# reasoning model spends its budget on reasoning and closes with an
+# LLMFullResponseEndFrame (still a valid round-trip), which the probe accepts.
+_LLM_PROBE_TOKEN_CAP = 32
+
+# The OpenAI-compatible provider family — the providers whose SDK accepts (and,
+# for reasoning models, requires) ``max_completion_tokens`` rather than
+# ``max_tokens``. Defined ONCE here (was rebuilt inside ``probe_llm`` on every
+# call). Keep aligned with the OpenAI-compat providers ``service_factory``
+# routes through ``BaseOpenAILLMService``.
+_LLM_MAX_COMPLETION_TOKEN_PROVIDERS = frozenset({
+    "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
+    "fireworks", "perplexity", "sambanova", "nebius", "together",
+    "xai", "grok", "novita", "qwen", "inception",
+})
+
+
+def _llm_probe_token_cap(provider: str) -> dict:
+    """The probe's completion-length cap as EXACTLY ONE metadata key.
+
+    Sending both ``max_tokens`` and ``max_completion_tokens`` is rejected
+    (OpenAI HTTP 400, Cohere HTTP 422), so we pick one per provider family:
+    OpenAI-compatible → ``max_completion_tokens``; everyone else (Anthropic,
+    Google, Bedrock, Cohere, Mistral, …) → ``max_tokens``.
+    """
+    key = (
+        "max_completion_tokens"
+        if provider in _LLM_MAX_COMPLETION_TOKEN_PROVIDERS
+        else "max_tokens"
+    )
+    return {key: _LLM_PROBE_TOKEN_CAP}
 
 # Bundled STT audio asset — native rate the WAV is encoded at. Resampled per
 # provider at probe time via `audioop.ratecv` when the STT service is
@@ -76,10 +108,17 @@ _STT_PROBE_ASSET = "probe_sample.wav"
 
 @dataclass
 class ProbeResult:
-    """Outcome of a live probe. ``message`` is the user-visible one-line summary."""
+    """Outcome of a live probe. ``message`` is the user-visible one-line summary.
+
+    ``timed_out`` distinguishes "the provider didn't answer within the budget"
+    (slow / warming up — a WARNING, must NOT block publish) from a confirmed
+    failure like a bad key or exhausted credit (a BLOCKER). Deep checks read
+    this to pick the severity.
+    """
 
     ok: bool
     message: str
+    timed_out: bool = False
 
 
 # Speech-to-speech LLMs — probing requires an actual audio session which we
@@ -179,30 +218,11 @@ async def probe_llm(ctx) -> ProbeResult:
     # false-flags a healthy provider. Overriding the user's own
     # ``max_tokens`` is intentional: probe cost must stay bounded even
     # when the agent's model is configured with a large budget.
-    # Provider-aware token cap: send EXACTLY ONE cap key per provider family.
-    # Sending BOTH ``max_tokens`` and ``max_completion_tokens`` is rejected by
-    # both Cohere (HTTP 422) and OpenAI (HTTP 400 "Setting 'max_tokens' and
-    # 'max_completion_tokens' at the same time is not supported"). Pipecat's
-    # ``InputParams`` for OpenAI-family services declares BOTH fields — so
-    # ``build_input_params`` doesn't filter either out — but the underlying
-    # SDK/API server insists we pick one. We pick:
-    #   * OpenAI-family (openai, azure, groq, openrouter, deepseek, cerebras,
-    #     fireworks, perplexity, sambanova, nebius, together, xai, grok,
-    #     novita, qwen, inception) → ``max_completion_tokens`` (the newer,
-    #     non-deprecated field; required by reasoning models o1/o3/o4/gpt-5
-    #     and accepted by legacy chat models on modern SDK versions).
-    #   * Everyone else (Anthropic, Google, Bedrock, Cohere, Mistral, Nvidia,
-    #     Sarvam, Ollama) → ``max_tokens`` (their SDKs only declare this).
-    _OPENAI_FAMILY = {
-        "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
-        "fireworks", "perplexity", "sambanova", "nebius", "together",
-        "xai", "grok", "novita", "qwen", "inception",
-    }
-    if provider in _OPENAI_FAMILY:
-        token_cap: Dict[str, Any] = {"max_completion_tokens": 1024}
-    else:
-        token_cap = {"max_tokens": 1024}
-    spec["metadata"] = {**(spec["metadata"] or {}), **token_cap}
+    # Provider-aware token cap (single source: _llm_probe_token_cap). Pipecat's
+    # ``InputParams`` for OpenAI-family services declares BOTH max_tokens and
+    # max_completion_tokens, so ``build_input_params`` won't filter either — but
+    # the underlying SDK/API insists on exactly one, so we choose per family.
+    spec["metadata"] = {**(spec["metadata"] or {}), **_llm_probe_token_cap(provider)}
 
     try:
         service = service_factory.build_llm(spec)
@@ -277,9 +297,14 @@ async def probe_llm(ctx) -> ProbeResult:
         )
     if err_msg:
         return ProbeResult(False, _summarise_error_text(provider, err_msg))
+    # err_msg is None → pure timeout: no frame, no ErrorFrame, no exception.
+    # Slow / warming up, NOT confirmed-broken → flag it so the check renders a
+    # WARNING instead of a publish-blocking BLOCKER.
     return ProbeResult(
         False,
-        f"{provider} LLM returned no response frame within budget — check model/key/quota.",
+        f"{provider} didn't respond within the time limit — it may be slow or "
+        "warming up. Run the deep test again in a moment.",
+        timed_out=True,
     )
 
 
@@ -450,9 +475,14 @@ async def probe_stt(ctx) -> ProbeResult:
             f"redeploy with core/services/readiness/assets/probe_sample.wav.",
         )
 
+    # Real audio was sent but no transcript arrived within budget. We can't
+    # tell "slow provider" from "silently broken", so treat it as a timeout
+    # (WARNING) — the missing-WAV deploy bug above is the only hard STT failure.
     return ProbeResult(
         False,
-        f"{provider} STT returned no transcript within budget — check language/model settings.",
+        f"{provider} didn't return a transcript in time — it may be slow. Run "
+        "the deep test again in a moment.",
+        timed_out=True,
     )
 
 
@@ -680,10 +710,13 @@ async def probe_tts(ctx) -> ProbeResult:
         return ProbeResult(True, f"{provider} synthesised a sentence.")
     if err_msg:
         return ProbeResult(False, _summarise_error_text(provider, err_msg))
-    # A healthy TTS must emit at least one audio frame for a real sentence.
+    # err_msg is None → pure timeout: no audio frame within budget. Slow /
+    # warming up, not confirmed-broken → WARNING, not a publish blocker.
     return ProbeResult(
         False,
-        f"{provider} TTS returned no audio for the probe sentence — provider likely rejected the request.",
+        f"{provider} didn't return audio in time — it may be slow or warming "
+        "up. Run the deep test again in a moment.",
+        timed_out=True,
     )
 
 
@@ -692,11 +725,10 @@ async def probe_tts(ctx) -> ProbeResult:
 # One dispatcher, one branch per provider. Every telephony provider we
 # support exposes a small, cheap "account status / balance" endpoint that
 # (a) fails fast with 401/403 on a revoked or wrong credential, and
-# (b) returns a balance we can inspect to decide "out of credit". Rather
-# than duplicate per-provider adapters (like the LLM probe does for
-# OpenAI-family vs Anthropic vs Google), the shape is uniform enough to
-# keep as one function that switches on ``channel_type``. Add a provider
-# by adding one branch.
+# (b) returns a balance we can inspect to decide "out of credit". The shape is
+# uniform enough that the request → error → balance-floor skeleton lives once
+# in ``_run_transport_probe`` and each provider is one ``_TransportProbe`` entry
+# in ``_TRANSPORT_PROBES``. Add a provider by adding one registry entry.
 #
 # Provider reference:
 # * Twilio  — GET /2010-04-01/Accounts/{sid}/Balance.json  (Basic sid:token)
@@ -716,6 +748,128 @@ _TRANSPORT_PROBE_TIMEOUT = 6.0
 _LOW_BALANCE_FLOOR = 1.0
 
 
+@dataclass(frozen=True)
+class _TransportProbe:
+    """Per-provider config for the shared transport-credit probe skeleton.
+
+    The skeleton (validate creds → GET → 401/403 → ≥400 → low-balance floor →
+    OK) lives once in :func:`_run_transport_probe`; each provider supplies only
+    the parts that differ. Adding a telephony provider is one registry entry —
+    never a new copy of the request/error/balance flow (OCP).
+    """
+
+    # Human label for the "rejected the credentials — {cred_label} invalid" line.
+    cred_label: str
+    # Returns a "missing …" message when required creds are absent, else None.
+    missing_reason: Callable[[Dict[str, Any]], Optional[str]]
+    # Returns ``(url, httpx-get-kwargs)`` (auth tuple or headers).
+    build_request: Callable[[Dict[str, Any]], Tuple[str, Dict[str, Any]]]
+    # Returns ``(balance, currency)`` from the successful response.
+    parse_balance: Callable[[Any], Tuple[Optional[float], Optional[str]]]
+    # Renders the "out of credit" line — Plivo phrases it differently.
+    low_balance_message: Callable[[float, Optional[str]], str]
+    # Forced currency for the OK line when the endpoint omits it (Plivo → USD).
+    ok_currency: Optional[str] = None
+
+
+def _require(cfg: Dict[str, Any], *keys: str) -> bool:
+    return all((cfg.get(k) or "").strip() for k in keys)
+
+
+def _default_low_balance(slug: str) -> Callable[[float, Optional[str]], str]:
+    return (
+        lambda bal, cur:
+        f"{slug} account balance is {bal:.2f} {cur or ''} — top up before making calls."
+    )
+
+
+_TRANSPORT_PROBES: Dict[str, _TransportProbe] = {
+    "twilio": _TransportProbe(
+        cred_label="account_sid / auth_token",
+        missing_reason=lambda c: (
+            None if _require(c, "account_sid", "auth_token")
+            else "twilio: account_sid / auth_token missing on the channel."
+        ),
+        build_request=lambda c: (
+            f"https://api.twilio.com/2010-04-01/Accounts/"
+            f"{(c.get('account_sid') or '').strip()}/Balance.json",
+            {"auth": ((c.get("account_sid") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        parse_balance=lambda resp: _parse_amount(resp, "balance", "currency"),
+        low_balance_message=_default_low_balance("twilio"),
+    ),
+    "telnyx": _TransportProbe(
+        cred_label="api_key",
+        missing_reason=lambda c: (
+            None if _require(c, "api_key")
+            else "telnyx: api_key missing on the channel."
+        ),
+        build_request=lambda c: (
+            "https://api.telnyx.com/v2/balance",
+            {"headers": {"Authorization": f"Bearer {(c.get('api_key') or '').strip()}"}},
+        ),
+        parse_balance=lambda resp: _parse_telnyx_balance(resp),
+        low_balance_message=_default_low_balance("telnyx"),
+    ),
+    "plivo": _TransportProbe(
+        cred_label="auth_id / auth_token",
+        missing_reason=lambda c: (
+            None if _require(c, "auth_id", "auth_token")
+            else "plivo: auth_id / auth_token missing on the channel."
+        ),
+        build_request=lambda c: (
+            f"https://api.plivo.com/v1/Account/{(c.get('auth_id') or '').strip()}/",
+            {"auth": ((c.get("auth_id") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        # Plivo reports credits in USD by convention (no currency field).
+        parse_balance=lambda resp: (
+            _to_float(_json_or_empty(resp).get("cash_credits")
+                      or _json_or_empty(resp).get("credit_limit")),
+            None,
+        ),
+        low_balance_message=(
+            lambda bal, cur:
+            f"plivo cash credits are {bal:.2f} USD — top up before making calls."
+        ),
+        ok_currency="USD",
+    ),
+    "exotel": _TransportProbe(
+        cred_label="api_key / api_token",
+        missing_reason=lambda c: (
+            None
+            if _require(c, "api_key", "api_token")
+            and ((c.get("account_sid") or c.get("sid") or "").strip())
+            else "exotel: api_key / api_token / account_sid missing on the channel."
+        ),
+        # Exotel uses (api_key, api_token) as HTTP Basic and (account_sid,
+        # subdomain) to route; ``subdomain`` defaults to the primary region so
+        # accounts on regional shards can override without a code change.
+        build_request=lambda c: (
+            f"https://{(c.get('subdomain') or 'api.exotel.com').strip()}"
+            f"/v1/Accounts/{(c.get('account_sid') or c.get('sid') or '').strip()}/Balance.json",
+            {"auth": ((c.get("api_key") or "").strip(), (c.get("api_token") or "").strip())},
+        ),
+        parse_balance=lambda resp: _parse_exotel_balance(resp),
+        low_balance_message=_default_low_balance("exotel"),
+    ),
+}
+
+
+def _parse_telnyx_balance(resp) -> Tuple[Optional[float], Optional[str]]:
+    data = _json_or_empty(resp).get("data") or {}
+    return _to_float(data.get("balance") or data.get("available_credit")), data.get("currency")
+
+
+def _parse_exotel_balance(resp) -> Tuple[Optional[float], Optional[str]]:
+    # Exotel wraps the payload as ``{"Balance": {"Balance": "10.00", ...}}``.
+    body = _json_or_empty(resp)
+    payload = body.get("Balance") if isinstance(body.get("Balance"), dict) else body
+    return (
+        _to_float(payload.get("Balance") or payload.get("balance")),
+        payload.get("Currency") or payload.get("currency"),
+    )
+
+
 async def probe_transport(
     client, channel_config: Dict[str, Any], channel_type: str
 ) -> ProbeResult:
@@ -727,22 +881,21 @@ async def probe_transport(
     ``Channel.encrypted_config`` dict — the same shape the transport
     serializers consume at call time. Returns a ``ProbeResult`` where
     ``ok=False`` means a real call would fail (bad credential, suspended
-    account, empty balance, or unreachable API).
+    account, empty balance, or unreachable API). Dispatches to a per-provider
+    ``_TransportProbe`` in ``_TRANSPORT_PROBES`` (add a provider = one entry).
     """
     import httpx
 
     slug = (channel_type or "").strip().lower()
-    cfg = channel_config or {}
+    probe = _TRANSPORT_PROBES.get(slug)
+    if probe is None:
+        return ProbeResult(
+            True,
+            f"{slug or 'transport'}: no credit probe implemented for this channel type.",
+        )
 
     try:
-        if slug == "twilio":
-            return await _probe_twilio(client, cfg)
-        if slug == "telnyx":
-            return await _probe_telnyx(client, cfg)
-        if slug == "plivo":
-            return await _probe_plivo(client, cfg)
-        if slug == "exotel":
-            return await _probe_exotel(client, cfg)
+        return await _run_transport_probe(client, slug, channel_config or {}, probe)
     except httpx.HTTPError as exc:
         logger.warning("[readiness] {} transport probe network error: {}", slug, exc)
         return ProbeResult(False, _summarise_error(slug, exc))
@@ -750,114 +903,28 @@ async def probe_transport(
         logger.exception("[readiness] {} transport probe unexpected error", slug)
         return ProbeResult(False, _summarise_error(slug, exc))
 
-    return ProbeResult(
-        True,
-        f"{slug or 'transport'}: no credit probe implemented for this channel type.",
-    )
 
+async def _run_transport_probe(
+    client, slug: str, cfg: Dict[str, Any], probe: _TransportProbe
+) -> ProbeResult:
+    """The shared credit-probe skeleton — one place for the request → error →
+    balance-floor logic every telephony provider uses identically."""
+    missing = probe.missing_reason(cfg)
+    if missing:
+        return ProbeResult(False, missing)
 
-async def _probe_twilio(client, cfg: Dict[str, Any]) -> ProbeResult:
-    account_sid = (cfg.get("account_sid") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not account_sid or not auth_token:
-        return ProbeResult(False, "twilio: account_sid / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/Balance.json",
-        auth=(account_sid, auth_token),
-    )
+    url, kwargs = probe.build_request(cfg)
+    resp = await client.get(url, **kwargs)
+
     if resp.status_code in (401, 403):
-        return ProbeResult(False, "twilio rejected the credentials — account_sid / auth_token invalid.")
+        return ProbeResult(False, f"{slug} rejected the credentials — {probe.cred_label} invalid.")
     if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("twilio", resp))
-    balance, currency = _parse_amount(resp, "balance", "currency")
+        return ProbeResult(False, _summarise_http(slug, resp))
+
+    balance, currency = probe.parse_balance(resp)
     if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"twilio account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("twilio", balance, currency))
-
-
-async def _probe_telnyx(client, cfg: Dict[str, Any]) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    if not api_key:
-        return ProbeResult(False, "telnyx: api_key missing on the channel.")
-    resp = await client.get(
-        "https://api.telnyx.com/v2/balance",
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "telnyx rejected the credentials — api_key invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("telnyx", resp))
-    data = _json_or_empty(resp).get("data") or {}
-    balance = _to_float(data.get("balance") or data.get("available_credit"))
-    currency = data.get("currency")
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"telnyx account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("telnyx", balance, currency))
-
-
-async def _probe_plivo(client, cfg: Dict[str, Any]) -> ProbeResult:
-    auth_id = (cfg.get("auth_id") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not auth_id or not auth_token:
-        return ProbeResult(False, "plivo: auth_id / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.plivo.com/v1/Account/{auth_id}/",
-        auth=(auth_id, auth_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "plivo rejected the credentials — auth_id / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("plivo", resp))
-    data = _json_or_empty(resp)
-    # Plivo reports credits in USD by convention (no currency field on this endpoint).
-    balance = _to_float(data.get("cash_credits") or data.get("credit_limit"))
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"plivo cash credits are {balance:.2f} USD — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("plivo", balance, "USD"))
-
-
-async def _probe_exotel(client, cfg: Dict[str, Any]) -> ProbeResult:
-    # Exotel uses (api_key, api_token) as HTTP Basic and (account_sid,
-    # subdomain) to route the request. ``subdomain`` defaults to the primary
-    # region so accounts on regional shards (e.g. ``sg.exotel.com``) can
-    # override without a code change.
-    api_key = (cfg.get("api_key") or "").strip()
-    api_token = (cfg.get("api_token") or "").strip()
-    account_sid = (cfg.get("account_sid") or cfg.get("sid") or "").strip()
-    subdomain = (cfg.get("subdomain") or "api.exotel.com").strip()
-    if not api_key or not api_token or not account_sid:
-        return ProbeResult(
-            False,
-            "exotel: api_key / api_token / account_sid missing on the channel.",
-        )
-    resp = await client.get(
-        f"https://{subdomain}/v1/Accounts/{account_sid}/Balance.json",
-        auth=(api_key, api_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "exotel rejected the credentials — api_key / api_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("exotel", resp))
-    # Exotel wraps the payload as ``{"Balance": {"Balance": "10.00", ...}}``.
-    body = _json_or_empty(resp)
-    payload = body.get("Balance") if isinstance(body.get("Balance"), dict) else body
-    balance = _to_float(payload.get("Balance") or payload.get("balance"))
-    currency = payload.get("Currency") or payload.get("currency")
-    if balance is not None and balance < _LOW_BALANCE_FLOOR:
-        return ProbeResult(
-            False,
-            f"exotel account balance is {balance:.2f} {currency or ''} — top up before making calls.",
-        )
-    return ProbeResult(True, _balance_ok_message("exotel", balance, currency))
+        return ProbeResult(False, probe.low_balance_message(balance, currency))
+    return ProbeResult(True, _balance_ok_message(slug, balance, probe.ok_currency or currency))
 
 
 def _json_or_empty(resp) -> Dict[str, Any]:
@@ -907,9 +974,11 @@ def _summarise_http(provider: str, resp) -> str:
 #   (c) for inbound-capable providers with webhook routing (Twilio, Telnyx),
 #       the inbound webhook prefix points at Tone (``BASE_CALL_URL``).
 #
-# Same dispatcher shape as ``probe_transport`` above — one branch per provider.
-# Plivo/Exotel don't have first-class inbound routes in Tone today, so the
-# webhook prefix argument is optional and those branches only check (a) and (b).
+# Same registry shape as ``probe_transport`` above — the shared skeleton lives
+# in ``_run_number_probe`` and each provider is one ``_NumberProbe`` entry in
+# ``_PHONE_NUMBER_PROBES`` (add a provider = one entry). Plivo/Exotel don't have
+# first-class inbound routes in Tone today, so the webhook prefix argument is
+# optional and their ``verify`` only checks (a) ownership and (b) voice.
 #
 # Provider endpoints:
 #   * Twilio  — GET /2010-04-01/Accounts/{sid}/IncomingPhoneNumbers.json
@@ -947,15 +1016,15 @@ async def probe_phone_number(
     if not number:
         return ProbeResult(False, f"{slug}: phone number is empty on the record.")
 
+    probe = _PHONE_NUMBER_PROBES.get(slug)
+    if probe is None:
+        return ProbeResult(
+            True,
+            f"{slug or 'transport'}: no number-verification probe implemented for this channel type.",
+        )
+
     try:
-        if slug == "twilio":
-            return await _probe_twilio_number(client, cfg, number, expected_webhook_prefix)
-        if slug == "telnyx":
-            return await _probe_telnyx_number(client, cfg, number, expected_webhook_prefix)
-        if slug == "plivo":
-            return await _probe_plivo_number(client, cfg, number)
-        if slug == "exotel":
-            return await _probe_exotel_number(client, cfg, number)
+        return await _run_number_probe(client, slug, cfg, number, expected_webhook_prefix, probe)
     except httpx.HTTPError as exc:
         logger.warning("[readiness] {} number probe network error: {}", slug, exc)
         return ProbeResult(False, _summarise_error(slug, exc))
@@ -963,40 +1032,41 @@ async def probe_phone_number(
         logger.exception("[readiness] {} number probe unexpected error", slug)
         return ProbeResult(False, _summarise_error(slug, exc))
 
-    return ProbeResult(
-        True,
-        f"{slug or 'transport'}: no number-verification probe implemented for this channel type.",
-    )
+
+@dataclass(frozen=True)
+class _NumberProbe:
+    """Per-provider config for the shared number-verification skeleton.
+
+    The skeleton (validate creds → GET → 404-not-owned → 401/403 → ≥400 →
+    per-provider ``verify``) lives once in :func:`_run_number_probe`. Each
+    provider supplies only what differs: credential validation, the request,
+    the "invalid credentials" copy, whether a 404 means "not owned", and how a
+    2xx body proves ownership / voice-capability / webhook routing. Adding a
+    telephony provider is one registry entry (OCP) — never a new copy of the
+    request/error flow. Mirrors ``_TransportProbe`` above.
+    """
+
+    # Returns a "missing …" message when required creds are absent, else None.
+    missing_reason: Callable[[Dict[str, Any]], Optional[str]]
+    # Returns ``(url, httpx-get-kwargs)`` for the per-number lookup.
+    build_request: Callable[[Dict[str, Any], str], Tuple[str, Dict[str, Any]]]
+    # The "rejected the credentials — … invalid" line for a 401/403.
+    invalid_creds_message: str
+    # Turns a successful (2xx) response into a verified/failed ``ProbeResult``.
+    verify: Callable[[Any, str, Optional[str]], ProbeResult]
+    # Providers whose per-number endpoint 404s when the number isn't owned
+    # (Plivo/Exotel look up by path segment; Twilio/Telnyx filter a list).
+    not_owned_on_404: bool = False
 
 
-async def _probe_twilio_number(
-    client, cfg: Dict[str, Any], number: str, expected_prefix: Optional[str]
-) -> ProbeResult:
-    account_sid = (cfg.get("account_sid") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not account_sid or not auth_token:
-        return ProbeResult(False, "twilio: account_sid / auth_token missing on the channel.")
-    resp = await client.get(
-        f"https://api.twilio.com/2010-04-01/Accounts/{account_sid}/IncomingPhoneNumbers.json",
-        params={"PhoneNumber": number},
-        auth=(account_sid, auth_token),
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "twilio rejected the credentials — account_sid / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("twilio", resp))
+def _twilio_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     numbers = _json_or_empty(resp).get("incoming_phone_numbers") or []
     if not numbers:
-        return ProbeResult(
-            False,
-            f"twilio: number {number} is not owned by this account.",
-        )
+        return ProbeResult(False, f"twilio: number {number} is not owned by this account.")
     entry = numbers[0]
-    capabilities = entry.get("capabilities") or {}
-    if not capabilities.get("voice"):
+    if not (entry.get("capabilities") or {}).get("voice"):
         return ProbeResult(
-            False,
-            f"twilio: number {number} is not voice-capable (SMS/MMS only).",
+            False, f"twilio: number {number} is not voice-capable (SMS/MMS only)."
         )
     if expected_prefix:
         voice_url = (entry.get("voice_url") or "").strip()
@@ -1009,34 +1079,16 @@ async def _probe_twilio_number(
     return ProbeResult(True, f"twilio: {number} verified (owned, voice-capable, webhook routed).")
 
 
-async def _probe_telnyx_number(
-    client, cfg: Dict[str, Any], number: str, expected_prefix: Optional[str]
-) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    if not api_key:
-        return ProbeResult(False, "telnyx: api_key missing on the channel.")
-    resp = await client.get(
-        "https://api.telnyx.com/v2/phone_numbers",
-        params={"filter[phone_number]": number},
-        headers={"Authorization": f"Bearer {api_key}"},
-    )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "telnyx rejected the credentials — api_key invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("telnyx", resp))
+def _telnyx_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     data = _json_or_empty(resp).get("data") or []
     if not data:
-        return ProbeResult(
-            False,
-            f"telnyx: number {number} is not owned by this account.",
-        )
+        return ProbeResult(False, f"telnyx: number {number} is not owned by this account.")
     entry = data[0]
-    features = entry.get("features") or []
     # Telnyx feature entries can be strings or objects — normalize both, and
     # skip anything that doesn't resolve to a non-empty string (a dict with
     # ``{"name": None, ...}`` would otherwise crash on ``None.lower()``).
     feature_names: set[str] = set()
-    for f in features:
+    for f in entry.get("features") or []:
         if not f:
             continue
         raw = f.get("name") if isinstance(f, dict) else f
@@ -1044,19 +1096,15 @@ async def _probe_telnyx_number(
             continue
         feature_names.add(raw.lower())
     if "voice" not in feature_names:
-        return ProbeResult(
-            False,
-            f"telnyx: number {number} is not voice-enabled.",
-        )
+        return ProbeResult(False, f"telnyx: number {number} is not voice-enabled.")
     # Webhook routing on Telnyx lives on the linked "voice connection"
-    # (connection_id) rather than the number row itself. We surface the
-    # coarser signal — the number is voice-enabled and owned — and let
-    # inbound wire-up failures show up in call logs. Verifying the
-    # connection's webhook_event_url would need a second API call per
-    # number, which is heavy for the readiness path.
+    # (connection_id) rather than the number row itself. We surface the coarser
+    # signal — voice-enabled and owned — and let inbound wire-up failures show
+    # up in call logs. Verifying the connection's webhook_event_url would need a
+    # second API call per number, which is heavy for the readiness path. Some
+    # account setups expose ``voice_url`` on the number itself; validate it when
+    # present, skip silently when absent.
     if expected_prefix:
-        # Best-effort: some Telnyx account setups expose ``voice_url`` on the
-        # number itself; if present, validate; if absent, skip silently.
         voice_url = (entry.get("voice_url") or "").strip()
         if voice_url and not voice_url.startswith(expected_prefix):
             return ProbeResult(
@@ -1067,71 +1115,113 @@ async def _probe_telnyx_number(
     return ProbeResult(True, f"telnyx: {number} verified (owned, voice-enabled).")
 
 
-async def _probe_plivo_number(
-    client, cfg: Dict[str, Any], number: str
-) -> ProbeResult:
-    auth_id = (cfg.get("auth_id") or "").strip()
-    auth_token = (cfg.get("auth_token") or "").strip()
-    if not auth_id or not auth_token:
-        return ProbeResult(False, "plivo: auth_id / auth_token missing on the channel.")
-    # Plivo number lookup uses the raw E.164 without the leading '+'.
-    plivo_number = number.lstrip("+")
-    resp = await client.get(
-        f"https://api.plivo.com/v1/Account/{auth_id}/Number/{plivo_number}/",
-        auth=(auth_id, auth_token),
-    )
-    if resp.status_code == 404:
-        return ProbeResult(
-            False,
-            f"plivo: number {number} is not owned by this account.",
-        )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "plivo rejected the credentials — auth_id / auth_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("plivo", resp))
-    data = _json_or_empty(resp)
+def _plivo_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     # Plivo returns ``voice_enabled`` (bool) on the number resource.
-    if data.get("voice_enabled") is False:
-        return ProbeResult(
-            False,
-            f"plivo: number {number} is not voice-enabled.",
-        )
+    if _json_or_empty(resp).get("voice_enabled") is False:
+        return ProbeResult(False, f"plivo: number {number} is not voice-enabled.")
     return ProbeResult(True, f"plivo: {number} verified (owned, voice-enabled).")
 
 
-async def _probe_exotel_number(
-    client, cfg: Dict[str, Any], number: str
-) -> ProbeResult:
-    api_key = (cfg.get("api_key") or "").strip()
-    api_token = (cfg.get("api_token") or "").strip()
-    account_sid = (cfg.get("account_sid") or cfg.get("sid") or "").strip()
-    subdomain = (cfg.get("subdomain") or "api.exotel.com").strip()
-    if not api_key or not api_token or not account_sid:
-        return ProbeResult(
-            False,
-            "exotel: api_key / api_token / account_sid missing on the channel.",
-        )
-    # Exotel forked from Twilio; both reject percent-encoded '+' ('%2B') in
-    # phone-number path segments. Strip the leading '+' the same way the Plivo
-    # branch does so httpx doesn't encode it in the URL path.
-    exotel_number = number.lstrip("+")
-    resp = await client.get(
-        f"https://{subdomain}/v1/Accounts/{account_sid}/IncomingPhoneNumbers/{exotel_number}.json",
-        auth=(api_key, api_token),
-    )
-    if resp.status_code == 404:
-        return ProbeResult(
-            False,
-            f"exotel: number {number} is not owned by this account.",
-        )
-    if resp.status_code in (401, 403):
-        return ProbeResult(False, "exotel rejected the credentials — api_key / api_token invalid.")
-    if resp.status_code >= 400:
-        return ProbeResult(False, _summarise_http("exotel", resp))
+def _exotel_number_verify(resp, number: str, expected_prefix: Optional[str]) -> ProbeResult:
     # Exotel wraps as ``{"IncomingPhoneNumber": {...}}``; the presence of the
-    # row is enough to prove ownership, and voice is the default capability
-    # for Exotel virtual numbers.
+    # row (a non-404) is enough to prove ownership, and voice is the default
+    # capability for Exotel virtual numbers.
     return ProbeResult(True, f"exotel: {number} verified (owned).")
+
+
+_PHONE_NUMBER_PROBES: Dict[str, _NumberProbe] = {
+    "twilio": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "account_sid", "auth_token")
+            else "twilio: account_sid / auth_token missing on the channel."
+        ),
+        build_request=lambda c, n: (
+            f"https://api.twilio.com/2010-04-01/Accounts/"
+            f"{(c.get('account_sid') or '').strip()}/IncomingPhoneNumbers.json",
+            {
+                "params": {"PhoneNumber": n},
+                "auth": (
+                    (c.get("account_sid") or "").strip(),
+                    (c.get("auth_token") or "").strip(),
+                ),
+            },
+        ),
+        invalid_creds_message="twilio rejected the credentials — account_sid / auth_token invalid.",
+        verify=_twilio_number_verify,
+    ),
+    "telnyx": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "api_key")
+            else "telnyx: api_key missing on the channel."
+        ),
+        build_request=lambda c, n: (
+            "https://api.telnyx.com/v2/phone_numbers",
+            {
+                "params": {"filter[phone_number]": n},
+                "headers": {"Authorization": f"Bearer {(c.get('api_key') or '').strip()}"},
+            },
+        ),
+        invalid_creds_message="telnyx rejected the credentials — api_key invalid.",
+        verify=_telnyx_number_verify,
+    ),
+    "plivo": _NumberProbe(
+        missing_reason=lambda c: (
+            None if _require(c, "auth_id", "auth_token")
+            else "plivo: auth_id / auth_token missing on the channel."
+        ),
+        # Plivo number lookup uses the raw E.164 without the leading '+'.
+        build_request=lambda c, n: (
+            f"https://api.plivo.com/v1/Account/{(c.get('auth_id') or '').strip()}"
+            f"/Number/{n.lstrip('+')}/",
+            {"auth": ((c.get("auth_id") or "").strip(), (c.get("auth_token") or "").strip())},
+        ),
+        invalid_creds_message="plivo rejected the credentials — auth_id / auth_token invalid.",
+        verify=_plivo_number_verify,
+        not_owned_on_404=True,
+    ),
+    "exotel": _NumberProbe(
+        missing_reason=lambda c: (
+            None
+            if _require(c, "api_key", "api_token")
+            and ((c.get("account_sid") or c.get("sid") or "").strip())
+            else "exotel: api_key / api_token / account_sid missing on the channel."
+        ),
+        # Exotel forked from Twilio; both reject percent-encoded '+' ('%2B') in
+        # phone-number path segments, so strip the leading '+' like Plivo does.
+        build_request=lambda c, n: (
+            f"https://{(c.get('subdomain') or 'api.exotel.com').strip()}"
+            f"/v1/Accounts/{(c.get('account_sid') or c.get('sid') or '').strip()}"
+            f"/IncomingPhoneNumbers/{n.lstrip('+')}.json",
+            {"auth": ((c.get("api_key") or "").strip(), (c.get("api_token") or "").strip())},
+        ),
+        invalid_creds_message="exotel rejected the credentials — api_key / api_token invalid.",
+        verify=_exotel_number_verify,
+        not_owned_on_404=True,
+    ),
+}
+
+
+async def _run_number_probe(
+    client, slug: str, cfg: Dict[str, Any], number: str,
+    expected_prefix: Optional[str], probe: _NumberProbe,
+) -> ProbeResult:
+    """The shared number-verification skeleton — one place for the request →
+    404 → 401/403 → ≥400 flow every provider uses before its own ``verify``."""
+    missing = probe.missing_reason(cfg)
+    if missing:
+        return ProbeResult(False, missing)
+
+    url, kwargs = probe.build_request(cfg, number)
+    resp = await client.get(url, **kwargs)
+
+    if probe.not_owned_on_404 and resp.status_code == 404:
+        return ProbeResult(False, f"{slug}: number {number} is not owned by this account.")
+    if resp.status_code in (401, 403):
+        return ProbeResult(False, probe.invalid_creds_message)
+    if resp.status_code >= 400:
+        return ProbeResult(False, _summarise_http(slug, resp))
+
+    return probe.verify(resp, number, expected_prefix)
 
 
 # ── error summariser ─────────────────────────────────────────────────────────
