@@ -1,12 +1,12 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { ArrowLeft, ClipboardCheck, FileText, ListChecks, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 
-import agentsAtom from '@/atoms/AgentsAtom';
+import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
 import IngestionConfigsTab from '@/components/knowledge-base/IngestionConfigsTab';
 import IngestionRunsTab from '@/components/knowledge-base/IngestionRunsTab';
 import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
@@ -26,6 +26,20 @@ interface KnowledgeBaseDetailPageProps {
 // the list is small in practice; swap for a dedicated GET if that changes.
 export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetailPageProps) {
   const [agentData] = useAtom(agentsAtom);
+  const [, fetchAgents] = useAtom(fetchAllAgentsAtom);
+  const hasFetchedAgentsRef = useRef(false);
+
+  // The agent name is resolved from the agents atom, but this page can be
+  // opened directly (deep link) with an empty atom — without fetching, the
+  // lookup below always falls back to "Unknown agent". Mirrors the fetch the
+  // KB list page does so the atom is populated regardless of entry point.
+  useEffect(() => {
+    if (hasFetchedAgentsRef.current) return;
+    hasFetchedAgentsRef.current = true;
+    fetchAgents().catch(() => {
+      // agents endpoint may be disabled; the name falls back to "Unknown agent"
+    });
+  }, [fetchAgents]);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [KNOWLEDGE_BASE_QUERY_KEY, 'detail', uploadId],
