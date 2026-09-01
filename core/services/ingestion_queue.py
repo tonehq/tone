@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import functools
 import threading
 from typing import Optional
 from uuid import UUID
@@ -7,7 +8,12 @@ from uuid import UUID
 from loguru import logger
 from procrastinate import App, PsycopgConnector
 
-from core.logging import get_applied_level, setup_logging
+from core.logging import (
+    get_applied_level,
+    isolated_trace_context,
+    job_logging_context,
+    setup_logging,
+)
 from shared.config import settings
 
 # The Procrastinate worker starts via ``python -m procrastinate --app=core.services.ingestion_queue.app``
@@ -18,6 +24,51 @@ from shared.config import settings
 # call subprocess via DB-resolved level), so no other entrypoint's log configuration is overridden.
 if get_applied_level() is None:
     setup_logging()
+
+
+def _with_job_logging(func):
+    """Bind the Procrastinate job id into the logging context for the whole task
+    run, so every log line the task emits carries ``job_id=<id>`` — the same way
+    a live call's logs carry ``trace_id`` (see ``core/logging.py``). This makes
+    background jobs filterable end-to-end in Grafana/Loki by ``job_id``.
+
+    Reusable across EVERY task: decorate the task body and register it with
+    ``@app.task(..., pass_context=True)``. Procrastinate then passes the
+    ``JobContext`` as the first positional argument, which this wrapper consumes
+    to read ``context.job.id`` and never forwards — the wrapped body keeps its
+    original signature (task kwargs only), so no call site or defer changes.
+
+    ``job_id`` and ``trace_id`` are two INDEPENDENT log keys with independent
+    lifecycles, both bounded to exactly this job:
+      * ``job_logging_context`` binds ``job_id`` for the whole job and restores
+        the prior value on exit — the id spans start-of-job → end-of-job only.
+      * ``isolated_trace_context`` starts the job trace-clean and restores the
+        prior trace on exit — so a ``trace_id`` the job configures (ingestion /
+        eval) can't leak into the next job on a reused worker thread, and a job
+        that configures no trace logs ``trace_id=none`` throughout.
+
+    Best-effort and non-breaking:
+      * ``context`` defaults to ``None`` so a direct (non-worker) call still runs.
+      * If the id can't be read, the job runs normally with ``job_id='none'``.
+    """
+
+    def wrapper(context=None, *args, **kwargs):
+        job_id = None
+        try:
+            job = getattr(context, "job", None)
+            job_id = getattr(job, "id", None)
+        except Exception:  # noqa: BLE001 — logging id extraction must never fail a job
+            job_id = None
+        with isolated_trace_context(), job_logging_context(job_id):
+            return func(*args, **kwargs)
+
+    # Copy identity only (NOT functools.wraps): wraps would expose the inner
+    # body's signature via __wrapped__, hiding the leading ``context`` param that
+    # pass_context requires. The wrapper's own ``(context, ...)`` signature must
+    # stay visible to Procrastinate.
+    wrapper.__name__ = getattr(func, "__name__", "wrapper")
+    wrapper.__doc__ = func.__doc__
+    return wrapper
 
 
 def _conninfo() -> str:
@@ -71,7 +122,8 @@ def _defer_via_ephemeral_app(*, task_name: str, queue: str, **kwargs) -> int:
         return ephemeral.configure_task(name=task_name, queue=queue).defer(**kwargs)
 
 
-@app.task(name="ingest_upload", queue="ingestion")
+@app.task(name="ingest_upload", queue="ingestion", pass_context=True)
+@_with_job_logging
 def ingest_upload(
     upload_id: str,
     org_id: str,
@@ -129,7 +181,8 @@ def ingest_upload(
         raise
 
 
-@app.task(name="run_contact_sync", queue="contact_import")
+@app.task(name="run_contact_sync", queue="contact_import", pass_context=True)
+@_with_job_logging
 def run_contact_sync(sync_id: str, org_id: str) -> None:
     """Execute one directory sync run: source → map → validate → upsert → auto-assign.
 
@@ -162,35 +215,40 @@ def enqueue_contact_sync_sync(sync_id, org_id) -> int:
 
 
 @app.periodic(cron="* * * * *")
-@app.task(name="sync_pods_and_nodes", queue="pod_sync")
+@app.task(name="sync_pods_and_nodes", queue="pod_sync", pass_context=True)
+@_with_job_logging
 def sync_pods_and_nodes_task(timestamp: int) -> None:
     from core.jobs.pod_sync import sync_pods_and_nodes
 
     sync_pods_and_nodes()
 
 
-@app.task(name="detect_call_overlaps", queue="call_overlaps")
+@app.task(name="detect_call_overlaps", queue="call_overlaps", pass_context=True)
+@_with_job_logging
 def detect_call_overlaps_task(call_id: str) -> None:
     from core.jobs.call_overlap import detect_call_overlaps
 
     detect_call_overlaps(call_id=call_id)
 
 
-@app.task(name="consolidate_call_transcript", queue="call_transcripts")
+@app.task(name="consolidate_call_transcript", queue="call_transcripts", pass_context=True)
+@_with_job_logging
 def consolidate_call_transcript_task(call_id: str) -> None:
     from core.jobs.consolidated_transcript import consolidate_call_transcript
 
     consolidate_call_transcript(call_id=call_id)
 
 
-@app.task(name="compute_call_metrics_aggregates", queue="call_metrics")
+@app.task(name="compute_call_metrics_aggregates", queue="call_metrics", pass_context=True)
+@_with_job_logging
 def compute_call_metrics_aggregates_task(call_id: str) -> None:
     from core.jobs.call_metrics_aggregates import compute_call_metrics_aggregates
 
     compute_call_metrics_aggregates(call_id=call_id)
 
 
-@app.task(name="sync_loki_logs", queue="log_sync", retry=3)
+@app.task(name="sync_loki_logs", queue="log_sync", retry=3, pass_context=True)
+@_with_job_logging
 def sync_loki_logs_task(call_id: str) -> None:
     from core.jobs.sync_loki import sync_call_logs
 
@@ -239,7 +297,8 @@ async def enqueue_reprocess(upload_id, org_id, ingestion_run_id) -> int:
 _EVAL_TRIGGERS = {"auto", "manual", "cli"}
 
 
-@app.task(name="eval_ingestion_run", queue="eval")
+@app.task(name="eval_ingestion_run", queue="eval", pass_context=True)
+@_with_job_logging
 def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> None:
     """Run the RAG eval for a completed ingestion pipeline run.
 
@@ -347,7 +406,8 @@ async def enqueue_eval_for_ingestion_run(
 _AGENT_LLM_EVAL_TRIGGERS = {"cli", "api", "manual"}
 
 
-@app.task(name="run_agent_llm_eval", queue="agent_eval")
+@app.task(name="run_agent_llm_eval", queue="agent_eval", pass_context=True)
+@_with_job_logging
 def run_agent_llm_eval(
     agent_id: str,
     triggered_by: str = "manual",
@@ -603,7 +663,8 @@ def enqueue_eval_for_ingestion_run_sync(
     )
 
 
-@app.task(name="execute_outbound_call", queue="outbound_calls")
+@app.task(name="execute_outbound_call", queue="outbound_calls", pass_context=True)
+@_with_job_logging
 def execute_outbound_call(scheduled_call_id: str, org_id: str) -> None:
     """Dispatch a scheduled outbound call when its ``schedule_at`` fires.
 
@@ -622,7 +683,8 @@ def execute_outbound_call(scheduled_call_id: str, org_id: str) -> None:
 
 
 @app.periodic(cron="* * * * *")
-@app.task(name="reconcile_outbound_calls", queue="outbound_calls")
+@app.task(name="reconcile_outbound_calls", queue="outbound_calls", pass_context=True)
+@_with_job_logging
 def reconcile_outbound_calls(timestamp: int) -> None:
     """Safety net for scheduled calls that were persisted but never enqueued (e.g. the API
     died between committing the rows and deferring their jobs). Re-enqueues them so they
@@ -636,7 +698,8 @@ def reconcile_outbound_calls(timestamp: int) -> None:
 
 
 @app.periodic(cron="*/5 * * * *")
-@app.task(name="reap_orphaned_calls", queue="pod_sync")
+@app.task(name="reap_orphaned_calls", queue="pod_sync", pass_context=True)
+@_with_job_logging
 def reap_orphaned_calls_task(timestamp: int) -> None:
     """Close calls left with ended_at NULL because their pod was SIGKILLed mid-call
     (spot reclaim, OOM, node loss, or a deploy that outran the drain). Without this they
@@ -649,7 +712,8 @@ def reap_orphaned_calls_task(timestamp: int) -> None:
 
 
 @app.periodic(cron="* * * * *")
-@app.task(name="drain_outbound_calls", queue="outbound_calls")
+@app.task(name="drain_outbound_calls", queue="outbound_calls", pass_context=True)
+@_with_job_logging
 def drain_outbound_calls(timestamp: int) -> None:
     """Concurrency safety net: for batches carrying a per-batch limit, fill any free slots
     with due, waiting scheduled calls that were held back at dispatch. Instant refill happens
@@ -663,7 +727,8 @@ def drain_outbound_calls(timestamp: int) -> None:
 
 
 @app.periodic(cron="*/5 * * * *")
-@app.task(name="reap_stuck_ingestion_runs", queue="pod_sync")
+@app.task(name="reap_stuck_ingestion_runs", queue="pod_sync", pass_context=True)
+@_with_job_logging
 def reap_stuck_ingestion_runs(timestamp: int) -> None:
     """Safety net for ingestion runs stranded in ``running`` because their
     worker was SIGKILLed mid-ingestion (spot reclaim, OOM, deploy). Without this
@@ -796,7 +861,8 @@ def enqueue_loki_log_sync_sync(call_id, *, delay_seconds: int = 0) -> int:
 _CALL_TRANSCRIPT_EVAL_TRIGGERS = {"auto", "manual"}
 
 
-@app.task(name="score_call_transcript", queue="call_transcript_eval")
+@app.task(name="score_call_transcript", queue="call_transcript_eval", pass_context=True)
+@_with_job_logging
 def score_call_transcript_task(
     call_id: str,
     org_id: str,

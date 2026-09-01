@@ -54,6 +54,37 @@ def test_extract_trace_id():
     assert extract_trace_id("Traceback (most recent call last):") is None
 
 
+def test_parse_line_strips_job_id_field():
+    """Background-job lines carry a ``job_id=...`` field between ``trace_id`` and
+    the message (core/logging._LOG_FORMAT). The parser must consume it so the
+    stored message is clean — never prefixed with ``job_id=99 | ``."""
+    line = (
+        "2026-07-17 11:09:21.123 | INFO     | core.services.ingestion_queue:ingest_upload:90 | "
+        "trace_id=abc12345-ing-run7 | job_id=99 | [ingestion] worker picked job"
+    )
+    parsed = parse_line(line)
+    assert parsed["level"] == "INFO"
+    assert parsed["logger_name"] == "core.services.ingestion_queue"
+    assert parsed["message"] == "[ingestion] worker picked job"
+
+
+def test_parse_line_job_id_none_and_message_with_pipes():
+    line = (
+        "2026-07-17 11:09:21.123 | INFO     | core.x:f:9 | "
+        "trace_id=abc-1-2 | job_id=none | a | b | c"
+    )
+    parsed = parse_line(line)
+    assert parsed["message"] == "a | b | c"  # pipes in message preserved
+
+
+def test_extract_trace_id_with_job_id_field_present():
+    line = (
+        "2026-07-17 11:09:21.123 | INFO     | core.x:f:9 | "
+        "trace_id=abc12345-agent-call | job_id=42 | hi"
+    )
+    assert extract_trace_id(line) == "abc12345-agent-call"
+
+
 def test_fingerprint_is_label_order_independent():
     line = "some log line"
     a = fingerprint(123, {"app": "tone", "pod": "x"}, line)
