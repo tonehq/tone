@@ -40,18 +40,16 @@ export const USE_CASE_OPTIONS: UseCaseOption[] = [
 ];
 
 export const INDUSTRY_OPTIONS: SelectOption[] = [
-  { value: 'software', label: 'Software / SaaS' },
-  { value: 'ecommerce', label: 'E-commerce' },
   { value: 'healthcare', label: 'Healthcare' },
   { value: 'financial_services', label: 'Financial Services' },
-  { value: 'real_estate', label: 'Real Estate' },
-  { value: 'education', label: 'Education' },
-  { value: 'travel_hospitality', label: 'Travel & Hospitality' },
   { value: 'insurance', label: 'Insurance' },
-  { value: 'legal', label: 'Legal' },
-  { value: 'marketing', label: 'Marketing / Advertising' },
-  { value: 'manufacturing', label: 'Manufacturing' },
-  { value: 'non_profit', label: 'Non-profit' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'home_services', label: 'Home Services' },
+  { value: 'debt_collection', label: 'Debt Collection' },
+  { value: 'retail_consumer_goods', label: 'Retail & Consumer Goods' },
+  { value: 'travel_hospitality', label: 'Travel & Hospitality' },
+  { value: 'real_estate', label: 'Real Estate' },
+  { value: 'car_dealerships', label: 'Car Dealerships' },
   { value: 'other', label: 'Other' },
 ];
 
