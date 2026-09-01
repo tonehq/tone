@@ -151,6 +151,27 @@ class TestUploadDocument:
         resp = client_unauthenticated.post(BASE, files=files)
         assert resp.status_code in (401, 403)
 
+    def test_upload_duplicate_name_returns_409(self, db_session, client_as_member, org_id):
+        """The upload route runs a duplicate-name pre-check
+        (KnowledgeBase by organization_id + name) BEFORE any R2 write, so a
+        strict duplicate deterministically returns 409 — no reliance on R2.
+
+        We seed a KnowledgeBase row in the SAME session the TestClient uses
+        (get_db is overridden to yield it), flush so the pre-check query sees
+        it, then upload a valid (non-empty, allowed-type) file whose filename
+        collides with the seeded name."""
+        from core.models.knowledge_base import KnowledgeBase
+
+        dup_name = f"dup-{uuid.uuid4().hex}.pdf"
+        kb = KnowledgeBase(organization_id=org_id, name=dup_name)
+        db_session.add(kb)
+        db_session.flush()
+
+        files = {"file": (dup_name, io.BytesIO(b"hello"), "application/pdf")}
+        resp = client_as_member.post(BASE, files=files)
+
+        assert resp.status_code == 409
+
 
 # ─── PATCH /api/v1/knowledge-base/{upload_id} ───
 
