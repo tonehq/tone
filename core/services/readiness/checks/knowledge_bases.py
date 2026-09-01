@@ -27,6 +27,10 @@ from loguru import logger
 
 from core.services.readiness.base import CheckContext, ShallowCheck
 from core.services.readiness.checks._messages import quote
+from core.services.readiness.checks._per_resource import (
+    PerResourceCheck,
+    ResourceProblem,
+)
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -35,12 +39,13 @@ from core.services.readiness.schemas import (
 )
 
 
-class KnowledgeBasesReadyCheck(ShallowCheck):
+class KnowledgeBasesReadyCheck(PerResourceCheck, ShallowCheck):
     """Every attached KB must be ingested end-to-end (KB row, upload, chunks)."""
 
     id: ClassVar[str] = "knowledge_bases.ready"
     category: ClassVar[Category] = Category.KNOWLEDGE_BASES
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "knowledge_base"
 
     def applies(self, ctx: CheckContext) -> bool:
         return bool(ctx.knowledge_bases)
@@ -48,29 +53,28 @@ class KnowledgeBasesReadyCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No knowledge bases attached."
 
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
-        results: List[CheckResult] = []
-        for kb in ctx.knowledge_bases:
-            reason = _kb_not_ready_reason(ctx.db, kb)
-            if reason is None:
-                continue
-            results.append(
-                self._fail(
-                    f"{quote(kb.name)} isn't ready to use — {reason}.",
-                    remediation=(
-                        "Wait for ingestion to finish, or re-upload the "
-                        "document if it failed."
-                    ),
-                    resource_ref=ResourceRef(type="knowledge_base", id=str(kb.id)),
-                    check_id=self._result_id(str(kb.id)),
-                )
-            )
-        if results:
-            return results
-        return [self._pass(f"{len(ctx.knowledge_bases)} knowledge base(s) attached.")]
+    def _resources(self, ctx: CheckContext) -> List[Any]:
+        return ctx.knowledge_bases
+
+    def _summary_message(self, count: int) -> str:
+        return f"{count} knowledge base(s) attached."
+
+    async def _check_one(
+        self, ctx: CheckContext, kb: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        reason = _kb_not_ready_reason(ctx.db, kb)
+        if reason is None:
+            return None
+        return ResourceProblem(
+            f"{quote(kb.name)} isn't ready to use — {reason}.",
+            remediation=(
+                "Wait for ingestion to finish, or re-upload the document if it "
+                "failed."
+            ),
+        )
 
 
-class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
+class KnowledgeBaseEmbeddingModelConfiguredCheck(PerResourceCheck, ShallowCheck):
     """Every attached KB must have a complete ingestion run declaring which
     embedding model was used.
 
@@ -90,6 +94,7 @@ class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
     id: ClassVar[str] = "knowledge_bases.embedding_model_configured"
     category: ClassVar[Category] = Category.KNOWLEDGE_BASES
     severity: ClassVar[Severity] = Severity.BLOCKER
+    resource_ref_type: ClassVar[str] = "knowledge_base"
 
     def applies(self, ctx: CheckContext) -> bool:
         return bool(ctx.knowledge_bases)
@@ -97,35 +102,33 @@ class KnowledgeBaseEmbeddingModelConfiguredCheck(ShallowCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No knowledge bases attached — embedding model not required."
 
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
+    def _resources(self, ctx: CheckContext) -> List[Any]:
+        return ctx.knowledge_bases
+
+    def _summary_message(self, count: int) -> str:
+        return f"All {count} KB(s) declare an embedding model."
+
+    async def _check_one(
+        self, ctx: CheckContext, kb: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
         # A KB is INCOMPLETE when its active_run doesn't declare an
         # embedding_model — retrieval can't embed the query without it.
-        results: List[CheckResult] = []
-        for kb in ctx.knowledge_bases:
-            active_run = kb.active_run() if hasattr(kb, "active_run") else None
-            if active_run is None:
-                # KB has no ingestion run at all — ``KnowledgeBasesReadyCheck``
-                # already surfaces "no upload / not ready", so don't double-report.
-                continue
-            model_slug = (getattr(active_run, "embedding_model", None) or "").strip()
-            if not model_slug:
-                results.append(
-                    self._fail(
-                        f"{quote(kb.name)} can't be searched — its ingestion "
-                        "didn't record an embedding model.",
-                        remediation=(
-                            "Re-run ingestion for this knowledge base with a "
-                            "valid embedding provider and model."
-                        ),
-                        resource_ref=ResourceRef(type="knowledge_base", id=str(kb.id)),
-                        check_id=self._result_id(str(kb.id)),
-                    )
-                )
-        if results:
-            return results
-        return [self._pass(
-            f"All {len(ctx.knowledge_bases)} KB(s) declare an embedding model."
-        )]
+        active_run = kb.active_run() if hasattr(kb, "active_run") else None
+        if active_run is None:
+            # KB has no ingestion run at all — ``KnowledgeBasesReadyCheck``
+            # already surfaces "no upload / not ready", so don't double-report.
+            return None
+        model_slug = (getattr(active_run, "embedding_model", None) or "").strip()
+        if model_slug:
+            return None
+        return ResourceProblem(
+            f"{quote(kb.name)} can't be searched — its ingestion didn't record "
+            "an embedding model.",
+            remediation=(
+                "Re-run ingestion for this knowledge base with a valid "
+                "embedding provider and model."
+            ),
+        )
 
 
 class KnowledgeBaseEmbeddingKeyUsableCheck(ShallowCheck):

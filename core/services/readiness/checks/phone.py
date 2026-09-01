@@ -12,7 +12,8 @@ existing structural checks miss.
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, List, Optional, Tuple
+import contextlib
+from typing import Any, AsyncIterator, ClassVar, List, Optional, Tuple
 
 from loguru import logger
 
@@ -20,10 +21,13 @@ from core.services.readiness.base import (
     CheckContext,
     DeepCheck,
     ShallowCheck,
-    with_retry,
     with_timeout,
 )
 from core.services.readiness.checks._messages import humanize_reason, quote
+from core.services.readiness.checks._per_resource import (
+    PerResourceCheck,
+    ResourceProblem,
+)
 from core.services.readiness.schemas import (
     Category,
     CheckResult,
@@ -145,7 +149,7 @@ class PhoneChannelReachableCheck(ShallowCheck):
 # ── Deep: live transport credit / account probe ──────────────────────────────
 
 
-class TransportCreditsReachableCheck(DeepCheck):
+class TransportCreditsReachableCheck(PerResourceCheck, DeepCheck):
     """Verify each configured telephony channel's account is usable.
 
     For every telephony ``Channel`` linked to the agent (via ``AgentChannel``),
@@ -167,6 +171,15 @@ class TransportCreditsReachableCheck(DeepCheck):
     id: ClassVar[str] = "phone.transport_credits_reachable"
     category: ClassVar[Category] = Category.TRANSPORT
     severity: ClassVar[Severity] = Severity.WARNING
+    resource_ref_type: ClassVar[str] = "channel"
+    # 6s per provider × up to N channels; probed in parallel so this bounds the
+    # slowest, not the sum. A timeout → WARNING ("couldn't verify"), not a block.
+    probe_timeout: ClassVar[float] = 15.0
+
+    _REMEDIATION: ClassVar[str] = (
+        "Open the channel in Integrations → Channels: check its credentials are "
+        "current and the provider account has enough credit to place calls."
+    )
 
     def applies(self, ctx: CheckContext) -> bool:
         return any(
@@ -178,78 +191,54 @@ class TransportCreditsReachableCheck(DeepCheck):
     def skip_reason(self, ctx: CheckContext) -> str:
         return "No telephony channel with credentials linked to this agent."
 
-    @with_retry()
-    # 6s per provider × up to N channels + JSON parse + retry buffer. Most
-    # accounts respond in <500ms; the 15s ceiling keeps a single stuck
-    # provider from stalling the report.
-    @with_timeout(15.0)
-    async def run(self, ctx: CheckContext) -> List[CheckResult]:
-        import httpx
-
-        from core.services.readiness.probes import (
-            _TRANSPORT_PROBE_TIMEOUT,
-            probe_transport,
-        )
-        from core.utils.encryption import decrypt_json
-
-        # Isolate telephony channels once so the loop and the "no channels"
-        # branch reason from the same subset ``applies()`` gated on.
-        telephony_channels = [
+    def _resources(self, ctx: CheckContext) -> List[Any]:
+        return [
             c for c in ctx.channels
             if (c.channel_type or "").lower() in _TELEPHONY_CHANNEL_TYPES
         ]
 
-        results: List[CheckResult] = []
-        checked = 0
+    def _summary_message(self, count: int) -> str:
+        return f"All {count} telephony channel(s) authenticated with sufficient balance."
 
-        remediation = (
-            "Open the channel in Integrations → Channels: check its "
-            "credentials are current and the provider account has enough "
-            "credit to place calls."
-        )
+    def _timeout_message(self, count: int) -> str:
+        return "Couldn't reach some telephony providers in time — they may be slow. Run the check again."
 
-        # One client, reused across all channel probes for connection pooling —
-        # same pattern as ``ToolReachableCheck`` and ``McpServerReachableCheck``.
+    @contextlib.asynccontextmanager
+    async def _shared(self, ctx: CheckContext) -> AsyncIterator[Any]:
+        import httpx
+
+        from core.services.readiness.probes import _TRANSPORT_PROBE_TIMEOUT
+
         async with httpx.AsyncClient(timeout=_TRANSPORT_PROBE_TIMEOUT) as client:
-            for channel in telephony_channels:
-                slug = (channel.channel_type or "").lower()
-                try:
-                    config = decrypt_json(channel.encrypted_config) or {}
-                except Exception:  # noqa: BLE001 — decrypt failure (rotated secret)
-                    logger.debug(
-                        "[readiness] channel credential decrypt failed for '{}'",
-                        channel.name,
-                    )
-                    results.append(self._fail(
-                        f"{quote(channel.name)} can't place calls — its "
-                        "credentials couldn't be read.",
-                        remediation=remediation,
-                        resource_ref=ResourceRef(type="channel", id=str(channel.id)),
-                        check_id=self._result_id(str(channel.id)),
-                    ))
-                    continue
+            yield client
 
-                result = await probe_transport(client, config, slug)
-                checked += 1
-                if not result.ok:
-                    results.append(self._fail(
-                        f"{quote(channel.name)} can't place calls — "
-                        f"{humanize_reason(result.message)}.",
-                        remediation=remediation,
-                        resource_ref=ResourceRef(type="channel", id=str(channel.id)),
-                        check_id=self._result_id(str(channel.id)),
-                    ))
+    async def _check_one(
+        self, ctx: CheckContext, channel: Any, shared: Any
+    ) -> Optional[ResourceProblem]:
+        from core.services.readiness.probes import probe_transport
+        from core.utils.encryption import decrypt_json
 
-        if not checked and not results:
-            # ``applies()`` guards this, but keep a defensive branch so the
-            # method is safe to call directly (tests, ad-hoc reruns).
-            return [self._skip("No telephony channel with credentials linked to this agent.")]
+        slug = (channel.channel_type or "").lower()
+        try:
+            config = decrypt_json(channel.encrypted_config) or {}
+        except Exception:  # noqa: BLE001 — decrypt failure (rotated secret)
+            logger.debug(
+                "[readiness] channel credential decrypt failed for '{}'", channel.name
+            )
+            return ResourceProblem(
+                f"{quote(channel.name)} can't place calls — its credentials "
+                "couldn't be read.",
+                remediation=self._REMEDIATION,
+            )
 
-        if results:
-            return results
-        return [self._pass(
-            f"All {checked} telephony channel(s) authenticated with sufficient balance."
-        )]
+        result = await probe_transport(shared, config, slug)
+        if not result.ok:
+            return ResourceProblem(
+                f"{quote(channel.name)} can't place calls — "
+                f"{humanize_reason(result.message)}.",
+                remediation=self._REMEDIATION,
+            )
+        return None
 
 
 # ── Deep: per-number verification at the provider ─────────────────────────────

@@ -14,6 +14,7 @@ observes the upload)."""
 from __future__ import annotations
 
 import mimetypes
+import re
 import time
 from pathlib import Path
 from typing import Any, Optional, Tuple, Union
@@ -46,21 +47,54 @@ DEFAULT_MAX_KB_FILE_SIZE_BYTES = 100 * 1024 * 1024
 # content-type, which is unreliable for csv/json), matching the frontend check.
 ALLOWED_KB_EXTENSIONS = frozenset({"pdf", "txt", "csv", "html", "json", "docx"})
 
+# Longest KB document name we accept. Bound by ``KnowledgeBase.name``
+# (``String(255)``), the tighter of the two columns a name lands in (the other
+# being ``Upload.file_name``, ``String(512)``). Enforcing it up front turns a
+# would-be DB ``DataError`` (opaque HTTP 500) into a clean validation error.
+MAX_KB_FILE_NAME_LENGTH = 255
+
+
+def _sanitize_kb_file_name(name: str) -> str:
+    """Reduce a client-supplied filename to a safe basename before it is used
+    as an R2 object-key segment or stored as the KB name.
+
+    Strips any directory components (so ``../`` or path separators can't leak
+    into the object key) and drops non-printable / control characters. Normal
+    filenames pass through unchanged; falls back to ``upload.bin`` when nothing
+    usable remains.
+    """
+    base = re.split(r"[\\/]+", name.strip())[-1].strip()
+    base = "".join(ch for ch in base if ch.isprintable())
+    return base or "upload.bin"
+
 
 class UploadService(BaseService):
     """Create-side lifecycle for KB uploads. Read/list/delete stay in the route
     (thin transports) until a second caller needs them."""
 
     @staticmethod
-    def validate_upload_file(*, file_name: str, size_bytes: int) -> None:
-        """Enforce the KB upload contract (size ceiling + type allowlist) on the
-        backend, independent of any frontend validation. Raises the transport-
-        agnostic :class:`IngestionValidationError` (routers map it to HTTP 400)
-        so HTTP upload, file-replace, and the CLI share ONE rule.
+    def validate_upload_file(
+        *,
+        file_name: str,
+        size_bytes: int,
+        max_name_length: int = MAX_KB_FILE_NAME_LENGTH,
+    ) -> None:
+        """Enforce the KB upload contract (name length + size ceiling + type
+        allowlist) on the backend, independent of any frontend validation.
+        Raises the transport-agnostic :class:`IngestionValidationError`
+        (routers map it to HTTP 400) so HTTP upload, file-replace, and the CLI
+        share ONE rule.
 
-        Zero-byte files are handled by the caller's own empty-file check; this
-        method owns the max-size and extension gates only.
+        ``max_name_length`` defaults to the create-path limit (bound by
+        ``KnowledgeBase.name``); the replace path passes the wider
+        ``Upload.file_name`` limit. Zero-byte files are handled by the caller's
+        own empty-file check; this method owns the name/size/type gates only.
         """
+        if len(file_name) > max_name_length:
+            raise IngestionValidationError(
+                f"File name is too long ({len(file_name)} characters). "
+                f"Maximum allowed is {max_name_length}."
+            )
         limit = settings.MAX_KB_FILE_SIZE_BYTES or DEFAULT_MAX_KB_FILE_SIZE_BYTES
         if size_bytes > limit:
             raise IngestionValidationError(
@@ -135,9 +169,14 @@ class UploadService(BaseService):
         if not resolved_size:
             raise ValueError("Empty file — refusing to create an upload for a zero-byte source")
 
-        # Backend enforcement of the size + type contract — runs BEFORE the R2
-        # write so a rejected file never leaves an orphan blob. Applies to the
-        # HTTP upload route AND any CLI caller that flows through this service.
+        # Reduce to a safe basename before it becomes an R2 key segment / the
+        # stored KB name (defeats path separators; normal names unchanged).
+        resolved_name = _sanitize_kb_file_name(resolved_name)
+
+        # Backend enforcement of the name + size + type contract — runs BEFORE
+        # the R2 write so a rejected file never leaves an orphan blob. Applies
+        # to the HTTP upload route AND any CLI caller that flows through this
+        # service. Uses the default (create-path) name-length limit.
         self.validate_upload_file(file_name=resolved_name, size_bytes=resolved_size)
 
         r2 = self._r2 or R2StorageService()
@@ -450,13 +489,14 @@ class UploadService(BaseService):
         file (routers → 400). Returns the refreshed ``Upload``."""
         upload = self._get_org_upload(upload_id)
 
-        new_name = file_name or upload.file_name
-        if len(new_name) > 512:
-            raise IngestionValidationError("file_name too long (max 512)")
-        # Backend enforcement of the size + type contract (single source of
-        # truth in UploadService) — runs BEFORE the R2 write so a rejected file
-        # never creates a blob. Mirrors the create path.
-        self.validate_upload_file(file_name=new_name, size_bytes=size_bytes)
+        new_name = _sanitize_kb_file_name(file_name or upload.file_name)
+        # Backend enforcement of the name + size + type contract (single source
+        # of truth in UploadService) — runs BEFORE the R2 write so a rejected
+        # file never creates a blob. Replace writes ``Upload.file_name``
+        # (``String(512)``), so it passes the wider name-length limit.
+        self.validate_upload_file(
+            file_name=new_name, size_bytes=size_bytes, max_name_length=512
+        )
         resolved_type = content_type or "application/octet-stream"
 
         logger.info(

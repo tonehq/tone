@@ -541,6 +541,34 @@ class IngestionRunService:
         db.delete(run)
         db.commit()
 
+    @staticmethod
+    def delete_runs_for_upload(db: Session, *, upload_id: Any, org_id: Any) -> int:
+        """Delete EVERY ingestion pipeline run for one upload (org-scoped),
+        cascading to that run's chunks + embeddings via FK ``ON DELETE
+        CASCADE``. The KB-level and per-agent ``active_ingestion_pipeline_run_id``
+        pins that referenced a deleted run are reset to NULL by their own FK
+        ``ON DELETE SET NULL``, so no dangling pointer remains.
+
+        Returns the number of runs removed. Used by the file-replace flow to
+        wipe the stale content of the previous file before re-ingesting; the
+        ``Upload`` and ``KnowledgeBase`` rows themselves are left intact (the
+        document identity is preserved — only its ingested content is cleared).
+        """
+        n = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.upload_id == upload_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        logger.info(
+            "[ingestion] purged {} pipeline run(s) (+chunks/embeddings) for upload={} org={}",
+            n, upload_id, org_id,
+        )
+        return n
+
     # ── list + resolver + agent-KB override ────────────────────────────────
 
     _LIST_SORT_MAP = {

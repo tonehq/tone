@@ -11,7 +11,7 @@ import uuid
 from datetime import datetime, timezone
 
 import pytest
-from fastapi import HTTPException
+from core.services.readiness.errors import ReadinessRunNotFoundError
 
 
 # ─── Helpers ───
@@ -570,21 +570,22 @@ class TestReadinessRunsService:
         assert len(report.checks) == 1
         assert report.checks[0].check_id == "llm.provider"
 
-    def test_get_run_unknown_raises_404(self, db_session, client_as_member):
+    def test_get_run_unknown_raises_not_found(self, db_session, client_as_member):
+        # Service raises the transport-agnostic domain error; the api_v1 handler
+        # maps it to HTTP 404 (see test_readiness_error_mapping.py for the wire).
         agent, _agent_row, _org_id, svc = self._agent_and_service(db_session, client_as_member)
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ReadinessRunNotFoundError):
             svc.get_run(agent["id"], 999)
-        assert exc.value.status_code == 404
 
     def test_get_run_shallow_run_not_found(self, db_session, client_as_member):
         """get_run is deep-only (mirrors list_runs) — a shallow run's number,
-        which never appears in the dropdown, must 404 rather than return it."""
+        which never appears in the dropdown, must raise (→ 404) rather than
+        return it."""
         agent, agent_row, org_id, svc = self._agent_and_service(db_session, client_as_member)
         _seed_event(db_session, org_id=org_id, agent_id=agent_row.id, run_number=4, depth="shallow")
         db_session.flush()
-        with pytest.raises(HTTPException) as exc:
+        with pytest.raises(ReadinessRunNotFoundError):
             svc.get_run(agent["id"], 4)
-        assert exc.value.status_code == 404
 
     def test_list_runs_skips_unmappable_row(self, db_session, client_as_member):
         """One legacy/partial event row with an out-of-enum overall_status must

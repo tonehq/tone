@@ -212,15 +212,115 @@ class TestErrorFrameExtractor:
         assert _extract_error_frame_message(SimpleNamespace(text="hi"), None) is None
 
 
+# ─── Real pipecat harness coverage ────────────────────────────────────────────
+
+
+def _pipeline_params():
+    from pipecat.pipeline.task import PipelineParams
+
+    return PipelineParams(
+        audio_in_sample_rate=16000, audio_out_sample_rate=24000, enable_metrics=False
+    )
+
+
+def _make_stub_service(*, emit_frame=None, error_text=None):
+    """A REAL pipecat FrameProcessor standing in for a provider service.
+
+    Once the pipeline has started (it sees the ``StartFrame`` every processor
+    gets), it reacts on a scheduled task so the pipeline is fully running:
+      * ``emit_frame`` → pushed downstream (simulates provider output).
+      * ``error_text`` → pushed upstream as an ErrorFrame (simulates a 4xx).
+      * neither → emits nothing (simulates a slow/hung provider → timeout).
+
+    This drives the actual ``probe_in_pipeline`` harness, unlike the old tests
+    that mocked ``run_tts``/``run_stt`` — methods the probe no longer calls.
+    """
+    from pipecat.frames.frames import StartFrame
+    from pipecat.processors.frame_processor import FrameProcessor
+
+    class _Stub(FrameProcessor):
+        def __init__(self):
+            super().__init__()
+            self._reacted = False
+
+        async def process_frame(self, frame, direction):
+            await super().process_frame(frame, direction)
+            await self.push_frame(frame, direction)
+            if not self._reacted and isinstance(frame, StartFrame):
+                self._reacted = True
+                asyncio.create_task(self._react())
+
+        async def _react(self):
+            from pipecat.frames.frames import ErrorFrame
+            from pipecat.processors.frame_processor import FrameDirection
+
+            await asyncio.sleep(0.15)  # let StartFrame propagate + pipeline settle
+            if error_text is not None:
+                await self.push_frame(ErrorFrame(error=error_text), FrameDirection.UPSTREAM)
+            elif emit_frame is not None:
+                await self.push_frame(emit_frame, FrameDirection.DOWNSTREAM)
+
+    return _Stub()
+
+
+class TestProbeInPipelineHarness:
+    """Real coverage of ``probe_in_pipeline`` — drives an actual pipecat
+    Pipeline with a stub FrameProcessor. Covers the pass / provider-error /
+    timeout branches and the ``err is None`` timeout contract (B2)."""
+
+    def _run(self, service, input_frames, is_target, timeout_s=3.0):
+        from core.services.readiness.probe_pipeline import probe_in_pipeline
+
+        return asyncio.run(
+            probe_in_pipeline(
+                service, input_frames, is_target,
+                params=_pipeline_params(), timeout_s=timeout_s, provider="test",
+            )
+        )
+
+    def test_pass_when_target_frame_emitted(self):
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        audio = TTSAudioRawFrame(audio=b"\x00\x01", sample_rate=24000, num_channels=1)
+        stub = _make_stub_service(emit_frame=audio)
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")], lambda f: isinstance(f, TTSAudioRawFrame)
+        )
+        assert ok is True and err is None
+        assert isinstance(frame, TTSAudioRawFrame)
+
+    def test_provider_error_frame_surfaces(self):
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        stub = _make_stub_service(error_text="server rejected: HTTP 402")
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")], lambda f: isinstance(f, TTSAudioRawFrame)
+        )
+        assert ok is False and frame is None
+        assert err is not None and "402" in err
+
+    def test_timeout_signals_none_error(self):
+        # Silent stub → no target, no ErrorFrame, no exception → pure timeout,
+        # which the harness MUST signal with err=None (the B2 contract).
+        from pipecat.frames.frames import TTSAudioRawFrame, TTSSpeakFrame
+
+        stub = _make_stub_service()  # emits nothing
+        ok, frame, err = self._run(
+            stub, [TTSSpeakFrame(text="hi")],
+            lambda f: isinstance(f, TTSAudioRawFrame), timeout_s=1.0,
+        )
+        assert ok is False and frame is None and err is None
+
+
 # ─── TTS probe (the primary regression surface) ───────────────────────────────
 
 
 class TestProbeTts:
-    """Exercise every branch of probe_tts. Mocks pipecat via
-    ``service_factory.build_tts`` so no live provider is required."""
+    """Exercise probe_tts against a REAL pipecat pipeline driven by a stub
+    FrameProcessor (see _make_stub_service) — no live provider required."""
 
     def _run(self, service):
-        """Call probe_tts against a fake service. Returns ProbeResult."""
+        """Call probe_tts against a stub service. Returns ProbeResult."""
         from core.services.readiness import probes
         ctx = _fake_spec_ctx("tts")
         with patch.object(probes, "_build_spec", return_value={
@@ -238,31 +338,36 @@ class TestProbeTts:
         """Healthy TTS emits a TTSAudioRawFrame with audio bytes → PASS."""
         from pipecat.frames.frames import TTSAudioRawFrame
         audio_frame = TTSAudioRawFrame(audio=b"\x00\x01", sample_rate=24000, num_channels=1)
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([audio_frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=audio_frame))
         assert result.ok is True
         assert "synthesised" in result.message.lower()
 
     def test_fail_on_error_frame(self):
-        """Regression: Fish Audio HTTP 402 arrives as an ErrorFrame in the
-        stream; probe MUST fail with the provider's message, not soft-pass."""
-        from pipecat.frames.frames import ErrorFrame
-        err = ErrorFrame(error="server rejected WebSocket connection: HTTP 402")
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([err]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "402" in result.message
+        """A provider ErrorFrame (HTTP 402) → FAIL, cleaned + credit-bucketed
+        (not a raw dump, not a timeout)."""
+        result = self._run(_make_stub_service(
+            error_text="server rejected WebSocket connection: HTTP 402"))
+        assert result.ok is False and result.timed_out is False
+        assert "credit" in result.message.lower() or "quota" in result.message.lower()
 
-    def test_fail_on_no_audio(self):
-        """Regression: previously returned a soft PASS on an empty stream —
-        now a real sentence probe MUST produce audio to be considered healthy."""
-        service = MagicMock()
-        service.run_tts = MagicMock(return_value=_FakeAsyncStream([]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no audio" in result.message.lower()
+    def test_timeout_maps_to_timed_out(self):
+        """A pure timeout (harness returns err=None) → timed_out=True (WARNING),
+        NOT a confirmed provider failure."""
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("tts")
+        with patch.object(probes, "_build_spec", return_value={
+            "provider_name": "fake_tts", "api_key": "k", "model_name": "m",
+            "metadata": {}, "model_meta_data": {},
+        }):
+            from core.services.pipeline import service_factory
+            with patch.object(service_factory, "build_tts", return_value=object()):
+                with patch(
+                    "core.services.readiness.probe_pipeline.probe_in_pipeline",
+                    new=AsyncMock(return_value=(False, None, None)),
+                ):
+                    result = asyncio.run(probes.probe_tts(ctx))
+        assert result.ok is False and result.timed_out is True
+        assert "slow" in result.message.lower() or "in time" in result.message.lower()
 
     def test_fail_when_construction_raises(self):
         """A broken client construction (bad API key at init time) → clear FAIL."""
@@ -296,13 +401,36 @@ class TestProbeStt:
             with patch.object(service_factory, "build_stt", return_value=service):
                 return asyncio.run(probes.probe_stt(ctx))
 
+    def _run_with_timeout_harness(self, *, wav_present=True):
+        """Run probe_stt with the harness patched to a pure timeout (err=None),
+        optionally simulating the bundled WAV being absent."""
+        from core.services.readiness import probes
+        ctx = _fake_spec_ctx("stt")
+        stack = [
+            patch.object(probes, "_build_spec", return_value={
+                "provider_name": "fake_stt", "api_key": "k", "model_name": "m",
+                "metadata": {}, "model_meta_data": {},
+            }),
+        ]
+        from core.services.pipeline import service_factory
+        stack.append(patch.object(service_factory, "build_stt", return_value=object()))
+        stack.append(patch(
+            "core.services.readiness.probe_pipeline.probe_in_pipeline",
+            new=AsyncMock(return_value=(False, None, None)),
+        ))
+        if not wav_present:
+            stack.append(patch("core.services.readiness.probes._load_probe_pcm16", return_value=None))
+        import contextlib
+        with contextlib.ExitStack() as es:
+            for cm in stack:
+                es.enter_context(cm)
+            return asyncio.run(probes.probe_stt(ctx))
+
     def test_pass_on_transcription_frame(self):
         """Healthy STT emits TranscriptionFrame with real text → PASS with snippet."""
         from pipecat.frames.frames import TranscriptionFrame
         frame = TranscriptionFrame(text="the quick brown fox", user_id="u", timestamp="t")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=frame))
         assert result.ok is True
         assert "transcribed" in result.message.lower()
         assert "the quick brown fox" in result.message
@@ -311,43 +439,65 @@ class TestProbeStt:
         """Providers that only emit interims (streaming-only) still pass."""
         from pipecat.frames.frames import InterimTranscriptionFrame
         frame = InterimTranscriptionFrame(text="hello world", user_id="u", timestamp="t")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame]))
-        result = self._run(service)
+        result = self._run(_make_stub_service(emit_frame=frame))
         assert result.ok is True
         assert "hello world" in result.message
 
     def test_fail_on_error_frame(self):
-        """Regression: WS-STT auth/quota failures arrive as ErrorFrame."""
-        from pipecat.frames.frames import ErrorFrame
-        err = ErrorFrame(error="invalid api key")
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([err]))
-        result = self._run(service)
-        assert result.ok is False
-        # ErrorFrame text is now cleaned + bucketed: an "invalid api key" body
-        # classifies as an auth failure ("rejected the API key").
+        """A WS-STT auth failure arrives as an ErrorFrame → cleaned + bucketed
+        to an auth message (not a timeout)."""
+        result = self._run(_make_stub_service(error_text="invalid api key"))
+        assert result.ok is False and result.timed_out is False
         assert "api key" in result.message.lower()
 
-    def test_fail_on_no_frames_with_real_audio(self):
-        """WAV was present but provider returned nothing → clear FAIL."""
-        service = MagicMock()
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no frames" in result.message.lower()
+    def test_timeout_maps_to_timed_out(self):
+        """Real audio sent, nothing back in time (harness err=None) → timed_out
+        WARNING, not a confirmed failure."""
+        result = self._run_with_timeout_harness(wav_present=True)
+        assert result.ok is False and result.timed_out is True
 
-    def test_fail_on_frames_without_transcript(self):
-        """Frames arrived but none carried text (whitespace-only) → FAIL with
-        language/model hint since that's the usual culprit."""
-        service = MagicMock()
-        # Non-error, non-transcript frames — e.g. audio ack frames with empty
-        # text — must not fool the assertion.
-        frame = SimpleNamespace(text=" ")
-        service.run_stt = MagicMock(return_value=_FakeAsyncStream([frame, frame]))
-        result = self._run(service)
-        assert result.ok is False
-        assert "no transcript" in result.message.lower()
+    def test_missing_wav_is_hard_fail_not_timeout(self):
+        """A missing bundled WAV is a deploy bug → a real FAIL (NOT a timeout
+        warning), because the probe itself can't run."""
+        result = self._run_with_timeout_harness(wav_present=False)
+        assert result.ok is False and result.timed_out is False
+        assert "wav" in result.message.lower() or "missing" in result.message.lower()
+
+
+# ─── Probe timeout → WARNING at the check layer (B2 end-to-end) ───────────────
+
+
+class TestProbeTimeoutSeverity:
+    """B2 at the check layer: a probe TIMEOUT surfaces as WARNING (does NOT
+    block publish); a confirmed failure keeps the check's BLOCKER severity."""
+
+    def _run_llm_check(self, probe_result):
+        from core.services.readiness import probes
+        from core.services.readiness.checks.llm import LLMProviderReachableCheck
+
+        ctx = SimpleNamespace(
+            llm=SimpleNamespace(provider=SimpleNamespace(display_name="OpenAI"))
+        )
+        with patch.object(probes, "probe_llm", new=AsyncMock(return_value=probe_result)):
+            return asyncio.run(LLMProviderReachableCheck().run(ctx))
+
+    def test_timeout_probe_is_warning(self):
+        from core.services.readiness.probes import ProbeResult
+        from core.services.readiness.schemas import Severity
+
+        r = self._run_llm_check(
+            ProbeResult(False, "OpenAI didn't respond in time", timed_out=True)
+        )
+        assert r.status.value == "fail"
+        assert r.severity == Severity.WARNING
+
+    def test_real_failure_probe_is_blocker(self):
+        from core.services.readiness.probes import ProbeResult
+        from core.services.readiness.schemas import Severity
+
+        r = self._run_llm_check(ProbeResult(False, "OpenAI rejected the API key"))
+        assert r.status.value == "fail"
+        assert r.severity == Severity.BLOCKER
 
 
 # ─── Tool GET probe (deep tools.reachable) ────────────────────────────────────
@@ -592,35 +742,50 @@ class TestMcpServerReachablePerServer:
             oauth_connection_id=None, app_integration_id=None,
         )
 
-    def test_healthy_server_yields_no_row(self):
+    def test_healthy_server_yields_no_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(True, None))
         check._handshake = AsyncMock(return_value=None)
-        result = asyncio.run(check._probe_server(MagicMock(), MagicMock(), self._server()))
-        assert result is None
+        problem = asyncio.run(
+            check._check_one(None, self._server(), (MagicMock(), MagicMock()))
+        )
+        assert problem is None
 
-    def test_unreachable_server_single_row(self):
+    def test_unreachable_server_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(False, "the server didn't respond"))
         check._handshake = AsyncMock(return_value=None)
-        result = asyncio.run(
-            check._probe_server(MagicMock(), MagicMock(), self._server(name="Gmail"))
+        problem = asyncio.run(
+            check._check_one(None, self._server(name="Gmail"), (MagicMock(), MagicMock()))
         )
-        assert result.status.value == "fail"
-        assert "Can't reach" in result.message and "Gmail" in result.message
-        assert result.check_id == "mcp_servers.reachable:s1"
-        assert result.resource_ref.type == "mcp_server" and result.resource_ref.id == "s1"
+        assert problem is not None
+        assert "Can't reach" in problem.message and "Gmail" in problem.message
 
-    def test_handshake_failure_single_row(self):
+    def test_handshake_failure_problem(self):
         check = self._check()
         check._http_reachable = AsyncMock(return_value=(True, None))
         check._handshake = AsyncMock(return_value="invalid credentials")
-        result = asyncio.run(
-            check._probe_server(MagicMock(), MagicMock(), self._server(sid="s2", name="Slack"))
+        problem = asyncio.run(
+            check._check_one(None, self._server(name="Slack"), (MagicMock(), MagicMock()))
         )
-        assert result.status.value == "fail"
-        assert "Slack" in result.message and "invalid credentials" in result.message
-        assert result.check_id == "mcp_servers.reachable:s2"
+        assert problem is not None
+        assert "Slack" in problem.message and "invalid credentials" in problem.message
+
+    def test_run_builds_per_server_check_id_and_ref(self):
+        # The PerResourceCheck base turns a ResourceProblem into a per-server
+        # CheckResult with a unique check_id + resource_ref.
+        check = self._check()
+        check._http_reachable = AsyncMock(return_value=(False, "the server didn't respond"))
+        check._handshake = AsyncMock(return_value=None)
+        ctx = SimpleNamespace(
+            mcp_servers=[self._server(sid="s1", name="Gmail")], db=None, org_id=None
+        )
+        results = asyncio.run(check.run(ctx))
+        assert len(results) == 1
+        r = results[0]
+        assert r.status.value == "fail"
+        assert r.check_id == "mcp_servers.reachable:s1"
+        assert r.resource_ref.type == "mcp_server" and r.resource_ref.id == "s1"
 
 
 class TestMcpServersConfiguredPerServer:
@@ -913,3 +1078,288 @@ class TestErrorFrameCleaning:
     def test_empty_error_frame_is_safe(self):
         out = self._fn()("openai", "")
         assert out and "{" not in out
+
+
+# ─── Transport credit probe (probe_transport, per-provider) ───────────────────
+
+
+class _FakeResp:
+    """Duck-typed httpx.Response for probe_transport tests."""
+
+    def __init__(self, status_code, json_data=None, text=""):
+        self.status_code = status_code
+        self._json = json_data
+        self.text = text
+
+    def json(self):
+        if self._json is None:
+            raise ValueError("no json body")
+        return self._json
+
+
+def _fake_transport_client(resp=None, *, raise_exc=None):
+    client = MagicMock()
+    if raise_exc is not None:
+        client.get = AsyncMock(side_effect=raise_exc)
+    else:
+        client.get = AsyncMock(return_value=resp)
+    return client
+
+
+class TestProbeTransport:
+    """Behavior lock for the per-provider transport credit probe. Written
+    BEFORE the registry refactor so the shared skeleton (missing-creds / 401 /
+    >=400 / low-balance / ok) and each provider's request shape are pinned."""
+
+    def _run(self, cfg, slug, resp=None, *, raise_exc=None):
+        from core.services.readiness.probes import probe_transport
+
+        client = _fake_transport_client(resp, raise_exc=raise_exc)
+        result = asyncio.run(probe_transport(client, cfg, slug))
+        return client, result
+
+    # ── shared skeleton ──────────────────────────────────────────────────────
+
+    def test_missing_credentials_fails_without_call(self):
+        client, result = self._run({}, "twilio")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_401_reports_rejected_credentials(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", _FakeResp(401)
+        )
+        assert result.ok is False and "rejected" in result.message.lower()
+
+    def test_5xx_routes_through_summariser(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(500, text="boom"),
+        )
+        assert result.ok is False and "500" in result.message
+
+    def test_low_balance_fails(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(200, {"balance": "0.50", "currency": "USD"}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+
+    def test_healthy_balance_passes(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            _FakeResp(200, {"balance": "42.00", "currency": "USD"}),
+        )
+        assert result.ok is True and "valid" in result.message.lower()
+
+    def test_unknown_slug_is_a_noop_pass(self):
+        _, result = self._run({}, "vonage")
+        assert result.ok is True and "no credit probe" in result.message.lower()
+
+    def test_network_error_is_a_fail(self):
+        import httpx
+
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            raise_exc=httpx.ConnectError("dns"),
+        )
+        assert result.ok is False
+
+    # ── per-provider request shape + parsing ─────────────────────────────────
+
+    def test_twilio_request_shape(self):
+        client, result = self._run(
+            {"account_sid": "AC123", "auth_token": "tok"}, "twilio",
+            _FakeResp(200, {"balance": "5", "currency": "USD"}),
+        )
+        assert result.ok is True
+        url = client.get.call_args.args[0]
+        assert "api.twilio.com" in url and "AC123" in url
+        assert client.get.call_args.kwargs["auth"] == ("AC123", "tok")
+
+    def test_telnyx_bearer_and_data_balance(self):
+        client, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            _FakeResp(200, {"data": {"balance": "0.10", "currency": "USD"}}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+        assert client.get.call_args.kwargs["headers"]["Authorization"] == "Bearer key"
+
+    def test_plivo_cash_credits(self):
+        client, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            _FakeResp(200, {"cash_credits": "10.0"}),
+        )
+        assert result.ok is True
+        assert client.get.call_args.kwargs["auth"] == ("id", "tok")
+
+    def test_exotel_nested_balance_and_subdomain(self):
+        client, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid",
+             "subdomain": "sg.exotel.com"},
+            "exotel",
+            _FakeResp(200, {"Balance": {"Balance": "0.20", "Currency": "INR"}}),
+        )
+        assert result.ok is False and "top up" in result.message.lower()
+        assert "sg.exotel.com" in client.get.call_args.args[0]
+
+
+class TestProbePhoneNumber:
+    """Behavior lock for the per-provider number-verification probe. Written
+    BEFORE the registry refactor so the shared skeleton (empty-number /
+    missing-creds / 401 / >=400 / unknown-slug) and each provider's request
+    shape + ownership/voice/webhook checks are pinned against the live code."""
+
+    def _run(self, cfg, slug, number="+15551234567", *, prefix=None, resp=None, raise_exc=None):
+        from core.services.readiness.probes import probe_phone_number
+
+        client = _fake_transport_client(resp, raise_exc=raise_exc)
+        result = asyncio.run(
+            probe_phone_number(client, cfg, slug, number, expected_webhook_prefix=prefix)
+        )
+        return client, result
+
+    # ── shared skeleton ──────────────────────────────────────────────────────
+
+    def test_empty_number_fails_without_call(self):
+        client, result = self._run({"account_sid": "AC", "auth_token": "t"}, "twilio", number="")
+        assert result.ok is False and "empty" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_missing_credentials_fails_without_call(self):
+        client, result = self._run({}, "twilio")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_401_reports_rejected_credentials(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", resp=_FakeResp(401)
+        )
+        assert result.ok is False and "invalid" in result.message.lower()
+
+    def test_5xx_routes_through_summariser(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(500, text="boom"),
+        )
+        assert result.ok is False and "500" in result.message
+
+    def test_unknown_slug_is_a_noop_pass(self):
+        _, result = self._run({}, "vonage")
+        assert result.ok is True and "no number-verification probe" in result.message.lower()
+
+    def test_network_error_is_a_fail(self):
+        import httpx
+
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            raise_exc=httpx.ConnectError("dns"),
+        )
+        assert result.ok is False
+
+    # ── twilio ───────────────────────────────────────────────────────────────
+
+    def test_twilio_not_owned(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(200, {"incoming_phone_numbers": []}),
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_twilio_not_voice_capable(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [{"capabilities": {"voice": False}}]}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_twilio_webhook_mismatch(self):
+        _, result = self._run(
+            {"account_sid": "AC", "auth_token": "t"}, "twilio", prefix="https://tone.app",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [
+                {"capabilities": {"voice": True}, "voice_url": "https://evil.example"}]}),
+        )
+        assert result.ok is False and "webhook" in result.message.lower()
+
+    def test_twilio_ok_with_matching_webhook(self):
+        client, result = self._run(
+            {"account_sid": "AC123", "auth_token": "tok"}, "twilio", prefix="https://tone.app",
+            resp=_FakeResp(200, {"incoming_phone_numbers": [
+                {"capabilities": {"voice": True}, "voice_url": "https://tone.app/inbound"}]}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        url = client.get.call_args.args[0]
+        assert "api.twilio.com" in url and "AC123" in url
+        assert client.get.call_args.kwargs["auth"] == ("AC123", "tok")
+        assert client.get.call_args.kwargs["params"] == {"PhoneNumber": "+15551234567"}
+
+    # ── telnyx ───────────────────────────────────────────────────────────────
+
+    def test_telnyx_not_owned(self):
+        _, result = self._run(
+            {"api_key": "key"}, "telnyx", resp=_FakeResp(200, {"data": []})
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_telnyx_not_voice_enabled(self):
+        _, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            resp=_FakeResp(200, {"data": [{"features": [{"name": "sms"}]}]}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_telnyx_ok_and_bearer_header(self):
+        client, result = self._run(
+            {"api_key": "key"}, "telnyx",
+            resp=_FakeResp(200, {"data": [{"features": ["voice"]}]}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        assert client.get.call_args.kwargs["headers"]["Authorization"] == "Bearer key"
+
+    # ── plivo ────────────────────────────────────────────────────────────────
+
+    def test_plivo_404_not_owned(self):
+        _, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo", resp=_FakeResp(404)
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_plivo_not_voice_enabled(self):
+        _, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            resp=_FakeResp(200, {"voice_enabled": False}),
+        )
+        assert result.ok is False and "voice" in result.message.lower()
+
+    def test_plivo_ok_strips_plus_in_path(self):
+        client, result = self._run(
+            {"auth_id": "id", "auth_token": "tok"}, "plivo",
+            resp=_FakeResp(200, {"voice_enabled": True}),
+        )
+        assert result.ok is True
+        assert client.get.call_args.args[0].endswith("/Number/15551234567/")
+        assert client.get.call_args.kwargs["auth"] == ("id", "tok")
+
+    # ── exotel ───────────────────────────────────────────────────────────────
+
+    def test_exotel_missing_any_of_three_creds(self):
+        client, result = self._run({"api_key": "k", "api_token": "t"}, "exotel")
+        assert result.ok is False and "missing" in result.message.lower()
+        client.get.assert_not_called()
+
+    def test_exotel_404_not_owned(self):
+        _, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid"}, "exotel",
+            resp=_FakeResp(404),
+        )
+        assert result.ok is False and "not owned" in result.message.lower()
+
+    def test_exotel_ok_uses_subdomain_and_strips_plus(self):
+        client, result = self._run(
+            {"api_key": "k", "api_token": "t", "account_sid": "sid",
+             "subdomain": "sg.exotel.com"},
+            "exotel", resp=_FakeResp(200, {"IncomingPhoneNumber": {}}),
+        )
+        assert result.ok is True and "verified" in result.message.lower()
+        url = client.get.call_args.args[0]
+        assert "sg.exotel.com" in url and url.endswith("/IncomingPhoneNumbers/15551234567.json")

@@ -675,3 +675,17 @@ def test_eval_service_defaults_to_factory_built_judge(monkeypatch):
     monkeypatch.setattr(settings, "EVAL_JUDGE_ENGINE", "legacy", raising=False)
     svc = EvalService()
     assert isinstance(svc._judge, LegacyJudge)
+
+
+def test_delete_eval_set_for_upload_bulk_deletes_and_returns_count():
+    """File-replace purge: deletes the upload's eval question set (org-scoped)
+    and returns the count. eval_results are removed via the DB FK
+    ON DELETE CASCADE on ``eval_results.eval_id``."""
+    db = MagicMock()
+    db.query.return_value.filter.return_value.delete.return_value = 5
+    n = EvalService().delete_eval_set_for_upload(db, upload_id="u", org_id="o")
+    assert n == 5
+    db.query.return_value.filter.return_value.delete.assert_called_once_with(
+        synchronize_session=False
+    )
+    db.commit.assert_called_once()
