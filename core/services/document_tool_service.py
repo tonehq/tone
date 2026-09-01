@@ -254,16 +254,24 @@ def create_document_handler(
             await params.result_callback(result)
 
         except Exception as e:
+            # The full traceback goes to the backend log (below); the raw
+            # exception text must NEVER be handed back through the tool result
+            # — it feeds the LLM/caller and could surface internal details
+            # (backend standards §"Never expose raw exceptions"). Return the
+            # same generic message the all-groups-failed branch already uses,
+            # and keep only the exception type as an internal audit tag.
             logger.bind(
                 tool_name="read_document",
                 agent_id=agent_id,
                 elapsed_ms=round((_time.monotonic() - _t_start) * 1000),
             ).exception("[doc-tool] read_document failed")
-            tool_call_entry["result"] = f"error: {str(e)}"
+            tool_call_entry["result"] = f"error: {type(e).__name__}"
             tool_call_entry["status_code"] = 500
             tool_call_entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
             finalize_and_record(tool_call_entry, timer, tool_call_entries)
-            await params.result_callback(f"Error searching documents: {str(e)}")
+            await params.result_callback(
+                "Document search is currently unavailable. Please try again."
+            )
 
     return handle_read_document
 

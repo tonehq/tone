@@ -180,6 +180,14 @@ class AgentLlmEvalService:
                     "AGENT_LLM_EVAL_METRICS_ENABLED or LLMScenario.metrics."
                 )
 
+        # Capture whether the CALLER supplied a run_id BEFORE minting one.
+        # The FE flow pre-inserts an ``agent_llm_eval_runs`` row (via the
+        # router's ``begin_pending_run``) and passes its id; the CLI / fixture
+        # / test path passes ``run_id=None`` and expects the results-table
+        # ``_next_run_number`` allocator below. Minting first and then testing
+        # ``run_id is not None`` would make that allocator branch dead and force
+        # the CLI path to raise, so branch on the pre-mint intent instead.
+        supplied_run_id = run_id is not None
         run_id = run_id or uuid.uuid4()
 
         # 1. Snapshot the agent's config while the session is still open,
@@ -215,7 +223,7 @@ class AgentLlmEvalService:
         # run_number) would still work BUT any historical caller that
         # groups by run_number would see garbage. Refuse loudly instead
         # of persisting inconsistent numbers.
-        if run_id is not None:
+        if supplied_run_id:
             existing_number = (
                 db.query(AgentLlmEvalRun.run_number)
                 .filter(AgentLlmEvalRun.id == run_id)

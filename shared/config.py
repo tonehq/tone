@@ -396,6 +396,13 @@ class Settings:
         self.DEFAULT_EMBEDDING_DIMENSIONS: int = _int_env(get_secret("DEFAULT_EMBEDDING_DIMENSIONS"))
         self.DEFAULT_VECTOR_STORE: str = get_secret("DEFAULT_VECTOR_STORE")
 
+        # Server-side ceiling for KB document uploads, in bytes. 0 = unset →
+        # UploadService falls back to its DEFAULT_MAX_KB_FILE_SIZE_BYTES (100 MB),
+        # mirroring the frontend limit. Enforced in UploadService.validate_upload_file
+        # so HTTP upload, file-replace, and the CLI all share one ceiling. Kept
+        # OFF MANDATORY_KEYS (0 is a legitimate "use the default" value).
+        self.MAX_KB_FILE_SIZE_BYTES: int = _int_env(get_secret("MAX_KB_FILE_SIZE_BYTES"))
+
         # Pinecone vector store — API key for the "pinecone" backend in the RAG
         # store factory. Empty in envs that only use pgvector; the store itself
         # raises EmbeddingProviderUnavailableError if a run requests pinecone

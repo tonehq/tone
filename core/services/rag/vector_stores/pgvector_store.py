@@ -190,6 +190,15 @@ class PgVectorStore(VectorStore):
                     )
                     .filter(IngestionPipelineRun.embedding_dimensions == int(dims))
                 )
+                # Tenant scoping (defense-in-depth): when the caller supplies an
+                # org, constrain the whole query to it so no branch below — in
+                # particular the legacy ``is_active`` fallback that filters only
+                # on dimensions — can return another org's chunks. Additive:
+                # callers that don't pass ``organization_id`` are unchanged, and
+                # the agent-scoped path is already bounded by its published-config
+                # join.
+                if org_id is not None:
+                    q = q.filter(KnowledgeBaseChunk.organization_id == org_id)
                 if provider is not None:
                     q = q.filter(IngestionPipelineRun.embedding_provider == provider)
                 if model is not None:
@@ -276,12 +285,19 @@ class PgVectorStore(VectorStore):
         filters = filters or {}
         upload_id = filters.get("upload_id")
         ingestion_run_id = filters.get("ingestion_run_id")
+        org_id = filters.get("organization_id")
         if upload_id is None and ingestion_run_id is None:
             raise ValueError(
                 "PgVectorStore.delete requires filters['upload_id'] or filters['ingestion_run_id']"
             )
         with self._db() as db:
             q = db.query(KnowledgeBaseChunk)
+            # Tenant scoping (defense-in-depth): when the caller supplies an org,
+            # scope the delete to it so an ``upload_id``/``ingestion_run_id`` from
+            # another tenant can't wipe this org's chunks. Additive — unchanged
+            # for callers that don't pass ``organization_id``.
+            if org_id is not None:
+                q = q.filter(KnowledgeBaseChunk.organization_id == org_id)
             if ingestion_run_id is not None:
                 q = q.filter(KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id)
             if upload_id is not None:

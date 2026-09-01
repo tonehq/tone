@@ -417,6 +417,39 @@ def test_run_eval_stamps_run_number_monotonically():
     assert persisted[0]["run_number"] == 7
 
 
+def test_run_eval_without_run_id_uses_allocator_not_runs_table_lookup():
+    """Regression: ``run_eval(run_id=None)`` (the CLI / fixture / test path)
+    must fall back to the results-table run-number allocator, NOT look up a
+    non-existent ``agent_llm_eval_runs`` row and raise.
+
+    Previously ``run_id`` was minted (``run_id = run_id or uuid4()``) BEFORE the
+    ``if run_id is not None`` check, making that branch always true and the
+    ``else`` allocator dead — so every CLI run minted a fresh id, found no
+    matching runs-table row, and raised ``AgentLlmEvalConfigError``. A ``db``
+    whose ``scalar()`` returns ``None`` reproduces "freshly-minted id has no
+    row"; the allocator is stubbed so the else-branch yields a valid number
+    without depending on the mock's ``scalar()``.
+    """
+    cfg = _config()
+    svc = AgentLlmEvalService(judge=_FakeJudge(), agent_loader=_FakeLoader(cfg))
+    persisted: list = []
+    db = MagicMock()
+    db.query.return_value.filter.return_value.scalar.return_value = None
+    with patch.object(svc, "_next_run_number", return_value=1) as alloc, _EvalHarness(
+        persisted=persisted
+    ):
+        summary = svc.run_eval(
+            db,
+            agent_id=cfg.agent_id,
+            scenarios=[_scenario("s1")],
+            run_id=None,
+        )
+    alloc.assert_called_once()  # allocator path taken, not the runs-table lookup
+    assert summary.status == "completed"
+    assert summary.run_number == 1
+    assert persisted[0]["run_number"] == 1
+
+
 def test_run_eval_judge_key_reuses_agent_key_when_same_provider():
     """Judge model on same provider as agent → the agent's already-decrypted
     key is reused (no extra DB lookup)."""

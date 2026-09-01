@@ -12,14 +12,10 @@ from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.services.ingestion_run_service import IngestionRunService
 from core.services.r2_storage_service import R2StorageService
-from core.services.rag.embedder_factory import build_embedder_from_run
+from core.services.rag.builders import build_pipeline_from_run
 from core.services.rag.errors import EmbeddingProviderUnavailableError, humanize_ingestion_error
-from core.services.rag.factory import get_vector_store
-from core.services.rag.parser_factory import get_parser
 from core.services.rag.pdf_router import HTML_CONTENT_TYPE, PDF_CONTENT_TYPE, PdfRoutingService
-from core.services.rag.pipeline import RAGPipeline
 from core.services.rag.provider_keys import ProviderKeyService
-from core.services.rag.tokeniser_factory import get_tokeniser
 
 
 _CONTENT_TYPE_DOC_TYPE = {
@@ -120,18 +116,10 @@ class DocumentProcessingService:
                     org_id, run.embedding_provider, run.id,
                 )
 
-                parser_cfg = dict(run.parser_config or {})
-                parser = get_parser(run.parser, config=parser_cfg)
-                chunker = get_tokeniser(run.tokeniser, config=run.tokeniser_config)
-                embedder = build_embedder_from_run(run, api_key=api_key)
-                store = get_vector_store(run.vector_store, **(run.vector_store_ref or {}))
-                pipeline = RAGPipeline(
-                    run=run,
-                    parser=parser,
-                    chunker=chunker,
-                    embedder=embedder,
-                    store=store,
-                )
+                # One shared builder assembles parser → chunker → embedder →
+                # store from the run row (see core/services/rag/builders.py) so
+                # ingestion, eval, and retrieval don't each re-wire the factories.
+                pipeline = build_pipeline_from_run(run, api_key=api_key)
                 logger.info(
                     "[ingestion] pipeline built run={} parser={} tokeniser={} "
                     "embedder={}({}d) store={} file_type={}",
