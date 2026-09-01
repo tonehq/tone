@@ -59,7 +59,10 @@ from core.services.evals.eval_summary import (
     _summarize_scored_rows,
 )
 from core.services.rag.builders import build_retriever_from_run
-from core.services.rag.errors import EmbeddingProviderUnavailableError
+from core.services.rag.errors import (
+    EmbeddingProviderUnavailableError,
+    humanize_provider_error,
+)
 from core.services.rag.provider_keys import ProviderKeyService
 from core.services.rag.readers import CompositeReader
 from shared.config import settings
@@ -238,7 +241,7 @@ class EvalService:
                     upload_id, upload.file_type,
                 )
                 raise EvalGenerationError(
-                    f"Source extraction failed: {type(e).__name__}: {e}"
+                    f"Source extraction failed: {humanize_provider_error(e)}"
                 ) from e
             document_text = document.text
 
@@ -816,7 +819,7 @@ class EvalService:
                 organization_id=organization_id,
                 question_dtos=question_dtos,
                 scored_rows=scored_rows,
-                error=str(e),
+                error=humanize_provider_error(e),
             )
         except Exception as e:  # noqa: BLE001
             logger.exception(
@@ -828,7 +831,7 @@ class EvalService:
                 organization_id=organization_id,
                 question_dtos=question_dtos,
                 scored_rows=scored_rows,
-                error=f"{type(e).__name__}: {e}",
+                error=humanize_provider_error(e),
             )
 
         return run_summary
@@ -1086,7 +1089,7 @@ class EvalService:
         except Exception as e:  # noqa: BLE001
             logger.exception("[eval] retrieval failed qid={}", qid)
             retrieved = []
-            retrieval_error = f"{type(e).__name__}: {e}"
+            retrieval_error = humanize_provider_error(e)
 
         hit = retrieval_hit(expected_snippet, [c["text"] for c in retrieved])
 
@@ -1113,7 +1116,7 @@ class EvalService:
         except Exception as e:  # noqa: BLE001
             logger.exception("[eval] answer LLM failed qid={} model={}", qid, answer_model)
             actual_answer = ""
-            answer_error = f"{type(e).__name__}: {e}"
+            answer_error = humanize_provider_error(e)
 
         t_judge = time.monotonic()
         # Prefer the per-run judge (built with resolved org overrides).

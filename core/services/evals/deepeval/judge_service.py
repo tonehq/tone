@@ -55,6 +55,7 @@ from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.deepeval.verdict import to_float  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
+from core.services.rag.errors import humanize_provider_error  # noqa: E402
 from shared.config import settings  # noqa: E402
 
 
@@ -193,7 +194,7 @@ class DeepEvalJudgeService:
             logger.exception(
                 "[eval] deepeval judge orchestrator failed model={}", model
             )
-            return _fail_shape(f"judge error: {type(e).__name__}: {e}")
+            return _fail_shape(f"Judge error: {humanize_provider_error(e)}")
 
         return _map_to_legacy(scorecard)
 

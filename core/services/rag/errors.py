@@ -58,16 +58,22 @@ class IngestionRunFailed(RagError):
 _MAX_FALLBACK_LEN = 240
 
 
-def humanize_ingestion_error(exc: BaseException) -> str:
-    """Return a short, user-friendly one-liner for an ingestion failure.
+def humanize_provider_error(exc: BaseException, *, subject: str = "The AI provider") -> str:
+    """Return a short, user-safe one-liner for a provider / SDK failure.
+
+    Shared by the ingestion AND eval error surfaces so no raw provider dict,
+    internal URL, or stack trace ever reaches the UI (backend standards
+    §"Never expose raw exceptions / internal implementation details"). The full
+    technical text is still captured by the ``logger.exception`` at each
+    failure site — this is only what surfaces to the user.
 
     Rules (in order):
     1. Typed ``RagError`` subclasses already carry a clean message — pass through.
     2. Common provider failures (missing model, bad key, quota, rate limit,
-       timeout, connection) → short human sentence.
-    3. Anything else → ``<ExceptionType>: <first line, truncated>``. Full
-       traceback is still available in logs via the ``logger.exception`` call
-       at the failure site — this is only what surfaces in the UI.
+       timeout, connection, auth) → short human sentence, worded around
+       ``subject`` (e.g. "The embedding provider" / "The AI provider").
+    3. Anything else → a generic safe line when the text looks like a raw dump
+       (dict / URL / SDK envelope), else ``<ExceptionType>: <first line>``.
     """
     if isinstance(exc, RagError):
         # Our own typed errors are already curated (e.g.
@@ -76,16 +82,14 @@ def humanize_ingestion_error(exc: BaseException) -> str:
 
     raw = str(exc) or exc.__class__.__name__
     lower = raw.lower()
+    subject_mid = subject[0].lower() + subject[1:]  # "the AI provider" mid-sentence
 
     # OpenAI-style structured errors — pattern-match on the ``code`` /
     # ``type`` fields the SDK embeds in its stringified representation.
     if "model_not_found" in lower or "does not exist or you do not have access" in lower:
-        return (
-            "Embedding model not found. Check the model name in the ingestion "
-            "config (e.g. text-embedding-3-small)."
-        )
+        return "Model not found. Check the configured model name and retry."
     if "invalid_api_key" in lower or "incorrect api key" in lower or "invalid api key" in lower:
-        return "Invalid API key for the embedding provider. Update the provider key and retry."
+        return f"Invalid API key for {subject_mid}. Update the provider key and retry."
     # Quota / resource-exhausted — covers OpenAI ("insufficient_quota",
     # "exceeded your current quota") AND Google/Vertex ("RESOURCE_EXHAUSTED",
     # "Quota exceeded for …requests_per_minute…", "submit a quota increase").
@@ -99,18 +103,18 @@ def humanize_ingestion_error(exc: BaseException) -> str:
         or "requests_per_minute" in lower
         or "billing" in lower
     ):
-        return "Embedding provider quota exceeded. Check the provider's quota/billing and retry."
+        return f"{subject} quota exceeded. Check the provider's quota/billing and retry."
     if (
         "rate_limit" in lower
         or "rate limit" in lower
         or "too many requests" in lower
         or "429" in lower
     ):
-        return "Embedding provider rate limit hit. Retry in a moment."
+        return f"{subject} rate limit hit. Retry in a moment."
     if "timeout" in lower or "timed out" in lower:
-        return "Embedding provider request timed out. Retry in a moment."
+        return f"{subject} request timed out. Retry in a moment."
     if "connection" in lower and ("refused" in lower or "reset" in lower or "aborted" in lower):
-        return "Could not reach the embedding provider. Check network / provider status."
+        return f"Could not reach {subject_mid}. Check network / provider status."
     if "unauthorized" in lower or "401" in lower:
         return "Provider rejected credentials. Update the API key and retry."
 
@@ -124,10 +128,17 @@ def humanize_ingestion_error(exc: BaseException) -> str:
     first_line = raw.strip().splitlines()[0] if raw.strip() else raw
     if "{" in first_line or "http" in lower or "googleapis" in lower:
         return (
-            "Document processing failed due to an unexpected provider error. "
+            "The request failed due to an unexpected provider error. "
             "Please retry — if it keeps failing, contact support."
         )
     label = type(exc).__name__
     if len(first_line) > _MAX_FALLBACK_LEN:
         first_line = first_line[: _MAX_FALLBACK_LEN - 1].rstrip() + "…"
     return f"{label}: {first_line}"
+
+
+def humanize_ingestion_error(exc: BaseException) -> str:
+    """Ingestion-flavoured wrapper of :func:`humanize_provider_error` — the
+    ``subject`` is the embedding provider. Kept as the existing entry point for
+    the ingestion call sites (``document_processing_service``)."""
+    return humanize_provider_error(exc, subject="The embedding provider")

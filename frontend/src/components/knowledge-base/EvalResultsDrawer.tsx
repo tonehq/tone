@@ -4,6 +4,7 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, MinusCircle, XCircle } from 'lucide-react';
 
 import { CustomDrawer, SelectInput } from '@/components/shared';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import { useEvalRunDetail, useEvalRunsForIngestion } from '@/lib/api/evals';
 import type {
   EvalRunSummary,
@@ -287,7 +288,9 @@ function QuestionRow({ q }: { q: EvalScoredQuestion }) {
                 <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
                   Judge reasoning
                 </div>
-                <div className="mt-1 whitespace-pre-wrap text-foreground">{q.judge.reasoning}</div>
+                <div className="mt-1 whitespace-pre-wrap text-foreground">
+                  {formatIngestionError(q.judge.reasoning) ?? q.judge.reasoning}
+                </div>
               </div>
             )}
             {(q.retrieval_error || q.answer_error) && (
@@ -296,10 +299,14 @@ function QuestionRow({ q }: { q: EvalScoredQuestion }) {
                   Errors
                 </div>
                 {q.retrieval_error && (
-                  <div className="mt-1 text-destructive">Retrieval: {q.retrieval_error}</div>
+                  <div className="mt-1 text-destructive">
+                    Retrieval: {formatIngestionError(q.retrieval_error) ?? q.retrieval_error}
+                  </div>
                 )}
                 {q.answer_error && (
-                  <div className="mt-1 text-destructive">Answer: {q.answer_error}</div>
+                  <div className="mt-1 text-destructive">
+                    Answer: {formatIngestionError(q.answer_error) ?? q.answer_error}
+                  </div>
                 )}
               </div>
             )}

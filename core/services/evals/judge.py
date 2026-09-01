@@ -14,6 +14,7 @@ from loguru import logger
 
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
 from core.services.llm.chat_complete import chat_complete
+from core.services.rag.errors import humanize_provider_error
 
 
 class JudgeService:
@@ -70,7 +71,7 @@ class JudgeService:
                 "correctness": 0.0,
                 "groundedness": 0.0,
                 "relevance": 0.0,
-                "reasoning": f"judge error: {type(e).__name__}: {e}",
+                "reasoning": f"Judge error: {humanize_provider_error(e)}",
             }
 
         verdict = str(raw.get("verdict", "FAIL")).upper()
