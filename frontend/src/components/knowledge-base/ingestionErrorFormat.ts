@@ -19,7 +19,8 @@ const PROVIDER_HINTS: Array<{ match: RegExp; message: string }> = [
     // OpenAI ("insufficient_quota" / "exceeded your current quota") AND
     // Google/Vertex ("RESOURCE_EXHAUSTED" / "Quota exceeded for
     // …requests_per_minute…" / "submit a quota increase").
-    match: /insufficient_quota|exceeded your current quota|quota exceeded|resource_?exhausted|quota increase|requests_per_minute|billing/i,
+    match:
+      /insufficient_quota|exceeded your current quota|quota exceeded|resource_?exhausted|quota increase|requests_per_minute|billing/i,
     message: "Embedding provider quota exceeded. Check the provider's quota/billing and retry.",
   },
   {
