@@ -12,6 +12,7 @@ import {
 import React, { useCallback, useRef, useState } from 'react';
 
 import CustomButton from '@/components/shared/CustomButton';
+import CustomModal from '@/components/shared/CustomModal';
 import TextInput from '@/components/shared/TextInput';
 import { useRenameKnowledgeBase, useReplaceKnowledgeBaseFile } from '@/lib/api/knowledge-base';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
@@ -65,6 +66,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
   const [fileName, setFileName] = useState(document.file_name);
   const [replacementFile, setReplacementFile] = useState<File | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const renameMutation = useRenameKnowledgeBase();
@@ -134,20 +136,20 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
   const canSave = trimmedName.length > 0 && (nameChanged || fileChanged);
   const saving = renameMutation.isPending || replaceMutation.isPending;
 
-  const handleSave = async () => {
-    if (!canSave) return;
-    if (!trimmedName) {
-      showToast.error('Name required', 'Please enter a file name before saving.');
-      return;
-    }
+  // The actual mutation. Callers must have already validated + (for a file
+  // replace) confirmed the destructive re-ingest via ``handleSaveClick``.
+  const performSave = async () => {
+    if (!canSave || !trimmedName) return;
     try {
       if (fileChanged && replacementFile) {
-        // Single backend call handles file swap + optional rename.
+        // Single backend call handles file swap + optional rename; the backend
+        // also purges the old ingestion + evals + results and re-ingests.
         const updated = await replaceMutation.mutateAsync({
           id: document.id,
           file: replacementFile,
           fileName: nameChanged ? trimmedName : undefined,
         });
+        setShowReplaceConfirm(false);
         showToast.success(
           nameChanged ? 'File replaced & renamed' : 'File replaced',
           'Changes saved successfully.',
@@ -170,6 +172,22 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
     }
   };
 
+  // Save entry point. A file replacement is destructive (it deletes the doc's
+  // existing ingestion, evals, and results), so it goes through a confirm
+  // dialog first; a rename-only save is applied immediately.
+  const handleSaveClick = () => {
+    if (!canSave) return;
+    if (!trimmedName) {
+      showToast.error('Name required', 'Please enter a file name before saving.');
+      return;
+    }
+    if (fileChanged) {
+      setShowReplaceConfirm(true);
+      return;
+    }
+    performSave();
+  };
+
   return (
     <div className="flex min-w-0 flex-col gap-5 overflow-hidden">
       <TextInput
@@ -183,7 +201,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
         onKeyDown={(e) => {
           if (e.key === 'Enter' && !replacementFile) {
             e.preventDefault();
-            handleSave();
+            handleSaveClick();
           }
         }}
       />
@@ -277,11 +295,23 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
         fullWidth
         loading={saving}
         disabled={!canSave}
-        onClick={handleSave}
+        onClick={handleSaveClick}
         icon={<Save className="size-4" />}
       >
         Save changes
       </CustomButton>
+
+      <CustomModal
+        open={showReplaceConfirm}
+        onClose={() => setShowReplaceConfirm(false)}
+        title="Replace file?"
+        description="Replacing the file permanently deletes this document's existing ingestion runs, chunks, and its evaluations and evaluation results. The new file is then re-ingested from scratch and evaluations are regenerated. This can't be undone."
+        confirmText="Replace & re-ingest"
+        cancelText="Cancel"
+        confirmType="danger"
+        confirmLoading={saving}
+        onConfirm={performSave}
+      />
     </div>
   );
 };

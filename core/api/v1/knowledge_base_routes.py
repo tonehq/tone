@@ -582,6 +582,15 @@ def build_knowledge_base_router(
                 status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
             ) from exc
 
+        # The file content changed, so everything derived from the OLD file is
+        # now stale. Purge it up front (the UI warns the user before this): all
+        # ingestion runs (→ chunks + embeddings via cascade) and the eval
+        # question set (→ eval_results via cascade). The fresh ingestion below
+        # then re-embeds and the auto-eval regenerates questions from the new
+        # content. ``delete_existing=False`` because nothing is left to wipe.
+        IngestionRunService.delete_runs_for_upload(db, upload_id=upload.id, org_id=org_id)
+        EvalService().delete_eval_set_for_upload(db, upload_id=upload.id, org_id=org_id)
+
         kb = _kb_for_upload(db, org_id, upload.id)
         await _start_ingestion_run(
             db,
@@ -589,7 +598,7 @@ def build_knowledge_base_router(
             kb=kb,
             org_id=org_id,
             request_config=None,
-            delete_existing=True,
+            delete_existing=False,
         )
 
         return _upload_to_payload(upload)

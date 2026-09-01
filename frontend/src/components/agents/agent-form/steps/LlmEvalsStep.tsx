@@ -41,6 +41,7 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
+import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
@@ -3038,7 +3039,7 @@ function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
                 Judge reasoning
               </div>
               <div className="mt-1 whitespace-pre-wrap text-foreground">
-                {scored.judge_reasoning}
+                {formatIngestionError(scored.judge_reasoning) ?? scored.judge_reasoning}
               </div>
             </div>
           )}
@@ -3100,10 +3101,14 @@ function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScoredScenario }) {
                 Errors
               </div>
               {scored.answer_error && (
-                <div className="mt-1 text-destructive">Answer: {scored.answer_error}</div>
+                <div className="mt-1 text-destructive">
+                  Answer: {formatIngestionError(scored.answer_error) ?? scored.answer_error}
+                </div>
               )}
               {scored.judge_error && (
-                <div className="mt-1 text-destructive">Judge: {scored.judge_error}</div>
+                <div className="mt-1 text-destructive">
+                  Judge: {formatIngestionError(scored.judge_error) ?? scored.judge_error}
+                </div>
               )}
             </div>
           )}

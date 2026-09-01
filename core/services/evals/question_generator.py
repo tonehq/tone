@@ -17,6 +17,7 @@ from core.services.evals.errors import EvalGenerationError
 from core.services.evals.prompt_loader import PromptLoader, render_prompt
 from core.services.llm.chat_complete import chat_complete
 from core.services.llm.errors import LLMError
+from core.services.rag.errors import humanize_provider_error
 
 
 class QuestionGeneratorService:
@@ -63,14 +64,14 @@ class QuestionGeneratorService:
             )
         except LLMError as e:
             logger.exception("[eval] question generation LLM call failed model={}", model)
-            raise EvalGenerationError(f"LLM call failed: {type(e).__name__}: {e}") from e
+            raise EvalGenerationError(f"LLM call failed: {humanize_provider_error(e)}") from e
 
         try:
             parsed = _parse_response(content)
         except Exception as e:
             logger.exception("[eval] question generation returned unparseable JSON")
             raise EvalGenerationError(
-                f"Unparseable question-generator output: {type(e).__name__}: {e}"
+                f"Unparseable question-generator output: {humanize_provider_error(e)}"
             ) from e
 
         questions = parsed.get("questions", [])

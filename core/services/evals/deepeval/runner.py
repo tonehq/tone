@@ -32,6 +32,7 @@ from deepeval.metrics.base_metric import BaseMetric
 from loguru import logger
 
 from core.services.evals.deepeval.verdict import to_float, verdict_for
+from core.services.rag.errors import humanize_provider_error
 
 
 async def _safe_measure(
@@ -53,7 +54,7 @@ async def _safe_measure(
         return name, score, verdict, reason
     except Exception as e:  # noqa: BLE001
         logger.exception(log_tag + " metric {} raised", name)
-        return name, 0.0, "fail", f"{type(e).__name__}: {e}"
+        return name, 0.0, "fail", humanize_provider_error(e)
 
 
 async def run_metrics(
