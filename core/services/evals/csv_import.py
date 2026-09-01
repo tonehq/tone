@@ -22,7 +22,7 @@ import csv
 import io
 from typing import Iterator, List, Optional
 
-from loguru import logger
+from core.services.evals.csv_decode import decode_csv_bytes
 
 _REQUIRED_COLUMNS = ("question", "expected_answer")
 _HEADER_ALIASES = {"id": "external_id"}
@@ -38,21 +38,6 @@ _ALLOWED_COLUMNS = {
 class EvalCsvParseError(ValueError):
     """Raised when the CSV cannot be parsed or is missing required headers.
     Router callers map this to HTTP 400 so the user sees the exact reason."""
-
-
-def _decode_csv_bytes(raw: bytes) -> str:
-    """Tolerant CSV decoding — UTF-8 (BOM-aware for Excel exports), then
-    cp1252/latin-1 so a spreadsheet with a stray non-UTF-8 byte (é, £, smart
-    quote) doesn't hard-fail. Mirrors the tolerant decoder used by the
-    contact-ingestion CSV source."""
-    for encoding in ("utf-8-sig", "cp1252", "latin-1"):
-        try:
-            return raw.decode(encoding)
-        except UnicodeDecodeError:
-            logger.debug(
-                "[eval] CSV not decodable as %s; trying next", encoding
-            )
-    return raw.decode("utf-8", errors="replace")
 
 
 def _normalize_header(name: Optional[str]) -> Optional[str]:
@@ -88,7 +73,7 @@ def parse_eval_questions_csv(raw: bytes) -> List[dict]:
     contents (empty ``question``/``expected_answer``, collisions, etc.) — that
     stays in the service so the CSV path and the manual path enforce the same
     rules."""
-    text = _decode_csv_bytes(raw)
+    text = decode_csv_bytes(raw, log_tag="[eval]")
     reader = csv.DictReader(io.StringIO(text))
     fieldnames = reader.fieldnames or []
     normalized = {_normalize_header(f) for f in fieldnames}

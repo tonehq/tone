@@ -18,10 +18,6 @@ class UnknownTokeniserError(RagError):
     """The tokeniser slug in an ``ingestion_pipeline_runs`` row has no registry entry."""
 
 
-class UnknownVectorStoreError(RagError):
-    """The vector-store slug in an ``ingestion_pipeline_runs`` row has no registry entry."""
-
-
 class EmbeddingProviderUnavailableError(RagError):
     """The embedding provider is not registered, or no API key is configured for the org."""
 

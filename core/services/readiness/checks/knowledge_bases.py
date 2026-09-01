@@ -177,9 +177,12 @@ class KnowledgeBaseEmbeddingKeyUsableCheck(ShallowCheck):
                 key = ProviderKeyService.get_key(ctx.db, ctx.org_id, provider)
             except Exception:  # noqa: BLE001 — decrypt failure inside get_key
                 # get_key returns None on missing key; a raise here means the
-                # ciphertext itself is un-decryptable (rotated JWT_SECRET_KEY).
-                # Both surface the same "no usable key" row; log for debugging.
-                logger.debug(
+                # ciphertext itself is un-decryptable (rotated JWT_SECRET_KEY) —
+                # a real misconfiguration, not expected control flow, so capture
+                # the full traceback (per logging standards) rather than a
+                # message-only debug line. The user still sees the same
+                # "no usable key" row.
+                logger.exception(
                     "[readiness] embedding key lookup/decrypt failed for provider '{}'",
                     provider,
                 )

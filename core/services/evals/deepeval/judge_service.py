@@ -51,7 +51,9 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
     build_metrics,
 )
+from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
+from core.services.evals.deepeval.verdict import to_float  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
 from shared.config import settings  # noqa: E402
 
@@ -63,13 +65,9 @@ _LEGACY_COLUMN_FROM_METRIC = {
     "correctness": "correctness",
 }
 
-# Metrics where a HIGHER score is WORSE (DeepEval's ``HallucinationMetric``
-# returns the hallucination fraction). Fallback verdict logic uses the
-# opposite comparator (`score < threshold` = pass) for these, and callers
-# summarising trends should keep in mind the inversion.
-_INVERTED_METRICS: frozenset[str] = frozenset({"hallucination"})
-
-# Aggregate verdict + reason clipping live in
+# Per-metric verdict + score coercion (incl. the inverted-metrics set) live in
+# ``core.services.evals.deepeval.verdict`` so all three DeepEval judges share
+# ONE implementation. Aggregate verdict + reason clipping live in
 # ``core.services.evals.deepeval.scorecard.aggregate_scorecard`` so the RAG
 # judge and the per-agent LLM judge share ONE implementation.
 
@@ -181,7 +179,14 @@ class DeepEvalJudgeService:
         )
 
         try:
-            scorecard = asyncio.run(_run_all(named_metrics, test_case))
+            # RAG measures every metric against the same single test case.
+            scorecard = asyncio.run(
+                run_metrics(
+                    named_metrics,
+                    lambda _name: test_case,
+                    log_tag="[eval] deepeval",
+                )
+            )
         except EvalConfigurationError:
             raise
         except Exception as e:  # noqa: BLE001
@@ -207,67 +212,6 @@ def _fail_shape(reason: str) -> dict:
     }
 
 
-async def _run_all(
-    named_metrics: List[Tuple[str, BaseMetric]],
-    tc: LLMTestCase,
-) -> dict:
-    """Fire every metric concurrently; one failing metric is captured, not
-    raised, so the others still contribute to the aggregate verdict."""
-    results = await asyncio.gather(
-        *[_safe_measure(name, metric, tc) for name, metric in named_metrics],
-        return_exceptions=False,
-    )
-    scorecard: dict = {}
-    for name, score, verdict, reason in results:
-        scorecard[name] = {
-            "score": score,
-            "verdict": verdict,
-            "reason": reason,
-        }
-    return scorecard
-
-
-async def _safe_measure(name: str, metric: BaseMetric, tc: LLMTestCase):
-    """Run one metric, capture any exception as a FAIL entry so peers keep
-    contributing. ``name`` is the registry key (authoritative) — never
-    derived from the DeepEval class name so scorecard keys stay stable
-    across SDK class renames."""
-    try:
-        await metric.a_measure(tc)
-        score = _to_float(getattr(metric, "score", None))
-        verdict = _verdict_for(name, metric, score)
-        reason = getattr(metric, "reason", None) or ""
-        return name, score, verdict, reason
-    except Exception as e:  # noqa: BLE001
-        logger.exception("[eval] deepeval metric {} raised", name)
-        return name, 0.0, "fail", f"{type(e).__name__}: {e}"
-
-
-def _verdict_for(name: str, metric: BaseMetric, score: float) -> str:
-    """Trust the metric's own ``.success`` when it's set (DeepEval's
-    implementations handle the score-direction correctly for each metric,
-    including hallucination-where-higher-is-worse). Fall back to a
-    direction-aware comparison against ``.threshold`` only when
-    ``.success`` is genuinely absent."""
-    success = getattr(metric, "success", None)
-    if success is not None:
-        return "pass" if bool(success) else "fail"
-    threshold = getattr(metric, "threshold", None)
-    if threshold is None:
-        return "fail"
-    if name in _INVERTED_METRICS:
-        return "pass" if score < float(threshold) else "fail"
-    return "pass" if score >= float(threshold) else "fail"
-
-
-def _to_float(v) -> float:
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, f))
-
-
 def _map_to_legacy(scorecard: dict) -> dict:
     """Fold the full per-metric scorecard into the legacy judge dict shape
     ``EvalService._persist_result_batch`` already understands."""
@@ -280,7 +224,7 @@ def _map_to_legacy(scorecard: dict) -> dict:
     for metric_key, column in _LEGACY_COLUMN_FROM_METRIC.items():
         entry = scorecard.get(metric_key)
         if entry:
-            legacy[column] = _to_float(entry.get("score"))
+            legacy[column] = to_float(entry.get("score"))
 
     verdict, reasoning, scores = aggregate_scorecard(scorecard)
 

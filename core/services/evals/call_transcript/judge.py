@@ -37,7 +37,7 @@ from core.services.evals.deepeval.telemetry import opt_out as _opt_out
 _opt_out()
 
 import asyncio  # noqa: E402
-from typing import Any, List, Optional, Tuple  # noqa: E402
+from typing import List, Optional, Tuple  # noqa: E402
 
 from deepeval.metrics.base_metric import BaseMetric  # noqa: E402
 from deepeval.test_case import (  # noqa: E402
@@ -52,14 +52,9 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
     build_metrics,
 )
+from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
-
-
-# Metrics where a HIGHER score is WORSE — used only by the fallback verdict
-# path when the metric didn't set ``.success``. Mirrors ``_INVERTED_METRICS``
-# in the agent-LLM judge.
-_INVERTED_METRICS: frozenset[str] = frozenset({"hallucination", "bias", "toxicity"})
 
 
 class CallTranscriptJudgeService:
@@ -177,8 +172,19 @@ class CallTranscriptJudgeService:
         )
 
         try:
+            # The ONE real diff from the other judges: each metric measures
+            # against the flavor it consumes — conversation-native metrics see
+            # the ``ConversationalTestCase``, everything else the joined
+            # ``LLMTestCase``. ``CONVERSATION_METRICS`` is the single source of
+            # truth for that dispatch.
             scorecard = asyncio.run(
-                _run_all(named_metrics, conv_case=conv_case, llm_case=llm_case)
+                run_metrics(
+                    named_metrics,
+                    lambda name: (
+                        conv_case if name in CONVERSATION_METRICS else llm_case
+                    ),
+                    log_tag="[call-transcript-eval]",
+                )
             )
         except EvalConfigurationError:
             raise
@@ -250,61 +256,3 @@ def _join_role(turns: List[Turn], role: str) -> str:
     used only to build the fallback ``LLMTestCase`` for non-conversation
     metrics. Empty when the role never spoke."""
     return "\n\n".join(t.content for t in turns if t.role == role and t.content)
-
-
-async def _run_all(
-    named_metrics: List[Tuple[str, BaseMetric]],
-    *,
-    conv_case: ConversationalTestCase,
-    llm_case: LLMTestCase,
-) -> dict:
-    """Fire every metric concurrently on the correct test case; capture
-    per-metric exceptions as FAIL entries so peers still contribute."""
-    coros = [
-        _safe_measure(
-            name,
-            metric,
-            conv_case if name in CONVERSATION_METRICS else llm_case,
-        )
-        for name, metric in named_metrics
-    ]
-    results = await asyncio.gather(*coros, return_exceptions=False)
-    scorecard: dict = {}
-    for name, score, verdict, reason in results:
-        scorecard[name] = {"score": score, "verdict": verdict, "reason": reason}
-    return scorecard
-
-
-async def _safe_measure(name: str, metric: BaseMetric, tc: Any):
-    try:
-        await metric.a_measure(tc)
-        score = _to_float(getattr(metric, "score", None))
-        verdict = _verdict_for(name, metric, score)
-        reason = getattr(metric, "reason", None) or ""
-        return name, score, verdict, reason
-    except Exception as e:  # noqa: BLE001
-        logger.exception("[call-transcript-eval] metric {} raised", name)
-        return name, 0.0, "fail", f"{type(e).__name__}: {e}"
-
-
-def _verdict_for(name: str, metric: BaseMetric, score: float) -> str:
-    """Trust ``metric.success`` (DeepEval sets it with the right score
-    direction). Fall back to a direction-aware threshold compare only when
-    ``.success`` is genuinely absent."""
-    success = getattr(metric, "success", None)
-    if success is not None:
-        return "pass" if bool(success) else "fail"
-    threshold = getattr(metric, "threshold", None)
-    if threshold is None:
-        return "fail"
-    if name in _INVERTED_METRICS:
-        return "pass" if score < float(threshold) else "fail"
-    return "pass" if score >= float(threshold) else "fail"
-
-
-def _to_float(v) -> float:
-    try:
-        f = float(v)
-    except (TypeError, ValueError):
-        return 0.0
-    return max(0.0, min(1.0, f))

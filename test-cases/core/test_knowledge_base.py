@@ -137,6 +137,15 @@ class TestUploadDocument:
         # Real R2 upload is unreliable in test env -> accept 201 or 5xx.
         assert resp.status_code in (201, 400, 500, 502, 503)
 
+    def test_upload_unsupported_type_returns_400(self, client_as_member):
+        """Backend rejects a disallowed extension with 400 BEFORE any R2 write
+        (server-side enforcement of the frontend allowlist — a direct API
+        caller can't bypass it). Deterministic because validation runs before
+        the unreliable R2 upload."""
+        files = {"file": ("malware.exe", io.BytesIO(b"MZ\x90\x00"), "application/octet-stream")}
+        resp = client_as_member.post(BASE, files=files)
+        assert resp.status_code == 400
+
     def test_upload_unauthenticated(self, client_unauthenticated):
         files = self._file_part()
         resp = client_unauthenticated.post(BASE, files=files)
