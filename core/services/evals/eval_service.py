@@ -570,6 +570,31 @@ class EvalService:
             generation_prompt_hash=row.generation_prompt_hash,
         )
 
+    def delete_eval_set_for_upload(
+        self, db: Session, *, upload_id: Any, org_id: Any
+    ) -> int:
+        """Delete the entire eval question set for one upload (org-scoped).
+
+        Cascades to ``eval_results`` via the ``eval_results.eval_id`` FK
+        ``ON DELETE CASCADE``, so every historical score for the document is
+        removed alongside the questions. Returns the number of questions
+        removed. Used by the file-replace flow: once the document's content
+        changes, questions generated from the OLD content are stale, so they
+        (and their results) are cleared and the next run regenerates from the
+        new content. Covers both generated AND manually-authored questions —
+        the caller is expected to have confirmed the destructive replace."""
+        n = (
+            db.query(Eval)
+            .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        logger.info(
+            "[eval] purged {} question(s) (+results via cascade) for upload={} org={}",
+            n, upload_id, org_id,
+        )
+        return n
+
     def list_questions(
         self, db: Session, *, upload_id: Any, org_id: Any
     ) -> List[Eval]:

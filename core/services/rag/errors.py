@@ -86,9 +86,26 @@ def humanize_ingestion_error(exc: BaseException) -> str:
         )
     if "invalid_api_key" in lower or "incorrect api key" in lower or "invalid api key" in lower:
         return "Invalid API key for the embedding provider. Update the provider key and retry."
-    if "insufficient_quota" in lower or "exceeded your current quota" in lower or "billing" in lower:
-        return "Embedding provider quota exhausted. Check your billing and retry."
-    if "rate_limit" in lower or "rate limit" in lower or "too many requests" in lower:
+    # Quota / resource-exhausted — covers OpenAI ("insufficient_quota",
+    # "exceeded your current quota") AND Google/Vertex ("RESOURCE_EXHAUSTED",
+    # "Quota exceeded for …requests_per_minute…", "submit a quota increase").
+    if (
+        "insufficient_quota" in lower
+        or "exceeded your current quota" in lower
+        or "quota exceeded" in lower
+        or "resource_exhausted" in lower
+        or "resource exhausted" in lower
+        or "quota increase" in lower
+        or "requests_per_minute" in lower
+        or "billing" in lower
+    ):
+        return "Embedding provider quota exceeded. Check the provider's quota/billing and retry."
+    if (
+        "rate_limit" in lower
+        or "rate limit" in lower
+        or "too many requests" in lower
+        or "429" in lower
+    ):
         return "Embedding provider rate limit hit. Retry in a moment."
     if "timeout" in lower or "timed out" in lower:
         return "Embedding provider request timed out. Retry in a moment."
@@ -97,8 +114,19 @@ def humanize_ingestion_error(exc: BaseException) -> str:
     if "unauthorized" in lower or "401" in lower:
         return "Provider rejected credentials. Update the API key and retry."
 
-    # Generic fallback — first line only, hard-capped, no raw dicts.
+    # Generic fallback — first line only. If it carries raw provider structure
+    # (a dict / JSON dump, an internal URL, or an SDK error envelope), that is
+    # internal implementation detail we must NOT surface (backend standards
+    # §"Never expose raw exceptions / internal implementation details"): return
+    # a safe generic message — the full text is already captured by the
+    # ``logger.exception`` at the failure site. Plain one-line messages pass
+    # through with their exception-type label.
     first_line = raw.strip().splitlines()[0] if raw.strip() else raw
+    if "{" in first_line or "http" in lower or "googleapis" in lower:
+        return (
+            "Document processing failed due to an unexpected provider error. "
+            "Please retry — if it keeps failing, contact support."
+        )
     label = type(exc).__name__
     if len(first_line) > _MAX_FALLBACK_LEN:
         first_line = first_line[: _MAX_FALLBACK_LEN - 1].rstrip() + "…"
