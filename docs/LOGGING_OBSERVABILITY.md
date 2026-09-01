@@ -90,6 +90,39 @@ flow through our single `sys.stderr` sink; they're just emitted at `DEBUG` and
 
 ---
 
+## 3.5 Correlation IDs — `trace_id` and `job_id`
+
+Every log line carries two structured correlation fields (rendered by the single
+sink in `core/logging.py`), so any unit of work is filterable end-to-end in
+Grafana/Loki:
+
+```
+... | trace_id=<id> | job_id=<id> | <message>
+```
+
+- **`trace_id`** — the per-call (and per-ingestion-run) id. Format
+  `{short_uuid}-{agent_id}-{call_id}` for calls, `{short_uuid}-ing-{run_id}` for
+  ingestion runs. Set via `start_call_trace` / `start_ingestion_trace`; present
+  on every line inside a call subprocess (including all pipecat lines). `none`
+  outside a call/run.
+- **`job_id`** — the **Procrastinate job id** of the background job currently
+  executing. Every `@app.task` in `core/services/ingestion_queue.py` is
+  registered with `pass_context=True` and wrapped by `_with_job_logging`, which
+  binds `job_id` (from `context.job.id`) for the whole task run via
+  `job_logging_context`. So all logs from outbound dispatch, ingestion, evals,
+  post-call jobs, and the periodic reapers carry the job id. `none` for
+  non-job logs (API requests, the live-call subprocess).
+
+Both are independent contextvars stamped by the same patcher: a log line can
+carry one, both, or neither. Adding a new background task requires no logging
+work — the two decorators (`@app.task(..., pass_context=True)` +
+`@_with_job_logging`) are all that's needed.
+
+**Grafana usage:** filter one background job by `job_id=<n>`; filter one call or
+ingestion run by `trace_id=<id>`.
+
+---
+
 ## 4. Log growth per call (KB/min)
 
 TRACE volume is driven by per-audio-frame pipecat logs (~50–100 lines/s), which

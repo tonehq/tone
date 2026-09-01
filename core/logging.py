@@ -1,5 +1,6 @@
 import sys
 import uuid
+from contextlib import contextmanager
 from contextvars import ContextVar
 
 from loguru import logger
@@ -25,7 +26,7 @@ _current_level: "str | None" = None
 _LOG_FORMAT = (
     "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | "
     "{name}:{function}:{line} | "
-    "trace_id={extra[trace_id]} | {message}"
+    "trace_id={extra[trace_id]} | job_id={extra[job_id]} | {message}"
 )
 
 
@@ -64,7 +65,9 @@ def _apply_sink(level: str) -> None:
     global _current_level
     logger.remove()
     logger.add(sys.stderr, format=_LOG_FORMAT, level=level)
-    logger.configure(extra={"trace_id": "none"}, patcher=_trace_patcher)
+    logger.configure(
+        extra={"trace_id": "none", "job_id": "none"}, patcher=_trace_patcher
+    )
     _current_level = level
 
 
@@ -81,14 +84,28 @@ _agent_id_var: ContextVar[str] = ContextVar("trace_agent_id", default="")
 _call_id_var: ContextVar[str] = ContextVar("trace_call_id", default="0")
 _trace_id_var: ContextVar[str] = ContextVar("trace_id", default="none")
 
+# Background-job correlation id, mirroring trace_id. Set by the Procrastinate
+# task wrapper (core/services/ingestion_queue.py::_with_job_logging) for the
+# duration of one job, so every log line the job emits carries job_id=<id>.
+# Stays "none" for non-job logs (API requests, live-call subprocess, etc.), the
+# same way trace_id is "none" outside a call.
+_job_id_var: ContextVar[str] = ContextVar("job_id", default="none")
+
 
 def _trace_patcher(record):
-    # Stamp every record with the current call's trace_id. Wrapped so logging
-    # can never raise into the caller; leaves non-call/global logs as "none".
+    # Stamp every record with the current call's trace_id and (when inside a
+    # background job) its job_id. Wrapped so logging can never raise into the
+    # caller; leaves non-call/non-job logs as "none".
     try:
         tid = _trace_id_var.get()
         if tid and tid != "none":
             record["extra"]["trace_id"] = tid
+    except Exception:
+        pass
+    try:
+        jid = _job_id_var.get()
+        if jid and jid != "none":
+            record["extra"]["job_id"] = jid
     except Exception:
         pass
 
@@ -142,6 +159,72 @@ def set_trace_id(trace_id: str) -> None:
     """Set the rendered trace_id directly for the current context (and any thread
     that calls this — executor threads don't inherit contextvars)."""
     _trace_id_var.set(trace_id or "none")
+
+
+def get_job_id() -> str:
+    """Return the job_id set for the current context (or 'none')."""
+    return _job_id_var.get()
+
+
+def set_job_id(job_id) -> None:
+    """Set the background-job id for the current context. Empty/None → 'none'."""
+    _job_id_var.set(str(job_id) if job_id not in (None, "") else "none")
+
+
+@contextmanager
+def job_logging_context(job_id):
+    """Bind ``job_id`` for the duration of the ``with`` block, then restore the
+    previous value.
+
+    Used to wrap a single background-job execution so every log line it emits
+    carries ``job_id=<id>`` and the id never leaks to the next job on a reused
+    worker thread. Mirrors the trace_id contract. Never raises out of enter/exit.
+    """
+    value = str(job_id) if job_id not in (None, "") else "none"
+    token = _job_id_var.set(value)
+    try:
+        yield
+    finally:
+        try:
+            _job_id_var.reset(token)
+        except Exception:
+            _job_id_var.set("none")
+
+
+# The four contextvars that together render the trace_id, with their defaults —
+# used to snapshot/restore the whole trace context as a unit.
+_TRACE_VARS = (
+    (_call_uuid_var, "none"),
+    (_agent_id_var, ""),
+    (_call_id_var, "0"),
+    (_trace_id_var, "none"),
+)
+
+
+@contextmanager
+def isolated_trace_context():
+    """Start the ``with`` block with a CLEAN trace (trace_id='none'), then restore
+    the previous trace values on exit.
+
+    Bounds a trace to exactly the span that configures it. A Procrastinate worker
+    thread is reused across jobs and contextvars persist on a thread, so without
+    this a ``trace_id`` one job sets (e.g. an ingestion run via
+    ``start_ingestion_trace``) would leak into the NEXT job on the same thread
+    that never configured its own. Wrapping each job run in this guarantees the
+    ``trace_id`` appears ONLY from the point the job configures it to the job's
+    end — a job that configures no trace logs ``trace_id=none`` throughout.
+    Independent of ``job_id`` (a separate contextvar / log key). Never raises out
+    of enter/exit.
+    """
+    tokens = [var.set(default) for var, default in _TRACE_VARS]
+    try:
+        yield
+    finally:
+        for (var, _default), token in zip(_TRACE_VARS, tokens):
+            try:
+                var.reset(token)
+            except Exception:
+                var.set(_default)
 
 
 def start_call_trace(agent_id=None, call_id=None, external=None) -> str:

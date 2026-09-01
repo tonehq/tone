@@ -15,13 +15,17 @@ import re
 from typing import Optional, TypedDict
 
 # Mirrors core/logging._LOG_FORMAT:
-#   "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | trace_id=... | {message}"
-# Tolerant of padding/whitespace and either '.' or ',' as the ms separator.
+#   "{time:YYYY-MM-DD HH:mm:ss.SSS} | {level: <8} | {name}:{function}:{line} | trace_id=... | job_id=... | {message}"
+# Tolerant of padding/whitespace and either '.' or ',' as the ms separator. The
+# ``job_id=...`` field is matched OPTIONALLY (and consumed, not stored) so this
+# parser handles both current lines and any older line emitted before job_id was
+# added to the format — in both cases ``message`` excludes the id prefixes.
 _LINE_RE = re.compile(
     r"^\s*\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}[.,]\d+\s*\|\s*"
     r"(?P<level>[A-Z]+)\s*\|\s*"
     r"(?P<location>[^|]*?)\s*\|\s*"
     r"trace_id=(?P<trace_id>[^|]*?)\s*\|\s*"
+    r"(?:job_id=[^|]*?\s*\|\s*)?"
     r"(?P<message>.*)$",
     re.DOTALL,
 )
