@@ -7,7 +7,6 @@ import AgentOverview from '@/components/agents/agent-overview/AgentOverview';
 import AiStep from '@/components/agents/agent-form/steps/AiStep';
 import BasicsStep from '@/components/agents/agent-form/steps/BasicsStep';
 import KnowledgePhoneStep from '@/components/agents/agent-form/steps/KnowledgePhoneStep';
-import ProfileStep from '@/components/agents/agent-form/steps/ProfileStep';
 import PromptStep from '@/components/agents/agent-form/steps/PromptStep';
 import ToolsMcpStep from '@/components/agents/agent-form/steps/ToolsMcpStep';
 import VoiceStep from '@/components/agents/agent-form/steps/VoiceStep';
@@ -33,7 +32,6 @@ export default function AgentSectionBody({
 
   const isStep =
     section === 'setup' ||
-    section === 'profile' || // available in both modes — create-mode uses local drafts
     section === 'prompt' ||
     section === 'voice' ||
     section === 'tools' ||
@@ -77,8 +75,6 @@ export default function AgentSectionBody({
           <AiStep />
         </div>
       );
-    case 'profile':
-      return <ProfileStep agentId={agentId} />;
     case 'prompt':
       return <PromptStep />;
     case 'voice':

@@ -26,7 +26,9 @@ import { showToast } from '@/utils/toast';
 
 /**
  * Manages one agent's Profile variables (the `{{profile.<key>}}` placeholders).
- * Rendered inside the "Profile" sidebar step (`ProfileStep`).
+ * Rendered inside the "Profile variables" right-side drawer
+ * (`ProfileVariablesDrawer`), opened from the Prompt step and the workflow
+ * builder toolbar.
  *
  * Dual-mode by design so callers don't need two components:
  * - EDIT (`agentId` present) — talks to `/agents/{id}/profile-variables` via

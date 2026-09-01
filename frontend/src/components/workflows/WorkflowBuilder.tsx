@@ -384,6 +384,7 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
         dirty={dirty}
         lastSavedAt={lastSavedAt}
         issues={issues}
+        agentId={agentId}
         onBack={() => router.push(backHref)}
         onSave={handleSave}
         onOpenGlobalPrompt={() => setGlobalOpen(true)}

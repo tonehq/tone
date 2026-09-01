@@ -262,18 +262,16 @@ OnboardingUseCase = Literal[
 ]
 
 OnboardingIndustry = Literal[
-    "software",
-    "ecommerce",
     "healthcare",
     "financial_services",
-    "real_estate",
-    "education",
-    "travel_hospitality",
     "insurance",
-    "legal",
-    "marketing",
-    "manufacturing",
-    "non_profit",
+    "logistics",
+    "home_services",
+    "debt_collection",
+    "retail_consumer_goods",
+    "travel_hospitality",
+    "real_estate",
+    "car_dealerships",
     "other",
 ]
 
