@@ -4,13 +4,13 @@ One narrow class with one public method — writes ARE this module's sole
 responsibility (SRP). Kept out of ``ReadinessService`` so the service stays
 focused on orchestration.
 
-Two rows written per call, in one transaction:
-- UPSERT the ``agent_readiness_snapshots`` row for ``(agent, config, depth)``
-- INSERT a fresh ``agent_readiness_events`` row (append-only history)
+One append-only ``agent_readiness_runs`` row is written per call. The table
+holds both the latest state (most recent row per agent/config/depth) and the
+full history, so there is no separate snapshot to keep in sync.
 
-If either write fails, the whole persistence step is rolled back and the
-caller receives no exception — the primary readiness flow must never break
-because storage misbehaved.
+If the write fails, the persistence step is rolled back and the caller receives
+no exception — the primary readiness flow must never break because storage
+misbehaved.
 """
 
 from __future__ import annotations
@@ -20,16 +20,14 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.orm import Session
 
-from core.models.agent_readiness_event import AgentReadinessEvent
-from core.models.agent_readiness_snapshot import AgentReadinessSnapshot
+from core.models.agent_readiness_run import AgentReadinessRun
 from core.services.readiness.schemas import ReadinessReport
 
 
 class ReadinessPersistence:
-    """Writes readiness reports to snapshot + event tables."""
+    """Appends readiness reports to the ``agent_readiness_runs`` table."""
 
     def __init__(self, db: Session, org_id: UUID):
         self.db = db
@@ -47,11 +45,11 @@ class ReadinessPersistence:
         started_at: Optional[datetime] = None,
         run_number: int = 1,
     ) -> None:
-        """Persist ``report`` to both tables. Swallows failures with a warning
-        log — never raises to the caller.
+        """Append ``report`` as one ``agent_readiness_runs`` row. Swallows
+        failures with a warning log — never raises to the caller.
 
-        ``started_at`` and ``run_number`` are stamped by the caller so both
-        snapshot and event rows share identical provenance in one transaction.
+        ``started_at`` and ``run_number`` are stamped by the caller so the
+        stored row carries the same provenance as the returned report.
         """
         try:
             self._write(
@@ -98,27 +96,9 @@ class ReadinessPersistence:
             run_number=run_number,
         )
 
-        # UPSERT the snapshot on (agent_id, config_id, depth). Every field
-        # from the fresh run overwrites the stored one — a snapshot only
-        # ever describes the latest state.
-        stmt = pg_insert(AgentReadinessSnapshot).values(**row)
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["agent_id", "config_id", "depth"],
-            set_={
-                k: getattr(stmt.excluded, k)
-                for k in row
-                # Preserve the row's PK + created_at across upserts; every
-                # other column is refreshed from the incoming report.
-                if k not in ("id", "created_at", "organization_id",
-                             "agent_id", "config_id", "depth")
-            },
-        )
-        self.db.execute(stmt)
-
-        # Always append a fresh event row — history is append-only.
-        event = AgentReadinessEvent(**row)
-        self.db.add(event)
-
+        # Append one run row — the table is append-only, so "latest" is just the
+        # most recent row and there is no snapshot to keep in sync.
+        self.db.add(AgentReadinessRun(**row))
         self.db.commit()
 
     def _row_from_report(
