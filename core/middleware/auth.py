@@ -271,8 +271,11 @@ def try_resolve_api_key(token: str, db) -> Optional[JWTClaims]:
     ``JWTClaims`` for the request; otherwise return ``None`` so the caller falls
     through to JWT decode.
 
-    API keys inherit **admin** authority within their org — they are the org's
-    programmatic identity, so ``require_admin_or_owner`` guards accept them.
+    A key carries the org role it was minted with (``api_key.role`` — one of
+    owner/admin/member/observer), and the request is authorized exactly like a
+    person of that role: an admin/owner key clears ``require_admin_or_owner``,
+    a member/observer key does not. Legacy keys with no stored role fall back to
+    "admin" (their pre-migration behavior).
     Tenant context is set here so downstream services/queries are scoped to the
     key's org exactly like a JWT-authenticated request. Session-tracking
     (``_enforce_active_session``) is intentionally skipped for API keys — a key
@@ -299,8 +302,9 @@ def try_resolve_api_key(token: str, db) -> Optional[JWTClaims]:
     claims = JWTClaims(
         user_id=str(api_key.created_by_user_id),
         org_id=str(api_key.organization_id),
-        # Admin authority is the deliberate design — see docstring.
-        role="admin",
+        # The key acts as the role it was minted with — see docstring. Legacy
+        # keys predating the role column fall back to admin (their old behavior).
+        role=(api_key.role or "admin"),
         email=f"api-key:{api_key.id}",
         iat=now,
         # Synthetic; not persisted. Long enough to survive any single request.
