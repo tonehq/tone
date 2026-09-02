@@ -9,12 +9,12 @@ import { cn } from '@/lib/utils';
 type AccentTone = 'primary' | 'amber' | 'emerald' | 'rose' | 'sky' | 'violet';
 
 const ACCENT_BAR_CLASS: Record<AccentTone, string> = {
-  primary: 'from-primary/80 via-primary to-primary/80',
-  amber: 'from-amber-400 via-amber-500 to-amber-400',
-  emerald: 'from-emerald-400 via-emerald-500 to-emerald-400',
-  rose: 'from-rose-400 via-rose-500 to-rose-400',
-  sky: 'from-sky-400 via-sky-500 to-sky-400',
-  violet: 'from-violet-400 via-violet-500 to-violet-400',
+  primary: 'bg-primary',
+  amber: 'bg-amber-500',
+  emerald: 'bg-emerald-500',
+  rose: 'bg-rose-500',
+  sky: 'bg-sky-500',
+  violet: 'bg-teal-500',
 };
 
 export interface CustomCardProps {
@@ -63,8 +63,8 @@ export default function CustomCard({
     <Card
       onClick={onClick}
       className={cn(
-        'relative overflow-hidden transition-all duration-200',
-        interactive && 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md hover:border-border',
+        'relative overflow-hidden transition-colors duration-150',
+        interactive && 'cursor-pointer hover:border-muted-foreground/30 hover:bg-accent/40',
         onClick && 'cursor-pointer',
         className,
       )}
@@ -72,10 +72,7 @@ export default function CustomCard({
       {accent && (
         <span
           aria-hidden="true"
-          className={cn(
-            'absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r',
-            ACCENT_BAR_CLASS[accent],
-          )}
+          className={cn('absolute inset-x-0 top-0 h-0.5', ACCENT_BAR_CLASS[accent])}
         />
       )}
       {hasHeader && (

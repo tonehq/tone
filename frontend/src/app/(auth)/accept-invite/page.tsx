@@ -6,24 +6,35 @@ import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useQueryClient } from '@tanstack/react-query';
-import { Building2, CheckCircle, LogIn, XCircle } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 import { acceptInviteSchema, type AcceptInviteFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Button } from '@/components/ui/button';
-import { AppLoader, CustomCard, Form, TextInput } from '@/components/shared';
+import { AppLoader, CustomButton, Form } from '@/components/shared';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthResult, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useAcceptInvitation, useValidateInvitation } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/auth';
+
+function StaticField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="pt-6">
+      <span className="block text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+        {label}
+      </span>
+      <p className="border-b border-border pb-2.5 pt-1.5 text-[15px] text-muted-foreground">
+        {value}
+      </p>
+    </div>
+  );
+}
 
 function AcceptInviteContent() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const searchParams = useSearchParams();
-  // `code` is the legacy query name (older invite emails). Accept either.
   const token = searchParams.get('token') || searchParams.get('code') || '';
   const { user, setLoginResponse } = useAuthStore();
-  // Stop revalidating once the user has consumed the invite — otherwise the
-  // post-accept refresh refetches the now-accepted token and returns 400.
   const [accepted, setAccepted] = useState(false);
 
   const { data: invitation, isLoading, error } = useValidateInvitation(token, !accepted);
@@ -46,9 +57,6 @@ function AcceptInviteContent() {
       router.push('/home');
       return;
     }
-    // Anonymous accept for an existing account — server added the membership
-    // but didn't issue tokens. Redirect to login so the user can sign in
-    // and pick up the new workspace.
     showToast.success(
       'Added to workspace',
       invitation
@@ -59,13 +67,8 @@ function AcceptInviteContent() {
   };
 
   const refreshUserState = async () => {
-    // Mark accepted FIRST so useValidateInvitation flips to enabled=false
-    // before we touch the cache — otherwise React Query refetches the now-
-    // consumed token and returns 400.
     setAccepted(true);
     queryClient.cancelQueries({ queryKey: ['invitation', token] });
-    // Refresh the rest of the cache (me, my-org, etc.) so the next page sees
-    // the new membership immediately.
     await queryClient.invalidateQueries({
       predicate: (q) => q.queryKey?.[0] !== 'invitation',
     });
@@ -98,17 +101,17 @@ function AcceptInviteContent() {
 
   if (!token) {
     return (
-      <CustomCard
-        centered
-        icon={<XCircle className="h-12 w-12 text-destructive" />}
-        title="Invalid invitation"
-        description="No invitation token provided."
-        contentClassName="pt-0 text-center"
+      <AuthResult
+        tone="error"
+        title="Invalid invitation."
+        description="No invitation token was provided."
       >
         <Link href="/login">
-          <Button>Go to login</Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Go to sign in
+          </CustomButton>
         </Link>
-      </CustomCard>
+      </AuthResult>
     );
   }
 
@@ -120,112 +123,123 @@ function AcceptInviteContent() {
     const errorMessage =
       (error as any)?.response?.data?.detail || 'This invitation is invalid or has expired.';
     return (
-      <CustomCard
-        centered
-        icon={<XCircle className="h-12 w-12 text-destructive" />}
-        title="Invalid invitation"
-        description={errorMessage}
-        contentClassName="pt-0 text-center"
-      >
+      <AuthResult tone="error" title="Invalid invitation." description={errorMessage}>
         <Link href="/login">
-          <Button>Go to login</Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Go to sign in
+          </CustomButton>
         </Link>
-      </CustomCard>
+      </AuthResult>
     );
   }
 
   if (user) {
     return (
-      <CustomCard
-        centered
-        icon={
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <Building2 className="h-6 w-6 text-primary" />
-          </div>
-        }
-        title={`Join ${invitation.organization_name}`}
+      <AuthResult
+        title={`Join ${invitation.organization_name}.`}
         description={`You're signed in as ${user.email}. Accept this invite to join as ${invitation.role}.`}
       >
-        <Button
-          className="w-full"
+        <CustomButton
+          type="primary"
+          fullWidth
+          className="h-11"
           loading={acceptInvitation.isPending}
           onClick={onAcceptAsExistingUser}
         >
           Accept invitation
-        </Button>
-      </CustomCard>
+        </CustomButton>
+      </AuthResult>
     );
   }
 
   if (invitation.account_exists) {
     return (
-      <CustomCard
-        centered
-        icon={
-          <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-            <LogIn className="h-6 w-6 text-primary" />
-          </div>
-        }
-        title={`Join ${invitation.organization_name}`}
+      <AuthResult
+        title={`Join ${invitation.organization_name}.`}
         description={`${invitation.email} already has a Tone account. Accept to add it to ${invitation.organization_name}, then sign in.`}
       >
-        <div className="flex flex-col gap-2">
-          <Button
-            className="w-full"
+        <div className="flex flex-col gap-2.5">
+          <CustomButton
+            type="primary"
+            fullWidth
+            className="h-11"
             loading={acceptInvitation.isPending}
             onClick={onAcceptAsExistingUser}
           >
             Accept invitation
-          </Button>
+          </CustomButton>
           <Link href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}>
-            <Button variant="outline" className="w-full" type="button">
+            <CustomButton type="default" fullWidth className="h-11" htmlType="button">
               Sign in first
-            </Button>
+            </CustomButton>
           </Link>
         </div>
-      </CustomCard>
+      </AuthResult>
     );
   }
 
   return (
-    <CustomCard
-      centered
-      icon={
-        <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-          <CheckCircle className="h-6 w-6 text-primary" />
-        </div>
-      }
-      title={`Join ${invitation.organization_name}`}
-      description={`You've been invited to join as a ${invitation.role}. Create your account below.`}
-    >
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmitNewUser}>
-        <TextInput name="email" label="Email" value={invitation.email} disabled />
-        <div className="grid grid-cols-2 gap-4">
-          <TextInput name="first_name" control={control} label="First name" isRequired />
-          <TextInput name="last_name" control={control} label="Last name" isRequired />
-        </div>
-        <TextInput name="password" control={control} label="Password" type="password" isRequired />
-        <TextInput
-          name="confirm_password"
-          control={control}
-          label="Confirm password"
-          type="password"
-          isRequired
-        />
-        <Button type="submit" className="w-full" loading={acceptInvitation.isPending}>
-          Create account &amp; join
-        </Button>
+    <>
+      <AuthHeading
+        title={`Join ${invitation.organization_name}.`}
+        subtitle={`You've been invited as a ${invitation.role}. Create your account to continue.`}
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmitNewUser} className="space-y-7">
+        <motion.div variants={fadeUp}>
+          <StaticField label="Email address" value={invitation.email} />
+        </motion.div>
+
+        <motion.div className="grid grid-cols-2 gap-5" variants={fadeUp}>
+          <AuthField
+            name="first_name"
+            control={control}
+            label="First name"
+            autoComplete="given-name"
+          />
+          <AuthField
+            name="last_name"
+            control={control}
+            label="Last name"
+            autoComplete="family-name"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="password"
+            control={control}
+            type="password"
+            label="Password"
+            autoComplete="new-password"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="confirm_password"
+            control={control}
+            type="password"
+            label="Confirm password"
+            autoComplete="new-password"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={acceptInvitation.isPending}>Create account &amp; join</AuthSubmit>
+        </motion.div>
       </Form>
-      <p className="mt-4 text-center text-sm text-muted-foreground">
+
+      <motion.p className="mt-8 text-center text-[13px] text-muted-foreground" variants={fadeUp}>
         Already have an account?{' '}
         <Link
           href={`/login?next=${encodeURIComponent(`/accept-invite?token=${token}`)}`}
-          className="text-primary hover:underline"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
         >
           Sign in
         </Link>
-      </p>
-    </CustomCard>
+      </motion.p>
+    </>
   );
 }
 

@@ -177,7 +177,7 @@ export default function MCPToolsListPage({ serverId }: MCPToolsListPageProps) {
           </CustomButton>
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
                 {loadingServer
                   ? 'Tools'
                   : (server?.name ?? (serverError ? 'Server unavailable' : 'Tools'))}
@@ -224,20 +224,22 @@ export default function MCPToolsListPage({ serverId }: MCPToolsListPageProps) {
       </div>
 
       {/* Table */}
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <CustomTable<MCPTool>
-          className="[&_table]:table-fixed"
-          columns={columns}
-          dataSource={filteredTools}
-          rowKey="name"
-          loading={loadingTools}
-          emptyState={<EmptyState hasFilter={hasFilter} />}
-        />
-
-        {loadingServer && !server && (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-background/40">
-            <AppLoader label="Loading server..." className="min-h-0" />
+      <div className="flex min-h-0 flex-1 flex-col">
+        {loadingTools || (loadingServer && !server) ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center rounded-xl border border-border bg-card shadow-sm">
+            <AppLoader
+              label={server?.name ? `Loading ${server.name} tools` : 'Loading tools'}
+              className="min-h-0"
+            />
           </div>
+        ) : (
+          <CustomTable<MCPTool>
+            className="[&_table]:table-fixed"
+            columns={columns}
+            dataSource={filteredTools}
+            rowKey="name"
+            emptyState={<EmptyState hasFilter={hasFilter} />}
+          />
         )}
       </div>
     </div>

@@ -16,7 +16,6 @@ import {
   useFacetedList,
 } from '@/components/shared';
 import ToolsListEmptyState from '@/components/tools/ToolsListEmptyState';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { METHOD_COLORS, TOOL_TYPE_HEADER } from '@/constants/toolForm';
 import { toolsApi, useDeleteTool } from '@/lib/api/tools';
@@ -147,10 +146,10 @@ export default function ToolsListPage() {
             headerConfig?.label ?? (record.tool_type === 'custom' ? 'Custom' : record.tool_type);
           const badgeClass =
             record.tool_type === 'custom'
-              ? 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400'
+              ? 'bg-sky-500/10 text-sky-700 dark:text-sky-400'
               : headerConfig
                 ? `${headerConfig.bg} ${headerConfig.color}`
-                : 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400';
+                : 'bg-amber-500/10 text-amber-700 dark:text-amber-400';
           return (
             <span
               className={cn(
@@ -294,28 +293,33 @@ export default function ToolsListPage() {
   const hasFilter = fl.hasActiveFilters;
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Tools</h1>
+    <div className="animate-page mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.34em] text-muted-foreground">
+            Build
+          </p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-display text-[clamp(2rem,3.4vw,2.75rem)] font-semibold leading-none tracking-[-0.04em] text-foreground">
+              Tools
+            </h1>
             {total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
+              <span className="font-mono text-[13px] tabular-nums text-muted-foreground">
                 {total}
-              </Badge>
+              </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Define external API tools your voice agents can call during conversations.
           </p>
         </div>
         <CustomButton
           type="primary"
-          icon={<Plus className="size-4" />}
+          icon={<Plus size={15} />}
+          className="h-10"
           onClick={() => router.push('/tools/create')}
         >
-          Create New Tool
+          Create tool
         </CustomButton>
       </div>
 
@@ -338,6 +342,7 @@ export default function ToolsListPage() {
           dataSource={tools}
           rowKey="id"
           loading={fl.listLoading}
+          loadingLabel="Loading tools"
           onRowClick={handleEdit}
           onSortChange={fl.handleSortChange}
           initialSort={toolsListConfig.defaultSort ?? undefined}

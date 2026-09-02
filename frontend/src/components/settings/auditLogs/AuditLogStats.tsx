@@ -38,7 +38,7 @@ const STATS: StatDef[] = [
     key: 'attachments',
     label: 'Attachments',
     icon: Link2,
-    tone: 'bg-violet-500/10 text-violet-600 dark:text-violet-400',
+    tone: 'bg-teal-500/10 text-teal-600 dark:text-teal-400',
   },
 ];
 

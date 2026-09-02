@@ -13,13 +13,12 @@ import {
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
-  IconChip,
   PhoneNumberDisplay,
   useFacetedList,
 } from '@/components/shared';
-import { Badge } from '@/components/ui/badge';
 import type { ApiAgent } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
+import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -36,9 +35,6 @@ const AgentListPage: React.FC = () => {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [cloneTarget, setCloneTarget] = useState<ApiAgent | null>(null);
-  /** Agent whose readiness drawer is currently open. Null = closed. Kept at
-   * page level so one drawer instance serves every row (cheaper than one
-   * drawer per cell). */
   const [readinessTarget, setReadinessTarget] = useState<string | null>(null);
 
   const handleEdit = useCallback(
@@ -55,7 +51,6 @@ const AgentListPage: React.FC = () => {
       try {
         await removeAgent(agentId);
         showToast.success('Agent deleted successfully');
-        // Step back a page if we just removed the last row on the final page.
         const remaining = Math.max(0, fl.total - 1);
         const lastPage = Math.max(1, Math.ceil(remaining / fl.pageSize));
         if (fl.page > lastPage) fl.handlePaginationChange(lastPage, fl.pageSize);
@@ -79,9 +74,9 @@ const AgentListPage: React.FC = () => {
       sorter: true,
       render: (_value, record) => (
         <div className="flex flex-col gap-0.5">
-          <span className="font-semibold text-foreground">{record.name}</span>
+          <span className="text-body font-medium text-foreground">{record.name}</span>
           {record.description && (
-            <span className="max-w-[280px] truncate text-xs text-muted-foreground">
+            <span className="max-w-[280px] truncate text-micro text-muted-foreground">
               {record.description}
             </span>
           )}
@@ -93,14 +88,20 @@ const AgentListPage: React.FC = () => {
       title: 'Status',
       render: (_value, record) => {
         const hasPhone = record.phone_number && record.phone_number.length > 0;
-        return hasPhone ? (
-          <Badge className="bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400">
-            Active
-          </Badge>
-        ) : (
-          <Badge className="bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400">
-            Inactive
-          </Badge>
+        return (
+          <span className="inline-flex items-center gap-2">
+            <span
+              className={cn(
+                'size-1.5 shrink-0 rounded-full',
+                hasPhone ? 'bg-success' : 'bg-muted-foreground/40',
+              )}
+            />
+            <span
+              className={cn('text-caption', hasPhone ? 'text-foreground' : 'text-muted-foreground')}
+            >
+              {hasPhone ? 'Active' : 'Inactive'}
+            </span>
+          </span>
         );
       },
     },
@@ -145,7 +146,9 @@ const AgentListPage: React.FC = () => {
       sorter: true,
       render: (value) =>
         value ? (
-          <span className="text-sm text-muted-foreground">{formatDate(value as number)}</span>
+          <span className="text-caption tabular-nums text-muted-foreground">
+            {formatDate(value as number)}
+          </span>
         ) : (
           <span className="text-muted-foreground">—</span>
         ),
@@ -168,21 +171,31 @@ const AgentListPage: React.FC = () => {
   ];
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5">
-      <div className="flex items-center justify-between">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Agents</h1>
+    <div className="animate-page mx-auto flex h-full w-full max-w-6xl flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        <div className="min-w-0">
+          <p className="mb-3 font-mono text-eyebrow uppercase tracking-[0.34em] text-muted-foreground">
+            Build
+          </p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-display text-[clamp(2rem,3.4vw,2.75rem)] font-semibold leading-none tracking-[-0.04em] text-foreground">
+              Agents
+            </h1>
             {fl.total > 0 && (
-              <Badge variant="secondary" className="text-xs tabular-nums">
+              <span className="font-mono text-caption tabular-nums text-muted-foreground">
                 {fl.total}
-              </Badge>
+              </span>
             )}
           </div>
-          <p className="mt-1 text-sm text-muted-foreground">Manage your voice agents</p>
+          <p className="mt-2 text-body text-muted-foreground">Manage your voice agents</p>
         </div>
-        <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
-          Create Agent
+        <CustomButton
+          type="primary"
+          icon={<Plus size={15} />}
+          className="h-10"
+          onClick={() => setModalOpen(true)}
+        >
+          Create agent
         </CustomButton>
       </div>
 
@@ -203,6 +216,7 @@ const AgentListPage: React.FC = () => {
           dataSource={fl.rows}
           rowKey="id"
           loading={fl.listLoading}
+          loadingLabel="Loading agents"
           onRowClick={handleEdit}
           onSortChange={fl.handleSortChange}
           initialSort={agentsListConfig.defaultSort ?? undefined}
@@ -214,16 +228,25 @@ const AgentListPage: React.FC = () => {
             onChange: fl.handlePaginationChange,
           }}
           emptyState={
-            <div className="flex flex-col items-center gap-4 py-8">
-              <IconChip icon={<Bot strokeWidth={1.75} />} tone="muted" size="xl" />
+            <div className="flex flex-col items-center gap-5 py-14">
+              <span className="inline-flex size-12 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground">
+                <Bot className="size-5" strokeWidth={1.75} />
+              </span>
               <div className="text-center">
-                <p className="font-semibold text-foreground">No agents yet</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="font-display text-heading font-semibold text-foreground">
+                  No agents yet
+                </p>
+                <p className="mt-1.5 text-body text-muted-foreground">
                   Create your first voice agent to get started
                 </p>
               </div>
-              <CustomButton type="primary" icon={<Plus />} onClick={() => setModalOpen(true)}>
-                Create Agent
+              <CustomButton
+                type="primary"
+                icon={<Plus size={15} />}
+                className="h-10"
+                onClick={() => setModalOpen(true)}
+              >
+                Create agent
               </CustomButton>
             </div>
           }

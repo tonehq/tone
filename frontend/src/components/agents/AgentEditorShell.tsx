@@ -139,11 +139,9 @@ async function flushProfileVariableDrafts(
 }
 
 const HEADER_TINT: Record<AgentDirection, string> = {
-  inbound:
-    'bg-gradient-to-r from-emerald-500/5 via-transparent to-transparent dark:from-emerald-500/10',
-  outbound:
-    'bg-gradient-to-r from-violet-500/5 via-transparent to-transparent dark:from-violet-500/10',
-  both: 'bg-gradient-to-r from-sky-500/5 via-transparent to-transparent dark:from-sky-500/10',
+  inbound: 'bg-emerald-500/[0.04] dark:bg-emerald-500/[0.07]',
+  outbound: 'bg-teal-500/[0.04] dark:bg-teal-500/[0.07]',
+  both: 'bg-sky-500/[0.04] dark:bg-sky-500/[0.07]',
 };
 
 export default function AgentEditorShell({ agentType, agentId, children }: AgentEditorShellProps) {
@@ -1018,21 +1016,20 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               {/* Save-bar header */}
               <header
                 className={cn(
-                  'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border/60 px-5 py-5',
+                  'relative flex shrink-0 items-center gap-3 overflow-hidden border-b border-border px-5 py-3',
                   HEADER_TINT[agentType],
                 )}
               >
                 <IconChip
                   tone={DIRECTION_TONES[agentType]}
-                  size="xl"
-                  interactive
-                  className="text-lg font-semibold tracking-tight"
+                  size="md"
+                  className="text-caption font-semibold"
                 >
                   <span aria-hidden>{agentInitial}</span>
                 </IconChip>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <h1 className="truncate text-base font-semibold tracking-tight text-foreground">
+                    <h1 className="truncate text-body font-semibold tracking-tight text-foreground">
                       {agentName}
                     </h1>
                     <AgentTypeBadge agentType={agentType} size="sm" />
@@ -1043,7 +1040,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                  <p className="truncate text-micro text-muted-foreground">
                     {isEditMode ? 'Editing agent configuration' : 'Set up a new voice agent'}
                   </p>
                 </div>
@@ -1097,14 +1094,14 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               )}
 
               {/* Body — the routed section */}
-              <main className="min-h-0 flex-1 overflow-auto px-5 py-5 lg:px-8 lg:py-6">
+              <main className="min-h-0 flex-1 overflow-auto px-5 pb-16 pt-5 lg:px-8 lg:pb-20 lg:pt-6">
                 {loading ? (
-                  <AppLoader className="min-h-0 h-full" />
+                  <AppLoader label="Loading agent" className="min-h-0 h-full" />
                 ) : (
                   <div
                     className={cn(
                       'mx-auto h-full',
-                      isWideSection ? 'w-full max-w-none' : 'max-w-3xl',
+                      isWideSection ? 'w-full max-w-none' : 'max-w-4xl',
                     )}
                   >
                     {children}

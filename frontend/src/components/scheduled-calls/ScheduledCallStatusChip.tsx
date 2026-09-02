@@ -40,7 +40,7 @@ const STATUS_CONFIG: Record<ScheduledCallStatus, StatusConfig> = {
   },
   in_progress: {
     label: 'In progress',
-    className: 'bg-indigo-100 text-indigo-700 ring-indigo-200',
+    className: 'bg-sky-100 text-sky-700 ring-sky-200',
     Icon: PhoneOutgoing,
     pulse: true,
   },

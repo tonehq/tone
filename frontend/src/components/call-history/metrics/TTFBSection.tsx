@@ -22,7 +22,7 @@ const STAT_META: Record<
   StatKey,
   { label: string; color: NonNullable<ReferenceLine['color']>; dot: string }
 > = {
-  avg: { label: 'Avg', color: 'violet', dot: 'bg-violet-500' },
+  avg: { label: 'Avg', color: 'violet', dot: 'bg-teal-500' },
   median: { label: 'Median', color: 'sky', dot: 'bg-sky-500' },
   min: { label: 'Min', color: 'emerald', dot: 'bg-emerald-500' },
   max: { label: 'Max', color: 'red', dot: 'bg-red-500' },

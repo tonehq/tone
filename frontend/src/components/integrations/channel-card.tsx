@@ -36,7 +36,7 @@ export default function ChannelCard({ channel, onEdit, onDelete }: ChannelCardPr
       onClick={() => onEdit(channel)}
       className={cn(
         'group relative cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-card transition-all duration-200',
-        'hover:border-foreground/20 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]',
+        'hover:border-foreground/20',
       )}
     >
       {/* Brand accent stripe down the left edge */}

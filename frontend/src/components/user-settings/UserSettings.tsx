@@ -33,11 +33,7 @@ export function AvatarPreview({ url, initials, size = 'lg' }: AvatarPreviewProps
           ringClass,
         )}
       >
-        {/* Gradient background sits behind the image so transparent PNGs still look intentional */}
-        <span
-          aria-hidden
-          className="absolute inset-0 bg-gradient-to-br from-violet-500 via-indigo-500 to-fuchsia-500"
-        />
+        <span aria-hidden className="absolute inset-0 bg-brand-field" />
         {showImage ? (
           <img
             src={url}
@@ -69,8 +65,8 @@ function RolePill({ role }: { role?: string | null }) {
   const palette = isOwner
     ? 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300'
     : isAdmin
-      ? 'bg-indigo-500/10 text-indigo-700 ring-indigo-500/20 dark:text-indigo-300'
-      : 'bg-violet-500/10 text-violet-700 ring-violet-500/20 dark:text-violet-300';
+      ? 'bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-300'
+      : 'bg-teal-500/10 text-teal-700 ring-teal-500/20 dark:text-teal-300';
 
   const Icon = isOwner ? Crown : ShieldCheck;
 
@@ -99,7 +95,9 @@ export default function UserSettings() {
     <div className="w-full">
       {/* ── Page header (matches the other settings pages) ────── */}
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">User settings</h1>
+        <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
+          User settings
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Manage your personal account details and how you appear across the workspace.
         </p>

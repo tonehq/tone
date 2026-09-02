@@ -5,7 +5,7 @@ import { Plus, Sparkles } from 'lucide-react';
 export default function IntegrationsEmptyState({ onCreate }: { onCreate: () => void }) {
   return (
     <div className="rounded-lg border border-dashed border-border bg-background py-16 text-center">
-      <Sparkles className="mx-auto size-6 text-violet-500" />
+      <Sparkles className="mx-auto size-6 text-teal-500" />
       <h3 className="mt-3 text-[14px] font-semibold text-foreground">No integrations yet</h3>
       <p className="mt-1 text-[12px] text-muted-foreground">
         Add a third-party provider to start connecting accounts.

@@ -187,7 +187,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
           <section id={CATALOG_ANCHOR_ID} className="space-y-4 scroll-mt-6">
             <div className="flex items-center justify-between gap-3">
               <div className="flex items-center gap-2">
-                <Sparkles className="size-4 text-violet-500" strokeWidth={2.25} />
+                <Sparkles className="size-4 text-teal-500" strokeWidth={2.25} />
                 <h2 className="text-[15px] font-semibold tracking-tight text-foreground">
                   Available providers
                 </h2>
@@ -207,7 +207,7 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
           <section className="relative overflow-hidden rounded-3xl border border-border/70 bg-gradient-to-b from-muted/40 to-muted/15 p-5 sm:p-6">
             <span
               aria-hidden
-              className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-violet-500/[0.06] blur-3xl"
+              className="pointer-events-none absolute -right-24 -top-24 size-64 rounded-full bg-teal-500/[0.06] blur-3xl"
             />
 
             <div className="relative mb-4 flex items-center gap-2">

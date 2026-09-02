@@ -64,7 +64,7 @@ const NodePalette: React.FC<NodePaletteProps> = ({ onAdd }) => {
                     draggable
                     onDragStart={(e: React.DragEvent) => onDragStart(e, meta.type)}
                     onClick={() => onAdd(meta.type)}
-                    className="group !h-auto cursor-grab !justify-start gap-3 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-card hover:shadow-md active:scale-[.99] active:cursor-grabbing"
+                    className="group !h-auto cursor-grab !justify-start gap-3 rounded-xl border border-border bg-card px-2.5 py-2 text-left shadow-sm transition-all hover:-translate-y-px hover:border-primary/30 hover:bg-card active:scale-[.99] active:cursor-grabbing"
                   >
                     <span
                       className={cn(

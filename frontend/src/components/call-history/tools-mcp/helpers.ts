@@ -35,7 +35,7 @@ export function toolTypeLabel(type: ToolExecution['tool_type']): string {
 export function toolTypeChipClasses(type: ToolExecution['tool_type']): string {
   switch (type) {
     case 'mcp':
-      return 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-300';
+      return 'bg-teal-100 text-teal-700 dark:bg-teal-500/15 dark:text-teal-300';
     case 'custom':
       return 'bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-300';
     case 'send_sms':

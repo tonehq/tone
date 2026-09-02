@@ -62,7 +62,7 @@ export default function FolderCard({
         'group relative flex h-full flex-col gap-4 rounded-xl border border-border/60 p-4 text-left',
         'transition-all duration-150',
         !isEditing &&
-          'hover:-translate-y-0.5 hover:border-border hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+          'hover:border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
         isEditing && 'ring-2 ring-ring/40',
         isMuted ? 'bg-muted/30' : 'bg-card',
       )}
@@ -77,7 +77,7 @@ export default function FolderCard({
             'flex size-10 shrink-0 items-center justify-center rounded-lg ring-1',
             isMuted
               ? 'bg-muted text-muted-foreground ring-border'
-              : 'bg-violet-500/10 text-violet-700 ring-violet-500/20 dark:text-violet-400',
+              : 'bg-teal-500/10 text-teal-700 ring-teal-500/20 dark:text-teal-400',
           )}
         >
           <FolderIcon className="size-5" />

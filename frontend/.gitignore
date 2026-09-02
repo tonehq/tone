@@ -45,3 +45,8 @@ next-env.d.ts
 test-results/
 playwright-report/
 
+# design-sync (local design-system tooling — not part of the app)
+.design-sync/
+.ds-sync/
+ds-bundle/
+types/

@@ -204,7 +204,7 @@ export default function AppIntegrationFormPage({ integrationId }: AppIntegration
           ) : (
             <>
               <AppIntegrationSection
-                icon={<Sparkles size={14} className="text-violet-500" />}
+                icon={<Sparkles size={14} className="text-teal-500" />}
                 title="Basic info"
                 description="What this integration is and how it appears in the catalog."
               >

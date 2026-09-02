@@ -1,5 +1,6 @@
 import ActionMenu from './ActionMenu';
 import AppLoader from './AppLoader';
+import BrandWaveform from './BrandWaveform';
 import CheckboxField from './CheckboxField';
 import CollapsibleSection from './CollapsibleSection';
 import CustomButton from './CustomButton';
@@ -93,6 +94,7 @@ export type { FacetFilterBarProps, UseFacetedListResult } from './faceted-list';
 export {
   ActionMenu,
   AppLoader,
+  BrandWaveform,
   CheckboxField,
   CollapsibleSection,
   CustomButton,

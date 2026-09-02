@@ -87,7 +87,7 @@ export default function ActionMenu({
           setConfirmOpen(true);
         }}
         aria-label={deleteLabel}
-        className="text-destructive hover:text-destructive/90"
+        className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
       >
         <Trash2 className="size-4" />
         <span className="sr-only">{deleteLabel}</span>
