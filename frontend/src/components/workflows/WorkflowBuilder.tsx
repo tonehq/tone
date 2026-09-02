@@ -22,12 +22,7 @@ import {
   type NodeChange,
   type ReactFlowInstance,
 } from '@xyflow/react';
-import { Layers, Plus, Sparkles } from 'lucide-react';
-
 import AppLoader from '@/components/shared/AppLoader';
-import CustomButton from '@/components/shared/CustomButton';
-import CustomDrawer from '@/components/shared/CustomDrawer';
-import TextAreaField from '@/components/shared/TextAreaField';
 import { showToast } from '@/utils/toast';
 import { handleApiError } from '@/utils/helpers';
 import {
@@ -48,6 +43,7 @@ import { nodeTypes, NodeActionsContext } from '@/components/workflows/canvas/nod
 import { edgeTypes, EdgeActionsContext } from '@/components/workflows/canvas/edges/ConditionEdge';
 import NodePalette from '@/components/workflows/palette/NodePalette';
 import NodeConfigDrawer from '@/components/workflows/config/NodeConfigDrawer';
+import GlobalPromptDrawer from '@/components/workflows/GlobalPromptDrawer';
 import WorkflowToolbar from '@/components/workflows/WorkflowToolbar';
 
 interface Props {
@@ -61,14 +57,6 @@ interface Props {
    * `/workflows/[id]` route — the picker just hides the Profile group. */
   agentId?: string;
 }
-
-/** One-tap building blocks for the global prompt drawer. */
-const GLOBAL_PROMPT_SNIPPETS = [
-  'Be warm, professional, and concise.',
-  'Ask only one question at a time and wait for the answer.',
-  'Always read key details back to confirm before acting.',
-  'Never make up information you have not been given.',
-];
 
 const defaultEdgeOptions = {
   type: 'condition',
@@ -195,7 +183,9 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
 
   const onConnect = useCallback(
     (c: Connection) => {
-      setEdges((eds) => addEdge(makeEdge(c.source!, c.target!), eds));
+      const { source, target } = c;
+      if (!source || !target) return;
+      setEdges((eds) => addEdge(makeEdge(source, target), eds));
       setDirty(true);
     },
     [setEdges],
@@ -374,6 +364,49 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
     [edges, selectedEdgeId],
   );
 
+  const clearSelection = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }, []);
+
+  // Keyboard access: Enter opens the config drawer for the selected node/edge.
+  const handleCanvasKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key !== 'Enter') return;
+      const selNode = getNodes().find((n) => n.selected);
+      if (selNode) {
+        setSelectedNodeId(selNode.id);
+        setSelectedEdgeId(null);
+        return;
+      }
+      const selEdge = edges.find((ed) => ed.selected);
+      if (selEdge) {
+        setSelectedEdgeId(selEdge.id);
+        setSelectedNodeId(null);
+      }
+    },
+    [getNodes, edges],
+  );
+
+  const handleNodeDoubleClick = useCallback((_: React.MouseEvent, n: WorkflowNode) => {
+    setSelectedNodeId(n.id);
+    setSelectedEdgeId(null);
+  }, []);
+
+  const handleEdgeClick = useCallback((_: React.MouseEvent, e: WorkflowEdge) => {
+    setSelectedEdgeId(e.id);
+    setSelectedNodeId(null);
+  }, []);
+
+  const handleGlobalPromptChange = useCallback((next: string) => {
+    setGlobalPrompt(next);
+    setDirty(true);
+  }, []);
+
+  const openGlobalPrompt = useCallback(() => setGlobalOpen(true), []);
+  const closeGlobalPrompt = useCallback(() => setGlobalOpen(false), []);
+  const goBack = useCallback(() => router.push(backHref), [router, backHref]);
+
   if (loading) return <AppLoader />;
 
   return (
@@ -385,9 +418,9 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
         lastSavedAt={lastSavedAt}
         issues={issues}
         agentId={agentId}
-        onBack={() => router.push(backHref)}
+        onBack={goBack}
         onSave={handleSave}
-        onOpenGlobalPrompt={() => setGlobalOpen(true)}
+        onOpenGlobalPrompt={openGlobalPrompt}
         onExport={handleExport}
         onFocusNode={focusNode}
       />
@@ -401,21 +434,7 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
           aria-label="Workflow canvas. Select a node or edge and press Enter to edit it."
           onDrop={onDrop}
           onDragOver={onDragOver}
-          onKeyDown={(e) => {
-            // Keyboard access: Enter opens the config drawer for the selected node/edge.
-            if (e.key !== 'Enter') return;
-            const selNode = getNodes().find((n) => n.selected);
-            if (selNode) {
-              setSelectedNodeId(selNode.id);
-              setSelectedEdgeId(null);
-              return;
-            }
-            const selEdge = edges.find((ed) => ed.selected);
-            if (selEdge) {
-              setSelectedEdgeId(selEdge.id);
-              setSelectedNodeId(null);
-            }
-          }}
+          onKeyDown={handleCanvasKeyDown}
         >
           <NodeActionsContext.Provider value={nodeActions}>
             <EdgeActionsContext.Provider value={edgeActions}>
@@ -433,18 +452,9 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
                 nodeDragThreshold={1}
                 connectionRadius={48}
                 isValidConnection={(c) => c.source !== c.target}
-                onNodeDoubleClick={(_, n) => {
-                  setSelectedNodeId(n.id);
-                  setSelectedEdgeId(null);
-                }}
-                onEdgeClick={(_, e) => {
-                  setSelectedEdgeId(e.id);
-                  setSelectedNodeId(null);
-                }}
-                onPaneClick={() => {
-                  setSelectedNodeId(null);
-                  setSelectedEdgeId(null);
-                }}
+                onNodeDoubleClick={handleNodeDoubleClick}
+                onEdgeClick={handleEdgeClick}
+                onPaneClick={clearSelection}
                 proOptions={{ hideAttribution: true }}
                 onInit={positionInitialView}
                 minZoom={0.2}
@@ -470,111 +480,18 @@ function BuilderInner({ workflowId, backHref: backHrefProp, agentId }: Props) {
         node={selectedNode}
         edge={selectedEdge}
         agentId={agentId}
-        onClose={() => {
-          setSelectedNodeId(null);
-          setSelectedEdgeId(null);
-        }}
+        onClose={clearSelection}
         onChangeNode={updateNodeData}
         onChangeEdge={updateEdgeData}
         onDeleteNode={deleteNode}
       />
 
-      <CustomDrawer
+      <GlobalPromptDrawer
         open={globalOpen}
-        onClose={() => setGlobalOpen(false)}
-        side="right"
-        width="w-[440px] sm:max-w-[440px]"
-        title="Global prompt"
-        description="Applied to every node, layered above the agent persona and each node's prompt."
-        footer={
-          <div className="flex justify-end">
-            <CustomButton type="primary" size="sm" onClick={() => setGlobalOpen(false)}>
-              Done
-            </CustomButton>
-          </div>
-        }
-      >
-        <div className="flex flex-col gap-4">
-          {/* layered-prompt explainer */}
-          <div className="rounded-xl border border-border bg-muted/40 p-3.5">
-            <div className="flex items-center gap-2 text-xs font-semibold text-foreground">
-              <Layers className="h-3.5 w-3.5 text-primary" />
-              How prompts apply
-            </div>
-            <p className="mt-1.5 text-[12px] text-muted-foreground">
-              In workflow mode the workflow drives the call on its own — the agent&apos;s system
-              prompt is not used. Set the call-wide persona and tone here.
-            </p>
-            <ol className="mt-2.5 space-y-1.5 text-[12px] text-muted-foreground">
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />
-                <span>
-                  <span className="font-medium text-foreground/80">Global prompt</span> — this text,
-                  applied to every node.
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-muted-foreground/40" />
-                <span>
-                  <span className="font-medium text-foreground/80">Node prompt</span> — what to do
-                  at each step.
-                </span>
-              </li>
-            </ol>
-          </div>
-
-          <TextAreaField
-            name="global-prompt"
-            label="Global instructions"
-            rows={10}
-            maxLength={4000}
-            placeholder="e.g. Be calm, warm, and concise. Always read details back to confirm before acting."
-            helperText="Keep it about call-wide tone and rules — leave step-specific instructions to each node."
-            value={globalPrompt}
-            onChange={(e) => {
-              setGlobalPrompt(e.target.value);
-              setDirty(true);
-            }}
-          />
-
-          <div className="-mt-1 flex items-center justify-between">
-            <span className="text-[11px] text-muted-foreground">
-              Use <code className="font-mono text-foreground/70">{'{{variables}}'}</code> to insert
-              collected values.
-            </span>
-            <span className="font-mono text-[11px] text-muted-foreground">
-              {globalPrompt.length}/4000
-            </span>
-          </div>
-
-          {/* quick starters */}
-          <div>
-            <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
-              <Sparkles className="h-3 w-3" />
-              Quick add
-            </div>
-            <div className="flex flex-wrap gap-1.5">
-              {GLOBAL_PROMPT_SNIPPETS.map((snippet) => (
-                <CustomButton
-                  key={snippet}
-                  type="default"
-                  size="xs"
-                  icon={<Plus className="h-3 w-3" />}
-                  onClick={() => {
-                    setGlobalPrompt((prev) =>
-                      prev.trim() ? `${prev.trim()}\n${snippet}` : snippet,
-                    );
-                    setDirty(true);
-                  }}
-                  className="!h-auto whitespace-normal py-1 text-left text-[11px] font-normal"
-                >
-                  {snippet}
-                </CustomButton>
-              ))}
-            </div>
-          </div>
-        </div>
-      </CustomDrawer>
+        onClose={closeGlobalPrompt}
+        value={globalPrompt}
+        onChange={handleGlobalPromptChange}
+      />
     </div>
   );
 }

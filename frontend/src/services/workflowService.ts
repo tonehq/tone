@@ -7,10 +7,15 @@ import type {
 } from '@/types/workflow';
 
 export const listWorkflows = async (agentId?: string): Promise<WorkflowSummary[]> => {
-  const res = await axiosInstance.get<WorkflowSummary[]>('/workflow/list', {
+  const res = await axiosInstance.get<{
+    items: WorkflowSummary[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>('/workflow/list', {
     params: agentId ? { agent_id: agentId } : undefined,
   });
-  return Array.isArray(res.data) ? res.data : [];
+  return Array.isArray(res.data?.items) ? res.data.items : [];
 };
 
 export const createWorkflow = async (

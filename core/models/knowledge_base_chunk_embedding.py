@@ -80,6 +80,23 @@ class KnowledgeBaseChunkEmbedding(OrgScopedModel):
 
     chunk = relationship("KnowledgeBaseChunk", back_populates="embeddings")
 
+    def to_dict(self) -> dict:
+        # Deliberately omits the raw vector arrays (embedding_1024/1536/3072) —
+        # they are huge and not JSON-useful. Callers get ids + dimension + which
+        # vector column is populated instead.
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "chunk_id": str(self.chunk_id) if self.chunk_id else None,
+            "ingestion_run_id": str(self.ingestion_run_id) if self.ingestion_run_id else None,
+            "embedding_dimensions": self.embedding_dimensions,
+            "has_embedding_1024": self.embedding_1024 is not None,
+            "has_embedding_1536": self.embedding_1536 is not None,
+            "has_embedding_3072": self.embedding_3072 is not None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
+
     @staticmethod
     def column_for_dimension(dimensions: int):
         """Map a run's ``embedding_dimensions`` → the SQLAlchemy Column on this

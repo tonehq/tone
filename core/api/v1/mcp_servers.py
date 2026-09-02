@@ -1,13 +1,18 @@
 from uuid import UUID
-from typing import List, Dict, Any
+from typing import List
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.services.mcp_server_service import McpServerService
 from core.api.v1.faceted_schemas import FacetsRequest
+from core.schemas.mcp_requests import (
+    McpServerListRequest,
+    UpsertMcpServerRequest,
+    ValidateMcpServerRequest,
+)
 from core.middleware.auth import require_org_member, JWTClaims
 from core.utils.pagination import parse_sort, parse_page
 from shared.config import settings
@@ -34,7 +39,7 @@ def _get_service(claims: JWTClaims, db: Session) -> McpServerService:
 
 @router.post("/list")
 def list_mcp_servers(
-    data: Dict[str, Any] = Body(default={}),
+    body: McpServerListRequest = McpServerListRequest(),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
@@ -48,6 +53,9 @@ def list_mcp_servers(
       page_size?: int,         # None/0 means "all"
     }
     """
+    # exclude_unset keeps the dict identical to the raw body this handler read
+    # before (only client-supplied keys; extras pass through via extra="allow").
+    data = body.model_dump(exclude_unset=True)
     # Prefer the new sort_by/sort_order contract; fall back to legacy "-field" sort.
     if data.get("sort_by") or data.get("sort_order"):
         sort_by = data.get("sort_by") or "created_at"
@@ -93,7 +101,7 @@ def get_mcp_filter_values(
 
 @router.post("/upsert_mcp_server", status_code=status.HTTP_200_OK)
 async def upsert_mcp_server(
-    data: Dict[str, Any] = Body(...),
+    body: UpsertMcpServerRequest,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
@@ -103,7 +111,10 @@ async def upsert_mcp_server(
     attachments (absent = attachments untouched). Sync problems come back in
     ``attachment_warnings`` — the server itself is still saved."""
     svc = _get_service(claims, db)
-    mcp_server = await svc.upsert_mcp_server(data)
+    # exclude_unset so the service sees exactly the keys the client sent — the
+    # update path copies provided keys onto the row, and create-only required
+    # checks (name/server_url → 400) stay in the service.
+    mcp_server = await svc.upsert_mcp_server(body.model_dump(exclude_unset=True))
     resp = svc.mcp_server_response(mcp_server)
     warnings = getattr(mcp_server, "attachment_warnings", None)
     if warnings:
@@ -116,12 +127,13 @@ async def upsert_mcp_server(
 
 @router.post("/validate_mcp_server", status_code=status.HTTP_200_OK)
 async def validate_mcp_server(
-    data: Dict[str, Any] = Body(...),
+    body: ValidateMcpServerRequest,
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
     """Validate an MCP server connection without creating it. Returns discovered tools on success."""
     svc = _get_service(claims, db)
+    data = body.model_dump(exclude_unset=True)
     server_url = data.get("server_url")
     transport_type = data.get("transport_type", "streamable_http")
     auth_config = data.get("auth_config")
@@ -129,14 +141,9 @@ async def validate_mcp_server(
     oauth_connection_id = data.get("oauth_connection_id")
     if not server_url:
         raise HTTPException(status_code=400, detail="server_url is required")
-    # Reflect how the server will actually authenticate at call time: custom headers from
-    # meta_data plus a fresh OAuth bearer (which wins on conflict) when a connection is linked.
-    from core.services.mcp_server_service import headers_from_meta
-
-    extra_headers = {
-        **headers_from_meta(data.get("meta_data")),
-        **svc._resolve_oauth_headers(oauth_connection_id),
-    }
+    # Header assembly (custom meta_data headers + fresh OAuth bearer) lives in
+    # the service so the router never reaches into private resolvers.
+    extra_headers = svc.build_validation_headers(data.get("meta_data"), oauth_connection_id)
     return await svc.validate_mcp_connection(
         server_url, transport_type, auth_config,
         extra_headers=extra_headers, auth_type=auth_type,
@@ -151,7 +158,10 @@ def get_mcp_server(
 ):
     svc = _get_service(claims, db)
     mcp_server = svc.get_mcp_server(mcp_server_id)
-    return svc.mcp_server_response(mcp_server)
+    # Single-resource edit-fetch: the MCP edit form loads this to pre-fill the
+    # form, so it needs the real decrypted credentials (list/collection
+    # responses stay masked by default).
+    return svc.mcp_server_response(mcp_server, mask_secrets=False)
 
 
 @router.get("/discover_tools")

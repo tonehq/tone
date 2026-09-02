@@ -348,19 +348,20 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
             : 'No eval batch has scored this run yet — click to view';
           return (
             <CustomTooltip content={tooltip}>
-              <button
-                type="button"
+              <CustomButton
+                type="text"
+                size="xs"
                 onClick={(e) => {
                   e.stopPropagation();
                   setDrawerRun(r);
                 }}
                 className={cn(
-                  'inline-flex items-center justify-center rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:brightness-110',
+                  'h-auto rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:brightness-110',
                   chip.className,
                 )}
               >
                 {chip.label}
-              </button>
+              </CustomButton>
             </CustomTooltip>
           );
         },
@@ -386,18 +387,19 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         width: 'w-[130px]',
         render: (_v, r) =>
           r.procrastinate_job_id != null ? (
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              size="xs"
+              icon={<Copy className="size-3" />}
               onClick={(e) => {
                 e.stopPropagation();
                 copyJobId(r.procrastinate_job_id as number);
               }}
-              className="inline-flex items-center gap-1 text-xs tabular-nums text-muted-foreground hover:text-foreground"
               title="Copy job id"
+              className="h-auto gap-1 px-0 text-xs tabular-nums text-muted-foreground hover:bg-transparent hover:text-foreground"
             >
-              <Copy className="size-3" />
               {r.procrastinate_job_id}
-            </button>
+            </CustomButton>
           ) : (
             <span className="text-muted-foreground">—</span>
           ),

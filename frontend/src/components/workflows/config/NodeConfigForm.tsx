@@ -1,0 +1,350 @@
+'use client';
+
+import React, { useEffect, useMemo, useState } from 'react';
+import { useAtomValue, useSetAtom } from 'jotai';
+import { Plus, Trash2 } from 'lucide-react';
+
+import { cn } from '@/utils/cn';
+import CustomButton from '@/components/shared/CustomButton';
+import RichPromptEditorField from '@/components/shared/RichPromptEditorField';
+import TextInput from '@/components/shared/TextInput';
+import TextAreaField from '@/components/shared/TextAreaField';
+import CheckboxField from '@/components/shared/CheckboxField';
+import SelectInput from '@/components/shared/SelectInput';
+import SearchableSelect from '@/components/shared/SearchableSelect';
+import ApiRequestForm from './ApiRequestForm';
+import SectionTitle from './SectionTitle';
+import Card from './Card';
+import { TOOL_SOURCE_OPTIONS, VAR_TYPE_OPTIONS } from './nodeConfigConstants';
+import { fetchToolsAtom, toolsAtom } from '@/atoms/ToolAtom';
+import { fetchMcpServersAtom, mcpServersAtom } from '@/atoms/MCPAtom';
+import { NODE_REGISTRY } from '@/components/workflows/nodeRegistry';
+import { buildProfileVariableItems } from '@/constants/promptVariables';
+import { useAgentProfileVariables } from '@/lib/api/agentProfileVariables';
+import type { WorkflowNode, WorkflowNodeType } from '@/types/workflow';
+
+type D = Record<string, unknown>;
+
+interface NodeConfigFormProps {
+  node: WorkflowNode;
+  /** Owning agent id when the builder is opened inside an agent editor route.
+   * Enables the "Profile" group in the prompt/first-message variable picker.
+   * Undefined on the standalone `/workflows/[id]` route — the group hides. */
+  agentId?: string;
+  onChangeNode: (id: string, data: D) => void;
+}
+
+const NodeConfigForm: React.FC<NodeConfigFormProps> = ({ node, agentId, onChangeNode }) => {
+  const { tools, loading: toolsLoading } = useAtomValue(toolsAtom);
+  const fetchTools = useSetAtom(fetchToolsAtom);
+
+  const { servers: mcpServers, loading: mcpLoading } = useAtomValue(mcpServersAtom);
+  const fetchMcp = useSetAtom(fetchMcpServersAtom);
+
+  // Per-agent Profile variables → `{{` typeahead "Profile" group. Only queried
+  // when the drawer is opened inside an agent-scoped workflow route (else the
+  // standalone page and the query stays disabled). CRUD lives in the agent's
+  // Profile sidebar tab — not here.
+  const { data: profileVariables = [] } = useAgentProfileVariables(agentId);
+  const profileVariableItems = useMemo(
+    () => buildProfileVariableItems(profileVariables),
+    [profileVariables],
+  );
+
+  // Tool node "source" (Tool vs MCP) — local so picking MCP switches the picker before an
+  // id is chosen. Re-synced whenever a different node opens.
+  const [toolSource, setToolSource] = useState<'tool' | 'mcp'>('tool');
+  useEffect(() => {
+    if (node.type === 'tool') {
+      setToolSource((node.data as D)?.mcpServerId ? 'mcp' : 'tool');
+    }
+  }, [node.id, node.type]);
+
+  const isToolNode = node.type === 'tool';
+  useEffect(() => {
+    if (!isToolNode) return;
+    if (tools.length === 0 && !toolsLoading) fetchTools();
+    if (mcpServers.length === 0 && !mcpLoading) fetchMcp();
+  }, [isToolNode, tools.length, toolsLoading, fetchTools, mcpServers.length, mcpLoading, fetchMcp]);
+
+  const toolOptions = useMemo(() => tools.map((t) => ({ value: t.id, label: t.name })), [tools]);
+  const mcpOptions = useMemo(
+    () => mcpServers.map((s) => ({ value: s.id, label: s.name })),
+    [mcpServers],
+  );
+
+  const type = node.type as WorkflowNodeType;
+  const meta = NODE_REGISTRY[type];
+  // A node whose type is no longer supported (e.g. a legacy graph opened after the
+  // type was removed). Show a safe message instead of crashing; it stays deletable.
+  if (!meta) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        This node’s type (<span className="font-mono">{String(type)}</span>) is no longer supported.
+        Delete it and rebuild this step with a supported node.
+      </p>
+    );
+  }
+  const Icon = meta.icon;
+  const data = node.data as D;
+  const patch = (p: D) => onChangeNode(node.id, { ...data, ...p });
+  const fm = String((data.messagePlan as D | undefined)?.firstMessage ?? '');
+  const setFirstMessage = (v: string) =>
+    patch({ messagePlan: { ...(data.messagePlan as D), firstMessage: v } });
+
+  const vars = ((data.variableExtractionPlan as D | undefined)?.output as D[] | undefined) ?? [];
+  const setVars = (next: D[]) => patch({ variableExtractionPlan: { output: next } });
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* identity */}
+      <div>
+        <div className="mb-2.5 flex items-center gap-2.5">
+          <span
+            className={cn(
+              'inline-flex h-9 w-9 items-center justify-center rounded-lg',
+              meta.accent.chip,
+            )}
+          >
+            <Icon className="h-4.5 w-4.5" />
+          </span>
+          <span className="font-mono text-[11px] uppercase tracking-wide text-muted-foreground">
+            {meta.label} node
+          </span>
+        </div>
+        <TextInput
+          name="node-name"
+          label="Node name"
+          value={String(data.name ?? node.id)}
+          onChange={(e) => patch({ name: e.target.value })}
+          placeholder="e.g. collect_name"
+        />
+      </div>
+
+      {/* conversation: first message */}
+      {(type === 'conversation' || type === 'endCall') && (
+        <RichPromptEditorField
+          name="first-message"
+          label={type === 'endCall' ? 'Goodbye message' : 'First message (spoken on entry)'}
+          minHeight={type === 'conversation' ? '80px' : '110px'}
+          value={fm}
+          onChange={setFirstMessage}
+          placeholder="What the agent says when it reaches this node…"
+          profileVariables={profileVariableItems}
+        />
+      )}
+
+      {/* conversation / decision: prompt */}
+      {(type === 'conversation' || type === 'decision') && (
+        <RichPromptEditorField
+          name="prompt"
+          label={type === 'decision' ? 'Routing guidance (optional)' : 'Prompt'}
+          minHeight="150px"
+          value={String(data.prompt ?? '')}
+          onChange={(v) => patch({ prompt: v })}
+          placeholder={
+            type === 'decision'
+              ? 'Optional hint for AI-routed branches'
+              : 'What should the agent do at this step? Use {{variables}} for dynamic values.'
+          }
+          helperText="The LLM (model & temperature) is inherited from the assigned agent."
+          profileVariables={profileVariableItems}
+        />
+      )}
+
+      {/* tool */}
+      {type === 'tool' && (
+        <div className="flex flex-col gap-3">
+          <SelectInput
+            name="tool-source"
+            label="Action source"
+            options={TOOL_SOURCE_OPTIONS}
+            value={toolSource}
+            onValueChange={(src) => {
+              const next = src === 'mcp' ? 'mcp' : 'tool';
+              setToolSource(next);
+              // Clear the other source's selection so only one is set on the node.
+              patch(
+                next === 'mcp'
+                  ? { toolId: undefined, tool: undefined }
+                  : { mcpServerId: undefined },
+              );
+            }}
+          />
+
+          {toolSource === 'mcp' ? (
+            <>
+              <SearchableSelect
+                name="mcp-server"
+                label="MCP server"
+                options={mcpOptions}
+                value={String(data.mcpServerId ?? '')}
+                onValueChange={(v) => patch({ mcpServerId: v, toolId: undefined, tool: undefined })}
+                loading={mcpLoading}
+                placeholder="Select an MCP server"
+              />
+              <TextInput
+                name="mcp-tool-name"
+                label="MCP tool to call (optional)"
+                value={String(data.mcpToolName ?? '')}
+                onChange={(e) => patch({ mcpToolName: e.target.value || undefined })}
+                placeholder="e.g. clickup_create_task"
+                className="font-mono"
+                helperText="Name the exact tool so the model calls it directly instead of guessing."
+              />
+            </>
+          ) : (
+            <SearchableSelect
+              name="tool"
+              label="Tool"
+              options={toolOptions}
+              value={String(data.toolId ?? '')}
+              onValueChange={(v) =>
+                patch({
+                  toolId: v,
+                  mcpServerId: undefined,
+                  mcpToolName: undefined,
+                  tool: undefined,
+                })
+              }
+              loading={toolsLoading}
+              placeholder="Select a tool (webhook / custom)"
+            />
+          )}
+
+          <TextAreaField
+            name="tool-notes"
+            label="Step details / instructions"
+            rows={4}
+            autoResize
+            value={String(data.notes ?? '')}
+            onChange={(e) => patch({ notes: e.target.value })}
+            placeholder={
+              'How to call the tool — e.g. list_id, exact field values, what to put in the ' +
+              'description. Use {{variables}} for collected values.'
+            }
+            helperText="Passed to the model as the step's details so it calls the tool with the right arguments."
+          />
+
+          <p className="text-[11px] text-muted-foreground">
+            The selected tool / MCP server must also be attached to the agent (Tools &amp; MCP) so
+            the model can call it at this step.
+          </p>
+        </div>
+      )}
+
+      {type === 'apiRequest' && <ApiRequestForm data={data} patch={patch} />}
+
+      {/* extract variables */}
+      {type === 'conversation' && (
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <SectionTitle>Extract variables</SectionTitle>
+            <CustomButton
+              type="text"
+              size="xs"
+              icon={<Plus className="h-3.5 w-3.5" />}
+              onClick={() =>
+                setVars([...vars, { title: '', type: 'string', enum: [], description: '' }])
+              }
+            >
+              Add
+            </CustomButton>
+          </div>
+          {vars.length === 0 ? (
+            <Card className="text-xs text-muted-foreground">
+              No variables extracted here. Add one to capture what the caller says (e.g.{' '}
+              <span className="font-mono">customer_name</span>).
+            </Card>
+          ) : (
+            <div className="flex flex-col gap-2.5">
+              {vars.map((v, i) => (
+                <Card key={i} className="bg-card">
+                  <div className="flex items-start gap-2">
+                    <div className="flex flex-1 flex-col gap-2">
+                      <div className="flex items-center gap-2">
+                        <TextInput
+                          name={`var-name-${i}`}
+                          value={String(v.title ?? '')}
+                          onChange={(e) =>
+                            setVars(
+                              vars.map((x, j) => (j === i ? { ...x, title: e.target.value } : x)),
+                            )
+                          }
+                          placeholder="variable_name"
+                          className="flex-1 font-mono"
+                        />
+                        <SelectInput
+                          name={`var-type-${i}`}
+                          options={VAR_TYPE_OPTIONS}
+                          value={String(v.type ?? 'string')}
+                          onValueChange={(val) =>
+                            setVars(vars.map((x, j) => (j === i ? { ...x, type: val } : x)))
+                          }
+                          className="w-28 shrink-0"
+                        />
+                      </div>
+                      <TextInput
+                        name={`var-desc-${i}`}
+                        value={String(v.description ?? '')}
+                        onChange={(e) =>
+                          setVars(
+                            vars.map((x, j) =>
+                              j === i ? { ...x, description: e.target.value } : x,
+                            ),
+                          )
+                        }
+                        placeholder="What to capture (description)"
+                      />
+                    </div>
+                    <CustomButton
+                      type="text"
+                      size="icon-sm"
+                      aria-label="Remove variable"
+                      onClick={() => setVars(vars.filter((_, j) => j !== i))}
+                      className="mt-1 shrink-0 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      icon={<Trash2 className="h-4 w-4" />}
+                    />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* behaviour */}
+      <div>
+        <SectionTitle>Behaviour</SectionTitle>
+        <Card className="flex flex-col gap-3">
+          {!meta.terminal && (
+            <CheckboxField
+              id="is-start"
+              label="Start node (entry point)"
+              checked={Boolean(data.isStart)}
+              onCheckedChange={(c) => patch({ isStart: c })}
+            />
+          )}
+          <CheckboxField
+            id="is-global"
+            label="Global (reachable from anywhere)"
+            checked={Boolean(data.isGlobal)}
+            onCheckedChange={(c) => patch({ isGlobal: c })}
+          />
+          {Boolean(data.isGlobal) && (
+            <TextInput
+              name="enter-condition"
+              label="Enter condition (Liquid)"
+              value={String(data.condition ?? '')}
+              onChange={(e) => patch({ condition: e.target.value })}
+              placeholder="{{ wants_human == true }}"
+              className="font-mono"
+            />
+          )}
+        </Card>
+      </div>
+    </div>
+  );
+};
+
+export default NodeConfigForm;

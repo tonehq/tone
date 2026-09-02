@@ -19,8 +19,13 @@ export const sipTrunkKeys = {
 
 export const sipTrunksApi = {
   list: async (): Promise<SipTrunk[]> => {
-    const { data } = await axios.post<SipTrunk[]>('/sip-trunk/list', {});
-    return data ?? [];
+    const { data } = await axios.post<{
+      items: SipTrunk[];
+      total: number;
+      page: number;
+      page_size: number;
+    }>('/sip-trunk/list', {});
+    return data?.items ?? [];
   },
   get: async (trunkId: string, includeAuth = false): Promise<SipTrunk> => {
     const { data } = await axios.get<SipTrunk>('/sip-trunk/get', {

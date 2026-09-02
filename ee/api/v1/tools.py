@@ -1,7 +1,7 @@
 from uuid import UUID
-from typing import List, Dict, Any
+from typing import List
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -9,6 +9,7 @@ from core.database.session import get_db
 from core.models.tool import Tool
 from core.services.tool_service import ToolService
 from core.api.v1.faceted_schemas import FacetsRequest
+from core.schemas.tool_requests import ToolListRequest, UpsertToolRequest
 from ee.middleware.auth import require_ee_org_member, EEJWTClaims
 
 router = APIRouter()
@@ -20,11 +21,13 @@ def _get_service(claims: EEJWTClaims, db: Session) -> ToolService:
 
 @router.post("/list")
 def list_tools(
-    body: dict = Body(default={}),
+    body: ToolListRequest = ToolListRequest(),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return _get_service(claims, db).list_tools(body)
+    # exclude_unset keeps the dict identical to the raw body the service read
+    # before (only client-supplied keys; extras pass through via extra="allow").
+    return _get_service(claims, db).list_tools(body.model_dump(exclude_unset=True))
 
 
 @router.post("/facets")
@@ -74,18 +77,24 @@ def get_tool(
 ):
     svc = _get_service(claims, db)
     tool = svc.get_tool(tool_id)
-    return svc.tool_response(tool)
+    # Single-resource edit-fetch: the edit form reads back the real auth_config
+    # to pre-fill, so this one endpoint returns decrypted secrets. List/collection
+    # responses stay masked (the default).
+    return svc.tool_response(tool, mask_secrets=False)
 
 
 @router.post("/upsert_tool", status_code=status.HTTP_200_OK)
 def upsert_tool(
-    data: Dict[str, Any] = Body(...),
+    body: UpsertToolRequest,
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     """Create or update a tool. Send id to update; send name and description to create."""
     svc = _get_service(claims, db)
-    tool = svc.upsert_tool(data)
+    # exclude_unset so the service sees exactly the keys the client sent — the
+    # update path copies provided keys onto the row, and create-only required
+    # checks (name/description → 400) stay in the service.
+    tool = svc.upsert_tool(body.model_dump(exclude_unset=True))
     return svc.tool_response(tool)
 
 

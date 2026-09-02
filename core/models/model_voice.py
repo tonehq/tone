@@ -22,3 +22,19 @@ class ModelVoice(TimestampModel):
 
     # relationships
     model = relationship("Model", back_populates="voices")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "model_id": str(self.model_id) if self.model_id else None,
+            "voice_id": self.voice_id,
+            "accent": self.accent,
+            "name": self.name,
+            "gender": self.gender,
+            "description": self.description,
+            "language_list": self.language_list,
+            "sample_url": self.sample_url,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

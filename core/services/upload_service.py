@@ -20,9 +20,13 @@ from pathlib import Path
 from typing import Any, Optional, Tuple, Union
 from uuid import UUID, uuid4
 
+from fastapi import HTTPException, status
 from loguru import logger
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
+from core.models.agent import Agent
+from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
@@ -159,7 +163,12 @@ class UploadService(BaseService):
         if self.org_id is None:
             raise ValueError("UploadService requires org_id (via constructor or context)")
 
-        resolved_name, resolved_type, stream, resolved_size = self._resolve_source(
+        # ``_resolve_source`` performs blocking file I/O (``Path.stat``,
+        # ``Path.open``, stream ``seek``/``tell``) — offload it off the event
+        # loop so a large local file (CLI path) or stream sizing never freezes
+        # the server. No DB usage inside, so it is thread-safe.
+        resolved_name, resolved_type, stream, resolved_size = await run_in_threadpool(
+            self._resolve_source,
             file_path=file_path,
             fileobj=fileobj,
             file_name=file_name,
@@ -191,7 +200,11 @@ class UploadService(BaseService):
         )
         t_r2 = time.monotonic()
         try:
-            r2.upload_fileobj(stream, object_key, content_type=resolved_type)
+            # boto3 is synchronous — stream the blob to R2 in a worker thread so
+            # the chunked upload doesn't block the event loop.
+            await run_in_threadpool(
+                r2.upload_fileobj, stream, object_key, content_type=resolved_type
+            )
         except Exception:
             logger.exception(
                 "[upload] R2 upload failed org={} key={}",
@@ -257,7 +270,9 @@ class UploadService(BaseService):
             )
             self.db.rollback()
             try:
-                r2.delete_file(object_key)
+                # boto3 delete is synchronous — offload the best-effort orphan
+                # cleanup off the event loop too.
+                await run_in_threadpool(r2.delete_file, object_key)
             except Exception as exc:  # noqa: BLE001
                 logger.debug("Best-effort R2 cleanup failed for {}: {}", object_key, exc)
             raise
@@ -358,6 +373,177 @@ class UploadService(BaseService):
         if upload is None:
             raise ValueError("Upload not found")
         return upload
+
+    def get_org_upload(self, upload_id: UUID) -> Upload:
+        """Public org-scoped fetch-or-``ValueError`` (routers map to a 404).
+
+        Thin wrapper over ``_get_org_upload`` so transports resolve an upload
+        for early error-ordering (e.g. the file-replace 404-before-400 seam)
+        without a raw ``db.query`` in the route."""
+        return self._get_org_upload(upload_id)
+
+    @staticmethod
+    def kb_for_upload(db: Session, org_id: UUID, upload_id: UUID) -> KnowledgeBase:
+        """Resolve the KnowledgeBase row backing an upload for enqueue flows. There
+        is exactly one per upload — a missing KB means the earlier create failed
+        and reprocess/replace is invalid, so surface a 500 rather than silently
+        dropping the enqueue."""
+        kb = (
+            db.query(KnowledgeBase)
+            .filter(
+                KnowledgeBase.upload_id == upload_id,
+                KnowledgeBase.organization_id == org_id,
+            )
+            .first()
+        )
+        if kb is None:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Knowledge base row missing for upload",
+            )
+        return kb
+
+    def resolve_published_agent_config(self, agent_id: UUID) -> AgentConfig:
+        """Resolve the agent's PUBLISHED ``AgentConfig`` for the KB upload route.
+
+        Uploads from the admin KB route attach directly to the agent's
+        published config — i.e. the document goes live for the call pipeline as
+        soon as the upload finishes ingesting. That is the established behaviour
+        for this endpoint; per-version isolation only applies to the editor
+        flow, where saves clone the chosen source version. Resolving up-front
+        (before touching R2) also means a missing-publication 409 doesn't orphan
+        the blob.
+
+        Raises ``HTTPException`` 404 when the agent is missing for the org and
+        409 when it has no published configuration yet."""
+        agent = (
+            self.db.query(Agent)
+            .filter(Agent.id == agent_id, Agent.organization_id == self.org_id)
+            .first()
+        )
+        if not agent:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
+            )
+
+        agent_config = None
+        if agent.published_config_id:
+            agent_config = (
+                self.db.query(AgentConfig)
+                .filter(
+                    AgentConfig.id == agent.published_config_id,
+                    AgentConfig.deleted_at.is_(None),
+                )
+                .first()
+            )
+        if not agent_config:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Agent has no published configuration yet. Save and publish the agent before uploading knowledge base documents.",
+            )
+        return agent_config
+
+    def ensure_kb_name_available(self, file_name: str) -> None:
+        """Fast-path duplicate-name pre-check: KnowledgeBase enforces
+        ``UniqueConstraint(organization_id, name)`` — without this the collision
+        becomes an opaque IntegrityError → HTTP 500 with no user message.
+        Surface a friendly 409 here BEFORE the R2 write so no orphan blob is
+        created for the doomed insert. The IntegrityError catch in the create
+        path still covers the (rare) race where two concurrent uploads land the
+        same name between this check and the service commit."""
+        duplicate_name = (
+            self.db.query(KnowledgeBase.id)
+            .filter(
+                KnowledgeBase.organization_id == self.org_id,
+                KnowledgeBase.name == file_name,
+            )
+            .first()
+        )
+        if duplicate_name is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"A document named '{file_name}' already exists. "
+                    "Rename the file or delete the existing document."
+                ),
+            )
+
+    async def reprocess_document(
+        self, upload_id: UUID, *, user_id: Any = None
+    ) -> Upload:
+        """Re-run the processing pipeline for an existing upload.
+
+        Used to retry a ``failed`` document (e.g. after configuring the OpenAI
+        key for embeddings) without forcing the user to upload the file again.
+        The original blob already lives in R2, so we just reset the status,
+        clear the previous error, and re-queue the pipeline.
+
+        Raises ``ValueError`` when the upload is missing (routers → 404) and
+        ``HTTPException`` 400 when it has no stored blob to reprocess. Returns
+        the refreshed ``Upload``."""
+        upload = self._get_org_upload(upload_id)
+
+        if not upload.file_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload has no stored file to reprocess",
+            )
+
+        logger.info(
+            "[ingestion] reprocess requested upload={} org={} user={} prev_status={}",
+            upload.id, self.org_id, user_id, upload.status,
+        )
+
+        # Flip to processing and drop the stale error so the UI reflects the
+        # retry immediately, before the background task runs.
+        upload.status = "processing"
+        meta = dict(upload.meta_data or {})
+        meta.pop("error", None)
+        upload.meta_data = meta
+        self.db.commit()
+        self.db.refresh(upload)
+
+        kb = self.kb_for_upload(self.db, self.org_id, upload.id)
+        await IngestionRunService.start_ingestion_run(
+            self.db,
+            upload=upload,
+            kb=kb,
+            org_id=self.org_id,
+            request_config=None,
+            delete_existing=True,
+        )
+        return upload
+
+    async def reingest_after_file_replace(self, upload: Upload) -> None:
+        """Purge everything derived from the OLD file and re-run ingestion after
+        the backing blob was swapped.
+
+        The file content changed, so everything derived from the OLD file is
+        now stale. Purge it up front (the UI warns the user before this): all
+        ingestion runs (→ chunks + embeddings via cascade) and the eval
+        question set (→ eval_results via cascade). The fresh ingestion below
+        then re-embeds and the auto-eval regenerates questions from the new
+        content. ``delete_existing=False`` because nothing is left to wipe."""
+        # Local import to avoid a service import cycle (EvalService pulls in
+        # ingestion helpers that reach back into this module).
+        from core.services.evals.eval_service import EvalService
+
+        IngestionRunService.delete_runs_for_upload(
+            self.db, upload_id=upload.id, org_id=self.org_id
+        )
+        EvalService().delete_eval_set_for_upload(
+            self.db, upload_id=upload.id, org_id=self.org_id
+        )
+
+        kb = self.kb_for_upload(self.db, self.org_id, upload.id)
+        await IngestionRunService.start_ingestion_run(
+            self.db,
+            upload=upload,
+            kb=kb,
+            org_id=self.org_id,
+            request_config=None,
+            delete_existing=False,
+        )
 
     def list_kb_documents(
         self,

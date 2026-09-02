@@ -17,3 +17,14 @@ class ModelLanguage(TimestampModel):
 
     # relationships
     model = relationship("Model", back_populates="languages")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "model_id": str(self.model_id) if self.model_id else None,
+            "name": self.name,
+            "display_name": self.display_name,
+            "is_active": self.is_active,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

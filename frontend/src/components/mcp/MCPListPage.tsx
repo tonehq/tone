@@ -5,6 +5,7 @@ import MCPCardSkeleton from '@/components/mcp/MCPCardSkeleton';
 import MCPEmptyState from '@/components/mcp/MCPEmptyState';
 import MCPServerCard from '@/components/mcp/MCPServerCard';
 import { mcpListConfig } from '@/components/mcp/mcpListConfig';
+import { SORT_OPTIONS } from '@/components/mcp/mcpConstants';
 import {
   CustomButton,
   FacetFilterBar,
@@ -13,7 +14,6 @@ import {
   useFacetedList,
 } from '@/components/shared';
 import SelectInput from '@/components/shared/SelectInput';
-import type { SelectOption } from '@/types/components';
 import type { MCPServer } from '@/types/mcp';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -22,14 +22,6 @@ import { useAtom } from 'jotai';
 import { Plus, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
-
-const SORT_OPTIONS: SelectOption[] = [
-  { value: 'created_at:desc', label: 'Newest' },
-  { value: 'created_at:asc', label: 'Oldest' },
-  { value: 'name:asc', label: 'Name A–Z' },
-  { value: 'name:desc', label: 'Name Z–A' },
-  { value: 'updated_at:desc', label: 'Recently updated' },
-];
 
 export default function MCPListPage() {
   const router = useRouter();
@@ -188,29 +180,33 @@ export default function MCPListPage() {
             ))}
 
             {/* Create new dashed card */}
-            <motion.button
-              type="button"
-              onClick={handleCreate}
-              aria-label="Create a new MCP server"
+            <motion.div
+              className="h-full"
               variants={{
                 hidden: { opacity: 0, y: 12 },
                 visible: { opacity: 1, y: 0, transition: { duration: 0.35 } },
               }}
               whileHover={{ y: -2 }}
-              className="group relative flex h-full min-h-[164px] cursor-pointer items-center justify-center overflow-hidden rounded-xl border-2 border-dashed border-border bg-card/40 transition-colors hover:border-sky-500/50 hover:bg-sky-500/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
             >
-              <div className="flex flex-col items-center gap-2 p-8">
-                <IconChip
-                  icon={<Plus strokeWidth={1.75} />}
-                  tone="sky"
-                  size="lg"
-                  className="transition-transform duration-300 group-hover:scale-110"
-                />
-                <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
-                  New MCP Server
-                </span>
-              </div>
-            </motion.button>
+              <CustomButton
+                type="text"
+                onClick={handleCreate}
+                aria-label="Create a new MCP server"
+                className="group relative flex !h-full min-h-[164px] w-full cursor-pointer items-center justify-center overflow-hidden !rounded-xl border-2 border-dashed border-border bg-card/40 !px-0 !py-0 transition-colors hover:border-sky-500/50 hover:!bg-sky-500/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:!ring-sky-500/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+              >
+                <div className="flex flex-col items-center gap-2 p-8">
+                  <IconChip
+                    icon={<Plus strokeWidth={1.75} />}
+                    tone="sky"
+                    size="lg"
+                    className="transition-transform duration-300 group-hover:scale-110"
+                  />
+                  <span className="text-sm font-medium text-muted-foreground group-hover:text-foreground">
+                    New MCP Server
+                  </span>
+                </div>
+              </CustomButton>
+            </motion.div>
           </motion.div>
         )}
       </div>

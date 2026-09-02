@@ -1,7 +1,7 @@
-from typing import Any, Dict, Optional
+from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
 
 from core.api.v1.agents import (
@@ -17,13 +17,9 @@ from core.api.v1.agents import (
     UpdateAgentRequest,
     UpdateVersionRequest,
     _prompt_errors,
-    agent_facets_for_org,
-    agent_filter_values_for_org,
-    list_agents_for_org,
 )
-from core.api.v1.faceted_schemas import FacetsRequest
+from core.api.v1.faceted_schemas import FacetsRequest, ListRequest
 from core.database.session import get_db
-from core.models.agent import Agent
 from core.services.agent_service import AgentService
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
@@ -56,14 +52,7 @@ def get_all_agents(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(claims.org_id)
-    rows = (
-        db.query(Agent.id, Agent.name)
-        .filter(Agent.organization_id == org_id, Agent.deleted_at.is_(None))
-        .order_by(Agent.name.asc())
-        .all()
-    )
-    return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
+    return _get_service(claims, db).get_all_agents()
 
 
 @router.post("/create_agent", status_code=status.HTTP_201_CREATED)
@@ -267,12 +256,11 @@ def delete_agent_version(
 
 @router.post("/list")
 def list_agents(
-    body: dict = Body(default={}),
+    body: ListRequest = ListRequest(),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(claims.org_id)
-    return list_agents_for_org(db, org_id, body)
+    return _get_service(claims, db).list_agents(body.model_dump())
 
 
 @router.post("/facets")
@@ -281,9 +269,8 @@ def get_agent_facets(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(claims.org_id)
     filters = [f.model_dump() for f in body.filters] if body.filters else None
-    return agent_facets_for_org(db, org_id, filters)
+    return _get_service(claims, db).facets(filters)
 
 
 @router.get("/filter-values")
@@ -292,8 +279,7 @@ def get_agent_filter_values(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(claims.org_id)
-    return agent_filter_values_for_org(db, org_id, column_name)
+    return _get_service(claims, db).filter_values(column_name)
 
 
 @router.post("/generate_prompt", response_model=GeneratedPromptResponse)

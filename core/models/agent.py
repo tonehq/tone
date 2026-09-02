@@ -26,3 +26,21 @@ class Agent(OrgScopedModel):
     log_level = Column(String(20), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "name": self.name,
+            "description": self.description,
+            "agent_type": self.agent_type,
+            "llm_model": self.llm_model,
+            "published_config_id": str(self.published_config_id) if self.published_config_id else None,
+            "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
+            "is_active": self.is_active,
+            "log_level": self.log_level,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

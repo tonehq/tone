@@ -226,6 +226,49 @@ class ChannelService(BaseService):
         return decrypt_json(channel.encrypted_config)
 
     # ──────────────────────────────────────────────────────────────────────
+    # DB phone-number listing (agent assignment status)
+    # ──────────────────────────────────────────────────────────────────────
+
+    def list_phone_numbers_for_channel(
+        self, channel_id: Union[str, UUID]
+    ) -> List[Dict[str, Any]]:
+        """List phone numbers stored in DB for a channel, with agent assignment.
+
+        Shared listing pipeline for ``/channel/phone_numbers`` (core + EE) and the
+        SIP-trunk phone-number route. Validates only the UUID shape (a 400 on a
+        malformed id) and returns rows scoped to this org — it does NOT 404 when
+        the channel is absent, preserving the original router behavior.
+        """
+        try:
+            ch_uuid = UUID(str(channel_id))
+        except (ValueError, TypeError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid channel_id"
+            )
+        rows = (
+            self.db.query(PhoneNumber, Agent.name.label("agent_name"))
+            .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+            .filter(
+                PhoneNumber.channel_id == ch_uuid,
+                PhoneNumber.organization_id == self.org_id,
+            )
+            .all()
+        )
+        return [
+            {
+                "id": str(pn.id),
+                "number": pn.number,
+                "label": pn.label,
+                "channel_id": str(pn.channel_id),
+                "assigned_to": {
+                    "agent_id": str(pn.agent_id),
+                    "agent_name": agent_name,
+                } if pn.agent_id else None,
+            }
+            for pn, agent_name in rows
+        ]
+
+    # ──────────────────────────────────────────────────────────────────────
     # Twilio: live IncomingPhoneNumber listing
     # ──────────────────────────────────────────────────────────────────────
 

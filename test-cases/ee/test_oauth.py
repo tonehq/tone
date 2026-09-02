@@ -299,7 +299,9 @@ class TestListConnections:
         response = client_as_member.post("/api/v1/oauth/list", json={})
         assert response.status_code in (200, 201, 500)
         if response.status_code == 200:
-            assert isinstance(response.json(), list)
+            body = response.json()
+            assert isinstance(body, dict)
+            assert isinstance(body["items"], list)
 
     def test_list_connections_with_provider_slug_filter(self, client_as_member):
         response = client_as_member.post(
@@ -308,7 +310,9 @@ class TestListConnections:
         )
         assert response.status_code in (200, 201, 500)
         if response.status_code == 200:
-            assert isinstance(response.json(), list)
+            body = response.json()
+            assert isinstance(body, dict)
+            assert isinstance(body["items"], list)
 
     def test_list_connections_as_admin(self, client_as_admin):
         response = client_as_admin.post("/api/v1/oauth/list", json={})

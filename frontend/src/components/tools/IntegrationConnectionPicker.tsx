@@ -1,6 +1,6 @@
 'use client';
 
-import { ScopeStatus, SelectInput } from '@/components/shared';
+import { CustomLink, ScopeStatus, SelectInput } from '@/components/shared';
 import { NO_APP_INTEGRATION, useIntegrationConnections } from '@/hooks/useIntegrationConnections';
 import { useEffect, useMemo } from 'react';
 
@@ -138,9 +138,9 @@ export default function IntegrationConnectionPicker({
         {oauthConnections.length === 0 && !connectionsLoading && (
           <p className="mt-2 text-[12px] text-muted-foreground">
             No accounts connected for this integration.{' '}
-            <a href="/settings/integrations" className="text-primary hover:underline">
+            <CustomLink href="/settings/integrations" className="text-[12px] font-normal">
               Connect one in Integrations
-            </a>
+            </CustomLink>
             .
           </p>
         )}

@@ -5,7 +5,7 @@ import { isEqual } from 'lodash';
 import { ArrowLeft, Sparkles } from 'lucide-react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { FormProvider, useForm, useWatch } from 'react-hook-form';
+import { FormProvider, useForm, useWatch, type FieldPath } from 'react-hook-form';
 
 import {
   createAgentAtom,
@@ -429,14 +429,28 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
    * tab where the first failure lives. */
   const applyServerValidation = useCallback(
     (err: unknown): boolean => {
-      const detailErr = (err as any)?.response?.data?.detail;
-      if (!detailErr || typeof detailErr !== 'object' || !detailErr.errors) return false;
-      const validationErrors = detailErr.errors as Record<string, Record<string, string[]>>;
+      // Structural narrow (same shape `extractGateDetail` uses below) instead of
+      // an `any` cast, so `detail`'s access stays type-checked.
+      const detailErr = (err as { response?: { data?: { detail?: unknown } } })?.response?.data
+        ?.detail;
+      if (!detailErr || typeof detailErr !== 'object') return false;
+      const payload = detailErr as {
+        errors?: Record<string, Record<string, string[]>>;
+        message?: string;
+      };
+      if (!payload.errors) return false;
+      const validationErrors = payload.errors;
       let firstPath: string | null = null;
       for (const [settingsKey, fields] of Object.entries(validationErrors)) {
         for (const [fieldName, messages] of Object.entries(fields)) {
           const path = `config.${settingsKey}.${fieldName}`;
-          methods.setError(path as any, { type: 'server', message: messages[0] });
+          // Dynamic dotted path — RHF's `setError` wants a typed `FieldPath`.
+          // We can't statically prove the runtime string, so narrow to the
+          // typed `FieldPath<AgentFormState>` rather than erasing to `any`.
+          methods.setError(path as FieldPath<AgentFormState>, {
+            type: 'server',
+            message: messages[0],
+          });
           if (!firstPath) firstPath = path;
         }
       }
@@ -446,10 +460,7 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         if (!pathname.startsWith(target)) router.push(target);
         scrollToInvalidField(firstPath);
       }
-      showToast.error(
-        'Validation failed',
-        detailErr.message || 'Please fix the highlighted fields.',
-      );
+      showToast.error('Validation failed', payload.message || 'Please fix the highlighted fields.');
       return true;
     },
     [basePath, methods, pathname, router],

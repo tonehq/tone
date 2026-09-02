@@ -3,9 +3,10 @@
 import { CustomButton, CustomModal } from '@/components/shared';
 import SearchableSelect from '@/components/shared/SearchableSelect';
 import TextInput from '@/components/shared/TextInput';
-import { createAgentFromTemplateAtom, listAgentTemplatesAtom } from '@/atoms/AgentsAtom';
+import { createAgentFromTemplateAtom } from '@/atoms/AgentsAtom';
+import { useAgentTemplates } from '@/lib/api/agentTemplates';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import { AgentType } from '@/types/agent';
-import type { AgentTemplateSummary } from '@/types/agent';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { useSetAtom } from 'jotai';
@@ -91,11 +92,14 @@ const agentOptions: AgentOption[] = [
 
 const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) => {
   const router = useRouter();
-  const loadTemplates = useSetAtom(listAgentTemplatesAtom);
   const createFromTemplate = useSetAtom(createAgentFromTemplateAtom);
 
-  const [templates, setTemplates] = useState<AgentTemplateSummary[]>([]);
-  const [sourcesLoading, setSourcesLoading] = useState(false);
+  // Templates are a read-only catalog, fetched only while the modal is open.
+  const templatesQuery = useAgentTemplates({ enabled: open });
+  const templates = useMemo(() => templatesQuery.data ?? [], [templatesQuery.data]);
+  const sourcesLoading = templatesQuery.isLoading;
+  useQueryErrorToast(templatesQuery.error);
+
   const [selected, setSelected] = useState('');
   const [name, setName] = useState('');
   // The name we pre-filled for the current selection. When the user leaves it
@@ -105,31 +109,15 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
   const [defaultName, setDefaultName] = useState('');
   const [creating, setCreating] = useState(false);
 
-  // Load templates when the modal opens; reset on close.
+  // Reset the picker + name whenever the modal closes so the next open starts
+  // clean. (Template data is fetched by the query above, gated on `open`.)
   useEffect(() => {
     if (!open) {
       setSelected('');
       setName('');
       setDefaultName('');
-      return;
     }
-    let cancelled = false;
-    setSourcesLoading(true);
-    loadTemplates()
-      .then((tpls) => {
-        if (cancelled) return;
-        setTemplates(tpls);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setSourcesLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, loadTemplates]);
+  }, [open]);
 
   const sourceOptions = useMemo(
     () => templates.map((t) => ({ value: t.source_config_id, label: t.name })),

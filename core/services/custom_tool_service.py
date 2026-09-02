@@ -8,6 +8,7 @@ from typing import Any, Callable, List, Optional, Tuple
 import httpx
 from fastapi import HTTPException
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
@@ -222,6 +223,60 @@ def _interp(text, ctx: dict):
     return substitute_variables(text, ctx) or ""
 
 
+# ─────────────────────────────────────────────────────────────────────
+# Inline auth-header appliers (strategy registry keyed on ``tool.auth_type``).
+# Each applier mutates the outgoing ``headers`` dict in place from the tool's
+# inline ``auth_config``. These are only consulted when NO linked connection
+# resolved a header (``conn_header`` is falsy) — a resolved connection always
+# wins, exactly as before. An unknown ``auth_type`` has no applier and is a
+# no-op (matching the previous if/elif fall-through — never an error). Adding a
+# new inline auth type = a new function + one registry entry; the dispatch below
+# never changes.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _apply_api_key_auth(headers: dict, auth_config: dict, tool: Tool, connection_id) -> None:
+    header_name = auth_config.get("header", "X-API-Key")
+    headers[header_name] = auth_config.get("value", "")
+
+
+def _apply_bearer_auth(headers: dict, auth_config: dict, tool: Tool, connection_id) -> None:
+    headers["Authorization"] = f"Bearer {auth_config.get('token', '')}"
+
+
+def _apply_basic_auth(headers: dict, auth_config: dict, tool: Tool, connection_id) -> None:
+    import base64
+    username = auth_config.get("username", "")
+    password = auth_config.get("password", "")
+    credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
+    headers["Authorization"] = f"Basic {credentials}"
+
+
+def _apply_oauth_auth(headers: dict, auth_config: dict, tool: Tool, connection_id) -> None:
+    # Only warns when there's no linked connection — with a connection the
+    # header was already applied via ``conn_header`` and this branch is skipped;
+    # if a connection_id exists but resolution failed (fail-open), we stay silent
+    # exactly as the previous ``auth_type == "oauth" and not connection_id`` guard.
+    if not connection_id:
+        logger.warning(
+            "Custom tool '{}' has auth_type='oauth' but no linked connection; "
+            "calling without an Authorization header",
+            tool.name,
+        )
+
+
+# Aliases share a single applier so behavior is byte-for-byte identical to the
+# original ``or``-chained conditions (bearer_token/bearer, basic/basic_auth).
+_INLINE_AUTH_HEADER_APPLIERS = {
+    "api_key": _apply_api_key_auth,
+    "bearer_token": _apply_bearer_auth,
+    "bearer": _apply_bearer_auth,
+    "basic": _apply_basic_auth,
+    "basic_auth": _apply_basic_auth,
+    "oauth": _apply_oauth_auth,
+}
+
+
 def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None):
     """Create a handler function for a custom tool that calls the customer's webhook.
 
@@ -272,26 +327,13 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
             auth_config = tool.auth_config or {}
             connection_id = effective_of(tool)
             logger.info("Custom tool '{}' auth_type={}", tool.name, tool.auth_type)
-            conn_header = _resolve_connection_header(tool) if connection_id else None
+            conn_header = await run_in_threadpool(_resolve_connection_header, tool) if connection_id else None
             if conn_header:
                 headers[conn_header[0]] = conn_header[1]
-            elif tool.auth_type == "api_key":
-                header_name = auth_config.get("header", "X-API-Key")
-                headers[header_name] = auth_config.get("value", "")
-            elif tool.auth_type == "bearer_token" or tool.auth_type == "bearer":
-                headers["Authorization"] = f"Bearer {auth_config.get('token', '')}"
-            elif tool.auth_type == "basic" or tool.auth_type == "basic_auth" :
-                import base64
-                username = auth_config.get("username", "")
-                password = auth_config.get("password", "")
-                credentials = base64.b64encode(f"{username}:{password}".encode()).decode()
-                headers["Authorization"] = f"Basic {credentials}"
-            elif tool.auth_type == "oauth" and not connection_id:
-                logger.warning(
-                    "Custom tool '{}' has auth_type='oauth' but no linked connection; "
-                    "calling without an Authorization header",
-                    tool.name,
-                )
+            else:
+                applier = _INLINE_AUTH_HEADER_APPLIERS.get(tool.auth_type)
+                if applier:
+                    applier(headers, auth_config, tool, connection_id)
 
             extra_headers = getattr(tool, "headers", None)
             if isinstance(extra_headers, dict):
@@ -384,13 +426,43 @@ def create_custom_tool_handler(tool: Tool, tool_call_entries: Optional[list] = N
     return handle_tool_call
 
 
+# Built-in tool builders (strategy registry keyed on ``tool.tool_type``). Each
+# entry takes the full handler-build context as keyword args and picks the
+# pieces its factory needs, so all builders share one call site. Adding a new
+# built-in tool = a new factory + one registry entry; the dispatch never changes.
+_BUILT_IN_TOOL_BUILDERS: dict = {
+    "send_sms": lambda **kw: _create_send_sms_handler(
+        kw["tool"],
+        kw["caller_number"],
+        tool_call_entries=kw["tool_call_entries"],
+        tool_request_ts=kw["tool_request_ts"],
+        current_turn=kw["current_turn"],
+    ),
+    "google_calendar": lambda **kw: _create_google_calendar_handler(
+        kw["tool"],
+        org_id=kw["org_id"],
+        tool_call_entries=kw["tool_call_entries"],
+        tool_request_ts=kw["tool_request_ts"],
+        current_turn=kw["current_turn"],
+        tool_dedup=kw["tool_dedup"],
+    ),
+}
+
+
 def create_built_in_tool_handler(tool: Tool, caller_number: str, org_id=None, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None, tool_dedup: Optional[dict] = None) -> Callable:
     """Create a handler for a built-in tool based on tool_type."""
 
-    if tool.tool_type == "send_sms":
-        return _create_send_sms_handler(tool, caller_number, tool_call_entries=tool_call_entries, tool_request_ts=tool_request_ts, current_turn=current_turn)
-    elif tool.tool_type == "google_calendar":
-        return _create_google_calendar_handler(tool, org_id=org_id, tool_call_entries=tool_call_entries, tool_request_ts=tool_request_ts, current_turn=current_turn, tool_dedup=tool_dedup)
+    builder = _BUILT_IN_TOOL_BUILDERS.get(tool.tool_type)
+    if builder:
+        return builder(
+            tool=tool,
+            caller_number=caller_number,
+            org_id=org_id,
+            tool_call_entries=tool_call_entries,
+            tool_request_ts=tool_request_ts,
+            current_turn=current_turn,
+            tool_dedup=tool_dedup,
+        )
 
     # Fallback: unknown built-in tool type
     async def noop_handler(params: FunctionCallParams) -> None:
@@ -612,7 +684,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
                         "Google Calendar connection not found. Please reconnect Google Calendar in the Integrations settings."
                     )
                     return
-                access_token = svc.get_valid_access_token_for_connection(connection)
+                access_token = await svc.get_valid_access_token_for_connection_async(connection)
         except HTTPException as e:
             logger.bind(tool_name="google_calendar", http_status=e.status_code).error(
                 "[builtin-tool] google_calendar OAuth error: {}", e.detail
@@ -625,7 +697,7 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
             else:
                 await params.result_callback(f"Google Calendar is not available right now. Reason: {e.detail}")
             return
-        except Exception:
+        except Exception as e:
             logger.bind(
                 tool_name="google_calendar",
                 organization_id=effective_org_id,
@@ -641,15 +713,21 @@ def _create_google_calendar_handler(tool: Tool, org_id=None, tool_call_entries: 
 
         base_url = f"https://www.googleapis.com/calendar/v3/calendars/{calendar_id}"
 
+        # Dispatch by action via a registry instead of an if/elif chain — a new
+        # calendar action is one more dict entry, no edit to this flow. All
+        # handlers share the same (base_url, headers, arguments, timezone)
+        # signature, so behavior is identical to the prior chain.
+        calendar_action_handlers = {
+            "check_availability": _calendar_check_availability,
+            "create_event": _calendar_create_event,
+            "list_events": _calendar_list_events,
+        }
         try:
-            if action == "check_availability":
-                result = await _calendar_check_availability(base_url, headers, arguments, timezone)
-            elif action == "create_event":
-                result = await _calendar_create_event(base_url, headers, arguments, timezone)
-            elif action == "list_events":
-                result = await _calendar_list_events(base_url, headers, arguments, timezone)
-            else:
+            handler = calendar_action_handlers.get(action)
+            if handler is None:
                 result = f"Unknown action: {action}. Supported actions: create_event, check_availability, list_events"
+            else:
+                result = await handler(base_url, headers, arguments, timezone)
 
             logger.info("google_calendar action='{}' result: {}", action, result)
             _log_tool_call("success")

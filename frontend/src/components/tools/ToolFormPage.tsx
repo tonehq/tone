@@ -145,7 +145,7 @@ export default function ToolFormPage({ toolId }: ToolFormPageProps) {
         setToolType(template.tool_type ?? 'custom');
         setParameters(template.parameters ?? {});
       })
-      .catch(() => {})
+      .catch((err) => handleApiError(err))
       .finally(() => setLoading(false));
   }, [templateId, isEditMode]);
 

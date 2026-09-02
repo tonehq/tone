@@ -68,8 +68,9 @@ def list_workflows(
     agent_id: Optional[str] = Query(None, description="Only workflows owned by this agent"),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
-) -> List[Dict[str, Any]]:
-    return _get_service(claims, db).list(agent_id=agent_id)
+) -> Dict[str, Any]:
+    items = _get_service(claims, db).list(agent_id=agent_id)
+    return {"items": items, "total": len(items), "page": 1, "page_size": len(items)}
 
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)

@@ -1,7 +1,12 @@
-/* eslint-disable @typescript-eslint/no-use-before-define */
 'use client';
 
 import { fetchMcpServersAtom, upsertMcpServerAtom } from '@/atoms/MCPAtom';
+import Chip from '@/components/mcp/form/Chip';
+import PreviewFavicon from '@/components/mcp/form/PreviewFavicon';
+import ProtocolCard from '@/components/mcp/form/ProtocolCard';
+import RailRow from '@/components/mcp/form/RailRow';
+import StatusPill from '@/components/mcp/form/StatusPill';
+import TimeoutDial from '@/components/mcp/form/TimeoutDial';
 import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
 import { finalizeAttachmentAndRedirect } from '@/services/agentAttachmentService';
 import { readAttachContext } from '@/utils/agentAttachmentContext';
@@ -34,7 +39,6 @@ import {
   Bot,
   Boxes,
   Cable,
-  Check,
   Clock,
   Globe,
   KeyRound,
@@ -106,20 +110,6 @@ function getHostname(url: string): string | null {
   } catch {
     return null;
   }
-}
-
-function getApexDomain(hostname: string): string {
-  const parts = hostname.split('.');
-  if (parts.length <= 2) return hostname;
-  const lastTwo = parts.slice(-2).join('.');
-  const dualTier = new Set(['co.uk', 'com.au', 'co.in', 'co.jp', 'com.br', 'co.nz', 'com.mx']);
-  if (dualTier.has(lastTwo)) return parts.slice(-3).join('.');
-  return lastTwo;
-}
-
-function getFaviconUrl(hostname: string | null): string | null {
-  if (!hostname) return null;
-  return `https://www.google.com/s2/favicons?domain=${getApexDomain(hostname)}&sz=64`;
 }
 
 /** Derive the ``auth_type`` string the backend expects from the form state.
@@ -499,6 +489,30 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
 
   const onBack = useGoBack('/mcp');
 
+  const handleConfirmDetach = () => {
+    if (!pendingDetachSave) return;
+    const { payload } = pendingDetachSave;
+    setPendingDetachSave(null);
+    doSave(payload);
+  };
+
+  const handleHeaderRemove = (id: string) => {
+    const idx = fields.findIndex((f) => f.id === id);
+    if (idx >= 0) remove(idx);
+  };
+
+  const handleHeaderChange = (id: string, patch: { key?: string; value?: string }) => {
+    const idx = fields.findIndex((f) => f.id === id);
+    if (idx < 0) return;
+    if (patch.key !== undefined) setValue(`http_headers.${idx}.key`, patch.key);
+    if (patch.value !== undefined) setValue(`http_headers.${idx}.value`, patch.value);
+  };
+
+  const handleAgentsChange = (ids: string[]) => {
+    setAttachedAgentIds(ids);
+    setAgentsTouched(true);
+  };
+
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
       <CustomModal
@@ -517,12 +531,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
         confirmText="Detach and save"
         confirmType="danger"
         confirmLoading={saving}
-        onConfirm={() => {
-          if (!pendingDetachSave) return;
-          const { payload } = pendingDetachSave;
-          setPendingDetachSave(null);
-          doSave(payload);
-        }}
+        onConfirm={handleConfirmDetach}
       />
 
       {/* Top bar */}
@@ -752,21 +761,15 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                     name="secret_url"
                     control={control}
                     render={({ field }) => (
-                      <label className="flex cursor-pointer items-start gap-3 rounded-lg border border-border p-3">
-                        <input
-                          type="checkbox"
-                          className="mt-0.5"
+                      <div className="rounded-lg border border-border p-3">
+                        <CheckboxField
+                          id="mcp-secret-url"
+                          label="URL contains a secret token"
                           checked={!!field.value}
-                          onChange={(e) => field.onChange(e.target.checked)}
+                          onCheckedChange={(checked) => field.onChange(!!checked)}
+                          helperText="For providers that embed credentials in the URL path (e.g. Zoho CRM). The URL is encrypted at rest and never returned by the API."
                         />
-                        <span className="text-sm">
-                          <span className="font-medium">URL contains a secret token</span>
-                          <span className="block text-muted-foreground">
-                            For providers that embed credentials in the URL path (e.g. Zoho CRM).
-                            The URL is encrypted at rest and never returned by the API.
-                          </span>
-                        </span>
-                      </label>
+                      </div>
                     )}
                   />
 
@@ -951,17 +954,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                         value: watchedHeaders[i]?.value ?? '',
                       }))}
                       onAdd={() => append({ key: '', value: '' })}
-                      onRemove={(id) => {
-                        const idx = fields.findIndex((f) => f.id === id);
-                        if (idx >= 0) remove(idx);
-                      }}
-                      onChange={(id, patch) => {
-                        const idx = fields.findIndex((f) => f.id === id);
-                        if (idx < 0) return;
-                        if (patch.key !== undefined) setValue(`http_headers.${idx}.key`, patch.key);
-                        if (patch.value !== undefined)
-                          setValue(`http_headers.${idx}.value`, patch.value);
-                      }}
+                      onRemove={handleHeaderRemove}
+                      onChange={handleHeaderChange}
                     />
                   </div>
                 </div>
@@ -1014,10 +1008,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
               >
                 <AgentAttachmentPicker
                   selectedIds={attachedAgentIds}
-                  onChange={(ids) => {
-                    setAttachedAgentIds(ids);
-                    setAgentsTouched(true);
-                  }}
+                  onChange={handleAgentsChange}
                   loading={agentsLoading}
                   loadFailed={agentsLoadFailed}
                   entityLabel="MCP server"
@@ -1065,285 +1056,6 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
           </div>
         </div>
       </div>
-    </div>
-  );
-}
-
-function StatusPill({ active, compact = false }: { active: boolean; compact?: boolean }) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full text-[10px] font-medium',
-        compact ? 'px-2 py-0.5' : 'px-2 py-0.5',
-        active
-          ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-400'
-          : 'bg-muted text-muted-foreground',
-      )}
-    >
-      <span
-        className={cn(
-          'size-1.5 rounded-full',
-          active ? 'animate-pulse bg-emerald-500' : 'bg-muted-foreground/50',
-        )}
-      />
-      {active ? 'Active' : 'Paused'}
-    </span>
-  );
-}
-
-function Chip({ icon, label }: { icon?: React.ReactNode; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-background/80 px-2 py-0.5 text-[11px] font-medium text-foreground backdrop-blur dark:bg-background/40">
-      {icon && <span className="text-muted-foreground">{icon}</span>}
-      {label}
-    </span>
-  );
-}
-
-function RailRow({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="min-w-0 text-foreground">{children}</dd>
-    </div>
-  );
-}
-
-function PreviewFavicon({
-  hostname,
-  size = 'md',
-}: {
-  hostname: string | null;
-  size?: 'sm' | 'md';
-}) {
-  const [failed, setFailed] = useState(false);
-  const url = getFaviconUrl(hostname);
-  const show = !!url && !failed;
-  const isSm = size === 'sm';
-  return (
-    <div
-      className={cn(
-        'flex shrink-0 items-center justify-center overflow-hidden rounded-lg border border-border',
-        isSm ? 'size-8' : 'size-9',
-        show ? 'bg-white p-1 dark:border-border/60' : 'bg-primary/5 dark:bg-primary/10',
-      )}
-    >
-      {show ? (
-        <img
-          src={url ?? ''}
-          alt={hostname ?? 'MCP server icon'}
-          width={isSm ? 18 : 20}
-          height={isSm ? 18 : 20}
-          className={cn('object-contain', isSm ? 'size-[18px]' : 'size-5')}
-          onError={() => setFailed(true)}
-        />
-      ) : (
-        <Boxes size={isSm ? 15 : 16} className="text-primary" />
-      )}
-    </div>
-  );
-}
-
-function TimeoutDial({ value }: { value: number }) {
-  const min = 1;
-  const max = 300;
-  const pct = Math.max(0, Math.min(1, (value - min) / (max - min)));
-  const size = 132;
-  const stroke = 8;
-  const r = (size - stroke) / 2;
-  const c = 2 * Math.PI * r;
-  const arcSpan = c * 0.78;
-  const arc = pct * arcSpan;
-
-  return (
-    <div className="relative mx-auto flex h-[132px] w-[132px] items-center justify-center">
-      <svg
-        width={size}
-        height={size}
-        viewBox={`0 0 ${size} ${size}`}
-        className="-rotate-[130deg]"
-        aria-hidden="true"
-      >
-        <defs>
-          <linearGradient id="mcp-dial-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.55" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
-          </linearGradient>
-        </defs>
-        <circle
-          cx={size / 2}
-          cy={size / 2}
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={stroke}
-          strokeLinecap="round"
-          strokeDasharray={`${arcSpan} ${c}`}
-          className="text-border"
-        />
-        <g className="text-primary">
-          <circle
-            cx={size / 2}
-            cy={size / 2}
-            r={r}
-            fill="none"
-            stroke="url(#mcp-dial-gradient)"
-            strokeWidth={stroke}
-            strokeLinecap="round"
-            strokeDasharray={`${arc} ${c}`}
-            className="transition-all duration-300"
-          />
-        </g>
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-[30px] font-semibold leading-none tabular-nums tracking-tight text-foreground">
-          {value}
-        </span>
-        <span className="mt-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-          seconds
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function ProtocolCard({
-  selected,
-  onSelect,
-  title,
-  description,
-  diagram,
-  badge,
-}: {
-  selected: boolean;
-  onSelect: () => void;
-  title: string;
-  description: string;
-  diagram: 'shttp' | 'sse';
-  badge?: string;
-}) {
-  return (
-    <CustomButton
-      type="text"
-      onClick={onSelect}
-      className={cn(
-        '!h-auto !flex-col !items-stretch group relative flex flex-col gap-3 overflow-hidden rounded-lg border bg-background p-4 text-left transition-all',
-        selected
-          ? 'border-primary ring-2 ring-primary/25 shadow-sm'
-          : 'border-border hover:border-primary/40 hover:bg-muted/20 hover:shadow-sm',
-      )}
-    >
-      {selected && (
-        <div
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-lg bg-gradient-to-br from-primary/[0.06] to-transparent"
-        />
-      )}
-
-      <div className="relative flex items-start justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <span className="text-[13px] font-semibold text-foreground">{title}</span>
-          {badge && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-1.5 py-0.5 text-[9.5px] font-medium text-primary">
-              <Sparkles size={9} />
-              {badge}
-            </span>
-          )}
-        </div>
-        <span
-          className={cn(
-            'flex size-4 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
-            selected ? 'border-primary bg-primary' : 'border-border bg-background',
-          )}
-        >
-          {selected && <Check size={10} className="text-primary-foreground" strokeWidth={3} />}
-        </span>
-      </div>
-
-      <ProtocolDiagram type={diagram} active={selected} />
-
-      <p className="relative text-[12px] leading-relaxed text-muted-foreground">{description}</p>
-    </CustomButton>
-  );
-}
-
-function ProtocolDiagram({ type, active }: { type: 'shttp' | 'sse'; active: boolean }) {
-  const gradientId = `mcp-proto-${type}`;
-  return (
-    <div
-      className={cn(
-        'rounded-md border bg-muted/30 px-3 py-2 transition-colors',
-        active ? 'border-primary/30 text-primary' : 'border-border text-muted-foreground',
-      )}
-    >
-      <svg viewBox="0 0 200 48" className="h-10 w-full" aria-hidden="true">
-        <defs>
-          <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.4" />
-            <stop offset="50%" stopColor="currentColor" stopOpacity="1" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="0.4" />
-          </linearGradient>
-        </defs>
-
-        <circle cx="20" cy="24" r="4" fill="currentColor" />
-        <text
-          x="20"
-          y="44"
-          textAnchor="middle"
-          className="fill-current text-[8px] uppercase tracking-wider opacity-60"
-        >
-          srv
-        </text>
-        <circle cx="180" cy="24" r="4" fill="currentColor" />
-        <text
-          x="180"
-          y="44"
-          textAnchor="middle"
-          className="fill-current text-[8px] uppercase tracking-wider opacity-60"
-        >
-          tone
-        </text>
-
-        {type === 'shttp' ? (
-          <>
-            <path
-              d="M 28 24 Q 50 10 72 24 T 116 24 T 160 24 L 172 24"
-              fill="none"
-              stroke={active ? `url(#${gradientId})` : 'currentColor'}
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-            <path
-              d="M 28 24 Q 50 38 72 24 T 116 24 T 160 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              opacity="0.45"
-              strokeDasharray="2,3"
-            />
-            <polygon points="172,24 168,21 168,27" fill="currentColor" />
-            <polygon points="28,24 32,21 32,27" fill="currentColor" opacity="0.45" />
-          </>
-        ) : (
-          <>
-            <line
-              x1="28"
-              y1="24"
-              x2="172"
-              y2="24"
-              stroke={active ? `url(#${gradientId})` : 'currentColor'}
-              strokeWidth="1.5"
-              strokeDasharray="6,5"
-              strokeLinecap="round"
-            />
-            <circle cx="60" cy="24" r="2.5" fill="currentColor" />
-            <circle cx="100" cy="24" r="2.5" fill="currentColor" />
-            <circle cx="140" cy="24" r="2.5" fill="currentColor" />
-            <polygon points="172,24 167,21 167,27" fill="currentColor" />
-          </>
-        )}
-      </svg>
     </div>
   );
 }

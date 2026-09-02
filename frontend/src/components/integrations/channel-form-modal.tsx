@@ -1,81 +1,12 @@
 'use client';
 
 import { AppLoader, CustomModal, SelectInput, TextInput } from '@/components/shared';
-import { getChannel } from '@/services/channelService';
+import { useChannel } from '@/lib/api/channels';
 import type { Channel, ChannelUpsertPayload } from '@/types/integration';
 import { handleApiError } from '@/utils/helpers';
 import { useEffect, useState } from 'react';
 import { useForm, useWatch } from 'react-hook-form';
-
-interface ChannelField {
-  name: string;
-  label: string;
-  type?: string;
-  placeholder?: string;
-  optional?: boolean;
-  helperText?: string;
-}
-
-const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
-  twilio: [
-    { name: 'account_sid', label: 'Account SID', placeholder: 'Enter account SID' },
-    { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
-  ],
-  telnyx: [
-    { name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' },
-    {
-      name: 'account_sid',
-      label: 'Account SID',
-      placeholder: 'Enter account SID',
-      optional: true,
-      helperText: 'Required to place outbound calls.',
-    },
-    {
-      name: 'application_sid',
-      label: 'TeXML Application SID',
-      placeholder: 'Enter TeXML application SID',
-      optional: true,
-      helperText: 'Required to place outbound calls.',
-    },
-  ],
-  plivo: [
-    { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
-    { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
-  ],
-  livekit: [
-    { name: 'url', label: 'Server URL', placeholder: 'wss://your-project.livekit.cloud' },
-    { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
-    { name: 'api_secret', label: 'API Secret', type: 'password', placeholder: 'Enter API secret' },
-    {
-      name: 'sip_uri',
-      label: 'SIP URI',
-      placeholder: 'sip:xxxxxxxx.sip.livekit.cloud',
-      optional: true,
-      helperText: 'From LiveKit → Telephony → SIP trunks. Required for SIP trunking.',
-    },
-  ],
-  daily: [{ name: 'api_key', label: 'API Key', type: 'password', placeholder: 'Enter API key' }],
-};
-
-const CHANNEL_TYPE_OPTIONS = [
-  { label: 'Twilio', value: 'twilio' },
-  { label: 'Telnyx', value: 'telnyx' },
-  { label: 'Plivo', value: 'plivo' },
-  { label: 'LiveKit', value: 'livekit' },
-  { label: 'Daily', value: 'daily' },
-];
-
-const ALL_FIELD_NAMES = [
-  'name',
-  'account_sid',
-  'application_sid',
-  'auth_token',
-  'auth_id',
-  'url',
-  'api_key',
-  'api_secret',
-  'sip_uri',
-];
+import { ALL_FIELD_NAMES, CHANNEL_FIELDS, CHANNEL_TYPE_OPTIONS } from './channelFields';
 
 type ChannelFormData = Record<string, string>;
 
@@ -105,28 +36,36 @@ export default function ChannelFormModal({
 
   const [channelType, setChannelType] = useState('twilio');
   const [saving, setSaving] = useState(false);
-  const [hydrating, setHydrating] = useState(false);
+
+  // Fetch the channel (with config) via the TanStack cache while the modal is
+  // open in edit mode — mirrors sip-trunk-form-modal's useSipTrunk hydration.
+  const {
+    data: fullChannel,
+    isLoading: hydrating,
+    error: channelError,
+  } = useChannel(open && editChannel ? editChannel.id : null, true);
 
   useEffect(() => {
     if (!open) return;
-    if (editChannel) {
-      setChannelType(editChannel.channel_type);
-      setHydrating(true);
-      getChannel(editChannel.id, true)
-        .then((full) => {
-          const config = (full.config ?? {}) as Record<string, string>;
-          reset({ ...emptyValues(), name: full.name, ...config });
-        })
-        .catch((err) => {
-          handleApiError(err);
-          reset({ ...emptyValues(), name: editChannel.name });
-        })
-        .finally(() => setHydrating(false));
-    } else {
+    if (!editChannel) {
       reset(emptyValues());
       setChannelType(providerKey ?? 'twilio');
+      return;
     }
-  }, [open, editChannel, providerKey, reset]);
+    setChannelType(editChannel.channel_type);
+    if (fullChannel) {
+      const config = (fullChannel.config ?? {}) as Record<string, string>;
+      reset({ ...emptyValues(), name: fullChannel.name, ...config });
+    }
+  }, [open, editChannel, providerKey, fullChannel, reset]);
+
+  // Preserve the previous catch: toast + fall back to the known name.
+  useEffect(() => {
+    if (open && editChannel && channelError) {
+      handleApiError(channelError);
+      reset({ ...emptyValues(), name: editChannel.name });
+    }
+  }, [open, editChannel, channelError, reset]);
 
   const fields = CHANNEL_FIELDS[channelType] ?? [];
   const values = useWatch({ control });
@@ -150,6 +89,9 @@ export default function ChannelFormModal({
       reset(emptyValues());
       onClose();
     } catch {
+      // Intentionally swallowed: `onSubmit` (the channel-grid upsert handler)
+      // already surfaces its own error toast. We only keep the modal open here
+      // by NOT closing/resetting, so the user can retry.
     } finally {
       setSaving(false);
     }

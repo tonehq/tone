@@ -8,11 +8,11 @@ import SipTrunkGrid from '@/components/integrations/sip-trunk-grid';
 import CustomCredentialModal from '@/components/integrations/custom-credential-modal';
 import OAuthConnectionGrid from '@/components/integrations/oauth-connection-grid';
 import { CustomButton } from '@/components/shared';
+import CountChip from '@/components/settings/CountChip';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { getOAuthCatalog } from '@/services/oauthService';
-import type { OAuthCatalogProvider } from '@/types/oauth';
-import { cn } from '@/utils/cn';
+import { oauthCatalogKeys, useOAuthCatalog } from '@/lib/api/oauthCatalog';
 import { handleApiError } from '@/utils/helpers';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtomValue, useSetAtom } from 'jotai';
 import { KeyRound, Network, Phone, Plug, Plus, RefreshCw, Settings, Sparkles } from 'lucide-react';
 import { useRouter } from 'next/navigation';
@@ -20,20 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const CATALOG_ANCHOR_ID = 'integrations-available-providers';
 const OAUTH_AND_API_HINT = 'Pick any provider below to add it to your workspace';
-
-function CountChip({ value, dim = false }: { value: number | null; dim?: boolean }) {
-  if (value === null) return null;
-  return (
-    <span
-      className={cn(
-        'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[10px] font-semibold tabular-nums',
-        dim ? 'bg-foreground/5 text-foreground/60' : 'bg-foreground/10 text-foreground/80',
-      )}
-    >
-      {value}
-    </span>
-  );
-}
 
 interface IntegrationsProps {
   refreshKey?: string | null;
@@ -52,21 +38,23 @@ export default function Integrations({ refreshKey }: IntegrationsProps) {
   const resetOAuth = useSetAtom(resetOAuthAtom);
   const resetChannels = useSetAtom(resetChannelsAtom);
 
-  const [catalog, setCatalog] = useState<OAuthCatalogProvider[]>([]);
   const [customCredentialOpen, setCustomCredentialOpen] = useState(false);
 
-  // Memoised so it can be passed to AvailableIntegrationsCatalog as the
-  // ``onCatalogChanged`` callback — fired after admin actions (delete) so the
-  // grid reflects the change without a page reload.
-  const refreshCatalog = useCallback(() => {
-    getOAuthCatalog()
-      .then(setCatalog)
-      .catch((err) => handleApiError(err));
-  }, []);
+  // Server catalog moved into the TanStack cache.
+  const queryClient = useQueryClient();
+  const { data: catalog = [], error: catalogError } = useOAuthCatalog();
 
+  // Preserve the previous toast-on-fetch-error behavior.
   useEffect(() => {
-    refreshCatalog();
-  }, [refreshCatalog]);
+    if (catalogError) handleApiError(catalogError);
+  }, [catalogError]);
+
+  // Passed to AvailableIntegrationsCatalog as the ``onCatalogChanged`` callback
+  // — fired after admin actions (delete) so the grid reflects the change
+  // without a page reload; invalidation triggers a refetch.
+  const refreshCatalog = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: oauthCatalogKeys.all() });
+  }, [queryClient]);
 
   // Provider slug → required scopes, used to drive the scope-status badges on connection cards.
   const requiredScopesByProvider = useMemo(

@@ -51,3 +51,33 @@ class AgentConfig(OrgScopedModel):
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
     archived_at = Column(DateTime(timezone=True), nullable=True)
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "agent_id": str(self.agent_id) if self.agent_id else None,
+            "version": self.version,
+            "canvas_label": self.canvas_label,
+            "mode": self.mode,
+            "workflow_id": str(self.workflow_id) if self.workflow_id else None,
+            "is_default": self.is_default,
+            "is_template": self.is_template,
+            "name": self.name,
+            "published_at": self.published_at.isoformat() if self.published_at else None,
+            "first_message": self.first_message,
+            "end_call_message": self.end_call_message,
+            "system_prompt_template": self.system_prompt_template,
+            "conversation_history_token_limit": self.conversation_history_token_limit,
+            "language_id": str(self.language_id) if self.language_id else None,
+            "knowledge_model_id": str(self.knowledge_model_id) if self.knowledge_model_id else None,
+            "llm_settings": self.llm_settings,
+            "voice_settings": self.voice_settings,
+            "stt_settings": self.stt_settings,
+            "conversation_settings": self.conversation_settings,
+            "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
