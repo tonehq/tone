@@ -15,9 +15,6 @@ class Tool(OrgScopedModel):
     name = Column(String(120), nullable=False)
     description = Column(Text, nullable=True)
     tool_type = Column(String(80), nullable=False)
-    action_params_schema = Column(JSONB, nullable=True)
-    trigger_phrases = Column(JSONB, nullable=True)
-    entity = Column(JSONB, nullable=True)
     parameters = Column(JSONB, nullable=True)
     url = Column(String(500), nullable=True)
     method = Column(String(10), nullable=True, default="POST")
@@ -37,9 +34,6 @@ class Tool(OrgScopedModel):
             "name": self.name,
             "description": self.description,
             "tool_type": self.tool_type,
-            "action_params_schema": self.action_params_schema,
-            "trigger_phrases": self.trigger_phrases,
-            "entity": self.entity,
             "parameters": self.parameters,
             "url": self.url,
             "method": self.method,

@@ -37,7 +37,6 @@ class UpsertMcpServerRequest(BaseModel):
     name: Optional[str] = None
     description: Optional[str] = None
     server_url: Optional[str] = None
-    endpoint: Optional[str] = None
     icon: Optional[str] = None
     transport_type: Optional[str] = None
     auth_type: Optional[str] = None

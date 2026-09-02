@@ -293,7 +293,6 @@ _TEMPLATE_JSON_FIELDS = (
     "system_prompt_template",
     "first_message",
     "end_call_message",
-    "conversation_history_token_limit",
     "llm_settings",
     "voice_settings",
     "stt_settings",

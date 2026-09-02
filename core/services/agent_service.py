@@ -1122,7 +1122,6 @@ class AgentService(BaseService):
         system_prompt_template: Optional[str] = None,
         first_message: Optional[str] = None,
         end_call_message: Optional[str] = None,
-        conversation_history_token_limit: Optional[int] = None,
         llm_settings: Optional[Dict[str, Any]] = None,
         voice_settings: Optional[Dict[str, Any]] = None,
         stt_settings: Optional[Dict[str, Any]] = None,
@@ -1160,7 +1159,6 @@ class AgentService(BaseService):
             system_prompt_template=system_prompt_template,
             first_message=first_message,
             end_call_message=end_call_message,
-            conversation_history_token_limit=conversation_history_token_limit,
             llm_settings=llm_settings,
             voice_settings=voice_settings,
             stt_settings=stt_settings,
@@ -1749,12 +1747,12 @@ class AgentService(BaseService):
     # ── Config field metadata (shared by in-place updates and version cloning) ──
     _CONFIG_FIELDS = (
         "first_message", "end_call_message", "system_prompt_template",
-        "conversation_history_token_limit", "language_id", "knowledge_model_id",
+        "language_id",
         "llm_settings", "voice_settings", "stt_settings", "conversation_settings",
         # Workflow assignment lives on the live config (per-agent toggle + assigned workflow).
         "mode", "workflow_id",
     )
-    _CONFIG_UUID_FIELDS = frozenset({"language_id", "knowledge_model_id", "workflow_id"})
+    _CONFIG_UUID_FIELDS = frozenset({"language_id", "workflow_id"})
 
     # Root agent fields that callers can patch via ``update_agent``.
     _AGENT_ROOT_FIELDS = ("name", "description", "agent_type", "is_active")
@@ -2774,8 +2772,7 @@ class AgentService(BaseService):
 
         # The model picker persists the selected LLM into config.llm_settings.model_id
         # (a models.id), so resolve a human-readable name for the detail/overview.
-        # Fall back to the denormalised agent.llm_model column for older agents.
-        llm_model_name = agent.llm_model
+        llm_model_name = None
         if config and isinstance(config.llm_settings, dict):
             model_id = config.llm_settings.get("model_id")
             if model_id:
@@ -2804,9 +2801,7 @@ class AgentService(BaseService):
                 "first_message": config.first_message,
                 "end_call_message": config.end_call_message,
                 "system_prompt_template": config.system_prompt_template,
-                "conversation_history_token_limit": config.conversation_history_token_limit,
                 "language_id": str(config.language_id) if config.language_id else None,
-                "knowledge_model_id": str(config.knowledge_model_id) if config.knowledge_model_id else None,
                 "llm_settings": config.llm_settings,
                 "voice_settings": config.voice_settings,
                 "stt_settings": config.stt_settings,

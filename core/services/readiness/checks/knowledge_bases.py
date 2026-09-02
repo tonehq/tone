@@ -79,13 +79,11 @@ class KnowledgeBaseEmbeddingModelConfiguredCheck(PerResourceCheck, ShallowCheck)
     embedding model was used.
 
     Reads from ``KB.active_run()`` (the ingestion run row that owns the KB's
-    stored vectors) — NOT from ``AgentConfig.knowledge_model_id``. The
-    retrieval path in ``document_tool_service.handle_read_document`` uses the
-    ingestion run's ``embedding_provider`` / ``embedding_model`` /
-    ``embedding_dimensions`` to build the embedder that encodes the user's
-    query; ``knowledge_model_id`` is not consulted at call time. Validating
-    the field retrieval actually uses is the only way this check reflects
-    real behavior.
+    stored vectors). The retrieval path in
+    ``document_tool_service.handle_read_document`` uses the ingestion run's
+    ``embedding_provider`` / ``embedding_model`` / ``embedding_dimensions`` to
+    build the embedder that encodes the user's query. Validating the field
+    retrieval actually uses is the only way this check reflects real behavior.
 
     Only relevant when the agent has KBs attached; a prompt-only agent
     doesn't need embeddings at all.
