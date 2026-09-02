@@ -61,7 +61,7 @@ const CallHistoryMetricsStrip: React.FC<CallHistoryMetricsStripProps> = ({
   return (
     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 rounded-lg border border-border bg-muted/30 px-4 py-3">
       <div className="flex items-center gap-2">
-        <Gauge className="size-4 text-violet-500" />
+        <Gauge className="size-4 text-teal-500" />
         <span className="text-sm font-medium text-foreground">End-to-end latency</span>
       </div>
 

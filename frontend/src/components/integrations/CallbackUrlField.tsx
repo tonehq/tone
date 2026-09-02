@@ -35,9 +35,9 @@ export default function CallbackUrlField({ slug }: CallbackUrlFieldProps) {
   };
 
   return (
-    <div className="rounded-md border border-violet-200/60 bg-violet-50/40 p-3 dark:border-violet-500/20 dark:bg-violet-500/[0.06]">
+    <div className="rounded-md border border-teal-200/60 bg-teal-50/40 p-3 dark:border-teal-500/20 dark:bg-teal-500/[0.06]">
       <div className="flex items-center gap-2">
-        <Link2 size={13} className="text-violet-500" />
+        <Link2 size={13} className="text-teal-500" />
         <p className="text-[12.5px] font-semibold text-foreground">Callback URL</p>
       </div>
       <p className="mt-0.5 text-[11.5px] text-muted-foreground">

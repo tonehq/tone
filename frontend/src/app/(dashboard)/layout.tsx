@@ -92,7 +92,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     return () => window.removeEventListener('storage', onStorage);
   }, [clearAuth, router]);
 
-  if (!ready) return <AppLoader />;
+  if (!ready) return <AppLoader label="Loading workspace" />;
 
   return (
     <NavigationProvider>

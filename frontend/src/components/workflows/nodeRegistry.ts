@@ -28,8 +28,8 @@ export interface NodeTypeMeta {
 // Concrete accents (Tailwind can't see dynamic class names, so spell them out).
 const ACCENTS: Record<WorkflowNodeType, NodeAccent> = {
   conversation: {
-    chip: 'bg-indigo-500/10 ring-1 ring-inset ring-indigo-500/20 text-indigo-600 dark:text-indigo-300',
-    bar: 'bg-indigo-500/70',
+    chip: 'bg-sky-500/10 ring-1 ring-inset ring-sky-500/20 text-sky-600 dark:text-sky-300',
+    bar: 'bg-sky-500/70',
     mini: '#6366f1',
   },
   decision: {
@@ -38,8 +38,8 @@ const ACCENTS: Record<WorkflowNodeType, NodeAccent> = {
     mini: '#f59e0b',
   },
   tool: {
-    chip: 'bg-violet-500/10 ring-1 ring-inset ring-violet-500/20 text-violet-600 dark:text-violet-300',
-    bar: 'bg-violet-500/70',
+    chip: 'bg-teal-500/10 ring-1 ring-inset ring-teal-500/20 text-teal-600 dark:text-teal-300',
+    bar: 'bg-teal-500/70',
     mini: '#8b5cf6',
   },
   endCall: {

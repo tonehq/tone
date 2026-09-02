@@ -18,7 +18,7 @@ export default function IntegrationCard({ integration, onEdit, onDelete }: Integ
 
   return (
     <article
-      className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-4 transition hover:border-violet-300 hover:shadow-sm"
+      className="group flex h-full cursor-pointer flex-col rounded-lg border border-border bg-background p-4 transition hover:border-teal-300"
       onClick={onEdit}
     >
       <div className="flex items-start justify-between gap-2">
@@ -28,7 +28,7 @@ export default function IntegrationCard({ integration, onEdit, onDelete }: Integ
               {integration.display_name}
             </h3>
             {integration.is_default && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-1.5 py-0.5 text-[10px] font-medium text-violet-700 dark:bg-violet-500/10 dark:text-violet-300">
+              <span className="inline-flex items-center gap-1 rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-medium text-teal-700 dark:bg-teal-500/10 dark:text-teal-300">
                 <ShieldCheck size={10} />
                 Default
               </span>

@@ -7,7 +7,7 @@ import { cn } from '@/utils/cn';
 
 export const DIRECTION_TONES: Record<AgentDirection, IconChipTone> = {
   inbound: 'emerald',
-  outbound: 'violet',
+  outbound: 'primary',
   both: 'sky',
 };
 
@@ -23,19 +23,18 @@ const DIRECTION_CONFIG: Record<
     label: 'Inbound',
     icon: PhoneIncoming,
     className:
-      'from-emerald-500/25 via-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:from-emerald-400/25 dark:via-emerald-400/10 dark:text-emerald-200 dark:ring-emerald-400/30',
+      'bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-300 dark:ring-emerald-400/30',
   },
   outbound: {
     label: 'Outbound',
     icon: PhoneOutgoing,
     className:
-      'from-violet-500/25 via-violet-500/10 text-violet-700 ring-violet-500/25 dark:from-violet-400/25 dark:via-violet-400/10 dark:text-violet-200 dark:ring-violet-400/30',
+      'bg-teal-500/10 text-teal-700 ring-teal-500/25 dark:text-teal-300 dark:ring-teal-400/30',
   },
   both: {
     label: 'Both',
     icon: Repeat2,
-    className:
-      'from-sky-500/25 via-sky-500/10 text-sky-700 ring-sky-500/25 dark:from-sky-400/25 dark:via-sky-400/10 dark:text-sky-200 dark:ring-sky-400/30',
+    className: 'bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-300 dark:ring-sky-400/30',
   },
 };
 
@@ -65,16 +64,12 @@ export function AgentTypeBadge({ agentType, size = 'md', className }: AgentTypeB
   return (
     <Badge
       className={cn(
-        'relative isolate border-transparent bg-gradient-to-br to-transparent font-medium ring-1 ring-inset',
+        'border-transparent font-medium ring-1 ring-inset',
         SIZES[size],
         config.className,
         className,
       )}
     >
-      <span
-        aria-hidden
-        className="pointer-events-none absolute inset-0 rounded-[inherit] bg-gradient-to-b from-white/60 to-transparent opacity-70 dark:from-white/10 dark:opacity-50"
-      />
       <Icon strokeWidth={2.25} />
       {config.label}
     </Badge>

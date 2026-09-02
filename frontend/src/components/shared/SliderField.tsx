@@ -50,12 +50,12 @@ const PlainSliderField = memo(
     return (
       <div className={className}>
         {label && (
-          <Label htmlFor={name} className={cn('mb-1.5', labelClassName)}>
+          <Label htmlFor={name} className={cn('mb-3', labelClassName)}>
             {label}
             {isRequired && <span className="ml-0.5 text-destructive">*</span>}
           </Label>
         )}
-        <div className="w-full px-1">
+        <div className="w-full px-1 py-1">
           <Slider
             value={[currentValue]}
             onValueChange={([v]) => onValueChange?.(v)}
@@ -66,7 +66,7 @@ const PlainSliderField = memo(
             aria-invalid={error || undefined}
           />
           {showLabels && (
-            <div className="mt-1 flex justify-between text-xs text-muted-foreground">
+            <div className="mt-3 flex justify-between text-xs tabular-nums text-muted-foreground">
               <span>{min}</span>
               <span>{currentValue}</span>
               <span>{max}</span>
@@ -74,7 +74,7 @@ const PlainSliderField = memo(
           )}
         </div>
         {helperText && (
-          <p className={cn('mt-1 text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
+          <p className={cn('mt-2.5 text-xs', error ? 'text-destructive' : 'text-muted-foreground')}>
             {helperText}
           </p>
         )}

@@ -58,8 +58,8 @@ const AgentWorkflowCard: React.FC<AgentWorkflowCardProps> = ({
     <Card
       className={cn(
         'group relative h-full cursor-pointer gap-0 overflow-hidden border-border/80 py-0',
-        'transition-all duration-200 hover:-translate-y-0.5 hover:border-foreground/20',
-        'hover:shadow-[0_10px_30px_-14px_rgba(99,102,241,0.35)]',
+        'transition-all duration-200 hover:border-foreground/20',
+        '',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2 focus-visible:ring-offset-background',
         assigned && 'border-primary/40 bg-primary/[0.035] ring-1 ring-primary/25',
       )}
@@ -83,7 +83,7 @@ const AgentWorkflowCard: React.FC<AgentWorkflowCardProps> = ({
         aria-hidden
       />
       <span
-        className="pointer-events-none absolute -right-12 -top-12 size-32 rounded-full bg-indigo-500 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-15"
+        className="pointer-events-none absolute -right-12 -top-12 size-32 rounded-full bg-sky-500 opacity-0 blur-2xl transition-opacity duration-300 group-hover:opacity-15"
         aria-hidden
       />
 

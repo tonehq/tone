@@ -6,7 +6,7 @@ export default function LlmEvalsSaveFirstEmptyState() {
   return (
     <SectionCard
       icon={<Gauge className="size-4" />}
-      iconClassName="bg-violet-500/10 text-violet-700 dark:text-violet-400 ring-violet-500/20"
+      iconClassName="bg-teal-500/10 text-teal-700 dark:text-teal-400 ring-teal-500/20"
       title="LLM Evals"
       description="Score this agent's LLM output against your scenarios."
     >

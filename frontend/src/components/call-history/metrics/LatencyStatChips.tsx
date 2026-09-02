@@ -25,7 +25,7 @@ interface StatMeta {
 
 // Display order = render order of the chip row.
 export const STAT_META: Record<StatKey, StatMeta> = {
-  avg: { label: 'Avg', color: 'violet', dot: 'bg-violet-500' },
+  avg: { label: 'Avg', color: 'violet', dot: 'bg-teal-500' },
   median: { label: 'Median', color: 'sky', dot: 'bg-sky-500' },
   min: { label: 'Min', color: 'emerald', dot: 'bg-emerald-500' },
   max: { label: 'Max', color: 'red', dot: 'bg-red-500' },

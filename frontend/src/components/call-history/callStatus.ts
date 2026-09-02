@@ -4,9 +4,9 @@
 // detail tab) but harmless — keeping one map avoids palette drift.
 
 export const CALL_STATUS_TONES: Record<string, string> = {
-  completed: 'bg-emerald-500/15 text-emerald-600 hover:bg-emerald-500/15 dark:text-emerald-400',
-  in_progress: 'bg-amber-500/15 text-amber-600 hover:bg-amber-500/15 dark:text-amber-400',
-  failed: 'bg-red-500/15 text-red-600 hover:bg-red-500/15 dark:text-red-400',
+  completed: 'bg-emerald-500/10 text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
+  in_progress: 'bg-amber-500/10 text-amber-700 hover:bg-amber-500/10 dark:text-amber-400',
+  failed: 'bg-destructive/10 text-destructive hover:bg-destructive/10',
 };
 
 export const CALL_STATUS_LABELS: Record<string, string> = {

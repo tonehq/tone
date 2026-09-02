@@ -369,8 +369,8 @@ export default function BuiltInToolForm({
               title="Agents"
               description="Attach this tool to agents' live (published) versions"
               icon={Bot}
-              iconColor="text-violet-600 dark:text-violet-400"
-              iconBg="bg-violet-50 dark:bg-violet-500/10"
+              iconColor="text-teal-600 dark:text-teal-400"
+              iconBg="bg-teal-50 dark:bg-teal-500/10"
               isOpen={openSections.agents}
               onToggle={() => toggleSection('agents')}
             >

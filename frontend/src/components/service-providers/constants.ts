@@ -17,7 +17,7 @@ export const PROVIDER_TYPE_TABS = [
 // ── Style maps ─────────────────────────────────────────────────────
 
 export const TYPE_BADGE_STYLES: Record<string, string> = {
-  llm: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400 hover:bg-violet-500/10',
+  llm: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400 hover:bg-teal-500/10',
   stt: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400 hover:bg-sky-500/10',
   tts: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400 hover:bg-amber-500/10',
   telephony:
@@ -25,7 +25,7 @@ export const TYPE_BADGE_STYLES: Record<string, string> = {
 };
 
 export const TYPE_ICON_STYLES: Record<string, string> = {
-  llm: 'bg-violet-500/10 text-violet-600 dark:bg-violet-500/20 dark:text-violet-400',
+  llm: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400',
   stt: 'bg-sky-500/10 text-sky-600 dark:bg-sky-500/20 dark:text-sky-400',
   tts: 'bg-amber-500/10 text-amber-600 dark:bg-amber-500/20 dark:text-amber-400',
   telephony: 'bg-teal-500/10 text-teal-600 dark:bg-teal-500/20 dark:text-teal-400',

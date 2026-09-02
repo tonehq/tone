@@ -3,12 +3,13 @@
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { MailCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
 
 import { signupSchema, type SignupFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Form, TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { Form, CustomButton } from '@/components/shared';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthResult, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useSignup } from '@/lib/api/auth';
 
 export default function SignupPage() {
@@ -37,77 +38,82 @@ export default function SignupPage() {
 
   if (signup.isSuccess) {
     return (
-      <div className="animate-page text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <MailCheck className="h-8 w-8 text-primary" />
-        </div>
-        <h2 className="text-2xl font-bold">Check your email</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We&apos;ve sent a verification link to <strong>{email}</strong>
-        </p>
-        <p className="mt-4 text-sm text-muted-foreground">
-          Click the link in the email to verify your account and start using Tone.
-        </p>
+      <AuthResult
+        tone="info"
+        title="Check your inbox."
+        description={
+          <>
+            We sent a verification link to <strong className="text-foreground">{email}</strong>.
+            Open it to activate your account and start building.
+          </>
+        }
+      >
         <Link href="/login">
-          <Button variant="outline" className="mt-6">
-            Back to Login
-          </Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Back to sign in
+          </CustomButton>
         </Link>
-      </div>
+      </AuthResult>
     );
   }
 
   return (
-    <div className="animate-page">
-      <div className="mb-8">
-        <h2 className="text-[28px] font-semibold tracking-tight">Create your account</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Start building AI voice agents in minutes
-        </p>
-      </div>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit}>
-        <div className="grid grid-cols-2 gap-3">
-          <TextInput
+    <>
+      <AuthHeading
+        title="Start building."
+        subtitle="Spin up your first voice agent in a few minutes."
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
+        <motion.div className="grid grid-cols-2 gap-5" variants={fadeUp}>
+          <AuthField
             name="first_name"
             control={control}
-            label="First Name"
-            placeholder="Jane"
-            isRequired
+            label="First name"
+            autoComplete="given-name"
           />
-          <TextInput
+          <AuthField
             name="last_name"
             control={control}
-            label="Last Name"
-            placeholder="Doe"
-            isRequired
+            label="Last name"
+            autoComplete="family-name"
           />
-        </div>
-        <TextInput
-          name="email"
-          control={control}
-          type="email"
-          label="Email"
-          placeholder="you@company.com"
-          isRequired
-        />
-        <TextInput
-          name="password"
-          control={control}
-          type="password"
-          label="Password"
-          placeholder="Min. 8 characters"
-          isRequired
-        />
-        <Button type="submit" className="w-full" loading={signup.isPending}>
-          Create Account
-        </Button>
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="email"
+            control={control}
+            type="email"
+            label="Work email"
+            autoComplete="email"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="password"
+            control={control}
+            type="password"
+            label="Password"
+            autoComplete="new-password"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={signup.isPending}>Create account</AuthSubmit>
+        </motion.div>
       </Form>
-      <p className="mt-6 text-center text-sm text-muted-foreground">
+
+      <motion.p className="mt-8 text-center text-[13px] text-muted-foreground" variants={fadeUp}>
         Already have an account?{' '}
-        <Link href="/login" className="font-medium text-primary hover:underline">
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+        >
           Sign in
         </Link>
-      </p>
-    </div>
+      </motion.p>
+    </>
   );
 }

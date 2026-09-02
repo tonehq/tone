@@ -185,7 +185,7 @@ export default function ServiceProvidersPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
               Model Providers
             </h1>
             {fl.total > 0 && (

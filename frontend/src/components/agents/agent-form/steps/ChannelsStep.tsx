@@ -231,7 +231,7 @@ export default function ChannelsStep() {
                   key={`${row.channel_id}|${row.number}`}
                   className={cn(
                     'group relative flex items-center gap-3 overflow-hidden rounded-xl border border-border/70 bg-card px-3 py-2.5 transition-all',
-                    'hover:border-primary/40 hover:shadow-sm',
+                    'hover:border-primary/40',
                   )}
                 >
                   <IconChip icon={<Phone strokeWidth={1.75} />} tone="primary" size="md" />
