@@ -24,9 +24,7 @@ class AgentConfigRequest(BaseModel):
     first_message: Optional[str] = None
     end_call_message: Optional[str] = None
     system_prompt_template: Optional[str] = None
-    conversation_history_token_limit: Optional[int] = None
     language_id: Optional[str] = None
-    knowledge_model_id: Optional[str] = None
     llm_settings: Optional[Dict[str, Any]] = None
     voice_settings: Optional[Dict[str, Any]] = None
     stt_settings: Optional[Dict[str, Any]] = None

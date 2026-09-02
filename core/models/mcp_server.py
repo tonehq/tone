@@ -15,7 +15,6 @@ class McpServer(OrgScopedModel):
     name = Column(String(120), nullable=False)
     description = Column(String(200), nullable=True)
     server_url = Column(String(500), nullable=False)
-    endpoint = Column(String(500), nullable=True)
     icon = Column(String(255), nullable=True)
     transport_type = Column(String(50), nullable=False, default="streamable_http")
     auth_type = Column(String(50), nullable=True, default="none")
@@ -32,7 +31,6 @@ class McpServer(OrgScopedModel):
             "name": self.name,
             "description": self.description,
             "server_url": self.server_url,
-            "endpoint": self.endpoint,
             "icon": self.icon,
             "transport_type": self.transport_type,
             "auth_type": self.auth_type,

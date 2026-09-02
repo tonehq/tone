@@ -45,9 +45,7 @@ export interface AgentConfig {
   /** When `mode === 'workflow'`, the assigned (published) workflow. */
   workflow_id?: string | null;
   system_prompt_template?: string | null;
-  conversation_history_token_limit?: number | null;
   language_id?: string | null;
-  knowledge_model_id?: string | null;
   llm_settings?: AgentLlmSettings | null;
   voice_settings?: AgentVoiceSettings | null;
   stt_settings?: AgentSttSettings | null;
@@ -289,9 +287,7 @@ export interface AgentFormState {
     mode: 'prompt' | 'workflow';
     workflow_id: string | null;
     system_prompt_template: string;
-    conversation_history_token_limit: number | null;
     language_id: string | null;
-    knowledge_model_id: string | null;
     llm_settings: AgentLlmSettings;
     voice_settings: AgentVoiceSettings;
     stt_settings: AgentSttSettings;

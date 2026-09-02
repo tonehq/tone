@@ -21,9 +21,7 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
     mode: 'prompt',
     workflow_id: null,
     system_prompt_template: '',
-    conversation_history_token_limit: null,
     language_id: null,
-    knowledge_model_id: null,
     llm_settings: {},
     voice_settings: {
       provider_id: null,
@@ -74,10 +72,7 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
       mode: cfg.mode === 'workflow' ? 'workflow' : 'prompt',
       workflow_id: cfg.workflow_id ?? null,
       system_prompt_template: cfg.system_prompt_template ?? base.config.system_prompt_template,
-      conversation_history_token_limit:
-        cfg.conversation_history_token_limit ?? base.config.conversation_history_token_limit,
       language_id: cfg.language_id ?? null,
-      knowledge_model_id: cfg.knowledge_model_id ?? null,
       llm_settings: cfg.llm_settings ?? {},
       voice_settings: cfg.voice_settings ?? base.config.voice_settings,
       stt_settings: cfg.stt_settings ?? {},
