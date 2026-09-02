@@ -18,8 +18,6 @@ class Model(TimestampModel):
     name = Column(String(120), nullable=False)
     display_name = Column(String(100), nullable=True)
     description = Column(String(500), nullable=True)
-    sample_id = Column(String(500), nullable=True)
-    sample_list = Column(Boolean, nullable=False, default=False)
     is_active = Column(Boolean, nullable=False, default=True)
     meta_data = Column(JSONB, nullable=True)
     meta_data_schema = Column(JSONB, nullable=True)
@@ -38,8 +36,6 @@ class Model(TimestampModel):
             "name": self.name,
             "display_name": self.display_name,
             "description": self.description,
-            "sample_id": self.sample_id,
-            "sample_list": self.sample_list,
             "is_active": self.is_active,
             "meta_data": self.meta_data,
             "meta_data_schema": self.meta_data_schema,

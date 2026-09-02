@@ -29,7 +29,6 @@ class KnowledgeBase(OrgScopedModel):
     meta_data = Column(JSONB, nullable=False, default=dict)
     is_active = Column(Boolean, nullable=False, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     runs = relationship(
         "IngestionPipelineRun",

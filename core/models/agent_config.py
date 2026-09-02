@@ -50,7 +50,6 @@ class AgentConfig(OrgScopedModel):
     conversation_settings = Column(JSONB, nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
         return {
@@ -77,7 +76,6 @@ class AgentConfig(OrgScopedModel):
             "conversation_settings": self.conversation_settings,
             "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
-            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

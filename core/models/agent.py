@@ -25,7 +25,6 @@ class Agent(OrgScopedModel):
     # and applied to this agent's call subprocess. Most specific override wins.
     log_level = Column(String(20), nullable=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
         return {
@@ -40,7 +39,6 @@ class Agent(OrgScopedModel):
             "is_active": self.is_active,
             "log_level": self.log_level,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
-            "archived_at": self.archived_at.isoformat() if self.archived_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

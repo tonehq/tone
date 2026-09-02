@@ -20,7 +20,6 @@ class Upload(OrgScopedModel):
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
         return {
