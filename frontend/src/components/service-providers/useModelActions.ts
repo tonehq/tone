@@ -11,7 +11,7 @@ import {
   upsertProviderModelAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
-import { getModelProvider } from '@/services/servicesService';
+import { getModelProvider, listProviderCatalog } from '@/services/servicesService';
 import type { ModelUpsertPayload } from '@/services/servicesService';
 import type {
   ModelProvider,
@@ -56,6 +56,13 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
   const [editingModel, setEditingModel] = useState<ProviderModel | null>(null);
   const [modelProviderId, setModelProviderId] = useState<string | null>(null);
   const [savingModel, setSavingModel] = useState(false);
+
+  // Model creator (flat page — provider chosen in the drawer)
+  const [addModelOpen, setAddModelOpen] = useState(false);
+  const [providerOptions, setProviderOptions] = useState<{ id: string; display_name: string }[]>(
+    [],
+  );
+  const [savingNewModel, setSavingNewModel] = useState(false);
 
   // Provider editor
   const [providerEditOpen, setProviderEditOpen] = useState(false);
@@ -102,6 +109,34 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
       }
     },
     [modelProviderId, upsertProviderModel, refresh],
+  );
+
+  const openAddModel = useCallback(async () => {
+    setAddModelOpen(true);
+    try {
+      const providers = await listProviderCatalog();
+      setProviderOptions(providers.map((p) => ({ id: p.id, display_name: p.display_name })));
+    } catch (err) {
+      handleApiError(err);
+    }
+  }, []);
+
+  const submitNewModel = useCallback(
+    async (payload: ModelUpsertPayload, _id?: string, providerId?: string) => {
+      if (!providerId) return;
+      setSavingNewModel(true);
+      try {
+        await upsertProviderModel({ providerId, values: payload });
+        showToast.success('Model created');
+        setAddModelOpen(false);
+        refresh();
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setSavingNewModel(false);
+      }
+    },
+    [upsertProviderModel, refresh],
   );
 
   const deleteModel = useCallback(
@@ -251,6 +286,13 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
     savingModel,
     closeModelEdit: useCallback(() => setModelEditOpen(false), []),
     submitModel,
+    // model creator
+    addModelOpen,
+    providerOptions,
+    savingNewModel,
+    openAddModel,
+    closeAddModel: useCallback(() => setAddModelOpen(false), []),
+    submitNewModel,
     // provider editor
     providerEditOpen,
     editingProvider,

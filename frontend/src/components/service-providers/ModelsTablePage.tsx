@@ -88,13 +88,22 @@ export default function ModelsTablePage() {
             Every model across your providers, with the API key configured for each.
           </p>
         </div>
-        <CustomButton
-          type="primary"
-          icon={<Plus className="size-4" />}
-          onClick={() => setCreateOpen(true)}
-        >
-          Add Provider
-        </CustomButton>
+        <div className="flex items-center gap-2">
+          <CustomButton
+            type="default"
+            icon={<Plus className="size-4" />}
+            onClick={actions.openAddModel}
+          >
+            Add Model
+          </CustomButton>
+          <CustomButton
+            type="primary"
+            icon={<Plus className="size-4" />}
+            onClick={() => setCreateOpen(true)}
+          >
+            Add Provider
+          </CustomButton>
+        </div>
       </div>
 
       <FacetFilterBar

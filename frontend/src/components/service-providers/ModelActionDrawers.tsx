@@ -18,6 +18,15 @@ interface ModelActionDrawersProps {
 const ModelActionDrawers = ({ actions }: ModelActionDrawersProps) => (
   <>
     <ModelFormDrawer
+      open={actions.addModelOpen}
+      editing={null}
+      providers={actions.providerOptions}
+      onClose={actions.closeAddModel}
+      onSubmit={actions.submitNewModel}
+      isPending={actions.savingNewModel}
+    />
+
+    <ModelFormDrawer
       open={actions.modelEditOpen}
       editing={actions.editingModel}
       onClose={actions.closeModelEdit}
