@@ -101,6 +101,38 @@ export interface ModelProviderUpsertPayload {
   meta_data_schema?: Record<string, unknown> | null;
 }
 
+/**
+ * API-key status for a flattened model row. Presence only — the raw secret is
+ * never sent to the client. `present` drives the masked-dots vs `-` column;
+ * the metadata feeds the row-detail drawer.
+ */
+export interface ModelApiKeyStatus {
+  present: boolean;
+  label: string | null;
+  is_default: boolean;
+  is_active: boolean;
+}
+
+/**
+ * One catalog Model flattened for the Model Providers table view — a provider
+ * with N models yields N rows. `api_key` is null when the org has no key for
+ * this model's (provider, kind).
+ */
+export interface ModelRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  kind: ServiceKind;
+  description: string | null;
+  base_url: string | null;
+  is_active: boolean;
+  meta_data: Record<string, unknown> | null;
+  provider: ServiceProviderRef;
+  api_key: ModelApiKeyStatus | null;
+  created_at: number;
+  updated_at: number;
+}
+
 /** Read-only model from the global catalog (detail page Models panel). */
 export interface ProviderModel {
   id: string;

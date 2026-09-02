@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **phoenix** (19047 symbols, 47763 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **newport-beach** (19074 symbols, 47877 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -17,7 +17,7 @@ This project is indexed by GitNexus as **phoenix** (19047 symbols, 47763 relatio
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/phoenix/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/newport-beach/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -56,10 +56,10 @@ This project is indexed by GitNexus as **phoenix** (19047 symbols, 47763 relatio
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/phoenix/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/phoenix/clusters` | All functional areas |
-| `gitnexus://repo/phoenix/processes` | All execution flows |
-| `gitnexus://repo/phoenix/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/newport-beach/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/newport-beach/clusters` | All functional areas |
+| `gitnexus://repo/newport-beach/processes` | All execution flows |
+| `gitnexus://repo/newport-beach/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

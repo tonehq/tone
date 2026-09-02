@@ -157,6 +157,39 @@ def list_providers_catalog(
     return _service(claims, db).list_providers_catalog(service_type=service_type)
 
 
+# ─── flat models list (all providers) ───────────────────────────────────────
+# One row per catalog Model, joined to the org's API-key presence. Reads only,
+# so any org member may list/filter.
+
+
+@router.post("/models/list")
+def list_models(
+    body: dict = Body(default={}),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).list_models(body)
+
+
+@router.post("/models/facets")
+def get_model_facets(
+    body: FacetsRequest,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    filters = [f.model_dump() for f in body.filters] if body.filters else None
+    return _service(claims, db).get_model_facets(filters)
+
+
+@router.get("/models/filter-values")
+def get_model_filter_values(
+    column_name: str = Query(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).get_model_filter_values(column_name)
+
+
 # ─── provider CRUD (admin) ─────────────────────────────────────────────────
 # `model_providers` is a global catalog shared across every tenant. Writes are
 # admin-gated so one org member can't rename or remove a definition that other

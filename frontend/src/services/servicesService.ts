@@ -2,12 +2,14 @@ import { pagedListRequest } from '@/services/listHelpers';
 import type {
   ModelProvider,
   ModelProviderUpsertPayload,
+  ModelRow,
   ProviderCatalogItem,
   ProviderModel,
   ProviderUsage,
   Service,
   ServiceUpsertPayload,
 } from '@/types/service';
+import type { ListFilterParam } from '@/types/facetedList';
 import axios from '@/utils/axios';
 
 // ─── aggregated usage list (cards) ─────────────────────────────────────────
@@ -33,6 +35,27 @@ export async function listServices(params: ListServicesParams = {}): Promise<Lis
     if (v !== undefined && v !== null && v !== '') body[k] = v;
   }
   return pagedListRequest<ProviderUsage>('/services/list', body);
+}
+
+// ─── flat models list (all providers) ──────────────────────────────────────
+export interface ListAllModelsParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  filters?: ListFilterParam[];
+}
+
+/** One row per model across every provider, with the org's API-key presence. */
+export async function listAllModels(
+  params: ListAllModelsParams = {},
+): Promise<{ rows: ModelRow[]; total: number; page: number; page_size: number }> {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  }
+  return pagedListRequest<ModelRow>('/services/models/list', body);
 }
 
 // ─── CRUD on individual ApiKey rows ────────────────────────────────────────

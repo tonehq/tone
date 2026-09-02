@@ -15,9 +15,10 @@ from core.models.model_language import ModelLanguage
 from core.models.model_provider import ModelProvider
 from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
+from core.services.common.list_query import apply_search_sort_pagination
 from core.services.crud import list_records
 from core.utils.encryption import encrypt
-from core.utils.faceted_query import apply_filters
+from core.utils.faceted_query import apply_filters, build_facets, distinct_values
 
 
 ALLOWED_SERVICE_TYPES = {"llm", "stt", "tts"}
@@ -977,6 +978,172 @@ class ModelProviderService(BaseService):
             q = q.filter(Model.kind == service_type)
         values = sorted([r[0] for r in q.distinct().all() if r[0]])
         return {"column": column_name, "values": values}
+
+    # ─── flat models list (all providers) ──────────────────────────────────
+    # One row per Model across the whole catalog (a provider with N models →
+    # N rows), joined to the org's API-key presence for (provider, kind).
+    # Powers the Model Providers page's table view.
+
+    MODEL_LIST_FACET_FIELDS = ["provider", "kind"]
+
+    def _models_base_query(self):
+        """Model joined to its provider. The join is always present so the
+        ``provider`` filter/facet (on ``ModelProvider.display_name``) can't
+        create an accidental cartesian product."""
+        return self.db.query(Model).join(
+            ModelProvider, ModelProvider.id == Model.provider_id
+        )
+
+    def _models_column_map(self) -> dict:
+        """Public filter/facet/sort field → column. Only scalar columns, per
+        the ``faceted_query`` contract (no JSONB)."""
+        return {
+            "name": Model.name,
+            "provider": ModelProvider.display_name,
+            "kind": Model.kind,
+        }
+
+    def _keys_summary_by_provider_kind_map(
+        self, provider_ids: Iterable[UUID]
+    ) -> dict[tuple[str, str], dict]:
+        """{(provider_id_str, service_type): {present, label, is_default,
+        is_active}} for the org's API keys. Single batched query (no N+1).
+
+        The plaintext key is NEVER read here — only presence + metadata, so the
+        table can show masked dots vs ``-`` and the drawer can show the key's
+        status. When several keys match a (provider, kind), the default wins,
+        then an active one, so the row reflects the credential agents use."""
+        ids = list(provider_ids)
+        if not ids:
+            return {}
+        rows = (
+            self.db.query(
+                ApiKey.provider_id,
+                ApiKey.service_type,
+                ApiKey.label,
+                ApiKey.is_default,
+                ApiKey.is_active,
+            )
+            .filter(
+                ApiKey.organization_id == self.org_id,
+                ApiKey.provider_id.in_(ids),
+                ApiKey.service_type.isnot(None),
+            )
+            .all()
+        )
+        out: dict[tuple[str, str], dict] = {}
+        for r in rows:
+            key = (str(r.provider_id), r.service_type)
+            existing = out.get(key)
+            candidate = {
+                "present": True,
+                "label": r.label,
+                "is_default": bool(r.is_default),
+                "is_active": bool(r.is_active),
+            }
+            if existing is None:
+                out[key] = candidate
+                continue
+            # Prefer default over non-default, then active over inactive.
+            if (candidate["is_default"] and not existing["is_default"]) or (
+                not existing["is_default"]
+                and candidate["is_active"]
+                and not existing["is_active"]
+            ):
+                out[key] = candidate
+        return out
+
+    def list_models(self, body: dict) -> dict:
+        """Flat, paginated list of every catalog Model with the org's API-key
+        presence joined. Same ``{items, total, page, page_size}`` envelope as
+        the other list endpoints so the faceted frontend works unchanged."""
+        page = max(int(body.get("page") or 1), 1)
+        page_size = min(max(int(body.get("page_size") or 50), 1), 200)
+        search = body.get("search")
+        sort_by = body.get("sort_by")
+        sort_order = (body.get("sort_order") or "asc").lower()
+
+        column_map = self._models_column_map()
+        q = self._models_base_query()
+
+        filters = body.get("filters")
+        if filters:
+            q = apply_filters(q, filters, column_map)
+
+        rows, total = apply_search_sort_pagination(
+            q,
+            search=search,
+            search_fields=[Model.name, Model.display_name],
+            sort_by=sort_by,
+            sort_order=sort_order,
+            sort_map={
+                "name": Model.name,
+                "display_name": Model.display_name,
+                "kind": Model.kind,
+                "created_at": Model.created_at,
+                "updated_at": Model.updated_at,
+            },
+            page_no=page,
+            page_size=page_size,
+        )
+
+        provider_ids = [m.provider_id for m in rows]
+        keys_map = self._keys_summary_by_provider_kind_map(provider_ids)
+
+        # Batch-load provider refs so we don't lazy-load m.provider per row.
+        provider_map: dict[str, dict] = {}
+        if provider_ids:
+            prows = (
+                self.db.query(
+                    ModelProvider.id,
+                    ModelProvider.slug,
+                    ModelProvider.display_name,
+                    ModelProvider.description,
+                )
+                .filter(ModelProvider.id.in_(provider_ids))
+                .all()
+            )
+            provider_map = {
+                str(p.id): {
+                    "id": str(p.id),
+                    "slug": p.slug,
+                    "display_name": p.display_name,
+                    "description": p.description,
+                }
+                for p in prows
+            }
+
+        items = []
+        for m in rows:
+            pid = str(m.provider_id)
+            row = _model_to_dict(m)
+            row["provider"] = provider_map.get(pid)
+            row["api_key"] = keys_map.get((pid, m.kind))
+            items.append(row)
+
+        return {
+            "items": items,
+            "total": int(total),
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def get_model_facets(self, filters: list | None = None) -> dict:
+        """Per-value facet counts (provider + kind) for the table's filter
+        drawer. Each facet excludes its own selection (Vercel semantics)."""
+        return build_facets(
+            self._models_base_query,
+            self._models_column_map(),
+            self.MODEL_LIST_FACET_FIELDS,
+            filters,
+        )
+
+    def get_model_filter_values(self, column_name: str) -> dict:
+        """Distinct values of a filterable column for token-search
+        autocomplete. Raises 400 for a column not in the map."""
+        return distinct_values(
+            self._models_base_query(), self._models_column_map(), column_name
+        )
 
     # ─── model CRUD ────────────────────────────────────────────────────────
 
