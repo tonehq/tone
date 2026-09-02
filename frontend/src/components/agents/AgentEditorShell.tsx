@@ -27,6 +27,7 @@ import CreateVersionModal, {
 } from '@/components/agents/CreateVersionModal';
 import PublishVersionConfirmModal from '@/components/agents/PublishVersionConfirmModal';
 import ReadinessBadge from '@/components/agents/readiness/ReadinessBadge';
+import ReadinessBlockedDialog from '@/components/agents/readiness/ReadinessBlockedDialog';
 import ReadinessConfirmDialog from '@/components/agents/readiness/ReadinessConfirmDialog';
 import ReadinessDrawer from '@/components/agents/readiness/ReadinessDrawer';
 import SaveAsTemplateModal from '@/components/agents/SaveAsTemplateModal';
@@ -222,6 +223,9 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
    * retries with `force_warnings=true` when the user opts in. */
   const [pendingWarningsReport, setPendingWarningsReport] = useState<ReadinessReport | null>(null);
   const [pendingWarningsConfigId, setPendingWarningsConfigId] = useState<string | null>(null);
+  /** Publish refused by BLOCKERs — the gate's deep report is shown so the user
+   * sees the exact reasons (blockers can't be forced, so there's no retry). */
+  const [pendingBlockedReport, setPendingBlockedReport] = useState<ReadinessReport | null>(null);
 
   const methods = useForm<AgentFormState>({
     defaultValues: defaultFormState(agentType),
@@ -756,11 +760,18 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
           setPendingWarningsConfigId(configId);
         } else if (gate?.reason === 'readiness_blocked') {
           bumpReadiness(); // refresh badge so the user sees the fresh blockers
-          showToast.error(
-            'Cannot publish',
-            gate.message ??
-              'This version has blockers. Open the readiness drawer to see what to fix.',
-          );
+          if (gate.report) {
+            // Surface the exact blocking checks (message + how to fix) from the
+            // gate's deep report, rather than a bare "N blocker(s)" toast.
+            setPendingBlockedReport(gate.report);
+          } else {
+            // Defensive: no structured report — fall back to the summary message.
+            showToast.error(
+              'Cannot publish',
+              gate.message ??
+                'This version has blockers. Open the readiness drawer to see what to fix.',
+            );
+          }
         } else {
           // Leave the modal open on generic errors — the user can retry
           // without losing the version-selector context.
@@ -781,6 +792,10 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
   const handleDismissWarningsDialog = useCallback(() => {
     setPendingWarningsReport(null);
     setPendingWarningsConfigId(null);
+  }, []);
+
+  const handleDismissBlockedDialog = useCallback(() => {
+    setPendingBlockedReport(null);
   }, []);
 
   const handleDeleteVersion = useCallback(
@@ -1183,6 +1198,12 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
               report={pendingWarningsReport}
               onConfirm={handleConfirmPublishWithWarnings}
               loading={publishing}
+            />
+
+            <ReadinessBlockedDialog
+              open={pendingBlockedReport !== null}
+              onClose={handleDismissBlockedDialog}
+              report={pendingBlockedReport}
             />
           </div>
         </AgentEditorProvider>
