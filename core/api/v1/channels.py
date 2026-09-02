@@ -6,8 +6,7 @@ from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_admin_or_owner, require_org_member
-from core.models.agent import Agent
-from core.models.phone_number import PhoneNumber
+from core.schemas.channel import ChannelListRequest, ChannelUpsertRequest
 from core.services.channel_service import ChannelService
 from core.utils.auth_helpers import require_org_id
 
@@ -20,10 +19,11 @@ def _svc(claims: JWTClaims, db: Session) -> ChannelService:
 
 @router.post("/upsert", status_code=status.HTTP_200_OK)
 def upsert_channel(
-    data: Dict[str, Any] = Body(...),
+    body: ChannelUpsertRequest = Body(...),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
+    data = body.model_dump(exclude_unset=True)
     if not data.get("name"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -34,13 +34,15 @@ def upsert_channel(
 
 @router.post("/list")
 def list_channels(
-    body: Dict[str, Any] = Body(default={}),
+    body: ChannelListRequest = Body(default_factory=ChannelListRequest),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return _svc(claims, db).list_channels(
-        channel_type=body.get("channel_type") or body.get("type"),
+    data = body.model_dump(exclude_unset=True)
+    items = _svc(claims, db).list_channels(
+        channel_type=data.get("channel_type") or data.get("type"),
     )
+    return {"items": items, "total": len(items), "page": 1, "page_size": len(items)}
 
 
 @router.get("/all")
@@ -90,33 +92,13 @@ def delete_channel(
 
 
 def list_phone_numbers_for_channel(db: Session, org_id: UUID, channel_id: str) -> List[Dict[str, Any]]:
-    """Shared listing pipeline for /channel/phone_numbers (core + EE)."""
-    try:
-        ch_uuid = UUID(channel_id)
-    except ValueError:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid channel_id")
-    rows = (
-        db.query(PhoneNumber, Agent.name.label("agent_name"))
-        .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
-        .filter(
-            PhoneNumber.channel_id == ch_uuid,
-            PhoneNumber.organization_id == org_id,
-        )
-        .all()
-    )
-    return [
-        {
-            "id": str(pn.id),
-            "number": pn.number,
-            "label": pn.label,
-            "channel_id": str(pn.channel_id),
-            "assigned_to": {
-                "agent_id": str(pn.agent_id),
-                "agent_name": agent_name,
-            } if pn.agent_id else None,
-        }
-        for pn, agent_name in rows
-    ]
+    """Shared listing pipeline for /channel/phone_numbers (core + EE).
+
+    Thin wrapper kept for import compatibility (``sip_trunks.py`` imports this).
+    The query + serialization now live in ``ChannelService`` — the single source
+    of truth — this just binds the org and delegates.
+    """
+    return ChannelService(db, org_id=org_id).list_phone_numbers_for_channel(channel_id)
 
 
 @router.get("/phone_numbers")

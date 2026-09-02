@@ -18,20 +18,19 @@ import {
   type SearchableSelectOption,
 } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
-import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import {
-  listTtsLanguages,
-  listTtsProviders,
-  listTtsVoices,
-  type TtsLanguage,
-  type TtsProvider,
-  type TtsVoice,
-} from '@/services/ttsService';
+  useSttModels,
+  useSttProviderCatalog,
+  useTtsLanguages,
+  useTtsModels,
+  useTtsProviders,
+  useTtsVoices,
+} from '@/lib/api/voiceCatalog';
+import type { TtsVoice } from '@/services/ttsService';
 import type { AgentFormState } from '@/types/agent';
 import type { MetaDataSchemaField } from '@/types/provider';
 import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
 
 /** Keys in voice_settings / stt_settings that are structural (not schema fields). */
 const TTS_STRUCTURAL_KEYS = new Set([
@@ -64,177 +63,71 @@ export default function VoiceStep() {
     name: 'config.voice_settings.model_id' as never,
   }) as string | null | undefined;
 
-  const [languages, setLanguages] = useState<TtsLanguage[]>([]);
-  const [providers, setProviders] = useState<TtsProvider[]>([]);
-  const [voices, setVoices] = useState<TtsVoice[]>([]);
-  const [sttProviders, setSttProviders] = useState<ProviderCatalogItem[]>([]);
-  const [sttModels, setSttModels] = useState<ProviderModel[]>([]);
-  const [ttsModels, setTtsModels] = useState<ProviderModel[]>([]);
-  const [loadingLangs, setLoadingLangs] = useState(false);
-  const [loadingProviders, setLoadingProviders] = useState(false);
-  const [loadingVoices, setLoadingVoices] = useState(false);
-  const [loadingStt, setLoadingStt] = useState(false);
-  const [loadingSttModels, setLoadingSttModels] = useState(false);
-  const [loadingTtsModels, setLoadingTtsModels] = useState(false);
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // ─── stt provider catalog ────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingStt(true);
-    listProviderCatalog('stt')
-      .then((items) => {
-        if (cancelled) return;
-        setSttProviders(items.filter((p) => p.kinds.includes('stt')));
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingStt(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ─── language load ────────────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingLangs(true);
-    listTtsLanguages()
-      .then((rows) => {
-        if (cancelled) return;
-        setLanguages(rows);
-
-        // Backward compat: if saved language is a raw code (e.g. "en")
-        // from an older agent, resolve it to the display name (e.g. "English").
-        // Use reset so both _formValues AND _defaultValues update together —
-        // setValue(.., shouldDirty:false) alone desyncs them and any later RHF
-        // dirty recompute flips isDirty true even with no user edits.
-        const saved = voiceSettings?.language;
-        if (saved && !rows.some((l) => l.name === saved)) {
-          const match = rows.find((l) => l.codes?.includes(saved));
-          if (match) {
-            const current = getValues();
-            reset(
-              {
-                ...current,
-                config: {
-                  ...current.config,
-                  voice_settings: { ...current.config.voice_settings, language: match.name },
-                },
-              },
-              { keepDirty: true, keepDirtyValues: true },
-            );
-          }
-        }
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingLangs(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ─── provider load (depends on language) ──────────────────────────────────
   const language = voiceSettings?.language ?? '';
-  useEffect(() => {
-    if (!language) {
-      setProviders([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingProviders(true);
-    listTtsProviders(language)
-      .then((rows) => {
-        if (!cancelled) setProviders(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingProviders(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [language]);
-
-  // ─── voices load (depends on provider + language + model) ──────────────────
   const providerId = voiceSettings?.provider_id ?? '';
-  useEffect(() => {
-    if (!providerId || !language) {
-      setVoices([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingVoices(true);
-    listTtsVoices(providerId, language, ttsModelId)
-      .then((rows) => {
-        if (!cancelled) setVoices(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingVoices(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [providerId, language, ttsModelId]);
 
-  // ─── TTS models (depends on provider) ─────────────────────────────────────
-  useEffect(() => {
-    if (!providerId) {
-      setTtsModels([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingTtsModels(true);
-    listProviderModels(providerId, { service_type: 'tts', page: 1, page_size: 100 })
-      .then((res) => {
-        if (!cancelled) setTtsModels(res.rows.filter((m) => m.is_active));
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingTtsModels(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [providerId]);
+  // ─── catalog queries (read-only provider/voice/model lookups) ─────────────
+  // Dependent queries stay disabled until their input exists, so an empty
+  // language/provider yields an empty list with no loading state — identical to
+  // the previous "early-return + setState([])" guards.
+  const sttProvidersQuery = useSttProviderCatalog();
+  const languagesQuery = useTtsLanguages();
+  const providersQuery = useTtsProviders(language);
+  const voicesQuery = useTtsVoices(providerId, language, ttsModelId);
+  const ttsModelsQuery = useTtsModels(providerId);
+  const sttModelsQuery = useSttModels(sttProviderId ?? '');
 
-  // ─── STT models (depends on STT provider) ─────────────────────────────────
+  const sttProviders = useMemo(() => sttProvidersQuery.data ?? [], [sttProvidersQuery.data]);
+  const languages = useMemo(() => languagesQuery.data ?? [], [languagesQuery.data]);
+  const providers = useMemo(() => providersQuery.data ?? [], [providersQuery.data]);
+  const voices = useMemo(() => voicesQuery.data ?? [], [voicesQuery.data]);
+  const ttsModels = useMemo(() => ttsModelsQuery.data ?? [], [ttsModelsQuery.data]);
+  const sttModels = useMemo(() => sttModelsQuery.data ?? [], [sttModelsQuery.data]);
+
+  const loadingStt = sttProvidersQuery.isLoading;
+  const loadingLangs = languagesQuery.isLoading;
+  const loadingProviders = providersQuery.isLoading;
+  const loadingVoices = voicesQuery.isLoading;
+  const loadingTtsModels = ttsModelsQuery.isLoading;
+  const loadingSttModels = sttModelsQuery.isLoading;
+
+  // Preserve the old `.catch(handleApiError)` toast on any catalog failure.
+  useQueryErrorToast(sttProvidersQuery.error);
+  useQueryErrorToast(languagesQuery.error);
+  useQueryErrorToast(providersQuery.error);
+  useQueryErrorToast(voicesQuery.error);
+  useQueryErrorToast(ttsModelsQuery.error);
+  useQueryErrorToast(sttModelsQuery.error);
+
+  // Backward compat: if the saved language is a raw code (e.g. "en") from an
+  // older agent, resolve it to the display name (e.g. "English") once the
+  // language catalog resolves. Use reset so both _formValues AND _defaultValues
+  // update together — setValue(.., shouldDirty:false) alone desyncs them and
+  // any later RHF dirty recompute flips isDirty true even with no user edits.
   useEffect(() => {
-    if (!sttProviderId) {
-      setSttModels([]);
-      return;
+    const rows = languagesQuery.data;
+    if (!rows) return;
+    const saved = voiceSettings?.language;
+    if (saved && !rows.some((l) => l.name === saved)) {
+      const match = rows.find((l) => l.codes?.includes(saved));
+      if (match) {
+        const current = getValues();
+        reset(
+          {
+            ...current,
+            config: {
+              ...current.config,
+              voice_settings: { ...current.config.voice_settings, language: match.name },
+            },
+          },
+          { keepDirty: true, keepDirtyValues: true },
+        );
+      }
     }
-    let cancelled = false;
-    setLoadingSttModels(true);
-    listProviderModels(sttProviderId, { service_type: 'stt', page: 1, page_size: 100 })
-      .then((res) => {
-        if (!cancelled) setSttModels(res.rows.filter((m) => m.is_active));
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingSttModels(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [sttProviderId]);
+  }, [languagesQuery.data]);
 
   // ─── audio sample playback ────────────────────────────────────────────────
   const stopPlayback = useCallback(() => {
@@ -307,6 +200,37 @@ export default function VoiceStep() {
       } as never,
       { shouldDirty: true },
     );
+  };
+  const setTtsModel = (v: string) => {
+    setValue('config.voice_settings.model_id' as never, (v || null) as never, {
+      shouldDirty: true,
+    });
+    setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
+  };
+  const setSttProvider = (v: string) => {
+    // Full reset on provider change (schema fields + model + model_id). Names
+    // rarely overlap across providers and a stale model_id makes the backend
+    // resolve the wrong model row (and its base_url) on calls.
+    const current = getValues('config.stt_settings' as never) as
+      | Record<string, unknown>
+      | undefined;
+    const kept = resetSchemaFields(current, STT_STRUCTURAL_KEYS);
+    setValue(
+      'config.stt_settings' as never,
+      { ...kept, provider_id: v || null, model: null, model_id: null } as never,
+      { shouldDirty: true },
+    );
+  };
+  const setSttModel = (v: string) => {
+    setValue('config.stt_settings.model' as never, (v || null) as never, {
+      shouldDirty: true,
+    });
+    // Keep model_id in lockstep with the selected model name so a stale id from
+    // a previous provider can never be saved.
+    const matched = sttModels.find((m) => m.name === v);
+    setValue('config.stt_settings.model_id' as never, (matched?.id ?? null) as never, {
+      shouldDirty: true,
+    });
   };
 
   const languageOptions = useMemo(
@@ -482,12 +406,7 @@ export default function VoiceStep() {
               label: m.display_name || m.name,
             }))}
             value={ttsModelId ?? ''}
-            onValueChange={(v) => {
-              setValue('config.voice_settings.model_id' as never, (v || null) as never, {
-                shouldDirty: true,
-              });
-              setValue('config.voice_settings.voice_id', null, { shouldDirty: true });
-            }}
+            onValueChange={setTtsModel}
             loading={loadingTtsModels}
             placeholder="Select a model"
             helperText="Optional — the provider's default model is used when blank."
@@ -575,21 +494,7 @@ export default function VoiceStep() {
             options={sttProviders.map((p) => ({ value: p.id, label: p.display_name }))}
             loading={loadingStt}
             value={sttProviderId ?? ''}
-            onValueChange={(v) => {
-              // Full reset on provider change (schema fields + model +
-              // model_id). Names rarely overlap across providers and a
-              // stale model_id makes the backend resolve the wrong model
-              // row (and its base_url) on calls.
-              const current = getValues('config.stt_settings' as never) as
-                | Record<string, unknown>
-                | undefined;
-              const kept = resetSchemaFields(current, STT_STRUCTURAL_KEYS);
-              setValue(
-                'config.stt_settings' as never,
-                { ...kept, provider_id: v || null, model: null, model_id: null } as never,
-                { shouldDirty: true },
-              );
-            }}
+            onValueChange={setSttProvider}
             placeholder="Select a provider"
           />
           <SelectInput
@@ -601,17 +506,7 @@ export default function VoiceStep() {
             }))}
             loading={loadingSttModels}
             value={sttModel ?? ''}
-            onValueChange={(v) => {
-              setValue('config.stt_settings.model' as never, (v || null) as never, {
-                shouldDirty: true,
-              });
-              // Keep model_id in lockstep with the selected model name so a
-              // stale id from a previous provider can never be saved.
-              const matched = sttModels.find((m) => m.name === v);
-              setValue('config.stt_settings.model_id' as never, (matched?.id ?? null) as never, {
-                shouldDirty: true,
-              });
-            }}
+            onValueChange={setSttModel}
             disabled={!sttProviderId}
             placeholder={sttProviderId ? 'Select a model' : 'Pick a provider first'}
           />

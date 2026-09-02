@@ -1,11 +1,10 @@
 'use client';
 
-import { Search } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
+import { SearchBar } from '@/components/shared';
 import CheckboxField from '@/components/shared/CheckboxField';
 import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
 import { getAllAgents } from '@/services/agentsService';
 import type { AgentDropdownItem } from '@/types/agent';
 import { handleApiError } from '@/utils/helpers';
@@ -112,15 +111,13 @@ export default function AgentAttachmentPicker({
         )}
       </div>
       {agents.length > 6 && (
-        <div className="flex items-center gap-2 rounded-md border border-border/70 bg-background px-2">
-          <Search className="size-3.5 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search agents..."
-            className="h-8 border-0 px-0 shadow-none focus-visible:ring-0"
-          />
-        </div>
+        <SearchBar
+          value={search}
+          onChange={setSearch}
+          placeholder="Search agents..."
+          clearable={false}
+          containerClassName="max-w-none"
+        />
       )}
       <div className="max-h-56 overflow-y-auto rounded-md border border-border/70 p-1.5">
         {filtered.length === 0 ? (

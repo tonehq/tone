@@ -3,7 +3,6 @@
 import { useAtom } from 'jotai';
 import {
   AlertTriangle,
-  BookOpen,
   Calendar,
   ExternalLink,
   FileText,
@@ -14,14 +13,15 @@ import {
   RotateCcw,
   Trash2,
   User,
-  X,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
+import DetailRow from '@/components/knowledge-base/DetailRow';
 import DocumentUpload from '@/components/knowledge-base/DocumentUpload';
 import EditDocument from '@/components/knowledge-base/EditDocument';
+import KnowledgeBaseEmptyState from '@/components/knowledge-base/KnowledgeBaseEmptyState';
 import {
   CustomButton,
   CustomModal,
@@ -29,8 +29,15 @@ import {
   FacetFilterBar,
   FacetFilterDrawer,
   IconChip,
+  SelectionBar,
   useFacetedList,
 } from '@/components/shared';
+import { statusConfig, statusDot } from '@/components/knowledge-base/knowledgeBaseConstants';
+import {
+  formatFileSize,
+  getTypeBadge,
+  truncateFileName,
+} from '@/components/knowledge-base/knowledgeBaseHelpers';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import { knowledgeBaseListConfig } from '@/components/knowledge-base/knowledgeBaseListConfig';
 import { Badge } from '@/components/ui/badge';
@@ -48,91 +55,10 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-const contentTypeBadgeColors: Record<string, { label: string; color: string }> = {
-  'application/pdf': {
-    label: 'PDF',
-    color: 'bg-red-100 text-red-700 dark:bg-red-950/40 dark:text-red-400',
-  },
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document': {
-    label: 'DOCX',
-    color: 'bg-blue-100 text-blue-700 dark:bg-blue-950/40 dark:text-blue-400',
-  },
-  'text/plain': {
-    label: 'TXT',
-    color: 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400',
-  },
-  'text/csv': {
-    label: 'CSV',
-    color: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400',
-  },
-  'text/html': {
-    label: 'HTML',
-    color: 'bg-orange-100 text-orange-700 dark:bg-orange-950/40 dark:text-orange-400',
-  },
-  'application/json': {
-    label: 'JSON',
-    color: 'bg-amber-100 text-amber-700 dark:bg-amber-950/40 dark:text-amber-400',
-  },
-};
-
-function getTypeBadge(contentType?: string | null) {
-  if (!contentType) return { label: 'FILE', color: 'bg-muted text-muted-foreground' };
-  const config = contentTypeBadgeColors[contentType];
-  if (config) return config;
-  const ext = contentType.split('/').pop()?.toUpperCase() ?? 'FILE';
-  return { label: ext, color: 'bg-muted text-muted-foreground' };
-}
-
 /** Extract the human-readable failure reason stored on a failed upload. */
 function getErrorMessage(doc: Pick<KnowledgeBaseDocument, 'meta_data'>): string | null {
   return formatIngestionError(doc.meta_data?.error);
 }
-
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
-// Visual-only truncation for long file names. Keeps the extension visible and
-// shows an ellipsis in the middle: e.g. "Voice AI Testing Platfo…uation.pdf".
-// The underlying value is never mutated — pair with title={fullName} for hover.
-function truncateFileName(name: string, max = 48): string {
-  if (!name || name.length <= max) return name;
-  const dotIdx = name.lastIndexOf('.');
-  const hasExt = dotIdx > -1 && dotIdx >= name.length - 6 && dotIdx < name.length - 1;
-  const ext = hasExt ? name.slice(dotIdx) : '';
-  const base = hasExt ? name.slice(0, dotIdx) : name;
-  const room = Math.max(max - ext.length - 1, 8); // 1 = ellipsis char
-  const head = Math.ceil(room * 0.65);
-  const tail = Math.max(room - head, 4);
-  return `${base.slice(0, head)}…${base.slice(-tail)}${ext}`;
-}
-
-type StatusKey = KnowledgeBaseDocument['status'];
-
-const statusDot: Record<StatusKey, string> = {
-  ready: 'bg-emerald-500',
-  processing: 'bg-amber-500 animate-pulse',
-  failed: 'bg-destructive',
-};
-
-const statusConfig: Record<StatusKey, { label: string; className: string }> = {
-  ready: {
-    label: 'Active',
-    className:
-      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
-  },
-  processing: {
-    label: 'Processing',
-    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
-  },
-  failed: {
-    label: 'Failed',
-    className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
-  },
-};
 
 export default function KnowledgeBasePage() {
   const [agentData] = useAtom(agentsAtom);
@@ -478,6 +404,14 @@ export default function KnowledgeBasePage() {
   const detailError =
     selectedDoc && selectedDoc.status === 'failed' ? getErrorMessage(selectedDoc) : null;
 
+  const handleDetailDelete = () => {
+    if (selectedDoc) setDeleteTarget(selectedDoc);
+  };
+
+  const handleDetailEdit = () => {
+    if (selectedDoc) setEditTarget(selectedDoc);
+  };
+
   return (
     <div className="animate-page flex h-full min-h-0 flex-col gap-5">
       {/* ─── header (lightweight) ─────────────────────────────────────── */}
@@ -536,7 +470,10 @@ export default function KnowledgeBasePage() {
             onChange: fl.handlePaginationChange,
           }}
           emptyState={
-            <EmptyState onAdd={() => setUploadModalOpen(true)} hasFilter={fl.hasActiveFilters} />
+            <KnowledgeBaseEmptyState
+              onAdd={() => setUploadModalOpen(true)}
+              hasFilter={fl.hasActiveFilters}
+            />
           }
         />
       </div>
@@ -558,6 +495,8 @@ export default function KnowledgeBasePage() {
         count={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         onDelete={() => setBulkDeleteOpen(true)}
+        singular="document"
+        plural="documents"
       />
 
       {/* ─── modals ───────────────────────────────────────────────────── */}
@@ -586,9 +525,7 @@ export default function KnowledgeBasePage() {
             <CustomButton
               type="danger"
               icon={<Trash2 className="size-4" />}
-              onClick={() => {
-                if (selectedDoc) setDeleteTarget(selectedDoc);
-              }}
+              onClick={handleDetailDelete}
             >
               Delete
             </CustomButton>
@@ -596,9 +533,7 @@ export default function KnowledgeBasePage() {
               <CustomButton
                 type="default"
                 icon={<Pencil className="size-4" />}
-                onClick={() => {
-                  if (selectedDoc) setEditTarget(selectedDoc);
-                }}
+                onClick={handleDetailEdit}
               >
                 Edit
               </CustomButton>
@@ -747,92 +682,6 @@ export default function KnowledgeBasePage() {
         confirmLoading={bulkDeleting}
         onConfirm={handleBulkDelete}
       />
-    </div>
-  );
-}
-
-// ─── tiny presentational helpers ────────────────────────────────────────────
-function DetailRow({
-  icon,
-  label,
-  value,
-  last,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-  last?: boolean;
-}) {
-  return (
-    <div className={cn('flex items-center gap-3 px-4 py-3', !last && 'border-b border-border/60')}>
-      <span className="text-muted-foreground">{icon}</span>
-      <span className="text-[13px] text-muted-foreground">{label}</span>
-      <span className="ml-auto truncate text-[13px] font-medium text-foreground">{value}</span>
-    </div>
-  );
-}
-
-function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-4 py-10">
-      <IconChip icon={<BookOpen strokeWidth={1.75} />} tone="muted" size="xl" />
-      <div className="max-w-sm text-center">
-        <p className="font-semibold text-foreground">
-          {hasFilter ? 'No matching documents' : 'No documents yet'}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {hasFilter
-            ? 'Try clearing the search or status filter.'
-            : 'Upload your first document to build your knowledge base.'}
-        </p>
-      </div>
-      {!hasFilter && (
-        <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={onAdd}>
-          Add Sources
-        </CustomButton>
-      )}
-    </div>
-  );
-}
-
-function SelectionBar({
-  count,
-  onClear,
-  onDelete,
-}: {
-  count: number;
-  onClear: () => void;
-  onDelete: () => void;
-}) {
-  const open = count > 0;
-  return (
-    <div
-      className={cn(
-        'pointer-events-none fixed bottom-6 left-1/2 z-40 -translate-x-1/2 transition-all duration-300',
-        open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
-      )}
-      aria-hidden={!open}
-    >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <span className="ml-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-primary/15 px-2 text-xs font-semibold text-primary">
-          {count}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          {count === 1 ? 'document selected' : 'documents selected'}
-        </span>
-        <div className="mx-1 h-5 w-px bg-border" />
-        <CustomButton type="text" size="sm" icon={<X className="size-3.5" />} onClick={onClear}>
-          Clear
-        </CustomButton>
-        <CustomButton
-          type="danger"
-          size="sm"
-          icon={<Trash2 className="size-3.5" />}
-          onClick={onDelete}
-        >
-          Delete
-        </CustomButton>
-      </div>
     </div>
   );
 }

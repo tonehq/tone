@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Trash2, Wrench, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -11,27 +11,20 @@ import {
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
-  IconChip,
   OAuthConnectionStatus,
+  SelectionBar,
   useFacetedList,
 } from '@/components/shared';
+import ToolsListEmptyState from '@/components/tools/ToolsListEmptyState';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import { TOOL_TYPE_HEADER } from '@/constants/toolForm';
+import { METHOD_COLORS, TOOL_TYPE_HEADER } from '@/constants/toolForm';
 import { toolsApi, useDeleteTool } from '@/lib/api/tools';
 import { toolsListConfig } from '@/components/tools/toolsListConfig';
 import type { CustomTableColumn } from '@/types/components';
 import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
 import { showToast } from '@/utils/toast';
-
-const METHOD_COLORS: Record<string, string> = {
-  GET: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400',
-  POST: 'bg-blue-100 text-blue-700 dark:bg-blue-500/15 dark:text-blue-400',
-  PUT: 'bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400',
-  DELETE: 'bg-red-100 text-red-700 dark:bg-red-500/15 dark:text-red-400',
-  PATCH: 'bg-violet-100 text-violet-700 dark:bg-violet-500/15 dark:text-violet-400',
-};
 
 export default function ToolsListPage() {
   const router = useRouter();
@@ -356,7 +349,7 @@ export default function ToolsListPage() {
             onChange: fl.handlePaginationChange,
           }}
           emptyState={
-            <EmptyState onAdd={() => router.push('/tools/create')} hasFilter={hasFilter} />
+            <ToolsListEmptyState onAdd={() => router.push('/tools/create')} hasFilter={hasFilter} />
           }
         />
       </div>
@@ -378,6 +371,8 @@ export default function ToolsListPage() {
         count={selectedIds.size}
         onClear={() => setSelectedIds(new Set())}
         onDelete={() => setBulkDeleteOpen(true)}
+        singular="tool"
+        plural="tools"
       />
 
       {/* Bulk delete modal */}
@@ -395,71 +390,6 @@ export default function ToolsListPage() {
         confirmLoading={bulkDeleting}
         onConfirm={handleBulkDelete}
       />
-    </div>
-  );
-}
-
-function EmptyState({ onAdd, hasFilter }: { onAdd: () => void; hasFilter: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-4 py-10">
-      <IconChip icon={<Wrench strokeWidth={1.75} />} tone="muted" size="xl" />
-      <div className="max-w-sm text-center">
-        <p className="font-semibold text-foreground">
-          {hasFilter ? 'No tools match your filters' : 'No tools yet'}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {hasFilter
-            ? 'Try clearing the search or filters.'
-            : 'Create your first tool to give your agents the ability to call external APIs.'}
-        </p>
-      </div>
-      {!hasFilter && (
-        <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={onAdd}>
-          Create New Tool
-        </CustomButton>
-      )}
-    </div>
-  );
-}
-
-function SelectionBar({
-  count,
-  onClear,
-  onDelete,
-}: {
-  count: number;
-  onClear: () => void;
-  onDelete: () => void;
-}) {
-  const open = count > 0;
-  return (
-    <div
-      className={cn(
-        'pointer-events-none fixed bottom-6 left-1/2 z-40 -translate-x-1/2 transition-all duration-300',
-        open ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0',
-      )}
-      aria-hidden={!open}
-    >
-      <div className="pointer-events-auto flex items-center gap-3 rounded-2xl border border-border bg-card/95 px-3 py-2 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-card/80">
-        <span className="ml-2 inline-flex h-6 min-w-[1.5rem] items-center justify-center rounded-full bg-primary/15 px-2 text-xs font-semibold text-primary">
-          {count}
-        </span>
-        <span className="text-sm text-muted-foreground">
-          {count === 1 ? 'tool selected' : 'tools selected'}
-        </span>
-        <div className="mx-1 h-5 w-px bg-border" />
-        <CustomButton type="text" size="sm" icon={<X className="size-3.5" />} onClick={onClear}>
-          Clear
-        </CustomButton>
-        <CustomButton
-          type="danger"
-          size="sm"
-          icon={<Trash2 className="size-3.5" />}
-          onClick={onDelete}
-        >
-          Delete
-        </CustomButton>
-      </div>
     </div>
   );
 }

@@ -27,6 +27,7 @@ import ScopeStatus from './ScopeStatus';
 import SearchBar from './SearchBar';
 import SearchableSelect from './SearchableSelect';
 import SelectInput from './SelectInput';
+import SelectionBar from './SelectionBar';
 import SliderField from './SliderField';
 import Stepper from './Stepper';
 import TextAreaField from './TextAreaField';
@@ -73,6 +74,7 @@ export type { IconChipProps, IconChipSize, IconChipTone } from './IconChip';
 export { ICON_CHIP_TONES } from './IconChip';
 export type { CustomCardProps } from './CustomCard';
 export type { SearchableSelectOption } from './SearchableSelect';
+export type { SelectionBarProps } from './SelectionBar';
 export type { StepperStep } from './Stepper';
 export type { TabItem } from './CustomTab';
 export type { ActionMenuProps } from './ActionMenu';
@@ -118,6 +120,7 @@ export {
   SearchBar,
   SearchableSelect,
   SelectInput,
+  SelectionBar,
   SliderField,
   Stepper,
   TextAreaField,

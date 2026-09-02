@@ -8,19 +8,34 @@ Each connection lives in ``oauth_connections``:
   - ``created_by_user_id`` (UUID) — who initiated the OAuth handshake
 """
 
+import json
 import time
+import urllib.parse
 from typing import Any, Dict, List, Optional, Tuple, Union
 from uuid import UUID
 
 import httpx
 from fastapi import HTTPException, status
 from loguru import logger
+from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from core.models.oauth_connection import OAuthConnection
 from core.services.base import BaseService
-from core.services.oauth_providers import get_provider_config, get_provider_scopes
+from core.services.oauth_providers import (
+    _row_by_slug,
+    get_provider_config,
+    get_provider_scopes,
+)
+from core.services.oauth_userinfo import fetch_user_email
 from core.utils.auth_helpers import coerce_uuid
-from core.utils.encryption import decrypt_json, encrypt_json
+from core.utils.encryption import decrypt, decrypt_json, encrypt, encrypt_json
+from core.utils.pkce import pkce_pair
+
+# PKCE state lives in the encrypted ``state`` parameter for this long before the
+# callback rejects it. Real-world OAuth handshakes complete in seconds; ten
+# minutes is generous slack for slow consent screens or multi-factor prompts.
+_PKCE_STATE_TTL_SECONDS = 600
 
 
 def normalize_scopes(scopes: Any) -> List[str]:
@@ -47,6 +62,197 @@ def normalize_scopes(scopes: Any) -> List[str]:
             seen.add(p)
             result.append(p)
     return result
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Catalog-flow PKCE state helpers. The actual verifier/challenge crypto lives
+# in ``core.utils.pkce`` (shared with the MCP discovery flow). These state
+# encode/decode/resolve helpers were moved verbatim out of the OAuth router so
+# the flow lives in the service layer; the routers now delegate to
+# ``OAuthService.build_authorize_url`` / ``OAuthService.exchange_code_and_persist``.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def encode_pkce_state(
+    verifier: str,
+    org_id: UUID,
+    user_id: UUID,
+    provider_slug: str,
+) -> str:
+    """Encrypt the PKCE handshake context into an opaque OAuth ``state`` string.
+
+    Carrying verifier + identity in the encrypted state lets the callback finish
+    the handshake without an in-flight ``OAuthConnection`` row, which used to
+    leak pending rows whenever a user abandoned the consent screen. Fernet's
+    output is URL-safe base64, so it slots straight into a redirect URL.
+
+    The payload also includes the originating ``provider_slug`` and an issued-at
+    timestamp so the callback can reject state replayed for a different provider
+    or after :data:`_PKCE_STATE_TTL_SECONDS`.
+    """
+    payload = json.dumps({
+        "v": verifier,
+        "o": str(org_id),
+        "u": str(user_id),
+        "p": provider_slug,
+        "t": int(time.time()),
+    })
+    return encrypt(payload)
+
+
+def decode_pkce_state(state: str, provider: str) -> Optional[Dict[str, Any]]:
+    """Inverse of :func:`encode_pkce_state`. Returns ``None`` for any state
+    that is not a current, valid PKCE token for this provider.
+
+    Callers should fall through to :func:`resolve_pkce_state` (legacy pending
+    rows still in flight from before the stateless flow shipped) and finally to
+    the ``org_id:user_id:provider`` legacy non-PKCE shape on a ``None`` here.
+    """
+    try:
+        decoded = decrypt(state)
+        payload = json.loads(decoded)
+    except Exception:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    if payload.get("p") != provider:
+        return None
+    if not payload.get("v"):
+        return None
+    issued = payload.get("t") or 0
+    try:
+        if int(time.time()) - int(issued) > _PKCE_STATE_TTL_SECONDS:
+            return None
+    except (TypeError, ValueError):
+        return None
+    return payload
+
+
+def apply_resource_indicator(config: Dict[str, Any], token_data: Dict[str, Any]) -> None:
+    resource = (config.get("extra_authorize_params") or {}).get("resource")
+    if resource:
+        token_data["resource"] = resource
+
+
+def resolve_pkce_state(
+    db: Session, state: str, provider: str
+) -> Tuple[Optional[OAuthConnection], Optional[str]]:
+    """Resolve a UUID-shaped ``state`` to its pending row + verifier.
+
+    Returns ``(pending_row, verifier)`` if found, ``(None, None)`` otherwise.
+    Used only as a fallback for any pending rows that were inserted by the old
+    PKCE flow before this code shipped — new handshakes use the stateless
+    :func:`encode_pkce_state` path and never write a pending row.
+    """
+    try:
+        state_uuid = UUID(state)
+    except (ValueError, TypeError):
+        return None, None
+    pending = (
+        db.query(OAuthConnection)
+        .filter(
+            OAuthConnection.id == state_uuid,
+            OAuthConnection.provider_slug == provider,
+        )
+        .first()
+    )
+    if not pending:
+        return None, None
+    creds = decrypt_json(pending.encrypted_credentials) or {}
+    return pending, creds.get("code_verifier")
+
+
+# ─────────────────────────────────────────────────────────────────────
+# Custom-credential builders (strategy registry keyed on ``auth_kind``).
+# Each builder validates its inputs and returns ``(encrypted, metadata,
+# auth_type)``; the shared ``create_custom_credential`` persists the resulting
+# ``OAuthConnection``. ``service`` is passed so the client-credentials builder
+# can mint a verification token via ``_request_client_credentials_token``.
+# Adding a new credential kind = a new builder + one registry entry; the
+# dispatch never changes. An unknown ``auth_kind`` raises the same 400 as before.
+# ─────────────────────────────────────────────────────────────────────
+
+
+def _build_bearer_credential(
+    service: "OAuthService", data: Dict[str, Any], name: str
+) -> Tuple[Any, Dict[str, Any], str]:
+    token = (data.get("token") or "").strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token is required for a bearer credential",
+        )
+    encrypted = encrypt_json({"access_token": token})
+    metadata: Dict[str, Any] = {
+        "credential_type": "custom",
+        "auth_kind": "bearer",
+        "status": "active",
+    }
+    return encrypted, metadata, "bearer"
+
+
+def _build_api_key_credential(
+    service: "OAuthService", data: Dict[str, Any], name: str
+) -> Tuple[Any, Dict[str, Any], str]:
+    # A raw API key applied to a caller-named header (default ``X-API-Key``).
+    # Unlike bearer/oauth these never resolve to an ``Authorization: Bearer``
+    # token — see ``resolve_connection_auth_header``.
+    api_key = (data.get("api_key") or data.get("token") or "").strip()
+    if not api_key:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="api_key is required for an API key credential",
+        )
+    header_name = (data.get("header_name") or "X-API-Key").strip() or "X-API-Key"
+    encrypted = encrypt_json({"api_key": api_key})
+    metadata: Dict[str, Any] = {
+        "credential_type": "custom",
+        "auth_kind": "api_key",
+        "header_name": header_name,
+        "status": "active",
+    }
+    return encrypted, metadata, "api_key"
+
+
+def _build_oauth2_client_credentials_credential(
+    service: "OAuthService", data: Dict[str, Any], name: str
+) -> Tuple[Any, Dict[str, Any], str]:
+    token_url = (data.get("token_url") or "").strip()
+    client_id = (data.get("client_id") or "").strip()
+    client_secret = (data.get("client_secret") or "").strip()
+    if not (token_url and client_id and client_secret):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="token_url, client_id and client_secret are required for OAuth 2.0",
+        )
+    scopes = normalize_scopes(data.get("scopes") or data.get("scope"))
+    # Verify the credential up front by minting a real token, so a credential that can't
+    # authenticate (e.g. a provider that doesn't support client-credentials) is rejected
+    # here with a clear error instead of silently showing "Connected" then failing at use.
+    token_result = service._request_client_credentials_token(
+        token_url, client_id, client_secret, scopes, label=name
+    )
+    encrypted = encrypt_json(
+        {"client_secret": client_secret, "access_token": token_result["access_token"]}
+    )
+    metadata: Dict[str, Any] = {
+        "credential_type": "custom",
+        "auth_kind": "oauth2_client_credentials",
+        "grant_type": "client_credentials",
+        "token_url": token_url,
+        "client_id": client_id,
+        "scopes": scopes,
+        "token_expiry": int(time.time()) + int(token_result.get("expires_in", 3600)),
+        "status": "active",
+    }
+    return encrypted, metadata, "oauth"
+
+
+_CUSTOM_CREDENTIAL_BUILDERS = {
+    "bearer": _build_bearer_credential,
+    "api_key": _build_api_key_credential,
+    "oauth2_client_credentials": _build_oauth2_client_credentials_credential,
+}
 
 
 class OAuthService(BaseService):
@@ -157,6 +363,27 @@ class OAuthService(BaseService):
             q = q.filter(OAuthConnection.app_integration_id == aid)
         items = q.order_by(OAuthConnection.updated_at.desc()).all()
         return [c.to_dict() for c in items]
+
+    def list_connections_envelope(
+        self,
+        provider_slug: Optional[str] = None,
+        user_id: Optional[Union[str, UUID]] = None,
+        app_integration_id: Optional[Union[str, UUID]] = None,
+    ) -> Dict[str, Any]:
+        """Wrap :meth:`list_connections` in the standard pagination envelope.
+
+        The endpoint returns every connection in the org (no real pagination),
+        so ``total`` == ``page_size`` == the number of items and ``page`` is 1.
+        Centralised here so both the Core and EE ``POST /oauth/list`` routes
+        emit an identical ``{items, total, page, page_size}`` shape.
+        """
+        items = self.list_connections(
+            provider_slug=provider_slug,
+            user_id=user_id,
+            app_integration_id=app_integration_id,
+        )
+        total = len(items)
+        return {"items": items, "total": total, "page": 1, "page_size": total}
 
     def get_connection_by_provider(self, provider: str) -> Optional[OAuthConnection]:
         return (
@@ -349,75 +576,13 @@ class OAuthService(BaseService):
         slug_suffix = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_") or "credential"
         provider_slug = f"custom:{slug_suffix}"
 
-        if auth_kind == "bearer":
-            token = (data.get("token") or "").strip()
-            if not token:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="token is required for a bearer credential",
-                )
-            encrypted = encrypt_json({"access_token": token})
-            metadata: Dict[str, Any] = {
-                "credential_type": "custom",
-                "auth_kind": "bearer",
-                "status": "active",
-            }
-            auth_type = "bearer"
-        elif auth_kind == "api_key":
-            # A raw API key applied to a caller-named header (default
-            # ``X-API-Key``). Unlike bearer/oauth these never resolve to an
-            # ``Authorization: Bearer`` token — see
-            # ``resolve_connection_auth_header``.
-            api_key = (data.get("api_key") or data.get("token") or "").strip()
-            if not api_key:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="api_key is required for an API key credential",
-                )
-            header_name = (data.get("header_name") or "X-API-Key").strip() or "X-API-Key"
-            encrypted = encrypt_json({"api_key": api_key})
-            metadata = {
-                "credential_type": "custom",
-                "auth_kind": "api_key",
-                "header_name": header_name,
-                "status": "active",
-            }
-            auth_type = "api_key"
-        elif auth_kind == "oauth2_client_credentials":
-            token_url = (data.get("token_url") or "").strip()
-            client_id = (data.get("client_id") or "").strip()
-            client_secret = (data.get("client_secret") or "").strip()
-            if not (token_url and client_id and client_secret):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="token_url, client_id and client_secret are required for OAuth 2.0",
-                )
-            scopes = normalize_scopes(data.get("scopes") or data.get("scope"))
-            # Verify the credential up front by minting a real token, so a credential that can't
-            # authenticate (e.g. a provider that doesn't support client-credentials) is rejected
-            # here with a clear error instead of silently showing "Connected" then failing at use.
-            token_result = self._request_client_credentials_token(
-                token_url, client_id, client_secret, scopes, label=name
-            )
-            encrypted = encrypt_json(
-                {"client_secret": client_secret, "access_token": token_result["access_token"]}
-            )
-            metadata = {
-                "credential_type": "custom",
-                "auth_kind": "oauth2_client_credentials",
-                "grant_type": "client_credentials",
-                "token_url": token_url,
-                "client_id": client_id,
-                "scopes": scopes,
-                "token_expiry": int(time.time()) + int(token_result.get("expires_in", 3600)),
-                "status": "active",
-            }
-            auth_type = "oauth"
-        else:
+        builder = _CUSTOM_CREDENTIAL_BUILDERS.get(auth_kind)
+        if not builder:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Unsupported auth_kind '{auth_kind}'",
             )
+        encrypted, metadata, auth_type = builder(self, data, name)
 
         connection = OAuthConnection(
             organization_id=self.org_id,
@@ -577,6 +742,21 @@ class OAuthService(BaseService):
         token = self.get_valid_access_token_for_connection(connection)
         return "Authorization", f"Bearer {token}"
 
+    async def resolve_connection_auth_header_async(
+        self, connection: OAuthConnection
+    ) -> Tuple[str, str]:
+        """Async-safe wrapper around :meth:`resolve_connection_auth_header`.
+
+        The sync method performs BLOCKING synchronous ``httpx.Client`` token
+        requests (client-credentials mint / OAuth refresh), which would freeze
+        the event loop if awaited on an async path (voice-pipeline tool
+        handlers, ``mcp_server_service.upsert_mcp_server``). Async callers
+        should ``await`` this wrapper, which runs the sync resolution in a
+        worker thread. Semantics are identical for sync callers, who keep
+        calling :meth:`resolve_connection_auth_header` directly.
+        """
+        return await run_in_threadpool(self.resolve_connection_auth_header, connection)
+
     def get_valid_access_token_for_connection(self, connection: OAuthConnection) -> str:
         provider = connection.provider_slug
         metadata = connection.public_metadata or {}
@@ -613,6 +793,10 @@ class OAuthService(BaseService):
         except Exception as exc:
             # Decryption failed (rotated key, corrupted blob, etc.) — the user
             # needs to reconnect rather than see a generic 500.
+            logger.exception(
+                "Failed to decrypt stored credentials for provider '{}'; user must reconnect",
+                provider,
+            )
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"Stored credentials for '{provider}' could not be decrypted. Please reconnect.",
@@ -702,12 +886,232 @@ class OAuthService(BaseService):
         )
         return new_access_token
 
+    async def get_valid_access_token_for_connection_async(
+        self, connection: OAuthConnection
+    ) -> str:
+        """Async-safe wrapper around :meth:`get_valid_access_token_for_connection`.
+
+        The sync method mints/refreshes tokens with a BLOCKING synchronous
+        ``httpx.Client`` (client-credentials grant and the OAuth refresh POST),
+        which freezes the event loop when awaited on an async path (voice
+        pipeline tool handlers, ``custom_tool_service.handle_google_calendar``).
+        Async callers should ``await`` this wrapper, which offloads the sync
+        call to a worker thread. Sync callers are unaffected and keep calling
+        the sync method directly.
+        """
+        return await run_in_threadpool(
+            self.get_valid_access_token_for_connection, connection
+        )
+
     # ──────────────────────────────────────────────────────────────────────
     # Response helpers
     # ──────────────────────────────────────────────────────────────────────
 
     def connection_response(self, connection: OAuthConnection) -> Dict[str, Any]:
         return connection.to_dict()
+
+    # ──────────────────────────────────────────────────────────────────────
+    # OAuth authorization-code flow (authorize URL + callback token exchange)
+    #
+    # These coarse entrypoints were moved verbatim out of the OAuth routers so
+    # the business logic (provider config lookup, PKCE state, the token POST,
+    # and the connection-persist branch) lives in the service layer. The routes
+    # now only: parse request params → one call here → return the same response.
+    # They take PLAIN args (no FastAPI Request/Depends) and resolve org scope
+    # from the caller-supplied ``org_id`` / the ``state`` parameter, so both the
+    # Core and EE routers share one implementation.
+    # ──────────────────────────────────────────────────────────────────────
+
+    @staticmethod
+    def build_authorize_url(
+        db: Session,
+        provider: str,
+        org_id: UUID,
+        user_id: Any,
+        backend_url: str,
+    ) -> str:
+        """Build the provider authorize URL (moved verbatim from the router).
+
+        ``org_id`` is resolved by the caller (Core: with a ``DEFAULT_ORG_ID``
+        fallback; EE: ``UUID(claims.org_id)``) so this preserves each edition's
+        exact org-resolution. The emitted ``state`` is byte-for-byte the same:
+        PKCE providers get the Fernet-encrypted state, everything else keeps the
+        legacy ``org_id:user_id:provider`` shape.
+        """
+        config = get_provider_config(db, org_id, provider)
+        if not config:
+            raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+        if not config["client_id"] or not config["client_secret"]:
+            raise HTTPException(
+                status_code=500,
+                detail=f"OAuth credentials not configured for {provider}",
+            )
+
+        callback_url = f"{backend_url}/oauth/{provider}/callback"
+        params = {
+            "client_id": config["client_id"],
+            "redirect_uri": callback_url,
+            "response_type": "code",
+        }
+
+        # PKCE branch: providers whose ``pkce_required`` is true (e.g. HubSpot's
+        # MCP Auth App) need ``code_challenge`` + ``code_challenge_method``. We
+        # carry the verifier + identity through the encrypted ``state`` parameter
+        # so the callback can finish the handshake without inserting a row up
+        # front — abandoned consent screens used to leave orphaned "pending"
+        # connection rows in the DB. Non-PKCE providers keep the legacy
+        # ``org:user:slug`` state format — backward compatible for everything
+        # that worked before.
+        if config.get("use_pkce"):
+            user_uuid = UUID(str(user_id))
+            verifier, challenge = pkce_pair()
+            params["state"] = encode_pkce_state(verifier, org_id, user_uuid, provider)
+            params["code_challenge"] = challenge
+            params["code_challenge_method"] = "S256"
+        else:
+            params["state"] = f"{org_id}:{user_id}:{provider}"
+
+        # Some providers (Notion, ClickUp) have no OAuth scopes; omit the param entirely for them.
+        scopes = config.get("scopes") or []
+        if scopes:
+            params["scope"] = config["scope_delimiter"].join(scopes)
+        # Provider-specific extras (Google offline access, Notion owner=user, etc.).
+        params.update(config.get("extra_authorize_params") or {})
+
+        return f"{config['auth_url']}?{urllib.parse.urlencode(params)}"
+
+    @classmethod
+    def exchange_code_and_persist(
+        cls,
+        db: Session,
+        provider: str,
+        code: str,
+        state: str,
+        backend_url: str,
+    ) -> OAuthConnection:
+        """Resolve the ``state``, exchange the code for tokens, and persist the
+        connection (moved verbatim from the router callback).
+
+        Three ``state`` shapes are accepted, in priority order:
+          1. Fernet-encrypted JSON  → current PKCE flow; carries verifier + org + user.
+             This is the only shape new authorize requests emit.
+          2. UUID                    → legacy PKCE pending row (still in flight from
+                                       handshakes started before the stateless flow
+                                       shipped); the row carries verifier + identity.
+          3. ``org_id:user_id:provider`` → legacy non-PKCE flow.
+
+        The org scope is derived from ``state`` (not the caller), so the persist
+        step builds an org-scoped service ``cls(db, org_id=org_id)`` exactly as
+        the router did. Returns the persisted connection; the caller renders the
+        same browser redirect.
+        """
+        pending: Optional[OAuthConnection] = None
+        verifier: Optional[str] = None
+        encoded = decode_pkce_state(state, provider)
+        if encoded:
+            org_id = UUID(encoded["o"])
+            user_id = UUID(encoded["u"])
+            verifier = encoded["v"]
+        else:
+            pending, verifier = resolve_pkce_state(db, state, provider)
+            if pending:
+                org_id = pending.organization_id
+                user_id = pending.created_by_user_id
+            else:
+                try:
+                    org_id_str, user_id_str, state_provider = state.split(":")
+                    org_id = UUID(org_id_str)
+                    user_id = UUID(user_id_str)
+                except (ValueError, TypeError):
+                    raise HTTPException(status_code=400, detail="Invalid state parameter")
+                if state_provider != provider:
+                    raise HTTPException(status_code=400, detail="Provider mismatch in state")
+
+        config = get_provider_config(db, org_id, provider)
+        if not config:
+            raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
+
+        callback_url = f"{backend_url}/oauth/{provider}/callback"
+
+        token_data = {
+            "code": code,
+            "grant_type": "authorization_code",
+            "redirect_uri": callback_url,
+        }
+        # PKCE: include the verifier we stashed at authorize time. Providers that
+        # didn't require PKCE just ignore the extra field.
+        if verifier:
+            token_data["code_verifier"] = verifier
+        apply_resource_indicator(config, token_data)
+        # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
+        token_kwargs: Dict[str, Any] = {"data": token_data}
+        if config.get("token_auth") == "basic":
+            token_kwargs["auth"] = (config["client_id"], config["client_secret"])
+        else:
+            token_data["client_id"] = config["client_id"]
+            token_data["client_secret"] = config["client_secret"]
+
+        with httpx.Client() as client:
+            response = client.post(config["token_url"], **token_kwargs)
+
+        if response.status_code != 200:
+            raise HTTPException(
+                status_code=400, detail=f"Token exchange failed: {response.text}"
+            )
+
+        tokens = response.json()
+        access_token = tokens.get("access_token")
+        refresh_token = tokens.get("refresh_token")
+        expires_in = tokens.get("expires_in")
+
+        if not access_token:
+            raise HTTPException(
+                status_code=400, detail="No access token received from provider"
+            )
+
+        token_expiry = int(time.time()) + expires_in if expires_in else None
+
+        # Prefer the scopes the provider actually granted (returned in the token response) over the
+        # ones we requested; fall back to the catalog's requested scopes when absent.
+        granted_scopes = normalize_scopes(tokens.get("scope")) or config["scopes"]
+
+        user_email = fetch_user_email(provider, access_token, config.get("userinfo_url"))
+
+        svc = cls(db, org_id=org_id)
+        token_payload = {
+            "access_token": access_token,
+            "refresh_token": refresh_token,
+            "token_expiry": token_expiry,
+            "scopes": granted_scopes,
+            "user_email": user_email,
+        }
+        if pending:
+            # Legacy PKCE pending row — promote it in place (or fold into an
+            # existing duplicate). Routing through ``complete_pkce_connection``
+            # avoids the duplicate-row bug ``create_connection``'s upsert hits
+            # when the pending row lacks ``user_email``.
+            connection = svc.complete_pkce_connection(
+                pending=pending,
+                token_data=token_payload,
+                provider=provider,
+                user_id=user_id,
+                user_email=user_email,
+            )
+        else:
+            # Stateless PKCE *and* non-PKCE both arrive here — no row exists yet,
+            # so the upsert is the right tool (matches an existing row by
+            # user_email when present, otherwise inserts a new one). Resolve the
+            # catalog row up front so the new connection inherits its
+            # ``app_integration_id`` for the per-integration filter in the picker.
+            integration_row = _row_by_slug(db, org_id, provider)
+            connection = svc.create_connection({
+                "provider_slug": provider,
+                "created_by_user_id": user_id,
+                "app_integration_id": integration_row.id if integration_row else None,
+                **token_payload,
+            })
+        return connection
 
     def complete_pkce_connection(
         self,

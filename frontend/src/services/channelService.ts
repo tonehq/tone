@@ -7,8 +7,13 @@ export interface ChannelListParams {
 
 export const listChannels = async (params: ChannelListParams = {}): Promise<Channel[]> => {
   const body = { channel_type: params.channel_type ?? null };
-  const { data } = await axiosInstance.post<Channel[]>('/channel/list', body);
-  return data ?? [];
+  const { data } = await axiosInstance.post<{
+    items: Channel[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>('/channel/list', body);
+  return data?.items ?? [];
 };
 
 export const getChannel = async (channelId: string, includeConfig = false): Promise<Channel> => {

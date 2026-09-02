@@ -14,8 +14,13 @@ export const listOAuthConnections = async (
     provider_slug: params.provider_slug ?? null,
     app_integration_id: params.app_integration_id ?? null,
   };
-  const { data } = await axiosInstance.post<OAuthConnection[]>('/oauth/list', body);
-  return data ?? [];
+  const { data } = await axiosInstance.post<{
+    items: OAuthConnection[];
+    total: number;
+    page: number;
+    page_size: number;
+  }>('/oauth/list', body);
+  return data.items ?? [];
 };
 
 export interface GetOAuthConnectionsParams {

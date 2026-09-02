@@ -62,7 +62,6 @@ class Workflow(OrgScopedModel):
 
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
     versions = relationship(
         "WorkflowVersion",
@@ -73,6 +72,20 @@ class Workflow(OrgScopedModel):
     draft_version = relationship(
         "WorkflowVersion", foreign_keys=[draft_version_id], post_update=True
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "name": self.name,
+            "agent_id": str(self.agent_id) if self.agent_id else None,
+            "description": self.description,
+            "draft_version_id": str(self.draft_version_id) if self.draft_version_id else None,
+            "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
 
 
 class WorkflowVersion(OrgScopedModel):
@@ -111,3 +124,20 @@ class WorkflowVersion(OrgScopedModel):
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     workflow = relationship("Workflow", back_populates="versions", foreign_keys=[workflow_id])
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "workflow_id": str(self.workflow_id) if self.workflow_id else None,
+            "version": self.version,
+            "graph": self.graph,
+            "start_node_name": self.start_node_name,
+            "graph_checksum": self.graph_checksum,
+            "is_valid": self.is_valid,
+            "validation_errors": self.validation_errors,
+            "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
+            "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

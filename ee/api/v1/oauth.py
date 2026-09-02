@@ -1,31 +1,17 @@
-import time
-import urllib.parse
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from fastapi.responses import RedirectResponse
 from sqlalchemy.orm import Session
 
-from core.api.v1.oauth import (
-    _decode_pkce_state,
-    _encode_pkce_state,
-    _resolve_pkce_state,
-    apply_resource_indicator,
-)
-from core.models.oauth_connection import OAuthConnection
-from core.utils.pkce import pkce_pair
 from core.config import settings
 from core.database.session import get_db
 from core.services.oauth_providers import (
-    _row_by_slug,
     get_catalog,
-    get_provider_config,
     get_supported_providers,
 )
-from core.services.oauth_service import OAuthService, normalize_scopes
-from core.services.oauth_userinfo import fetch_user_email
+from core.services.oauth_service import OAuthService
 from core.utils.auth_helpers import require_org_id
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
@@ -66,7 +52,7 @@ def list_connections(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return _get_service(claims, db).list_connections(
+    return _get_service(claims, db).list_connections_envelope(
         provider_slug=body.get("provider_slug"),
         app_integration_id=body.get("app_integration_id"),
     )
@@ -195,44 +181,13 @@ def authorize(
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    config = get_provider_config(db, UUID(claims.org_id), provider)
-    if not config:
-        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-
-    if not config["client_id"] or not config["client_secret"]:
-        raise HTTPException(
-            status_code=500,
-            detail=f"OAuth credentials not configured for {provider}",
-        )
-
-    callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
-    params = {
-        "client_id": config["client_id"],
-        "redirect_uri": callback_url,
-        "response_type": "code",
-    }
-
-    # PKCE branch — see ``core/api/v1/oauth.py`` for the design notes. The
-    # verifier + identity ride through the encrypted ``state`` parameter so the
-    # callback can finish the handshake without writing a pending row up front.
-    if config.get("use_pkce"):
-        org_uuid = UUID(claims.org_id)
-        user_uuid = UUID(str(claims.user_id))
-        verifier, challenge = pkce_pair()
-        params["state"] = _encode_pkce_state(verifier, org_uuid, user_uuid, provider)
-        params["code_challenge"] = challenge
-        params["code_challenge_method"] = "S256"
-    else:
-        params["state"] = f"{claims.org_id}:{claims.user_id}:{provider}"
-
-    # Some providers (Notion, ClickUp) have no OAuth scopes; omit the param entirely for them.
-    scopes = config.get("scopes") or []
-    if scopes:
-        params["scope"] = config["scope_delimiter"].join(scopes)
-    # Provider-specific extras (Google offline access, Notion owner=user, etc.).
-    params.update(config.get("extra_authorize_params") or {})
-
-    auth_url = f"{config['auth_url']}?{urllib.parse.urlencode(params)}"
+    auth_url = OAuthService.build_authorize_url(
+        db=db,
+        provider=provider,
+        org_id=UUID(claims.org_id),
+        user_id=claims.user_id,
+        backend_url=BACKEND_URL,
+    )
     return {"auth_url": auth_url}
 
 
@@ -243,117 +198,17 @@ def callback(
     state: str = Query(..., description="State parameter with org_id:user_id:provider"),
     db: Session = Depends(get_db),
 ):
-    # Three ``state`` shapes are accepted, in priority order:
-    #   1. Fernet-encrypted JSON  → current PKCE flow; carries verifier + org + user.
-    #      The only shape new authorize requests emit.
-    #   2. UUID                    → legacy PKCE pending row (in-flight handshakes
-    #                                from before the stateless flow shipped).
-    #   3. ``org_id:user_id:provider`` → legacy non-PKCE flow.
-    pending: Optional[OAuthConnection] = None
-    verifier: Optional[str] = None
-    encoded = _decode_pkce_state(state, provider)
-    if encoded:
-        org_id = UUID(encoded["o"])
-        user_id = UUID(encoded["u"])
-        verifier = encoded["v"]
-    else:
-        pending, verifier = _resolve_pkce_state(db, state, provider)
-        if pending:
-            org_id = pending.organization_id
-            user_id = pending.created_by_user_id
-        else:
-            try:
-                org_id_str, user_id_str, state_provider = state.split(":")
-                org_id = UUID(org_id_str)
-                user_id = UUID(user_id_str)
-            except (ValueError, TypeError):
-                raise HTTPException(status_code=400, detail="Invalid state parameter")
-            if state_provider != provider:
-                raise HTTPException(status_code=400, detail="Provider mismatch in state")
-
-    config = get_provider_config(db, org_id, provider)
-    if not config:
-        raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}")
-
-    callback_url = f"{BACKEND_URL}/oauth/{provider}/callback"
-
-    token_data = {
-        "code": code,
-        "grant_type": "authorization_code",
-        "redirect_uri": callback_url,
-    }
-    # PKCE: include the verifier we stashed at authorize time. Providers that
-    # didn't require PKCE just ignore the extra field.
-    if verifier:
-        token_data["code_verifier"] = verifier
-    apply_resource_indicator(config, token_data)
-    # Providers either accept client creds in the body (default) or require HTTP Basic (Notion).
-    token_kwargs: Dict[str, Any] = {"data": token_data}
-    if config.get("token_auth") == "basic":
-        token_kwargs["auth"] = (config["client_id"], config["client_secret"])
-    else:
-        token_data["client_id"] = config["client_id"]
-        token_data["client_secret"] = config["client_secret"]
-
-    with httpx.Client() as client:
-        response = client.post(config["token_url"], **token_kwargs)
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=400, detail=f"Token exchange failed: {response.text}"
-        )
-
-    tokens = response.json()
-    access_token = tokens.get("access_token")
-    refresh_token = tokens.get("refresh_token")
-    expires_in = tokens.get("expires_in")
-
-    if not access_token:
-        raise HTTPException(
-            status_code=400, detail="No access token received from provider"
-        )
-
-    token_expiry = int(time.time()) + expires_in if expires_in else None
-
-    # Prefer the scopes the provider actually granted; fall back to requested scopes.
-    granted_scopes = normalize_scopes(tokens.get("scope")) or config["scopes"]
-
-    user_email = fetch_user_email(provider, access_token, config.get("userinfo_url"))
-
-    svc = OAuthService(db, org_id=org_id)
-    token_payload = {
-        "access_token": access_token,
-        "refresh_token": refresh_token,
-        "token_expiry": token_expiry,
-        "scopes": granted_scopes,
-        "user_email": user_email,
-    }
-    if pending:
-        # Legacy PKCE pending row — promote it in place (or fold into an
-        # existing duplicate). Routing through ``complete_pkce_connection``
-        # avoids the duplicate-row bug ``create_connection``'s upsert hits
-        # when the pending row lacks ``user_email``.
-        connection = svc.complete_pkce_connection(
-            pending=pending,
-            token_data=token_payload,
-            provider=provider,
-            user_id=user_id,
-            user_email=user_email,
-        )
-    else:
-        # Stateless PKCE *and* non-PKCE both arrive here — no row exists yet,
-        # so the upsert is the right tool (matches an existing row by
-        # user_email when present, otherwise inserts a new one). Resolve the
-        # catalog row up front so the new connection inherits its
-        # ``app_integration_id`` for the per-integration filter in the picker.
-        integration_row = _row_by_slug(db, org_id, provider)
-        connection = svc.create_connection({
-            "provider_slug": provider,
-            "created_by_user_id": user_id,
-            "app_integration_id": integration_row.id if integration_row else None,
-            **token_payload,
-        })
-
+    # Business logic (state resolution across all three shapes, the token
+    # exchange, and the connection-persist branch) lives in the service. The
+    # route only exchanges + persists, then renders the SAME browser redirect
+    # as before.
+    OAuthService.exchange_code_and_persist(
+        db=db,
+        provider=provider,
+        code=code,
+        state=state,
+        backend_url=BACKEND_URL,
+    )
     frontend_url = settings.APPLICATION_URL.rstrip("/")
     return RedirectResponse(
         url=f"{frontend_url}/integrations?provider={provider}&status=success"

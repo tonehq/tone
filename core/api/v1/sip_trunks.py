@@ -29,7 +29,8 @@ def list_sip_trunks(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    return _svc(claims, db).list_trunks()
+    items = _svc(claims, db).list_trunks()
+    return {"items": items, "total": len(items), "page": 1, "page_size": len(items)}
 
 
 @router.get("/get")
