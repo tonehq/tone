@@ -16,7 +16,6 @@ class Agent(SoftDeleteMixin, OrgScopedModel):
     name = Column(String(50), nullable=False)
     description = Column(String(200), nullable=True)
     agent_type = Column(String(20), nullable=False)  # inbound | outbound | both
-    llm_model = Column(String, nullable=True)
     published_config_id = Column(UUID(as_uuid=True), ForeignKey("agent_configs.id", ondelete="SET NULL", use_alter=True), nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     # Per-agent log level (TRACE/DEBUG/INFO/…). NULL = inherit the organization's
@@ -31,7 +30,6 @@ class Agent(SoftDeleteMixin, OrgScopedModel):
             "name": self.name,
             "description": self.description,
             "agent_type": self.agent_type,
-            "llm_model": self.llm_model,
             "published_config_id": str(self.published_config_id) if self.published_config_id else None,
             "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
             "is_active": self.is_active,

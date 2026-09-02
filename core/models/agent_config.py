@@ -29,7 +29,6 @@ class AgentConfig(OrgScopedModel):
     # NULL is only legal when ``is_template = true`` (see CHECK above).
     agent_id = Column(UUID(as_uuid=True), ForeignKey("agents.id", ondelete="CASCADE"), nullable=True)
     version = Column(Integer, nullable=False)
-    canvas_label = Column(String(200), nullable=True)
     # Conversation-flow driver: "prompt" (single system prompt) | "workflow" (assigned graph).
     mode = Column(String(16), nullable=False, server_default="prompt")
     # The assigned org-level workflow when mode == "workflow" (SET NULL on workflow delete).
@@ -48,9 +47,7 @@ class AgentConfig(OrgScopedModel):
     first_message = Column(String(1000), nullable=True)
     end_call_message = Column(String(1000), nullable=True)
     system_prompt_template = Column(Text, nullable=True)
-    conversation_history_token_limit = Column(Integer, nullable=True)
     language_id = Column(UUID(as_uuid=True), ForeignKey("model_languages.id", ondelete="SET NULL"), nullable=True)
-    knowledge_model_id = Column(UUID(as_uuid=True), ForeignKey("models.id", ondelete="SET NULL"), nullable=True)
     llm_settings = Column(JSONB, nullable=True)
     voice_settings = Column(JSONB, nullable=True)
     stt_settings = Column(JSONB, nullable=True)
@@ -64,7 +61,6 @@ class AgentConfig(OrgScopedModel):
             "organization_id": str(self.organization_id) if self.organization_id else None,
             "agent_id": str(self.agent_id) if self.agent_id else None,
             "version": self.version,
-            "canvas_label": self.canvas_label,
             "mode": self.mode,
             "workflow_id": str(self.workflow_id) if self.workflow_id else None,
             "is_default": self.is_default,
@@ -74,9 +70,7 @@ class AgentConfig(OrgScopedModel):
             "first_message": self.first_message,
             "end_call_message": self.end_call_message,
             "system_prompt_template": self.system_prompt_template,
-            "conversation_history_token_limit": self.conversation_history_token_limit,
             "language_id": str(self.language_id) if self.language_id else None,
-            "knowledge_model_id": str(self.knowledge_model_id) if self.knowledge_model_id else None,
             "llm_settings": self.llm_settings,
             "voice_settings": self.voice_settings,
             "stt_settings": self.stt_settings,
