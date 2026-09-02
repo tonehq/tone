@@ -14,7 +14,8 @@ export const modelsListConfig: FacetedListConfig<ModelRow> = {
   searchField: { key: 'name', label: 'Name' },
   facetSections: [
     { field: 'provider', label: 'Provider' },
-    { field: 'kind', label: 'Type', titleCase: true },
+    // Model kinds render in caps (LLM / STT / TTS) in both the token bar and drawer.
+    { field: 'kind', label: 'Type', formatValue: (v) => v.toUpperCase() },
   ],
   defaultSort: { field: 'name', order: 'asc' },
   defaultPageSize: 50,

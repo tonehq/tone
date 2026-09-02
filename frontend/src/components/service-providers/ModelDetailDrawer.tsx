@@ -1,4 +1,6 @@
-import { CustomDrawer } from '@/components/shared';
+import { Pencil, Trash2 } from 'lucide-react';
+
+import { CustomButton, CustomDrawer } from '@/components/shared';
 import type { ModelRow } from '@/types/service';
 import { formatDate } from '@/utils/date';
 
@@ -9,9 +11,23 @@ interface ModelDetailDrawerProps {
   model: ModelRow | null;
   open: boolean;
   onClose: () => void;
+  onEditProvider: (model: ModelRow) => void;
+  onEditModel: (model: ModelRow) => void;
+  onDeleteModel: (model: ModelRow) => void;
+  onEditApiKey: (model: ModelRow) => void;
+  onDeleteApiKey: (model: ModelRow) => void;
 }
 
-const ModelDetailDrawer = ({ model, open, onClose }: ModelDetailDrawerProps) => (
+const ModelDetailDrawer = ({
+  model,
+  open,
+  onClose,
+  onEditProvider,
+  onEditModel,
+  onDeleteModel,
+  onEditApiKey,
+  onDeleteApiKey,
+}: ModelDetailDrawerProps) => (
   <CustomDrawer
     open={open}
     onClose={onClose}
@@ -22,6 +38,45 @@ const ModelDetailDrawer = ({ model, open, onClose }: ModelDetailDrawerProps) => 
     {model && (
       <div className="flex flex-col gap-6">
         <section className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Provider</h3>
+            <CustomButton
+              type="default"
+              size="sm"
+              icon={<Pencil className="size-3.5" />}
+              onClick={() => onEditProvider(model)}
+            >
+              Edit
+            </CustomButton>
+          </div>
+          <DetailField label="Name">{model.provider?.display_name ?? '—'}</DetailField>
+          <DetailField label="Slug">
+            <span className="text-muted-foreground">{model.provider?.slug ?? '—'}</span>
+          </DetailField>
+        </section>
+
+        <section className="flex flex-col gap-4 border-t border-border pt-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">Model</h3>
+            <div className="flex items-center gap-2">
+              <CustomButton
+                type="default"
+                size="sm"
+                icon={<Pencil className="size-3.5" />}
+                onClick={() => onEditModel(model)}
+              >
+                Edit
+              </CustomButton>
+              <CustomButton
+                type="default"
+                size="sm"
+                icon={<Trash2 className="size-3.5" />}
+                onClick={() => onDeleteModel(model)}
+              >
+                Delete
+              </CustomButton>
+            </div>
+          </div>
           <DetailField label="Type">
             <ModelTypeBadge kind={model.kind} />
           </DetailField>
@@ -59,15 +114,29 @@ const ModelDetailDrawer = ({ model, open, onClose }: ModelDetailDrawerProps) => 
         </section>
 
         <section className="flex flex-col gap-4 border-t border-border pt-5">
-          <h3 className="text-sm font-semibold text-foreground">Provider</h3>
-          <DetailField label="Name">{model.provider?.display_name ?? '—'}</DetailField>
-          <DetailField label="Slug">
-            <span className="text-muted-foreground">{model.provider?.slug ?? '—'}</span>
-          </DetailField>
-        </section>
-
-        <section className="flex flex-col gap-4 border-t border-border pt-5">
-          <h3 className="text-sm font-semibold text-foreground">API key</h3>
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold text-foreground">API key</h3>
+            {model.api_key?.present && (
+              <div className="flex items-center gap-2">
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  icon={<Pencil className="size-3.5" />}
+                  onClick={() => onEditApiKey(model)}
+                >
+                  Edit
+                </CustomButton>
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  icon={<Trash2 className="size-3.5" />}
+                  onClick={() => onDeleteApiKey(model)}
+                >
+                  Delete
+                </CustomButton>
+              </div>
+            )}
+          </div>
           {model.api_key?.present ? (
             <>
               <DetailField label="Label">

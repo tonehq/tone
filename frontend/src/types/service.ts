@@ -107,6 +107,8 @@ export interface ModelProviderUpsertPayload {
  * the metadata feeds the row-detail drawer.
  */
 export interface ModelApiKeyStatus {
+  /** ID of the representative key (default-preferred) — lets the drawer edit/delete it. */
+  id: string;
   present: boolean;
   label: string | null;
   is_default: boolean;
@@ -127,6 +129,7 @@ export interface ModelRow {
   base_url: string | null;
   is_active: boolean;
   meta_data: Record<string, unknown> | null;
+  meta_data_schema: import('@/types/provider').MetaDataSchemaField[] | null;
   provider: ServiceProviderRef;
   api_key: ModelApiKeyStatus | null;
   created_at: number;

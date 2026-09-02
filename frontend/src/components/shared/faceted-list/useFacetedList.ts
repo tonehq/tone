@@ -180,7 +180,7 @@ export function useFacetedList<TRow>(config: FacetedListConfig<TRow>): UseFacete
         label: s.label,
         type: 'enum',
         fetchValues: () => configRef.current.fetchFilterValues(s.field),
-        formatValue: s.titleCase ? titleCase : undefined,
+        formatValue: s.formatValue ?? (s.titleCase ? titleCase : undefined),
       });
     }
     return fields;

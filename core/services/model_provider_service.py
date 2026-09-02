@@ -1018,6 +1018,7 @@ class ModelProviderService(BaseService):
             return {}
         rows = (
             self.db.query(
+                ApiKey.id,
                 ApiKey.provider_id,
                 ApiKey.service_type,
                 ApiKey.label,
@@ -1036,6 +1037,7 @@ class ModelProviderService(BaseService):
             key = (str(r.provider_id), r.service_type)
             existing = out.get(key)
             candidate = {
+                "id": str(r.id),
                 "present": True,
                 "label": r.label,
                 "is_default": bool(r.is_default),

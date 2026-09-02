@@ -13,13 +13,17 @@ const FacetOptionList: React.FC<FacetOptionListProps> = ({
   field,
   label,
   titleCase: useTitleCase,
+  formatValue,
   values,
   selected,
   loading,
   onToggle,
 }) => {
   const [query, setQuery] = useState('');
-  const format = (v: string) => (useTitleCase ? titleCase(v) : v);
+  const format = (v: string) => {
+    if (formatValue) return formatValue(v);
+    return useTitleCase ? titleCase(v) : v;
+  };
 
   const options = useMemo<FacetValue[]>(() => {
     const present = new Set(values.map((v) => v.value));

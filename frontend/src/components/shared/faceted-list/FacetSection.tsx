@@ -11,6 +11,7 @@ const FacetSection: React.FC<FacetSectionProps> = ({
   field,
   label,
   titleCase,
+  formatValue,
   values,
   selected,
   loading,
@@ -21,6 +22,7 @@ const FacetSection: React.FC<FacetSectionProps> = ({
       field={field}
       label={label}
       titleCase={titleCase}
+      formatValue={formatValue}
       values={values}
       selected={selected}
       loading={loading}

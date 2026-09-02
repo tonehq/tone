@@ -24,8 +24,10 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
 import ApiKeyCreateDrawer from './api-key-create-drawer';
-import { getModelColumns } from './modelTableColumns';
+import ModelActionDrawers from './ModelActionDrawers';
 import ModelDetailDrawer from './ModelDetailDrawer';
+import { getModelColumns } from './modelTableColumns';
+import { useModelActions } from './useModelActions';
 
 export default function ModelsTablePage() {
   const [, upsertService] = useAtom(upsertServiceAtom);
@@ -38,6 +40,9 @@ export default function ModelsTablePage() {
   const [filterDrawerOpen, setFilterDrawerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+
+  const closeDetail = useCallback(() => setSelected(null), []);
+  const actions = useModelActions({ refresh: fl.refresh, closeDetail });
 
   const handleCreate = useCallback(
     async (payload: ServiceUpsertPayload) => {
@@ -153,7 +158,18 @@ export default function ModelsTablePage() {
         isPending={isSaving}
       />
 
-      <ModelDetailDrawer model={selected} open={!!selected} onClose={() => setSelected(null)} />
+      <ModelDetailDrawer
+        model={selected}
+        open={!!selected}
+        onClose={closeDetail}
+        onEditProvider={actions.editProvider}
+        onEditModel={actions.editModel}
+        onDeleteModel={actions.deleteModel}
+        onEditApiKey={actions.editApiKey}
+        onDeleteApiKey={actions.deleteApiKey}
+      />
+
+      <ModelActionDrawers actions={actions} />
     </div>
   );
 }
