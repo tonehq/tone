@@ -46,8 +46,7 @@ export default function ProviderTile({
     <article
       className={cn(
         'group relative flex flex-col overflow-hidden rounded-2xl border border-border/80 bg-card p-5 transition-all duration-200',
-        !dimmed &&
-          'hover:-translate-y-0.5 hover:border-foreground/20 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]',
+        !dimmed && ' hover:border-foreground/20',
         dimmed && 'opacity-80',
       )}
     >

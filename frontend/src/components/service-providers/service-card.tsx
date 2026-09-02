@@ -59,7 +59,7 @@ export default function ServiceCard({ usage, onClick, onEdit, onDelete }: Servic
         onClick={handleClick}
         className={cn(
           'group relative flex h-full cursor-pointer flex-col gap-4 overflow-hidden p-5 transition-all',
-          'border-border/70 hover:border-border hover:shadow-[0_4px_24px_-12px_rgb(0_0_0/0.12)]',
+          'border-border/70 hover:border-border',
         )}
       >
         {/* header: logo + title + actions */}

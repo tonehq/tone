@@ -25,9 +25,9 @@ export default function VariableChip({ node, selected }: NodeViewProps) {
         className={cn(
           'mx-0.5 inline-flex select-none items-center gap-0.5 rounded-md border px-1.5 py-px align-baseline text-[0.8125rem] font-medium',
           known
-            ? 'border-violet-500/30 bg-violet-500/10 text-violet-700 dark:text-violet-300'
+            ? 'border-teal-500/30 bg-teal-500/10 text-teal-700 dark:text-teal-300'
             : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300',
-          selected && 'ring-2 ring-violet-500/40',
+          selected && 'ring-2 ring-teal-500/40',
         )}
       >
         <span className="opacity-50">{'{'}</span>

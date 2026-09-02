@@ -70,9 +70,9 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     key: 'daily',
     name: 'Daily',
     description: 'WebRTC API for in-browser voice and video calls.',
-    icon: <Video size={18} className="text-violet-500" />,
-    iconBg: 'bg-violet-50 dark:bg-violet-500/10',
-    iconBorder: 'border-violet-200/50 dark:border-violet-500/20 shadow-sm dark:shadow-none',
-    accentColor: 'bg-violet-500',
+    icon: <Video size={18} className="text-teal-500" />,
+    iconBg: 'bg-teal-50 dark:bg-teal-500/10',
+    iconBorder: 'border-teal-200/50 dark:border-teal-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-teal-500',
   },
 ];

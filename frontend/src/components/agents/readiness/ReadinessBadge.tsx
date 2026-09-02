@@ -35,11 +35,13 @@ interface ReadinessBadgeProps {
 }
 
 const VARIANT_STYLES: Record<BadgeState, string> = {
-  ready: 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/20',
-  ready_with_warnings: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25',
-  not_ready: 'bg-destructive/10 text-destructive border-destructive/25',
-  loading: 'bg-muted/40 text-muted-foreground border-border/60',
-  error: 'bg-muted/40 text-muted-foreground border-border/60',
+  ready:
+    'border-transparent bg-transparent text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
+  ready_with_warnings:
+    'border-transparent bg-transparent text-amber-700 hover:bg-amber-500/10 dark:text-amber-400',
+  not_ready: 'border-transparent bg-transparent text-destructive hover:bg-destructive/10',
+  loading: 'border-transparent bg-transparent text-muted-foreground',
+  error: 'border-transparent bg-transparent text-muted-foreground hover:bg-accent',
 };
 
 const ICONS: Record<BadgeState, React.ComponentType<{ className?: string }>> = {

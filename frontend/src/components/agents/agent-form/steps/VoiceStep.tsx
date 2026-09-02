@@ -572,7 +572,7 @@ function VoiceRow({
           </span>
         )}
       </div>
-      {isSelected && !dense && <span className="size-1.5 shrink-0 rounded-full bg-violet-500" />}
+      {isSelected && !dense && <span className="size-1.5 shrink-0 rounded-full bg-teal-500" />}
     </div>
   );
 }

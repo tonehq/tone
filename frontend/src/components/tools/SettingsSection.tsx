@@ -26,7 +26,7 @@ export default function SettingsSection({
   children,
 }: SettingsSectionProps) {
   return (
-    <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-shadow hover:shadow-md">
+    <div className="overflow-hidden rounded-xl border border-border bg-background shadow-sm transition-shadow">
       <CustomButton
         type="text"
         fullWidth

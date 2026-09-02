@@ -98,5 +98,6 @@
     "postcss": "^8.5.6",
     "prettier": "^3.6.2",
     "typescript": "^5"
-  }
+  },
+  "types": "types/index.d.ts"
 }

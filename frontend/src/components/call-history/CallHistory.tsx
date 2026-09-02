@@ -12,7 +12,6 @@ import {
   CustomButton,
   CustomPopover,
   CustomTable,
-  IconChip,
   PhoneNumberDisplay,
   TokenSearchBar,
 } from '@/components/shared';
@@ -536,27 +535,30 @@ const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
         );
 
   return (
-    <div className="animate-page flex h-full flex-col gap-5">
+    <div className="animate-page mx-auto flex h-full w-full max-w-6xl flex-col gap-4">
       {/* Embedded mode: the tab is already labeled "Call History" and lives in
           the agent editor, so drop the whole page header — heading, subtitle,
           and the call-count pill — and lead straight into the toolbar. */}
       {!agentId && (
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">Call History</h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="min-w-0">
+            <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.34em] text-muted-foreground">
+              Build
+            </p>
+            <div className="flex items-baseline gap-3">
+              <h1 className="font-display text-[clamp(2rem,3.4vw,2.75rem)] font-semibold leading-none tracking-[-0.04em] text-foreground">
+                Call History
+              </h1>
+              {!data.loading && data.total > 0 && (
+                <span className="font-mono text-[13px] tabular-nums text-muted-foreground">
+                  {data.total.toLocaleString()}
+                </span>
+              )}
+            </div>
+            <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
               View and filter your voice agent call logs
             </p>
           </div>
-          {!data.loading && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/40 px-3 py-1 text-[13px] text-muted-foreground">
-              <Phone className="size-3.5" />
-              <span className="font-semibold tabular-nums text-foreground">
-                {data.total.toLocaleString()}
-              </span>
-              {data.total === 1 ? 'call' : 'calls'}
-            </span>
-          )}
         </div>
       )}
 
@@ -692,6 +694,7 @@ const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
           dataSource={data.callLogs}
           rowKey="id"
           loading={data.loading}
+          loadingLabel="Loading call logs"
           onRowClick={(record) =>
             // Embedded (agent-scoped) mode tags the detail URL with the current
             // agent Call History path so its back link returns here instead of
@@ -712,11 +715,15 @@ const CallHistory: React.FC<{ agentId?: string }> = ({ agentId }) => {
             onChange: handlePaginationChange,
           }}
           emptyState={
-            <div className="flex flex-col items-center gap-4 py-12">
-              <IconChip icon={<Phone strokeWidth={1.75} />} tone="muted" size="xl" />
+            <div className="flex flex-col items-center gap-5 py-14">
+              <span className="inline-flex size-12 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground">
+                <Phone className="size-5" strokeWidth={1.75} />
+              </span>
               <div className="max-w-xs text-center">
-                <p className="font-semibold text-foreground">No call logs found</p>
-                <p className="mt-1 text-sm text-muted-foreground">
+                <p className="font-display text-[15px] font-semibold text-foreground">
+                  No call logs found
+                </p>
+                <p className="mt-1.5 text-sm text-muted-foreground">
                   {hasActiveFilters
                     ? 'No calls match your current filters. Try adjusting or clearing them.'
                     : 'Call logs will appear here once your agents start handling calls.'}

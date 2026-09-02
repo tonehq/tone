@@ -175,7 +175,9 @@ const OrganizationListPage: React.FC = () => {
         transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
       >
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Organizations</h1>
+          <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
+            Organizations
+          </h1>
           <p className="mt-1 text-[13px] leading-relaxed text-muted-foreground">
             Manage your workspaces and team collaboration
           </p>

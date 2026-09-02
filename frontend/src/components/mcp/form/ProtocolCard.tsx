@@ -26,7 +26,7 @@ export default function ProtocolCard({
         '!h-auto !flex-col !items-stretch group relative flex flex-col gap-3 overflow-hidden rounded-lg border bg-background p-4 text-left transition-all',
         selected
           ? 'border-primary ring-2 ring-primary/25 shadow-sm'
-          : 'border-border hover:border-primary/40 hover:bg-muted/20 hover:shadow-sm',
+          : 'border-border hover:border-primary/40 hover:bg-muted/20',
       )}
     >
       {selected && (
