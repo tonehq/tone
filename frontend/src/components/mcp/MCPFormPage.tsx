@@ -642,8 +642,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
           {/* RIGHT COLUMN — scrollable form */}
           <div className="relative min-h-0 overflow-auto">
             {loadingServer && (
-              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/70 backdrop-blur-sm">
-                <AppLoader label="Loading server..." className="min-h-0" />
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background">
+                <AppLoader label="Loading server" className="min-h-0" />
               </div>
             )}
             <div className="mx-auto max-w-[780px] space-y-4 px-6 py-8 lg:px-8">
@@ -829,7 +829,7 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                         Resolves a fresh bearer token at call time and validates scopes. */}
                     <div className="rounded-md border border-border/60 bg-muted/20 p-3">
                       <div className="flex items-center gap-2">
-                        <Sparkles size={13} className="text-violet-500" />
+                        <Sparkles size={13} className="text-teal-500" />
                         <p className="text-[12.5px] font-semibold text-foreground">
                           Use an OAuth connection
                         </p>
@@ -966,8 +966,8 @@ export default function MCPFormPage({ serverId }: MCPFormPageProps = {}) {
                 title="Protocol"
                 description="How packets flow between Tone and your server"
                 icon={Cable}
-                iconColor="text-violet-600 dark:text-violet-400"
-                iconBg="bg-violet-50 dark:bg-violet-500/10"
+                iconColor="text-teal-600 dark:text-teal-400"
+                iconBg="bg-teal-50 dark:bg-teal-500/10"
                 isOpen={openSections.protocol}
                 onToggle={() => toggleSection('protocol')}
               >

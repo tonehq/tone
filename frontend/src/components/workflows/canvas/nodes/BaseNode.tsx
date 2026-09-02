@@ -65,7 +65,7 @@ const BaseNode: React.FC<BaseNodeProps> = ({
       <div
         className={cn(
           'cursor-grab overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition-shadow active:cursor-grabbing',
-          'hover:shadow-lg',
+          '',
           selected ? 'shadow-md' : 'hover:border-primary/30',
         )}
       >

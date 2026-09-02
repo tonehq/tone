@@ -56,17 +56,16 @@ const agentOptions: AgentOption[] = [
     icon: PhoneOutgoing,
     arrowIcon: ArrowUpRight,
     gradientClass:
-      'bg-[radial-gradient(120%_80%_at_0%_100%,theme(colors.violet.500/0.08),transparent_55%)]',
-    iconSurfaceClass: 'bg-violet-500/10 dark:bg-violet-500/15',
-    iconRingClass: 'ring-violet-500/20 dark:ring-violet-400/25',
-    iconColorClass: 'text-violet-600 dark:text-violet-300',
-    pulseClass: 'bg-violet-500/30 dark:bg-violet-400/30',
-    accentClass: 'bg-violet-500 dark:bg-violet-400',
+      'bg-[radial-gradient(120%_80%_at_0%_100%,theme(colors.teal.500/0.08),transparent_55%)]',
+    iconSurfaceClass: 'bg-teal-500/10 dark:bg-teal-500/15',
+    iconRingClass: 'ring-teal-500/20 dark:ring-teal-400/25',
+    iconColorClass: 'text-teal-600 dark:text-teal-300',
+    pulseClass: 'bg-teal-500/30 dark:bg-teal-400/30',
+    accentClass: 'bg-teal-500 dark:bg-teal-400',
     accentOriginClass: 'origin-left',
-    hoverRingClass:
-      'group-hover:shadow-[0_0_0_1px_theme(colors.violet.500/0.25),0_18px_40px_-20px_theme(colors.violet.500/0.45)]',
-    taglineClass: 'text-violet-600/80 dark:text-violet-300/80',
-    arrowClass: 'text-violet-600 dark:text-violet-300',
+    hoverRingClass: 'group-',
+    taglineClass: 'text-teal-600/80 dark:text-teal-300/80',
+    arrowClass: 'text-teal-600 dark:text-teal-300',
   },
   {
     type: 'inbound',
@@ -83,8 +82,7 @@ const agentOptions: AgentOption[] = [
     pulseClass: 'bg-emerald-500/30 dark:bg-emerald-400/30',
     accentClass: 'bg-emerald-500 dark:bg-emerald-400',
     accentOriginClass: 'origin-right',
-    hoverRingClass:
-      'group-hover:shadow-[0_0_0_1px_theme(colors.emerald.500/0.25),0_18px_40px_-20px_theme(colors.emerald.500/0.45)]',
+    hoverRingClass: 'group-',
     taglineClass: 'text-emerald-700/80 dark:text-emerald-300/80',
     arrowClass: 'text-emerald-600 dark:text-emerald-300',
   },
@@ -182,7 +180,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
               className={cn(
                 'group relative isolate flex h-auto cursor-pointer flex-col items-stretch justify-start gap-0 overflow-hidden rounded-2xl border border-border/70 bg-card p-5 text-left whitespace-normal',
                 'shadow-[0_1px_0_0_theme(colors.border)] transition-all duration-300 ease-out',
-                'hover:-translate-y-0.5 hover:border-transparent hover:bg-card',
+                ' hover:border-transparent hover:bg-card',
                 'focus-visible:outline-none focus-visible:-translate-y-0.5 focus-visible:border-transparent',
                 option.hoverRingClass,
                 'focus-visible:shadow-[0_0_0_2px_theme(colors.ring/0.6)]',
@@ -289,7 +287,7 @@ const CreateAgentModal: React.FC<CreateAgentModalProps> = ({ open, onClose }) =>
             emptyMessage="No templates yet."
             renderOption={(option, isSelected) => (
               <div className="flex w-full items-center gap-2">
-                <span className="rounded bg-violet-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-violet-600 dark:text-violet-300">
+                <span className="rounded bg-teal-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-teal-600 dark:text-teal-300">
                   Template
                 </span>
                 <span className="flex-1 truncate">{option.label}</span>

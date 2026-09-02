@@ -109,7 +109,7 @@ export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetai
             </CustomButton>
           </Link>
           <div className="min-w-0">
-            <h1 className="truncate text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="truncate font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
               {doc?.file_name ?? 'Knowledge base document'}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">

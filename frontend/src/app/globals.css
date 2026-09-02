@@ -6,6 +6,8 @@
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 
+  --font-display: var(--font-bricolage), var(--font-geist-sans);
+
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
   --color-card: hsl(var(--card));
@@ -34,72 +36,141 @@
   --color-warning: hsl(var(--warning));
   --color-warning-foreground: hsl(var(--warning-foreground));
 
+  --color-surface: hsl(var(--surface));
+  --color-surface-raised: hsl(var(--surface-raised));
+
+  --color-hairline: hsl(var(--hairline));
+
+  --color-brand-field: hsl(var(--brand-field));
+  --color-brand-field-deep: hsl(var(--brand-field-deep));
+
+  --color-ink: hsl(var(--ink));
+  --color-ink-raised: hsl(var(--ink-raised));
+  --color-ink-foreground: hsl(var(--ink-foreground));
+  --color-ink-muted: hsl(var(--ink-muted));
+  --color-ink-border: hsl(var(--ink-border));
+
+  --text-eyebrow: 0.6875rem;
+  --text-eyebrow--line-height: 1;
+  --text-eyebrow--letter-spacing: 0.1em;
+  --text-eyebrow--font-weight: 500;
+
+  --text-micro: 0.75rem;
+  --text-micro--line-height: 1.35;
+
+  --text-caption: 0.8125rem;
+  --text-caption--line-height: 1.45;
+
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.6;
+
+  --text-heading: 1.0625rem;
+  --text-heading--line-height: 1.35;
+  --text-heading--letter-spacing: -0.011em;
+
+  --text-title: 1.375rem;
+  --text-title--line-height: 1.25;
+  --text-title--letter-spacing: -0.02em;
+
+  --text-display: clamp(1.875rem, 1.2rem + 2vw, 2.5rem);
+  --text-display--line-height: 1.04;
+  --text-display--letter-spacing: -0.035em;
+
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+
+  --shadow-xs: 0 1px 1px hsl(var(--shadow-color) / 0.05);
+  --shadow-sm:
+    0 1px 2px -1px hsl(var(--shadow-color) / 0.09), 0 1px 1px hsl(var(--shadow-color) / 0.04);
+  --shadow-md:
+    0 2px 4px -2px hsl(var(--shadow-color) / 0.1), 0 4px 10px -3px hsl(var(--shadow-color) / 0.07);
+  --shadow-lg:
+    0 4px 8px -4px hsl(var(--shadow-color) / 0.12), 0 14px 32px -8px hsl(var(--shadow-color) / 0.14);
 }
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 0 0% 9%;
+    --background: 213 32% 96%;
+    --foreground: 215 28% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 9%;
+    --card-foreground: 215 28% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 9%;
-    --primary: 243 75% 59%;
+    --popover-foreground: 215 28% 11%;
+    --primary: 217 79% 43%;
     --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 96.1%;
-    --secondary-foreground: 0 0% 9%;
-    --muted: 0 0% 96.1%;
-    --muted-foreground: 0 0% 45.1%;
-    --accent: 0 0% 96.1%;
-    --accent-foreground: 0 0% 9%;
-    --destructive: 0 84.2% 60.2%;
+    --secondary: 214 26% 92.5%;
+    --secondary-foreground: 215 25% 20%;
+    --muted: 214 26% 92.5%;
+    --muted-foreground: 215 14% 44%;
+    --accent: 214 30% 90.5%;
+    --accent-foreground: 215 28% 14%;
+    --destructive: 356 68% 48%;
     --destructive-foreground: 0 0% 100%;
-    --success: 142 71% 45%;
+    --success: 158 64% 33%;
     --success-foreground: 0 0% 100%;
-    --warning: 38 92% 50%;
+    --warning: 32 90% 42%;
     --warning-foreground: 0 0% 100%;
-    --border: 0 0% 89.8%;
-    --input: 0 0% 89.8%;
-    --ring: 243 75% 59%;
+    --border: 214 22% 86.5%;
+    --input: 214 22% 83%;
+    --ring: 217 79% 43%;
     --radius: 0.5rem;
-    --sidebar: 0 0% 98.5%;
-    --sidebar-foreground: 0 0% 9%;
-    --sidebar-accent: 0 0% 92%;
-    --sidebar-border: 0 0% 91%;
+    --sidebar: 215 34% 93.5%;
+    --sidebar-foreground: 215 20% 30%;
+    --sidebar-accent: 214 32% 88%;
+    --sidebar-border: 214 22% 85%;
+
+    --surface: 214 28% 93.5%;
+    --surface-raised: 0 0% 100%;
+    --hairline: 214 22% 89%;
+    --shadow-color: 215 35% 15%;
   }
 
   .dark {
-    --background: 220 6% 7%;
-    --foreground: 0 0% 95%;
-    --card: 220 6% 9%;
-    --card-foreground: 0 0% 95%;
-    --popover: 220 6% 9%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 243 75% 65%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 6% 14%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 220 6% 14%;
-    --muted-foreground: 220 4% 55%;
-    --accent: 220 6% 14%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 72% 51%;
-    --destructive-foreground: 0 0% 98%;
-    --success: 142 71% 40%;
-    --success-foreground: 0 0% 98%;
-    --warning: 38 92% 45%;
-    --warning-foreground: 0 0% 98%;
-    --border: 220 6% 16%;
-    --input: 220 6% 16%;
-    --ring: 243 75% 65%;
-    --sidebar: 220 8% 5.5%;
-    --sidebar-foreground: 0 0% 95%;
-    --sidebar-accent: 220 6% 12%;
-    --sidebar-border: 220 6% 13%;
+    --background: 217 26% 8.5%;
+    --foreground: 210 22% 95%;
+    --card: 217 24% 11.5%;
+    --card-foreground: 210 22% 95%;
+    --popover: 217 24% 13%;
+    --popover-foreground: 210 22% 95%;
+    --primary: 213 92% 66%;
+    --primary-foreground: 215 60% 9%;
+    --secondary: 217 20% 17%;
+    --secondary-foreground: 210 20% 92%;
+    --muted: 217 20% 16%;
+    --muted-foreground: 215 14% 60%;
+    --accent: 217 22% 19%;
+    --accent-foreground: 210 22% 95%;
+    --destructive: 356 72% 58%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 158 58% 46%;
+    --success-foreground: 158 60% 8%;
+    --warning: 36 92% 58%;
+    --warning-foreground: 32 60% 10%;
+    --border: 217 18% 20%;
+    --input: 217 18% 24%;
+    --ring: 213 92% 66%;
+    --sidebar: 217 28% 7%;
+    --sidebar-foreground: 214 14% 70%;
+    --sidebar-accent: 217 22% 16%;
+    --sidebar-border: 217 18% 16%;
+
+    --surface: 217 22% 13.5%;
+    --surface-raised: 217 22% 16%;
+    --hairline: 217 18% 18%;
+    --shadow-color: 220 50% 2%;
+  }
+
+  :root,
+  .dark {
+    --brand-field: 217 76% 38%;
+    --brand-field-deep: 217 80% 27%;
+    --ink: 220 30% 9%;
+    --ink-raised: 220 24% 12.5%;
+    --ink-foreground: 210 25% 96%;
+    --ink-muted: 214 13% 56%;
+    --ink-border: 216 18% 20%;
   }
 }
 
@@ -114,11 +185,7 @@
     height: 100%;
     overflow: hidden;
   }
-  /* Clickable elements always use a pointer cursor — Tailwind's preflight otherwise
-     leaves native buttons at the default arrow. Any interactive control (buttons,
-     role="button", links, form labels, summary, custom-select triggers) is covered
-     here so individual components don't need to add `cursor-pointer`. Disabled
-     controls fall back to not-allowed. */
+
   button:not(:disabled),
   [role='button']:not([aria-disabled='true']):not([data-disabled]),
   [role='option'],
@@ -130,8 +197,6 @@
   label[for],
   summary,
   select:not(:disabled),
-  /* Clickable input types (date/time pickers, checkbox, radio, file, range, color,
-     button-like inputs). Text-like inputs keep the default text cursor. */
   input[type='checkbox']:not(:disabled),
   input[type='radio']:not(:disabled),
   input[type='file']:not(:disabled),
@@ -147,7 +212,7 @@
   input[type='week']:not(:disabled) {
     cursor: pointer;
   }
-  /* The native date/time picker's clock/calendar indicator button. */
+
   ::-webkit-calendar-picker-indicator {
     cursor: pointer;
   }
@@ -159,11 +224,14 @@
 }
 
 ::selection {
-  background-color: hsl(var(--primary) / 0.2);
-  color: hsl(var(--foreground));
+  background-color: hsl(var(--primary) / 0.3);
+}
+.on-ink ::selection,
+.on-ink::selection {
+  background-color: rgba(96, 165, 250, 0.38);
+  color: #fff;
 }
 
-/* ── Scrollbar ── */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -179,7 +247,6 @@
   background: hsl(var(--muted-foreground) / 0.35);
 }
 
-/* ── Page transition ── */
 .animate-page {
   animation: pageIn 0.35s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -209,7 +276,6 @@
   animation: fadeIn 0.3s ease-out forwards;
 }
 
-/* ── Tone loader (branded voice-analyzing animation) ── */
 @keyframes tone-loader-mic {
   0%,
   100% {
@@ -239,7 +305,6 @@
   }
 }
 
-/* ── Subtle grain overlay for depth ── */
 .grain::before {
   content: '';
   position: fixed;
@@ -250,12 +315,10 @@
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
 }
 
-/* Tab panel transitions */
 [role='tabpanel'] {
   animation: fadeIn 0.2s ease-out;
 }
 
-/* ProseMirror / TipTap editor styles */
 .ProseMirror ul {
   list-style: disc;
   padding-left: 1.5em;
@@ -291,11 +354,8 @@
   margin: 0.25em 0;
 }
 
-/* ── Workflow canvas (React Flow) theming ─────────────────────────────────── */
 .workflow-canvas {
-  /* subtle radial depth so the canvas isn't flat */
-  background:
-    radial-gradient(125% 125% at 50% 0%, transparent 40%, hsl(var(--muted) / 0.35));
+  background: hsl(var(--surface));
 }
 .workflow-canvas .react-flow {
   --xy-background-pattern-dots-color-default: hsl(var(--border));
@@ -326,7 +386,7 @@
   background: transparent;
   box-shadow: none;
 }
-/* no default selection outline on the node wrapper — selection is shown inside the card */
+
 .workflow-canvas .react-flow__node.selected,
 .workflow-canvas .react-flow__node:focus,
 .workflow-canvas .react-flow__node:focus-visible {

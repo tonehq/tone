@@ -54,10 +54,10 @@ export default function SipTrunkCard({
       onClick={() => onEdit(trunk)}
       className={cn(
         'group relative cursor-pointer overflow-hidden rounded-2xl border border-border/80 bg-card transition-all duration-200',
-        'hover:border-foreground/20 hover:shadow-[0_8px_24px_-12px_rgba(0,0,0,0.12)]',
+        'hover:border-foreground/20',
       )}
     >
-      <span className="absolute inset-y-0 left-0 w-1 bg-indigo-500" aria-hidden />
+      <span className="absolute inset-y-0 left-0 w-1 bg-sky-500" aria-hidden />
 
       <div className="flex items-center gap-4 py-4 pl-5 pr-4">
         <IconChip icon={<Network strokeWidth={1.75} />} tone="indigo" size="lg" />

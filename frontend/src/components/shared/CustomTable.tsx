@@ -19,6 +19,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Columns3,
+  Loader2,
   RefreshCw,
   Rows3,
 } from 'lucide-react';
@@ -56,6 +57,7 @@ function CustomTableInner<TRow>({
   dataSource,
   rowKey,
   loading = false,
+  loadingLabel,
   skeletonRows = 12,
   searchable = false,
   searchPlaceholder = 'Search...',
@@ -341,6 +343,16 @@ function CustomTableInner<TRow>({
           fillHeight && 'flex-1',
         )}
       >
+        {loading && loadingLabel && (
+          <div
+            role="status"
+            aria-live="polite"
+            className="flex shrink-0 items-center gap-2 border-b border-border px-5 py-2.5 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+          >
+            <Loader2 className="size-3 animate-spin" aria-hidden />
+            {loadingLabel}
+          </div>
+        )}
         <DataTable
           table={table}
           rows={paginatedRows}

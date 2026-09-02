@@ -54,7 +54,9 @@ export default function AuditLogs() {
     <div className="w-full space-y-6">
       {/* ── Header ─────────────────────────────────────────────── */}
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Audit Logs</h1>
+        <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
+          Audit Logs
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Track every configuration change made to your agents.
         </p>

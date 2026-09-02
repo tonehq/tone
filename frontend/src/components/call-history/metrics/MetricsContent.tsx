@@ -113,7 +113,7 @@ const MetricsContent: React.FC<MetricsContentProps> = ({ metrics, toolExecutions
             label="Avg Latency"
             value={overview.avgLatency != null ? formatMs(overview.avgLatency) : '-'}
             sub="User to bot"
-            color="bg-violet-500"
+            color="bg-teal-500"
           />
           <StatCard
             icon={MessageSquare}

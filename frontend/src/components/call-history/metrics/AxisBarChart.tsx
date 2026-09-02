@@ -32,7 +32,7 @@ const REF_LINE_STYLES: Record<
   emerald: { line: 'border-emerald-500/70', label: 'text-emerald-600 dark:text-emerald-400' },
   amber: { line: 'border-amber-500/70', label: 'text-amber-600 dark:text-amber-400' },
   sky: { line: 'border-sky-500/70', label: 'text-sky-600 dark:text-sky-400' },
-  violet: { line: 'border-violet-500/70', label: 'text-violet-600 dark:text-violet-400' },
+  violet: { line: 'border-teal-500/70', label: 'text-teal-600 dark:text-teal-400' },
 };
 
 export function AxisBarChart({

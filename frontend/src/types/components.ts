@@ -30,6 +30,7 @@ export interface CustomTableProps<TRow> {
   dataSource: TRow[];
   rowKey: (keyof TRow & string) | ((record: TRow) => string | number);
   loading?: boolean;
+  loadingLabel?: string;
   skeletonRows?: number;
   searchable?: boolean;
   searchPlaceholder?: string;

@@ -4,7 +4,6 @@ import {
   BookOpen,
   Bot,
   Boxes,
-  Building2,
   Check,
   ChevronsUpDown,
   Home,
@@ -64,8 +63,8 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
     return (
       <Tooltip>
         <TooltipTrigger asChild>
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-primary/10 to-primary/5 ring-1 ring-primary/10">
-            <Building2 className="h-4 w-4 text-primary/70" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-md border border-border bg-surface text-[12px] font-semibold text-foreground">
+            {(organization?.name ?? 'W').charAt(0).toUpperCase()}
           </div>
         </TooltipTrigger>
         <TooltipContent side="right" sideOffset={12}>
@@ -84,8 +83,8 @@ function WorkspaceSwitcher({ collapsed }: { collapsed: boolean }) {
           aria-label="Switch organization"
           className="h-auto justify-start gap-3 rounded-lg px-2 py-2 text-left font-normal hover:bg-sidebar-accent/60"
         >
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 ring-1 ring-primary/10">
-            <Building2 className="h-[18px] w-[18px] text-primary" strokeWidth={1.75} />
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border bg-surface text-[13px] font-semibold text-foreground">
+            {(organization?.name ?? 'W').charAt(0).toUpperCase()}
           </div>
           <div className="min-w-0 flex-1">
             <p className="truncate text-[14px] font-semibold leading-tight tracking-tight">

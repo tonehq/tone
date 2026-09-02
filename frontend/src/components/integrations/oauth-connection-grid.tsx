@@ -105,10 +105,10 @@ export default function OAuthConnectionGrid({
       onClick={onConnectAnother}
       className={cn(
         '!h-auto group flex cursor-pointer items-center justify-center gap-2 rounded-2xl border border-dashed border-foreground/15 bg-transparent px-4 py-3 text-xs font-medium text-muted-foreground transition-all',
-        'hover:border-foreground/30 hover:bg-background hover:text-foreground hover:shadow-sm',
+        'hover:border-foreground/30 hover:bg-background hover:text-foreground',
       )}
     >
-      <ArrowUp className="size-3.5 transition-transform group-hover:-translate-y-0.5" />
+      <ArrowUp className="size-3.5 transition-transform group-" />
       Connect another service
     </CustomButton>
   ) : null;

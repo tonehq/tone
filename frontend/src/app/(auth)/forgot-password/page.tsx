@@ -3,12 +3,14 @@
 import Link from 'next/link';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ArrowLeft, MailCheck } from 'lucide-react';
+import { motion } from 'framer-motion';
+import { ArrowLeft } from 'lucide-react';
 
 import { forgotPasswordSchema, type ForgotPasswordFormData } from '@/schemas/auth';
 import { showToast } from '@/lib/toast';
-import { Form, TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { Form, CustomButton } from '@/components/shared';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthResult, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useForgotPassword } from '@/lib/api/auth';
 
 export default function ForgotPasswordPage() {
@@ -28,42 +30,56 @@ export default function ForgotPasswordPage() {
 
   if (mutation.isSuccess) {
     return (
-      <div className="animate-page text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-primary/10">
-          <MailCheck className="h-8 w-8 text-primary" />
-        </div>
-        <h2 className="text-2xl font-bold">Check your email</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We&apos;ve sent a password reset link to <strong>{email}</strong>
-        </p>
+      <AuthResult
+        title="Check your inbox."
+        description={
+          <>
+            If an account exists for <strong className="text-foreground">{email}</strong>, a
+            password reset link is on its way.
+          </>
+        }
+      >
         <Link href="/login">
-          <Button variant="outline" className="mt-6" icon={<ArrowLeft className="h-4 w-4" />}>
-            Back to login
-          </Button>
+          <CustomButton type="default" fullWidth className="h-11">
+            Back to sign in
+          </CustomButton>
         </Link>
-      </div>
+      </AuthResult>
     );
   }
 
   return (
-    <div className="animate-page">
-      <h2 className="text-[28px] font-semibold tracking-tight">Reset password</h2>
-      <p className="mt-2 text-sm text-muted-foreground">
-        Enter your email and we&apos;ll send you a reset link
-      </p>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="mt-6">
-        <TextInput name="email" control={control} label="Email" type="email" isRequired />
-        <Button type="submit" className="w-full" loading={mutation.isPending}>
-          Send Reset Link
-        </Button>
+    <>
+      <AuthHeading
+        title="Reset password."
+        subtitle="Enter your email and we'll send you a link to set a new one."
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="email"
+            control={control}
+            type="email"
+            label="Email address"
+            autoComplete="email"
+          />
+        </motion.div>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={mutation.isPending}>Send reset link</AuthSubmit>
+        </motion.div>
       </Form>
-      <Link
-        href="/login"
-        className="mt-4 inline-flex items-center text-sm text-primary hover:underline"
-      >
-        <ArrowLeft className="mr-1 h-3 w-3" />
-        Back to login
-      </Link>
-    </div>
+
+      <motion.p className="mt-8 text-center text-[13px]" variants={fadeUp}>
+        <Link
+          href="/login"
+          className="inline-flex items-center gap-1.5 font-medium text-muted-foreground underline-offset-4 transition-colors hover:text-foreground hover:underline"
+        >
+          <ArrowLeft className="h-3.5 w-3.5" />
+          Back to sign in
+        </Link>
+      </motion.p>
+    </>
   );
 }

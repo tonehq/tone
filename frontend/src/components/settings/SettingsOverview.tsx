@@ -8,6 +8,7 @@ import { IconChip } from '@/components/shared';
 import { SETTINGS_NAV_GROUPS, type SettingsNavItem } from '@/components/settings/navConfig';
 import { cn, getInitials } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth';
+import { formatDisplayName } from '@/utils/displayName';
 
 // The overview lists only the labelled sections (skip the ungrouped Overview
 // entry from the shared rail config).
@@ -29,7 +30,7 @@ function SettingsRow({ row, variants }: { row: SettingsNavItem; variants: Varian
           icon={<Icon strokeWidth={1.75} />}
           tone="primary"
           size="lg"
-          className="group-hover:from-primary group-hover:via-primary group-hover:to-primary group-hover:text-primary-foreground group-hover:ring-primary"
+          className="transition-colors group-hover:bg-primary group-hover:text-primary-foreground group-hover:ring-primary"
         />
         <div className="min-w-0 flex-1">
           <p className="text-[14px] font-semibold tracking-tight text-foreground">{row.label}</p>
@@ -46,7 +47,7 @@ function SettingsRow({ row, variants }: { row: SettingsNavItem; variants: Varian
 export default function SettingsOverview() {
   const user = useAuthStore((s) => s.user);
   const reduceMotion = useReducedMotion();
-  const firstName = user?.first_name?.trim();
+  const firstName = formatDisplayName(user?.first_name, user?.last_name, user?.email);
   const initials = getInitials(user?.first_name, user?.last_name) || 'U';
 
   const container: Variants = {
@@ -69,7 +70,9 @@ export default function SettingsOverview() {
             <span className="size-1.5 rounded-full bg-primary" />
             Workspace settings
           </div>
-          <h1 className="mt-2 text-2xl font-semibold tracking-tight text-foreground">Settings</h1>
+          <h1 className="mt-2 font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
+            Settings
+          </h1>
           <p className="mt-1 max-w-xl text-sm leading-relaxed text-muted-foreground">
             {firstName ? `Welcome back, ${firstName}. ` : ''}
             Manage your account, workspace, and connected services in one place.

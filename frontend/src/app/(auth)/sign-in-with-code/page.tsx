@@ -16,22 +16,13 @@ import {
   type VerifySignInCodeFormData,
 } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Form, TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { Form, CustomButton } from '@/components/shared';
+import { AuthCodeField, AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useRequestSignInCode, useVerifySignInCode } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/auth';
 
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  },
-};
-
 const RESEND_COOLDOWN_SECONDS = 60;
-const digitsOnly = (raw: string) => raw.replace(/\D/g, '').slice(0, SIGNIN_CODE_LENGTH);
 
 function RequestStep({ onSubmitted }: { onSubmitted: (email: string) => void }) {
   const requestCode = useRequestSignInCode();
@@ -52,31 +43,32 @@ function RequestStep({ onSubmitted }: { onSubmitted: (email: string) => void }) 
 
   return (
     <>
-      <motion.div className="mb-8" variants={fadeUp}>
-        <h2 className="text-[28px] font-semibold tracking-tight">Sign in with a code</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We&apos;ll email you a {SIGNIN_CODE_LENGTH}-digit code to sign in. No password needed.
-        </p>
-      </motion.div>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit}>
+      <AuthHeading
+        title="Sign in with a code."
+        subtitle={`We'll email you a ${SIGNIN_CODE_LENGTH}-digit code. No password needed.`}
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
         <motion.div variants={fadeUp}>
-          <TextInput
+          <AuthField
             name="email"
             control={control}
             type="email"
-            label="Email"
-            placeholder="you@company.com"
-            isRequired
+            label="Email address"
+            autoComplete="email"
           />
         </motion.div>
-        <motion.div variants={fadeUp}>
-          <Button type="submit" className="w-full" loading={requestCode.isPending}>
-            Send code
-          </Button>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={requestCode.isPending}>Send code</AuthSubmit>
         </motion.div>
       </Form>
-      <motion.p className="mt-6 text-center text-sm text-muted-foreground" variants={fadeUp}>
-        <Link href="/login" className="font-medium text-primary hover:underline">
+
+      <motion.p className="mt-8 text-center text-[13px] text-muted-foreground" variants={fadeUp}>
+        <Link
+          href="/login"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+        >
           Sign in with password instead
         </Link>
       </motion.p>
@@ -132,54 +124,51 @@ function VerifyStep({ email, onBack }: { email: string; onBack: () => void }) {
 
   return (
     <>
-      <motion.div className="mb-8" variants={fadeUp}>
-        <h2 className="text-[28px] font-semibold tracking-tight">Enter your code</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          We sent a {SIGNIN_CODE_LENGTH}-digit code to <strong>{email}</strong>. It expires in 10
-          minutes.
-        </p>
-      </motion.div>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit}>
+      <AuthHeading
+        title="Enter your code."
+        subtitle={
+          <>
+            We sent a {SIGNIN_CODE_LENGTH}-digit code to{' '}
+            <strong className="text-foreground">{email}</strong>. It expires in 10 minutes.
+          </>
+        }
+      />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
         <motion.div variants={fadeUp}>
-          <TextInput
+          <AuthCodeField
             name="code"
             control={control}
-            type="text"
             label={`${SIGNIN_CODE_LENGTH}-digit code`}
-            placeholder="123456"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            maxLength={SIGNIN_CODE_LENGTH}
-            isRequired
-            onValueChange={(value) => setValue('code', digitsOnly(value))}
+            length={SIGNIN_CODE_LENGTH}
           />
         </motion.div>
-        <motion.div variants={fadeUp}>
-          <Button type="submit" className="w-full" loading={verifyCode.isPending}>
-            Verify and sign in
-          </Button>
+
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={verifyCode.isPending}>Verify and sign in</AuthSubmit>
         </motion.div>
       </Form>
-      <motion.div className="mt-6 flex items-center justify-between text-sm" variants={fadeUp}>
-        <Button
-          variant="link"
-          type="button"
+
+      <motion.div className="mt-8 flex items-center justify-between text-[13px]" variants={fadeUp}>
+        <CustomButton
+          type="link"
+          htmlType="button"
           onClick={onBack}
           className="h-auto p-0 text-muted-foreground"
+          icon={<ArrowLeft className="h-3.5 w-3.5" />}
         >
-          <ArrowLeft className="mr-1 h-3 w-3" />
           Use a different email
-        </Button>
-        <Button
-          variant="link"
-          type="button"
+        </CustomButton>
+        <CustomButton
+          type="link"
+          htmlType="button"
           onClick={onResend}
           disabled={resendIn > 0 || requestCode.isPending}
           loading={requestCode.isPending}
           className="h-auto p-0 font-medium"
         >
           {resendIn > 0 ? `Resend in ${resendIn}s` : 'Resend code'}
-        </Button>
+        </CustomButton>
       </motion.div>
     </>
   );

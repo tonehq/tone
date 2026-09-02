@@ -48,8 +48,8 @@ function ToolTypeCard({
         onClick={onClick}
         className={cn(
           'group h-auto items-start justify-start gap-4 whitespace-normal rounded-2xl border border-border/70 bg-card p-5 text-left font-normal',
-          'transition-all duration-200 ease-out hover:-translate-y-0.5 hover:border-primary/30 hover:bg-card',
-          'hover:shadow-[0_10px_34px_-14px_hsl(var(--primary)/0.45)]',
+          'transition-all duration-200 ease-out hover:border-primary/30 hover:bg-card',
+          '',
           'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background',
           'motion-reduce:transition-none motion-reduce:hover:translate-y-0',
         )}
@@ -101,7 +101,7 @@ function ToolTypeCard({
           )}
         </span>
 
-        <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/40 transition-all duration-200 group-hover:-translate-y-0.5 group-hover:translate-x-0.5 group-hover:text-primary" />
+        <ArrowUpRight className="size-4 shrink-0 text-muted-foreground/40 transition-all duration-200 group- group-hover:translate-x-0.5 group-hover:text-primary" />
       </CustomButton>
     </motion.div>
   );

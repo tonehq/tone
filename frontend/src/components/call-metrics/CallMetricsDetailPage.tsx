@@ -67,7 +67,7 @@ const CallMetricsDetailPage: React.FC<CallMetricsDetailPageProps> = ({ callId })
           className="-ml-2 h-8 text-muted-foreground hover:text-foreground"
           aria-label="Back to call metrics"
         />
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+        <h1 className="font-display text-[1.75rem] font-semibold tracking-[-0.03em] text-foreground">
           {`Metrics${agentName ? ` — ${agentName}` : ''}`}
         </h1>
       </div>

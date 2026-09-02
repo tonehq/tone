@@ -9,20 +9,12 @@ import { motion } from 'framer-motion';
 
 import { loginSchema, type LoginFormData } from '@/schemas/auth';
 import { showToast, handleApiError } from '@/lib/toast';
-import { Form, TextInput } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { Form, CustomButton } from '@/components/shared';
 import { Checkbox } from '@/components/ui/primitives';
+import { AuthField } from '@/components/auth/auth-field';
+import { AuthHeading, AuthSubmit, fadeUp } from '@/components/auth/auth-ui';
 import { useLogin, useResendVerification } from '@/lib/api/auth';
 import { useAuthStore } from '@/stores/auth';
-
-const fadeUp = {
-  hidden: { opacity: 0, y: 12 },
-  visible: {
-    opacity: 1,
-    y: 0,
-    transition: { duration: 0.5, ease: [0.22, 1, 0.36, 1] as const },
-  },
-};
 
 function LoginPageInner() {
   const router = useRouter();
@@ -47,9 +39,6 @@ function LoginPageInner() {
       const data = await login.mutateAsync(values);
       setLoginResponse(data);
       showToast.success('Welcome back!');
-      // Route new/returning users to onboarding until their workspace has
-      // captured use_case + workspace name. Existing orgs are backfilled to
-      // onboarding_completed=true so they land on /home as before.
       const needsOnboarding = data.organization?.onboarding_completed === false;
       const safeNext = nextPath && nextPath.startsWith('/') ? nextPath : '/home';
       router.push(needsOnboarding ? '/onboarding' : safeNext);
@@ -69,38 +58,37 @@ function LoginPageInner() {
 
   return (
     <>
-      <motion.div className="mb-8" variants={fadeUp}>
-        <h2 className="text-[28px] font-semibold tracking-tight">Welcome back</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Enter your credentials to access your account
-        </p>
-      </motion.div>
-      <Form handleSubmit={handleSubmit} onSubmit={onSubmit}>
+      <AuthHeading title="Welcome back." subtitle="Sign in to pick up where you left off." />
+
+      <Form handleSubmit={handleSubmit} onSubmit={onSubmit} className="space-y-7">
         <motion.div variants={fadeUp}>
-          <TextInput
+          <AuthField
             name="email"
             control={control}
             type="email"
-            label="Email"
-            placeholder="you@company.com"
-            isRequired
+            label="Email address"
+            autoComplete="email"
           />
         </motion.div>
-        <motion.div className="space-y-2" variants={fadeUp}>
-          <label htmlFor="password" className="text-sm font-medium leading-none">
-            Password
-          </label>
-          <TextInput name="password" control={control} type="password" placeholder="••••••••" />
+
+        <motion.div variants={fadeUp}>
+          <AuthField
+            name="password"
+            control={control}
+            type="password"
+            label="Password"
+            autoComplete="current-password"
+          />
         </motion.div>
 
-        <motion.div className="flex items-center justify-between" variants={fadeUp}>
-          <label className="flex cursor-pointer items-center gap-2 text-[13px] text-foreground/80">
+        <motion.div className="flex items-center justify-between pt-1" variants={fadeUp}>
+          <label className="flex cursor-pointer select-none items-center gap-2 text-[13px] text-foreground/75">
             <Checkbox id="remember" />
-            <span>Remember me</span>
+            <span>Keep me signed in</span>
           </label>
           <Link
             href="/forgot-password"
-            className="text-[13px] font-medium text-primary hover:underline"
+            className="text-[13px] font-medium text-primary underline-offset-4 transition-colors hover:text-primary/80 hover:underline"
           >
             Forgot password?
           </Link>
@@ -108,40 +96,49 @@ function LoginPageInner() {
 
         {needsVerification && (
           <motion.div
-            className="rounded-md bg-yellow-50 p-3 text-sm text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-200"
-            variants={fadeUp}
+            className="rounded-lg border border-warning/30 bg-warning/10 p-3.5 text-sm text-foreground"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
           >
-            <p>Please verify your email before logging in.</p>
-            <Button
-              variant="link"
-              type="button"
+            <p className="text-[13px]">Please verify your email before signing in.</p>
+            <CustomButton
+              type="link"
+              htmlType="button"
               onClick={handleResendVerification}
               disabled={!email}
               loading={resend.isPending}
               className="mt-1 h-auto p-0 font-medium"
             >
               Resend verification email
-            </Button>
+            </CustomButton>
           </motion.div>
         )}
 
-        <motion.div variants={fadeUp}>
-          <Button type="submit" className="w-full" loading={login.isPending}>
-            Sign In
-          </Button>
+        <motion.div variants={fadeUp} className="pt-1">
+          <AuthSubmit loading={login.isPending}>Sign in</AuthSubmit>
         </motion.div>
       </Form>
-      <motion.p className="mt-4 text-center text-sm text-muted-foreground" variants={fadeUp}>
-        <Link href="/sign-in-with-code" className="font-medium text-primary hover:underline">
+
+      <motion.div
+        className="mt-8 flex flex-col items-center gap-2 text-[13px] text-muted-foreground"
+        variants={fadeUp}
+      >
+        <Link
+          href="/sign-in-with-code"
+          className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+        >
           Sign in with a code instead
         </Link>
-      </motion.p>
-      <motion.p className="mt-2 text-center text-sm text-muted-foreground" variants={fadeUp}>
-        Don&apos;t have an account?{' '}
-        <Link href="/signup" className="font-medium text-primary hover:underline">
-          Sign up
-        </Link>
-      </motion.p>
+        <p>
+          New to Tone?{' '}
+          <Link
+            href="/signup"
+            className="font-medium text-foreground underline-offset-4 transition-colors hover:underline"
+          >
+            Create an account
+          </Link>
+        </p>
+      </motion.div>
     </>
   );
 }

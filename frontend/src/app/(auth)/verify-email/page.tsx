@@ -3,11 +3,10 @@
 import { useEffect, useRef, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
-import { CheckCircle, XCircle } from 'lucide-react';
 
 import { showToast } from '@/lib/toast';
-import { AppLoader } from '@/components/shared';
-import { Button } from '@/components/ui/button';
+import { AppLoader, CustomButton } from '@/components/shared';
+import { AuthResult } from '@/components/auth/auth-ui';
 import { useVerifyEmail } from '@/lib/api/auth';
 
 function VerifyEmailContent() {
@@ -42,45 +41,39 @@ function VerifyEmailContent() {
   }, [token]);
 
   if (status === 'loading') {
-    return <AppLoader label="Verifying your email..." className="animate-page" />;
+    return <AppLoader label="Verifying your email..." />;
   }
 
   if (status === 'success') {
     return (
-      <div className="animate-page text-center">
-        <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100">
-          <CheckCircle className="h-8 w-8 text-green-600" />
-        </div>
-        <h2 className="text-2xl font-bold">Email Verified!</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          Your email is verified. Let&apos;s finish setting up your workspace.
-        </p>
+      <AuthResult
+        tone="success"
+        title="Email verified."
+        description="You're all set. Let's finish setting up your workspace."
+      >
         <Link href="/onboarding">
-          <Button className="mt-6">Continue to Onboarding</Button>
+          <CustomButton type="primary" fullWidth className="h-11">
+            Continue to onboarding
+          </CustomButton>
         </Link>
-      </div>
+      </AuthResult>
     );
   }
 
   return (
-    <div className="animate-page text-center">
-      <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
-        <XCircle className="h-8 w-8 text-red-600" />
-      </div>
-      <h2 className="text-2xl font-bold">Verification Failed</h2>
-      <p className="mt-2 text-sm text-muted-foreground">{errorMsg}</p>
-      <div className="mt-6 space-x-3">
-        <Link href="/login">
-          <Button variant="outline">Back to Login</Button>
-        </Link>
-      </div>
-    </div>
+    <AuthResult tone="error" title="Verification failed." description={errorMsg}>
+      <Link href="/login">
+        <CustomButton type="default" fullWidth className="h-11">
+          Back to sign in
+        </CustomButton>
+      </Link>
+    </AuthResult>
   );
 }
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<AppLoader className="animate-page" />}>
+    <Suspense fallback={<AppLoader />}>
       <VerifyEmailContent />
     </Suspense>
   );

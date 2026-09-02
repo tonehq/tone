@@ -20,8 +20,8 @@ export const roleConfig: Record<
   },
   admin: {
     icon: Shield,
-    color: 'text-blue-600 dark:text-blue-400',
-    bg: 'bg-blue-500/10',
+    color: 'text-primary',
+    bg: 'bg-primary/10',
     label: 'Admin',
   },
   member: {
@@ -32,13 +32,13 @@ export const roleConfig: Record<
   },
 };
 
-const avatarGradients = [
-  'from-violet-500 to-purple-600',
-  'from-blue-500 to-cyan-500',
-  'from-emerald-500 to-teal-500',
-  'from-rose-500 to-pink-500',
-  'from-amber-500 to-orange-500',
-  'from-indigo-500 to-blue-500',
+const avatarTones = [
+  'bg-primary/10 text-primary ring-primary/20',
+  'bg-sky-500/10 text-sky-700 ring-sky-500/20 dark:text-sky-300 dark:ring-sky-400/25',
+  'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-300 dark:ring-emerald-400/25',
+  'bg-rose-500/10 text-rose-700 ring-rose-500/20 dark:text-rose-300 dark:ring-rose-400/25',
+  'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-300 dark:ring-amber-400/25',
+  'bg-teal-500/10 text-teal-700 ring-teal-500/20 dark:text-teal-300 dark:ring-teal-400/25',
 ];
 
 export function getInitials(name: string): string {
@@ -50,10 +50,10 @@ export function getInitials(name: string): string {
     .toUpperCase();
 }
 
-export function getAvatarGradient(name: string): string {
+export function getAvatarTone(name: string): string {
   let hash = 0;
   for (let i = 0; i < name.length; i++) {
     hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return avatarGradients[Math.abs(hash) % avatarGradients.length];
+  return avatarTones[Math.abs(hash) % avatarTones.length];
 }

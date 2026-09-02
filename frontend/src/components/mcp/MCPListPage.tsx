@@ -19,7 +19,7 @@ import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
-import { Plus, Search } from 'lucide-react';
+import { Loader2, Plus, Search } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 
@@ -80,18 +80,34 @@ export default function MCPListPage() {
   const noMatches = !fl.listLoading && servers.length === 0 && fl.hasActiveFilters;
 
   return (
-    <div className="animate-page flex h-full min-h-0 flex-col gap-5">
-      {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-4">
+    <div className="animate-page mx-auto flex h-full min-h-0 w-full max-w-6xl flex-col gap-4">
+      <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground">MCP Servers</h1>
-          <p className="mt-1 text-sm text-muted-foreground">
+          <p className="mb-3 font-mono text-[11px] uppercase tracking-[0.34em] text-muted-foreground">
+            Build
+          </p>
+          <div className="flex items-baseline gap-3">
+            <h1 className="font-display text-[clamp(2rem,3.4vw,2.75rem)] font-semibold leading-none tracking-[-0.04em] text-foreground">
+              MCP Servers
+            </h1>
+            {fl.total > 0 && (
+              <span className="font-mono text-[13px] tabular-nums text-muted-foreground">
+                {fl.total}
+              </span>
+            )}
+          </div>
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
             Connect Model Context Protocol servers to extend your agents with external tools and
             resources.
           </p>
         </div>
-        <CustomButton type="primary" icon={<Plus className="size-4" />} onClick={handleCreate}>
-          Create MCP Server
+        <CustomButton
+          type="primary"
+          icon={<Plus size={15} />}
+          className="h-10"
+          onClick={handleCreate}
+        >
+          Create MCP server
         </CustomButton>
       </div>
 
@@ -122,23 +138,30 @@ export default function MCPListPage() {
       {/* Content */}
       <div className="flex min-h-0 flex-1 flex-col">
         {isInitialLoading && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <MCPCardSkeleton key={i} />
-            ))}
-          </div>
+          <>
+            <div
+              role="status"
+              aria-live="polite"
+              className="mb-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-muted-foreground"
+            >
+              <Loader2 className="size-3 animate-spin" aria-hidden />
+              Loading MCP servers
+            </div>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+              {[1, 2, 3].map((i) => (
+                <MCPCardSkeleton key={i} />
+              ))}
+            </div>
+          </>
         )}
 
         {noServersAtAll && <MCPEmptyState onCreate={handleCreate} />}
 
         {noMatches && (
           <div className="flex flex-col items-center justify-center py-16 text-center">
-            <IconChip
-              icon={<Search strokeWidth={1.75} />}
-              tone="muted"
-              size="xl"
-              className="mb-3"
-            />
+            <span className="mb-4 inline-flex size-12 items-center justify-center rounded-xl border border-border bg-surface text-muted-foreground">
+              <Search className="size-5" strokeWidth={1.75} />
+            </span>
             <p className="text-sm text-foreground">No MCP servers match your filters</p>
             <CustomButton
               type="link"
