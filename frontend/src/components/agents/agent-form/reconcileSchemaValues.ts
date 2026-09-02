@@ -64,7 +64,15 @@ export function reconcileSchemaValues(
 
     if (field.data_type === 'float' || field.data_type === 'integer' || field.data_type === 'int') {
       const num = typeof value === 'number' ? value : Number(value);
-      if (Number.isNaN(num)) continue;
+      // A non-numeric value for a numeric field (e.g. a stale string carried
+      // over from a provider whose same-named field was a select) can never be
+      // valid. Drop it so the input/slider re-seeds a valid default instead of
+      // shipping garbage the backend rejects ("… must be a valid number").
+      // Applies uniformly to LLM / STT / TTS reconciliation.
+      if (Number.isNaN(num)) {
+        changes[key] = undefined;
+        continue;
+      }
 
       const validator =
         typeof field.validator === 'object' && field.validator !== null ? field.validator : {};

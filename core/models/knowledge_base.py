@@ -1,11 +1,11 @@
-from sqlalchemy import Column, String, Boolean, DateTime, ForeignKey, UniqueConstraint
+from sqlalchemy import Column, String, ForeignKey, UniqueConstraint
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 
-from core.models.base import OrgScopedModel
+from core.models.base import OrgScopedModel, SoftDeleteMixin
 
 
-class KnowledgeBase(OrgScopedModel):
+class KnowledgeBase(SoftDeleteMixin, OrgScopedModel):
     __tablename__ = "knowledge_bases"
     __table_args__ = (
         UniqueConstraint("organization_id", "name", name="uq_knowledge_base_org_name"),
@@ -27,8 +27,6 @@ class KnowledgeBase(OrgScopedModel):
     doc_type = Column(String(32), nullable=True)
     ingestion_stats = Column(JSONB, nullable=True)
     meta_data = Column(JSONB, nullable=False, default=dict)
-    is_active = Column(Boolean, nullable=False, default=True)
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     runs = relationship(
         "IngestionPipelineRun",

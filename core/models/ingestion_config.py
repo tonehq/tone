@@ -1,10 +1,10 @@
-from sqlalchemy import Boolean, Column, DateTime, Index, Integer, String, UniqueConstraint
+from sqlalchemy import Column, Index, Integer, String, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 
-from core.models.base import OrgScopedModel
+from core.models.base import OrgScopedModel, SoftDeleteMixin
 
 
-class IngestionConfig(OrgScopedModel):
+class IngestionConfig(SoftDeleteMixin, OrgScopedModel):
     """A named, reusable ingestion pipeline recipe (parser / tokeniser /
     embedder / vector store) that users save once and pick when starting a
     ``POST /knowledge-base/{upload_id}/runs``. Selecting one snapshots every
@@ -45,12 +45,6 @@ class IngestionConfig(OrgScopedModel):
     embedding_config = Column(JSONB, nullable=True)
     vector_store = Column(String(32), nullable=False)
     vector_store_ref = Column(JSONB, nullable=True)
-
-    is_active = Column(Boolean, nullable=False, default=True)
-    # Soft-delete: rows with ``deleted_at IS NOT NULL`` are hidden from list
-    # + selection so historical runs still resolve their source config for
-    # audit even after the user "deletes" it.
-    deleted_at = Column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
         return {
