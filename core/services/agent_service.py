@@ -2975,6 +2975,8 @@ class AgentService(BaseService):
             self.version_response(v, is_live=(v.id == live_id)) for v in version_rows
         ]
 
+        return result
+
     # ------------------------------------------------------------------
     # Agent list / facets / filter-values pipeline
     # (moved out of the router — single source of truth for core + EE)
