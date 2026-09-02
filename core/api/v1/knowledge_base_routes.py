@@ -30,10 +30,7 @@ from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
-from core.models.agent import Agent
-from core.models.agent_config import AgentConfig
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
-from core.models.knowledge_base import KnowledgeBase
 from core.models.upload import Upload
 from core.services.evals.eval_service import EvalRunSummary, EvalService
 from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
@@ -51,13 +48,8 @@ from core.services.ingestion_errors import (
     UnknownRagComponentError,
     is_unique_violation,
 )
-from core.services.ingestion_queue import (
-    enqueue_eval_for_ingestion_run,
-    enqueue_reprocess,
-    enqueue_upload,
-)
+from core.services.ingestion_queue import enqueue_eval_for_ingestion_run
 from core.services.ingestion_run_service import IngestionRunService
-from core.services.rag.component_registry import ensure_rag_component
 from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
 from core.services.rag.parser_factory import PARSERS
@@ -213,77 +205,6 @@ def _eval_run_summary_to_dict(s: EvalRunSummary) -> dict:
     }
 
 
-def _kb_for_upload(db: Session, org_id: UUID, upload_id: UUID) -> KnowledgeBase:
-    """Resolve the KnowledgeBase row backing an upload for enqueue flows. There
-    is exactly one per upload — a missing KB means the earlier create failed
-    and reprocess/replace is invalid, so surface a 500 rather than silently
-    dropping the enqueue."""
-    kb = (
-        db.query(KnowledgeBase)
-        .filter(
-            KnowledgeBase.upload_id == upload_id,
-            KnowledgeBase.organization_id == org_id,
-        )
-        .first()
-    )
-    if kb is None:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Knowledge base row missing for upload",
-        )
-    return kb
-
-
-async def _start_ingestion_run(
-    db: Session,
-    *,
-    upload: Upload,
-    kb: KnowledgeBase,
-    org_id: UUID,
-    request_config: dict | None,
-    delete_existing: bool,
-    ingestion_config_id: UUID | None = None,
-) -> tuple[IngestionPipelineRun, int]:
-    """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
-    stamp the returned job id on the run. Shared by every KB write path
-    (upload / replace / reprocess / custom /runs) so the "create-run → enqueue
-    → stamp" trio lives in exactly one place.
-
-    When ``ingestion_config_id`` is set, the run row's recipe columns are
-    snapshotted from that saved config (``request_config`` is ignored, per
-    product decision) and the id is stamped on the run for audit.
-
-    On defer failure the pending run is marked ``failed`` (not orphaned) and
-    the exception is re-raised for the caller to translate to an HTTP error.
-    """
-    cfg = IngestionRunService.resolve_run_config(
-        db, org_id, kb.id, request_config, ingestion_config_id=ingestion_config_id
-    )
-    run = IngestionRunService.begin_pending_run(
-        db,
-        upload_id=upload.id,
-        knowledge_base_id=kb.id,
-        org_id=org_id,
-        config=cfg,
-        ingestion_config_id=ingestion_config_id,
-    )
-    enqueue = enqueue_reprocess if delete_existing else enqueue_upload
-    try:
-        job_id = await enqueue(upload.id, org_id, run.id)
-    except Exception as exc:  # noqa: BLE001
-        logger.exception(
-            "[ingestion] enqueue failed for upload {} run {}", upload.id, run.id
-        )
-        IngestionRunService.fail_run(db, run.id, error=f"enqueue failed: {exc}")
-        raise
-    IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
-    logger.info(
-        "[ingestion] enqueued upload={} run={} job_id={} reprocess={} config_id={}",
-        upload.id, run.id, job_id, delete_existing, ingestion_config_id,
-    )
-    return run, job_id
-
-
 def build_knowledge_base_router(
     auth_dependency: Callable[..., Any],
     resolve_org_id: Callable[[Any], UUID],
@@ -389,38 +310,12 @@ def build_knowledge_base_router(
                     status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid agent_id"
                 )
 
-            agent = (
-                db.query(Agent)
-                .filter(Agent.id == agent_uuid, Agent.organization_id == org_id)
-                .first()
-            )
-            if not agent:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-                )
-
-            # Uploads from this admin route attach directly to the agent's
-            # PUBLISHED config — i.e. the document goes live for the call
-            # pipeline as soon as the upload finishes ingesting. That is the
-            # established behaviour for this endpoint; per-version isolation
-            # only applies to the editor flow, where saves clone the chosen
-            # source version. Resolving up-front here (before touching R2)
-            # also means a missing-publication 409 doesn't orphan the blob.
-            agent_config = None
-            if agent.published_config_id:
-                agent_config = (
-                    db.query(AgentConfig)
-                    .filter(
-                        AgentConfig.id == agent.published_config_id,
-                        AgentConfig.deleted_at.is_(None),
-                    )
-                    .first()
-                )
-            if not agent_config:
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Agent has no published configuration yet. Save and publish the agent before uploading knowledge base documents.",
-                )
+            # Resolve the agent's PUBLISHED config up-front (before touching R2)
+            # so a missing-publication 409 doesn't orphan the blob. The
+            # Agent/AgentConfig queries + typed 404/409 live in the service.
+            agent_config = UploadService(
+                db, org_id=org_id
+            ).resolve_published_agent_config(agent_uuid)
 
         file_name = file.filename or "upload.bin"
         content_type = file.content_type or "application/octet-stream"
@@ -432,29 +327,11 @@ def build_knowledge_base_router(
         if not size_bytes:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Empty file")
 
-        # Fast-path duplicate-name check: KnowledgeBase enforces
-        # UniqueConstraint(organization_id, name) — without this pre-check the
-        # collision becomes an opaque IntegrityError → HTTP 500 with no user
-        # message. Surface a friendly 409 here BEFORE R2 write so no orphan
-        # blob is created for the doomed insert. The IntegrityError catch
-        # below still covers the (rare) race where two concurrent uploads
-        # land the same name between this check and the service commit.
-        duplicate_name = (
-            db.query(KnowledgeBase.id)
-            .filter(
-                KnowledgeBase.organization_id == org_id,
-                KnowledgeBase.name == file_name,
-            )
-            .first()
-        )
-        if duplicate_name is not None:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail=(
-                    f"A document named '{file_name}' already exists. "
-                    "Rename the file or delete the existing document."
-                ),
-            )
+        # Fast-path duplicate-name check (409 before the R2 write) so no orphan
+        # blob is created for a doomed insert — the query + friendly message
+        # live in the service; the IntegrityError catch below still covers the
+        # rare concurrent-upload race.
+        UploadService(db, org_id=org_id).ensure_kb_name_available(file_name)
 
         logger.info(
             "[upload] received upload org={} user={} agent={} file_name={} content_type={} size={}",
@@ -550,11 +427,13 @@ def build_knowledge_base_router(
         # Resolve first so the 404 for a missing upload takes precedence over
         # the empty-file 400 (preserving the original error ordering) and so the
         # requested-name fallback can reference the current file name.
-        upload = (
-            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
-        )
-        if not upload:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
+        svc = UploadService(db, org_id=org_id)
+        try:
+            upload = svc.get_org_upload(uid)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
 
         file.file.seek(0, 2)
         size_bytes = file.file.tell()
@@ -572,7 +451,7 @@ def build_knowledge_base_router(
         # IngestionValidationError (→ 400) for a too-long name / bad type /
         # oversize file, and ValueError (→ 404) for a missing upload.
         try:
-            upload = UploadService(db, org_id=org_id).replace_upload_file(
+            upload = svc.replace_upload_file(
                 upload_id=uid,
                 fileobj=file.file,
                 file_name=requested_name,
@@ -587,23 +466,9 @@ def build_knowledge_base_router(
             ) from exc
 
         # The file content changed, so everything derived from the OLD file is
-        # now stale. Purge it up front (the UI warns the user before this): all
-        # ingestion runs (→ chunks + embeddings via cascade) and the eval
-        # question set (→ eval_results via cascade). The fresh ingestion below
-        # then re-embeds and the auto-eval regenerates questions from the new
-        # content. ``delete_existing=False`` because nothing is left to wipe.
-        IngestionRunService.delete_runs_for_upload(db, upload_id=upload.id, org_id=org_id)
-        EvalService().delete_eval_set_for_upload(db, upload_id=upload.id, org_id=org_id)
-
-        kb = _kb_for_upload(db, org_id, upload.id)
-        await _start_ingestion_run(
-            db,
-            upload=upload,
-            kb=kb,
-            org_id=org_id,
-            request_config=None,
-            delete_existing=False,
-        )
+        # now stale — purge prior runs + the eval set and re-run ingestion. The
+        # orchestration lives in the service so this route stays a transport.
+        await svc.reingest_after_file_replace(upload)
 
         return _upload_to_payload(upload)
 
@@ -627,41 +492,18 @@ def build_knowledge_base_router(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
-        upload = (
-            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
-        )
-        if not upload:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
-
-        if not upload.file_path:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Upload has no stored file to reprocess",
+        # Status flip + meta cleanup + commit and the re-queue orchestration all
+        # live in the service (no ORM mutation / commit in the transport). The
+        # service raises ValueError for a missing upload (→ 404) and a 400
+        # HTTPException when there is no stored blob to reprocess.
+        try:
+            upload = await UploadService(db, org_id=org_id).reprocess_document(
+                uid, user_id=claims.user_id
             )
-
-        logger.info(
-            "[ingestion] reprocess requested upload={} org={} user={} prev_status={}",
-            upload.id, org_id, claims.user_id, upload.status,
-        )
-
-        # Flip to processing and drop the stale error so the UI reflects the
-        # retry immediately, before the background task runs.
-        upload.status = "processing"
-        meta = dict(upload.meta_data or {})
-        meta.pop("error", None)
-        upload.meta_data = meta
-        db.commit()
-        db.refresh(upload)
-
-        kb = _kb_for_upload(db, org_id, upload.id)
-        await _start_ingestion_run(
-            db,
-            upload=upload,
-            kb=kb,
-            org_id=org_id,
-            request_config=None,
-            delete_existing=True,
-        )
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
 
         return _upload_to_payload(upload)
 
@@ -823,69 +665,17 @@ def build_knowledge_base_router(
         """
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
-        if not upload.file_path:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Upload has no stored file to reprocess",
-            )
-
-        raw_body = body or {}
-
-        # Parse the optional ingestion_config_id up front (backend enforces
-        # even if the frontend omits validation).
-        ingestion_config_id: UUID | None = None
-        raw_config_id = raw_body.get("ingestion_config_id")
-        if raw_config_id:
-            try:
-                ingestion_config_id = UUID(str(raw_config_id))
-            except (TypeError, ValueError):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Invalid ingestion_config_id",
-                )
-
-        allowed = {
-            "parser", "parser_config",
-            "tokeniser", "tokeniser_config",
-            "embedding_provider", "embedding_model",
-            "embedding_dimensions", "embedding_version", "embedding_config",
-            "vector_store", "vector_store_ref",
-        }
-        run_config = {k: v for k, v in raw_body.items() if k in allowed}
-
-        # When a saved config is picked, ignore any per-field overrides in
-        # the body — the recipe is fixed by the config (product decision).
-        # Skip the slug validation too: those fields were validated when the
-        # config was created, and the snapshot happens in resolve_run_config.
-        if ingestion_config_id is None:
-            # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser
-            # / provider / store) so the queued job doesn't error mid-ingest.
-            # ``ensure_rag_component`` raises ``UnknownRagComponentError`` —
-            # the router-level ``_raise_http_for_ingestion_error`` maps it to
-            # a 400 with the same "Available: [...]" hint as before.
-            try:
-                for kind in (
-                    "parser", "tokeniser", "embedding_provider", "vector_store",
-                ):
-                    if kind in run_config:
-                        ensure_rag_component(kind, run_config[kind])
-            except UnknownRagComponentError as exc:
-                _raise_http_for_ingestion_error(exc)
-        else:
-            # Discard any per-field entries silently when a config was chosen
-            # so the response reflects what was actually applied.
-            run_config = {}
-
-        kb = _kb_for_upload(db, org_id, upload.id)
+        # Body parsing, slug validation, KB resolution, run start, and the
+        # effective-recipe response all live in the service. Typed ingestion
+        # errors are mapped to HTTP here (400/404) exactly as before; the
+        # "Invalid ingestion_config_id" / "no stored file" 400s and the
+        # missing-KB 500 are raised as HTTPException inside the service.
         try:
-            run, job_id = await _start_ingestion_run(
+            return await IngestionRunService.create_pipeline_run(
                 db,
-                upload=upload,
-                kb=kb,
                 org_id=org_id,
-                request_config=run_config or None,
-                delete_existing=False,
-                ingestion_config_id=ingestion_config_id,
+                upload=upload,
+                raw_body=body or {},
             )
         except (
             IngestionConfigNotFoundError,
@@ -894,38 +684,6 @@ def build_knowledge_base_router(
             IngestionValidationError,
         ) as exc:
             _raise_http_for_ingestion_error(exc)
-        logger.info(
-            "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
-            "config_id={}, overrides={})",
-            upload.id, run.id, job_id, ingestion_config_id, sorted(run_config.keys()),
-        )
-        # Echo the EFFECTIVE recipe snapshotted onto the run row (not the
-        # request's raw run_config, which is intentionally empty when a saved
-        # config was picked). This way the client can verify what was actually
-        # applied without a follow-up GET.
-        effective_config = {
-            "parser": run.parser,
-            "parser_config": run.parser_config,
-            "tokeniser": run.tokeniser,
-            "tokeniser_config": run.tokeniser_config,
-            "embedding_provider": run.embedding_provider,
-            "embedding_model": run.embedding_model,
-            "embedding_dimensions": run.embedding_dimensions,
-            "embedding_version": run.embedding_version,
-            "embedding_config": run.embedding_config,
-            "vector_store": run.vector_store,
-            "vector_store_ref": run.vector_store_ref,
-        }
-        return {
-            "upload_id": str(upload.id),
-            "ingestion_run_id": str(run.id),
-            "job_id": job_id,
-            "ingestion_config_id": (
-                str(ingestion_config_id) if ingestion_config_id else None
-            ),
-            "run_config": effective_config,
-            "status": "queued",
-        }
 
     @router.post("/{upload_id}/runs/{run_id}/activate", status_code=status.HTTP_200_OK)
     def activate_pipeline_run(

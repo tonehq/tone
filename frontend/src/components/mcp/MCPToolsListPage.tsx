@@ -1,15 +1,11 @@
 'use client';
 
-import { ArrowLeft, RefreshCw, Wrench } from 'lucide-react';
+import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  AppLoader,
-  CustomButton,
-  CustomTable,
-  IconChip,
-  TokenSearchBar,
-} from '@/components/shared';
+import CountChip from '@/components/mcp/tools/CountChip';
+import EmptyState from '@/components/mcp/tools/EmptyState';
+import { AppLoader, CustomButton, CustomTable, TokenSearchBar } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { useGoBack } from '@/hooks/useGoBack';
 import { discoverMcpTools, getMcpServer } from '@/services/mcpServerService';
@@ -243,56 +239,6 @@ export default function MCPToolsListPage({ serverId }: MCPToolsListPageProps) {
             <AppLoader label="Loading server..." className="min-h-0" />
           </div>
         )}
-      </div>
-    </div>
-  );
-}
-
-const CHIP_TONES = {
-  sky: 'bg-sky-500/10 text-sky-600 ring-sky-500/20 dark:text-sky-400',
-  amber: 'bg-amber-500/10 text-amber-600 ring-amber-500/20 dark:text-amber-400',
-} as const;
-
-function CountChip({
-  count,
-  label,
-  tone,
-  noun = false,
-}: {
-  count: number;
-  label: string;
-  tone: keyof typeof CHIP_TONES;
-  noun?: boolean;
-}) {
-  if (count === 0) {
-    return <span className="text-[12px] text-muted-foreground/50">—</span>;
-  }
-  const suffix = noun ? label : count === 1 ? label : `${label}s`;
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span
-        className={`inline-flex h-5 min-w-[20px] items-center justify-center rounded-md px-1.5 text-[11px] font-semibold tabular-nums ring-1 ring-inset ${CHIP_TONES[tone]}`}
-      >
-        {count}
-      </span>
-      <span className="text-[12px] text-muted-foreground">{suffix}</span>
-    </span>
-  );
-}
-
-function EmptyState({ hasFilter }: { hasFilter: boolean }) {
-  return (
-    <div className="flex flex-col items-center gap-4 py-10">
-      <IconChip icon={<Wrench strokeWidth={1.75} />} tone="muted" size="xl" />
-      <div className="max-w-sm text-center">
-        <p className="font-semibold text-foreground">
-          {hasFilter ? 'No tools match your search' : 'No tools available'}
-        </p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {hasFilter
-            ? 'Try a different search term.'
-            : 'This MCP server is connected but did not expose any tools.'}
-        </p>
       </div>
     </div>
   );

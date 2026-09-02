@@ -1,9 +1,9 @@
 'use client';
 
-import { Check, Loader2, PhoneIncoming, Search, Sparkles, X } from 'lucide-react';
+import { Check, Loader2, PhoneIncoming, Search, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { CustomButton, CustomModal, SelectInput } from '@/components/shared';
+import { CustomButton, CustomModal, SearchBar, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import {
   listChannelPhoneNumbers,
@@ -210,6 +210,14 @@ export default function AssignPhoneNumberModal({
 
   const clearSelection = () => setSelected(new Map());
 
+  const handleServiceProviderChange = (v: string) => {
+    setServiceProvider(v);
+    // Auto-jump channel to the first one in this provider so the numbers list
+    // refreshes without an extra click.
+    const first = channels.find((c) => c.channel_type === v);
+    setChannelId(first?.id ?? '');
+  };
+
   return (
     <CustomModal
       open={open}
@@ -226,13 +234,7 @@ export default function AssignPhoneNumberModal({
             label="Service provider"
             options={serviceProviderOptions}
             value={serviceProvider}
-            onValueChange={(v) => {
-              setServiceProvider(v);
-              // Auto-jump channel to the first one in this provider so the
-              // numbers list refreshes without an extra click.
-              const first = channels.find((c) => c.channel_type === v);
-              setChannelId(first?.id ?? '');
-            }}
+            onValueChange={handleServiceProviderChange}
             loading={channelsLoading}
             placeholder="Select a provider"
           />
@@ -288,31 +290,14 @@ export default function AssignPhoneNumberModal({
             )}
           </div>
 
-          {/* Search */}
+          {/* Search — instant local filter (no debounce) via the shared SearchBar */}
           {hasNumbers && (
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="text"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by number, label, or agent name"
-                className={cn(
-                  'h-9 w-full rounded-lg border border-border/70 bg-background pl-8 pr-8 text-sm transition-colors',
-                  'placeholder:text-muted-foreground/70 focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/20',
-                )}
-              />
-              {search && (
-                <CustomButton
-                  type="text"
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="absolute right-2 top-1/2 flex size-5 -translate-y-1/2 items-center justify-center rounded-md p-0 text-muted-foreground hover:bg-muted hover:text-foreground"
-                >
-                  <X className="size-3" />
-                </CustomButton>
-              )}
-            </div>
+            <SearchBar
+              value={search}
+              onChange={setSearch}
+              placeholder="Search by number, label, or agent name"
+              containerClassName="max-w-none"
+            />
           )}
 
           {/* List container */}

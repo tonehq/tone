@@ -2,51 +2,18 @@ from contextlib import contextmanager
 from typing import Any, Dict, List, Literal, Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, status
 from pydantic import BaseModel, Field, model_validator
-from sqlalchemy import and_, case, exists, or_
 from sqlalchemy.orm import Session
 
-from core.api.v1.faceted_schemas import FacetsRequest
+from core.api.v1.faceted_schemas import FacetsRequest, ListRequest
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
-from core.models.agent import Agent
-from core.models.channel import Channel
-from core.models.phone_number import PhoneNumber
 from core.services.agent_service import AgentService
 from core.services.readiness import ReadinessService
-from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
-from core.utils.list_params import resolve_sort
 from shared.config import settings
 
 router = APIRouter()
-
-
-AGENT_FACET_FIELDS = ["agent_type", "status"]
-
-
-def _agent_column_map(org_id: UUID) -> Dict[str, Any]:
-    # ``status`` mirrors the list UI, where an agent is "active" when it has at
-    # least one phone number attached. A CASE over an EXISTS subquery lets it
-    # flow through the generic faceted-query helpers as a string facet.
-    has_phone = exists().where(
-        and_(PhoneNumber.agent_id == Agent.id, PhoneNumber.organization_id == org_id)
-    )
-    return {
-        "name": Agent.name,
-        "agent_type": Agent.agent_type,
-        "status": case((has_phone, "active"), else_="inactive"),
-        "is_active": Agent.is_active,
-        "created_at": Agent.created_at,
-        "updated_at": Agent.updated_at,
-    }
-
-
-def _agent_base_query(db: Session, org_id: UUID):
-    """Org-scoped base query for agents (excludes soft-deleted rows)."""
-    return db.query(Agent).filter(
-        Agent.organization_id == org_id, Agent.deleted_at.is_(None)
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -213,105 +180,6 @@ def _get_service(claims: JWTClaims, db: Session) -> AgentService:
 
 
 # ---------------------------------------------------------------------------
-# Helpers (shared with EE)
-# ---------------------------------------------------------------------------
-
-def _phone_numbers_for(db: Session, org_id: UUID, agent_ids: list[UUID]) -> dict[UUID, list[dict]]:
-    """Batch-fetch phone numbers for the given agents. Returns {agent_id: [{type, no}, ...]}."""
-    if not agent_ids:
-        return {}
-    rows = (
-        db.query(PhoneNumber.agent_id, PhoneNumber.number, Channel.channel_type)
-        .join(Channel, Channel.id == PhoneNumber.channel_id)
-        .filter(
-            PhoneNumber.organization_id == org_id,
-            PhoneNumber.agent_id.in_(agent_ids),
-        )
-        .all()
-    )
-    grouped: dict[UUID, list[dict]] = {}
-    for agent_id, number, channel_type in rows:
-        grouped.setdefault(agent_id, []).append({"type": channel_type, "no": number})
-    return grouped
-
-
-def _serialize_agent(
-    agent: Agent,
-    phone_map: dict[UUID, list[dict]],
-    readiness_map: dict[UUID, dict],
-) -> dict:
-    return {
-        "id": str(agent.id),
-        "uuid": str(agent.id),
-        "name": agent.name,
-        "description": agent.description,
-        "agent_type": agent.agent_type,
-        "is_active": agent.is_active,
-        "phone_number": phone_map.get(agent.id, []),
-        # Last-known readiness for the list badge; None until a run is stored.
-        "readiness": readiness_map.get(agent.id),
-        "created_at": agent.created_at.timestamp() if agent.created_at else None,
-        "updated_at": agent.updated_at.timestamp() if agent.updated_at else None,
-    }
-
-
-def list_agents_for_org(db: Session, org_id: UUID, body: dict) -> dict:
-    """Shared list pipeline used by both core and EE agent list endpoints."""
-    page = max(int(body.get("page") or 1), 1)
-    page_size = min(max(int(body.get("page_size") or 20), 1), 100)
-    search = body.get("search")
-    is_active = body.get("is_active")
-    agent_type = body.get("agent_type")
-
-    column_map = _agent_column_map(org_id)
-    query = _agent_base_query(db, org_id)
-
-    # Named params (back-compat).
-    if search:
-        like = f"%{search}%"
-        query = query.filter(or_(Agent.name.ilike(like), Agent.description.ilike(like)))
-    if is_active is not None:
-        query = query.filter(Agent.is_active == bool(is_active))
-    if agent_type:
-        query = query.filter(Agent.agent_type == agent_type)
-
-    # Generic faceted filters + sort.
-    query = apply_filters(query, body.get("filters"), column_map)
-    total = query.count()
-    sort_by, sort_order = resolve_sort(body, "updated_at")
-    query = apply_sort(query, column_map, sort_by, sort_order, Agent.updated_at)
-
-    offset = (page - 1) * page_size
-    items = query.offset(offset).limit(page_size).all()
-    agent_ids = [a.id for a in items]
-    phone_map = _phone_numbers_for(db, org_id, agent_ids)
-    readiness_map = ReadinessService(db, org_id=org_id).latest_for_agents(agent_ids)
-    return {
-        "items": [_serialize_agent(a, phone_map, readiness_map) for a in items],
-        "total": total,
-        "page": page,
-        "page_size": page_size,
-    }
-
-
-def agent_facets_for_org(db: Session, org_id: UUID, filters=None) -> dict:
-    """Per-value facet counts for the agent filter drawer."""
-    return build_facets(
-        lambda: _agent_base_query(db, org_id),
-        _agent_column_map(org_id),
-        AGENT_FACET_FIELDS,
-        filters,
-    )
-
-
-def agent_filter_values_for_org(db: Session, org_id: UUID, column_name: str) -> dict:
-    """Distinct values of a column for token-search autocomplete."""
-    column_map = _agent_column_map(org_id)
-    allowed = {k: column_map[k] for k in ("name", "agent_type", "status")}
-    return distinct_values(_agent_base_query(db, org_id), allowed, column_name)
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -320,14 +188,7 @@ def get_all_agents(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    rows = (
-        db.query(Agent.id, Agent.name)
-        .filter(Agent.organization_id == org_id, Agent.deleted_at.is_(None))
-        .order_by(Agent.name.asc())
-        .all()
-    )
-    return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
+    return _get_service(claims, db).get_all_agents()
 
 
 @router.post("/create_agent", status_code=status.HTTP_201_CREATED)
@@ -549,12 +410,11 @@ def delete_agent_version(
 
 @router.post("/list")
 def list_agents(
-    body: dict = Body(default={}),
+    body: ListRequest = ListRequest(),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    return list_agents_for_org(db, org_id, body)
+    return _get_service(claims, db).list_agents(body.model_dump())
 
 
 @router.post("/facets")
@@ -563,9 +423,8 @@ def get_agent_facets(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
     filters = [f.model_dump() for f in body.filters] if body.filters else None
-    return agent_facets_for_org(db, org_id, filters)
+    return _get_service(claims, db).facets(filters)
 
 
 @router.get("/filter-values")
@@ -574,8 +433,7 @@ def get_agent_filter_values(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    org_id = UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-    return agent_filter_values_for_org(db, org_id, column_name)
+    return _get_service(claims, db).filter_values(column_name)
 
 
 # ---------------------------------------------------------------------------

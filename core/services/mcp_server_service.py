@@ -6,6 +6,8 @@ from typing import Any, Dict, List, Optional
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from sqlalchemy import case, or_
 
@@ -210,6 +212,37 @@ def mask_auth_config_url(auth_config) -> dict:
     return {**auth_config, SECRET_URL_KEY: _MASKED_URL}
 
 
+def _masked_auth_config(auth_config):
+    """Return an auth_config with the same KEYS/structure but every secret VALUE
+    replaced by the fixed ``_MASKED_URL`` sentinel, WITHOUT decrypting anything.
+
+    Used for broad/list responses so credentials (``api_key``, ``bearer_token``,
+    the ``server_url``, and any custom header values) are never dumped in
+    plaintext. Only the single-item edit-fetch (``get_mcp_server``) passes
+    ``mask_secrets=False`` to return the real decrypted config the edit form
+    needs to pre-fill.
+
+    Structure is preserved: the nested ``headers`` list keeps its shape with each
+    string value masked, and non-string / structural values pass through
+    untouched. ``server_url`` collapses to the same sentinel
+    :func:`mask_auth_config_url` already emits. ``None``/falsy stays ``None``.
+    """
+    if not auth_config:
+        return None
+    masked = {}
+    for key, value in auth_config.items():
+        if key == "headers" and isinstance(value, list):
+            masked[key] = [
+                {k: (_MASKED_URL if isinstance(v, str) and v else v) for k, v in h.items()}
+                for h in value
+            ]
+        elif isinstance(value, str) and value:
+            masked[key] = _MASKED_URL
+        else:
+            masked[key] = value
+    return masked
+
+
 def headers_from_meta(meta_data) -> dict:
     """Extract the custom request headers the MCP form stores under
     ``meta_data.http_headers`` (e.g. ClickUp's ``x-workspace-id``).
@@ -367,9 +400,12 @@ class McpServerService(BaseService):
                 effective_meta = update_data.get("meta_data", existing.meta_data)
                 effective_auth_type = update_data.get("auth_type", existing.auth_type)
                 # OAuth bearer takes precedence over any custom header of the same name.
+                oauth_headers = await run_in_threadpool(
+                    self._resolve_oauth_headers, effective_oauth_id
+                )
                 extra_headers = {
                     **headers_from_meta(effective_meta),
-                    **self._resolve_oauth_headers(effective_oauth_id),
+                    **oauth_headers,
                 }
                 validation_result = await self.validate_mcp_connection(
                     validate_url, validate_transport, validate_auth,
@@ -421,9 +457,12 @@ class McpServerService(BaseService):
         self._validate_oauth_scopes(oauth_connection_id)
 
         # Validate connection before persisting (inject custom headers + OAuth bearer when linked).
+        oauth_headers = await run_in_threadpool(
+            self._resolve_oauth_headers, oauth_connection_id
+        )
         extra_headers = {
             **headers_from_meta(data.get("meta_data")),
-            **self._resolve_oauth_headers(oauth_connection_id),
+            **oauth_headers,
         }
         validation_result = await self.validate_mcp_connection(
             effective_server_url(data.get("auth_config"), data["server_url"]),
@@ -764,6 +803,23 @@ class McpServerService(BaseService):
         header_name, header_value = svc.resolve_connection_auth_header(connection)
         return {header_name: header_value}
 
+    def build_validation_headers(
+        self, meta_data, oauth_connection_id
+    ) -> Dict[str, str]:
+        """Assemble the request headers used to validate an MCP connection.
+
+        Reflects how the server will actually authenticate at call time: custom
+        headers stored under ``meta_data.http_headers`` merged with a fresh OAuth
+        bearer (or API-key header) from the linked connection, which wins on
+        name conflict. Public entrypoint so routers don't reach into the private
+        header resolvers — the same assembly ``upsert_mcp_server`` /
+        ``discover_tools`` perform inline.
+        """
+        return {
+            **headers_from_meta(meta_data),
+            **self._resolve_oauth_headers(oauth_connection_id),
+        }
+
     def _validate_oauth_scopes(self, oauth_connection_id) -> None:
         """Block config when a linked connection lacks the provider's required scopes."""
         if not oauth_connection_id:
@@ -861,6 +917,12 @@ class McpServerService(BaseService):
         except HTTPException:
             raise
         except Exception as e:
+            # Full traceback for diagnosis; no secrets — auth_config, resolved
+            # headers, and the (possibly secret) server_url are deliberately
+            # omitted. The client still gets the sanitized HTTPException below.
+            logger.exception(
+                f"[mcp] MCP connection validation failed (transport={transport_type})"
+            )
             error_str = str(e).lower()
             if any(keyword in error_str for keyword in [
                 "nodename nor servname", "name or service not known",
@@ -900,9 +962,12 @@ class McpServerService(BaseService):
         """Connect to an MCP server and return its available tools."""
         mcp_server = self.get_mcp_server(mcp_server_id)
         decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
+        oauth_headers = await run_in_threadpool(
+            self._resolve_oauth_headers, mcp_server.oauth_connection_id
+        )
         extra_headers = {
             **headers_from_meta(mcp_server.meta_data),
-            **self._resolve_oauth_headers(mcp_server.oauth_connection_id),
+            **oauth_headers,
         }
         result = await self.validate_mcp_connection(
             resolve_server_url(mcp_server),
@@ -923,6 +988,8 @@ class McpServerService(BaseService):
         self,
         mcp_server: McpServer,
         oauth_map: Optional[Dict[Any, Dict[str, Any]]] = None,
+        *,
+        mask_secrets: bool = True,
     ) -> Dict[str, Any]:
         # ``oauth_map`` is the pre-hydrated OAuth summary produced by
         # ``_hydrate_oauth_summary`` during list responses; single-item
@@ -930,6 +997,15 @@ class McpServerService(BaseService):
         oauth_connection = None
         if mcp_server.oauth_connection_id and oauth_map:
             oauth_connection = oauth_map.get(mcp_server.oauth_connection_id)
+        # Safe by default: broad/list responses mask secret VALUES (keys kept)
+        # so credentials are never dumped. Only the single-item edit-fetch
+        # (get_mcp_server) passes ``mask_secrets=False`` to return the real
+        # decrypted config the edit form needs to pre-fill.
+        auth_config = (
+            _masked_auth_config(mcp_server.auth_config)
+            if mask_secrets
+            else mask_auth_config_url(decrypt_auth_config(mcp_server.auth_config))
+        )
         return {
             "id": str(mcp_server.id),
             "name": mcp_server.name,
@@ -939,7 +1015,7 @@ class McpServerService(BaseService):
             "icon": mcp_server.icon,
             "transport_type": mcp_server.transport_type,
             "auth_type": normalize_auth_type(mcp_server.auth_type),
-            "auth_config": mask_auth_config_url(decrypt_auth_config(mcp_server.auth_config)),
+            "auth_config": auth_config,
             "meta_data": mcp_server.meta_data,
             "oauth_connection_id": (
                 str(mcp_server.oauth_connection_id) if mcp_server.oauth_connection_id else None

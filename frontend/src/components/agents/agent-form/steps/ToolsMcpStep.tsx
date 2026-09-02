@@ -1,7 +1,7 @@
 'use client';
 
 import { Plus, Server, Settings2, Wrench, X } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
@@ -13,15 +13,10 @@ import SectionCard from '@/components/agents/agent-form/SectionCard';
 import { CustomButton } from '@/components/shared';
 import { withAttachContext } from '@/utils/agentAttachmentContext';
 import { Badge } from '@/components/ui/badge';
-import { listMcpServers } from '@/services/mcpServerService';
-import { listOAuthConnections } from '@/services/oauthService';
-import { getAllTools } from '@/services/toolService';
+import { useToolsMcpCatalog } from '@/lib/api/toolsMcpCatalog';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import type { AgentFormState } from '@/types/agent';
-import type { MCPServer } from '@/types/mcp';
-import type { OAuthConnection } from '@/types/oauth';
-import type { Tool } from '@/types/tool';
 import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
 
 // Section accents. Kept small and re-used on both the section-header icon and
 // the summary-row icon so the two categories read at a glance.
@@ -167,34 +162,17 @@ export default function ToolsMcpStep() {
   const toolOverrides = useWatch({ control, name: 'tool_oauth_overrides' }) ?? {};
   const mcpOverrides = useWatch({ control, name: 'mcp_server_oauth_overrides' }) ?? {};
 
-  const [tools, setTools] = useState<Tool[]>([]);
-  const [mcpServers, setMcpServers] = useState<MCPServer[]>([]);
-  // Loaded once so the OAuth picker inside the modal doesn't do per-row fetches.
-  const [oauthConnections, setOauthConnections] = useState<OAuthConnection[]>([]);
-  const [loading, setLoading] = useState(false);
   const [toolsModalOpen, setToolsModalOpen] = useState(false);
   const [mcpModalOpen, setMcpModalOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([getAllTools(), listMcpServers(), listOAuthConnections()])
-      .then(([toolRows, mcpRows, connectionRows]) => {
-        if (cancelled) return;
-        setTools(toolRows);
-        setMcpServers(mcpRows);
-        setOauthConnections(connectionRows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  // Tools + MCP servers + OAuth connections load as one catalog (single loading
+  // flag; any failure blanks all three + toasts, same as the old Promise.all).
+  // `addConnection` prepends an inline-created credential to the cached list.
+  const { data, isLoading: loading, error, addConnection } = useToolsMcpCatalog();
+  const tools = useMemo(() => data?.tools ?? [], [data]);
+  const mcpServers = useMemo(() => data?.mcpServers ?? [], [data]);
+  const oauthConnections = useMemo(() => data?.connections ?? [], [data]);
+  useQueryErrorToast(error);
 
   // Lookups by id — iterating over ``selected*Ids`` (source of truth) and
   // reading from these maps avoids the O(n²) ``find`` per selected row.
@@ -204,14 +182,6 @@ export default function ToolsMcpStep() {
     () => new Map(oauthConnections.map((c) => [c.id, c])),
     [oauthConnections],
   );
-
-  // A credential created inline from a picker row is added to the shared list
-  // so it's immediately selectable across every attachment (deduped by id in
-  // case a refetch races it in).
-  const addConnection = (created: OAuthConnection) =>
-    setOauthConnections((prev) =>
-      prev.some((c) => c.id === created.id) ? prev : [created, ...prev],
-    );
 
   const toggleTool = (toolId: string) =>
     setValue('tool_ids', toggleId(selectedToolIds, toolId), { shouldDirty: true });

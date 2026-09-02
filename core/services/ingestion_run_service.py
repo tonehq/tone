@@ -277,6 +277,183 @@ class IngestionRunService:
         db.commit()
 
     @staticmethod
+    async def start_ingestion_run(
+        db: Session,
+        *,
+        upload,
+        kb: KnowledgeBase,
+        org_id: Any,
+        request_config: Optional[dict],
+        delete_existing: bool,
+        ingestion_config_id: Optional[Any] = None,
+    ) -> Tuple[IngestionPipelineRun, int]:
+        """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
+        stamp the returned job id on the run. Shared by every KB write path
+        (upload / replace / reprocess / custom /runs) so the "create-run → enqueue
+        → stamp" trio lives in exactly one place.
+
+        When ``ingestion_config_id`` is set, the run row's recipe columns are
+        snapshotted from that saved config (``request_config`` is ignored, per
+        product decision) and the id is stamped on the run for audit.
+
+        On defer failure the pending run is marked ``failed`` (not orphaned) and
+        the exception is re-raised for the caller to translate to an HTTP error.
+        """
+        # Local import — ``ingestion_queue`` imports this service (locally), so
+        # keep the enqueue import inside the method to avoid an import cycle.
+        from core.services.ingestion_queue import enqueue_reprocess, enqueue_upload
+
+        cfg = IngestionRunService.resolve_run_config(
+            db, org_id, kb.id, request_config, ingestion_config_id=ingestion_config_id
+        )
+        run = IngestionRunService.begin_pending_run(
+            db,
+            upload_id=upload.id,
+            knowledge_base_id=kb.id,
+            org_id=org_id,
+            config=cfg,
+            ingestion_config_id=ingestion_config_id,
+        )
+        enqueue = enqueue_reprocess if delete_existing else enqueue_upload
+        try:
+            job_id = await enqueue(upload.id, org_id, run.id)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "[ingestion] enqueue failed for upload {} run {}", upload.id, run.id
+            )
+            IngestionRunService.fail_run(db, run.id, error=f"enqueue failed: {exc}")
+            raise
+        IngestionRunService.set_procrastinate_job_id(db, run.id, job_id)
+        logger.info(
+            "[ingestion] enqueued upload={} run={} job_id={} reprocess={} config_id={}",
+            upload.id, run.id, job_id, delete_existing, ingestion_config_id,
+        )
+        return run, job_id
+
+    @staticmethod
+    async def create_pipeline_run(
+        db: Session,
+        *,
+        org_id: Any,
+        upload,
+        raw_body: dict,
+    ) -> dict:
+        """Kick off a NEW custom ingestion run for an existing upload (parser /
+        tokeniser / embedder / vector store overrides, or a saved
+        ``ingestion_config_id``) and return the response payload the
+        ``POST /{upload_id}/runs`` route echoes back.
+
+        Business logic relocated verbatim from the router: validate the upload
+        has a stored blob, parse the optional ``ingestion_config_id``, whitelist
+        the per-field overrides, fail fast on mis-typed slugs, resolve the KB,
+        start the run, then build the EFFECTIVE recipe snapshot for the client.
+
+        Raises ``HTTPException`` (400) for a missing blob / malformed
+        ``ingestion_config_id`` and the typed ingestion errors
+        (``UnknownRagComponentError`` / ``IngestionConfigNotFoundError`` /
+        ``IngestionConfigInactiveError`` / ``IngestionValidationError``) for bad
+        slugs / configs — the router maps the latter to HTTP status codes.
+        """
+        from fastapi import HTTPException, status
+
+        if not upload.file_path:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Upload has no stored file to reprocess",
+            )
+
+        raw_body = raw_body or {}
+
+        # Parse the optional ingestion_config_id up front (backend enforces
+        # even if the frontend omits validation).
+        ingestion_config_id: Optional[UUID] = None
+        raw_config_id = raw_body.get("ingestion_config_id")
+        if raw_config_id:
+            try:
+                ingestion_config_id = UUID(str(raw_config_id))
+            except (TypeError, ValueError):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Invalid ingestion_config_id",
+                )
+
+        allowed = {
+            "parser", "parser_config",
+            "tokeniser", "tokeniser_config",
+            "embedding_provider", "embedding_model",
+            "embedding_dimensions", "embedding_version", "embedding_config",
+            "vector_store", "vector_store_ref",
+        }
+        run_config = {k: v for k, v in raw_body.items() if k in allowed}
+
+        # When a saved config is picked, ignore any per-field overrides in
+        # the body — the recipe is fixed by the config (product decision).
+        # Skip the slug validation too: those fields were validated when the
+        # config was created, and the snapshot happens in resolve_run_config.
+        if ingestion_config_id is None:
+            # Fail fast on obvious mis-typed slugs (unknown parser / tokeniser
+            # / provider / store) so the queued job doesn't error mid-ingest.
+            # ``ensure_rag_component`` raises ``UnknownRagComponentError`` —
+            # the router-level ``_raise_http_for_ingestion_error`` maps it to
+            # a 400 with the same "Available: [...]" hint as before.
+            for kind in (
+                "parser", "tokeniser", "embedding_provider", "vector_store",
+            ):
+                if kind in run_config:
+                    ensure_rag_component(kind, run_config[kind])
+        else:
+            # Discard any per-field entries silently when a config was chosen
+            # so the response reflects what was actually applied.
+            run_config = {}
+
+        # Local import — ``upload_service`` imports this service at module level,
+        # so keep the KB resolver import inside the method to avoid a cycle.
+        from core.services.upload_service import UploadService
+
+        kb = UploadService.kb_for_upload(db, org_id, upload.id)
+        run, job_id = await IngestionRunService.start_ingestion_run(
+            db,
+            upload=upload,
+            kb=kb,
+            org_id=org_id,
+            request_config=run_config or None,
+            delete_existing=False,
+            ingestion_config_id=ingestion_config_id,
+        )
+        logger.info(
+            "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
+            "config_id={}, overrides={})",
+            upload.id, run.id, job_id, ingestion_config_id, sorted(run_config.keys()),
+        )
+        # Echo the EFFECTIVE recipe snapshotted onto the run row (not the
+        # request's raw run_config, which is intentionally empty when a saved
+        # config was picked). This way the client can verify what was actually
+        # applied without a follow-up GET.
+        effective_config = {
+            "parser": run.parser,
+            "parser_config": run.parser_config,
+            "tokeniser": run.tokeniser,
+            "tokeniser_config": run.tokeniser_config,
+            "embedding_provider": run.embedding_provider,
+            "embedding_model": run.embedding_model,
+            "embedding_dimensions": run.embedding_dimensions,
+            "embedding_version": run.embedding_version,
+            "embedding_config": run.embedding_config,
+            "vector_store": run.vector_store,
+            "vector_store_ref": run.vector_store_ref,
+        }
+        return {
+            "upload_id": str(upload.id),
+            "ingestion_run_id": str(run.id),
+            "job_id": job_id,
+            "ingestion_config_id": (
+                str(ingestion_config_id) if ingestion_config_id else None
+            ),
+            "run_config": effective_config,
+            "status": "queued",
+        }
+
+    @staticmethod
     def ensure_trace_id(db: Session, run_id: Any) -> Optional[str]:
         """Resolve the run's trace_id — read existing off the row (retry case)
         or mint + persist a new one — and stamp it onto the loguru contextvar
@@ -471,22 +648,30 @@ class IngestionRunService:
 
     @staticmethod
     def list_runs(
-        db: Session, upload_id: Any, org_id: Optional[Any] = None
+        db: Session, upload_id: Any, org_id: Any
     ) -> List[IngestionPipelineRun]:
-        # ``org_id`` is optional for backward compatibility with worker/CLI
-        # callers that already operate inside a trusted scope; router callers
-        # pass it so the query is tenant-scoped (defense-in-depth against IDOR).
-        q = db.query(IngestionPipelineRun).filter(
-            IngestionPipelineRun.upload_id == upload_id
+        # ``org_id`` is REQUIRED and ALWAYS applied so the query is tenant-scoped
+        # (defense-in-depth against IDOR). The only caller — the KB router's
+        # runs-list endpoint — already passes it.
+        return (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.upload_id == upload_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .order_by(IngestionPipelineRun.run_number.asc())
+            .all()
         )
-        if org_id is not None:
-            q = q.filter(IngestionPipelineRun.organization_id == org_id)
-        return q.order_by(IngestionPipelineRun.run_number.asc()).all()
 
     @staticmethod
     def get_active_run(
         db: Session, upload_id: Any, org_id: Optional[Any] = None
     ) -> Optional[IngestionPipelineRun]:
+        # ``org_id`` intentionally stays OPTIONAL: there is no router-reachable
+        # path to this method — the only callers are the trusted-scope
+        # ``rag-testing`` CLI scripts (run_eval.py / run_all.py) which invoke it
+        # WITHOUT an org_id. Making it required would break those scripts.
+        # When an org_id IS supplied the tenant filter is applied.
         q = db.query(IngestionPipelineRun).filter(
             IngestionPipelineRun.upload_id == upload_id,
             IngestionPipelineRun.is_active.is_(True),
@@ -497,12 +682,19 @@ class IngestionRunService:
 
     @staticmethod
     def activate_run(
-        db: Session, run_id: Any, org_id: Optional[Any] = None
+        db: Session, run_id: Any, org_id: Any
     ) -> IngestionPipelineRun:
-        q = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id)
-        if org_id is not None:
-            q = q.filter(IngestionPipelineRun.organization_id == org_id)
-        run = q.first()
+        # ``org_id`` is REQUIRED and ALWAYS applied so the run is resolved
+        # tenant-scoped (no cross-tenant activate). The only caller — the KB
+        # router's activate endpoint — already passes it.
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .first()
+        )
         if run is None:
             raise ValueError(f"IngestionPipelineRun {run_id} not found")
         (
@@ -532,12 +724,21 @@ class IngestionRunService:
         return run
 
     @staticmethod
-    def delete_run(db: Session, run_id: Any, org_id: Optional[Any] = None) -> None:
-        """Cascades to chunks + embeddings via FK ON DELETE CASCADE."""
-        q = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id)
-        if org_id is not None:
-            q = q.filter(IngestionPipelineRun.organization_id == org_id)
-        run = q.first()
+    def delete_run(db: Session, run_id: Any, org_id: Any) -> None:
+        """Cascades to chunks + embeddings via FK ON DELETE CASCADE.
+
+        ``org_id`` is REQUIRED and ALWAYS applied so a run is only ever deleted
+        within the caller's tenant (no cross-tenant delete). The only caller —
+        the KB router's delete endpoint — already passes it.
+        """
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .first()
+        )
         if run is None:
             return
         db.delete(run)

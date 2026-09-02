@@ -42,3 +42,16 @@ class KnowledgeBaseChunk(OrgScopedModel):
         back_populates="chunk",
         cascade="all, delete-orphan",
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": str(self.id),
+            "organization_id": str(self.organization_id) if self.organization_id else None,
+            "upload_id": str(self.upload_id) if self.upload_id else None,
+            "ingestion_run_id": str(self.ingestion_run_id) if self.ingestion_run_id else None,
+            "chunk_index": self.chunk_index,
+            "chunk_text": self.chunk_text,
+            "chunk_metadata": self.chunk_metadata,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

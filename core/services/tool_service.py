@@ -48,6 +48,17 @@ def decrypt_auth_config(auth_config: Optional[Dict[str, Any]]) -> Optional[Dict[
     return decrypted
 
 
+def _masked_auth_config(
+    auth_config: Optional[Dict[str, Any]]
+) -> Optional[Dict[str, Any]]:
+    """Return an auth_config with the same KEYS but every secret VALUE replaced
+    by a fixed placeholder, WITHOUT decrypting anything. Used for broad/list
+    responses so credentials are never dumped. ``None``/falsy stays ``None``."""
+    if not auth_config:
+        return None
+    return {key: "********" for key in auth_config.keys()}
+
+
 class ToolService(BaseService):
 
     def _validate_oauth_connection(self, oauth_connection_id) -> None:
@@ -553,7 +564,11 @@ class ToolService(BaseService):
         return distinct_values(self._tool_base_query(), allowed, column_name)
 
     def tool_response(
-        self, tool: Tool, oauth_map: Optional[Dict[Any, Dict[str, Any]]] = None
+        self,
+        tool: Tool,
+        oauth_map: Optional[Dict[Any, Dict[str, Any]]] = None,
+        *,
+        mask_secrets: bool = True,
     ) -> Dict[str, Any]:
         # ``oauth_map`` is the pre-hydrated OAuth summary produced by
         # ``_hydrate_oauth_summary`` during list responses; single-item
@@ -561,6 +576,15 @@ class ToolService(BaseService):
         oauth_connection = None
         if tool.oauth_connection_id and oauth_map:
             oauth_connection = oauth_map.get(tool.oauth_connection_id)
+        # Safe by default: broad/list responses mask secret VALUES (keys kept)
+        # so credentials are never dumped. Only the single-item edit-fetch
+        # (get_tool) passes ``mask_secrets=False`` to return the real decrypted
+        # config the edit form needs to pre-fill.
+        auth_config = (
+            _masked_auth_config(tool.auth_config)
+            if mask_secrets
+            else decrypt_auth_config(tool.auth_config)
+        )
         return {
             "id": str(tool.id),
             "name": tool.name,
@@ -570,7 +594,7 @@ class ToolService(BaseService):
             "url": tool.url,
             "method": tool.method,
             "auth_type": tool.auth_type,
-            "auth_config": decrypt_auth_config(tool.auth_config),
+            "auth_config": auth_config,
             "meta_data": tool.meta_data,
             "oauth_connection_id": tool.oauth_connection_id,
             # Compact summary the UI uses to render the token-expiry badge

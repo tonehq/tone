@@ -1,5 +1,5 @@
 from decimal import Decimal
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, case, exists, or_
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
 from typing import Dict, Any, Iterable, List, Optional, Tuple
@@ -38,6 +38,11 @@ from core.models.phone_number import PhoneNumber
 from core.models.tool import Tool
 from core.models.mcp_server import McpServer
 from core.models.upload import Upload
+from core.utils.faceted_query import apply_filters, apply_sort, build_facets, distinct_values
+from core.utils.list_params import resolve_sort
+
+# Facet fields exposed by the agent list filter drawer.
+AGENT_FACET_FIELDS = ["agent_type", "status"]
 
 # Keys from request JSON to store in agent_config.agent_metadata
 AGENT_METADATA_KEYS = (
@@ -326,6 +331,11 @@ class AgentService(BaseService):
                 .all()
             )
         except Exception:
+            logger.debug(
+                "[agent] AgentChannelPhoneNumbers agent_id lookup failed for agent_id=%s; falling back to channel_id filter",
+                agent.id,
+                exc_info=True,
+            )
             self.db.rollback()
             phone_rows = (
                 self.query(AgentChannelPhoneNumbers)
@@ -2079,6 +2089,7 @@ class AgentService(BaseService):
             logger.warning(
                 "[agent-config] pipeline cache re-warm failed for agent={}: {}",
                 agent_id, e,
+                exc_info=True,
             )
 
     def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
@@ -2963,5 +2974,141 @@ class AgentService(BaseService):
         result["versions"] = [
             self.version_response(v, is_live=(v.id == live_id)) for v in version_rows
         ]
+
+        return result
+
+    # ------------------------------------------------------------------
+    # Agent list / facets / filter-values pipeline
+    # (moved out of the router — single source of truth for core + EE)
+    # ------------------------------------------------------------------
+
+    def _agent_column_map(self) -> Dict[str, Any]:
+        # ``status`` mirrors the list UI, where an agent is "active" when it has
+        # at least one phone number attached. A CASE over an EXISTS subquery lets
+        # it flow through the generic faceted-query helpers as a string facet.
+        has_phone = exists().where(
+            and_(
+                PhoneNumber.agent_id == Agent.id,
+                PhoneNumber.organization_id == self.org_id,
+            )
+        )
+        return {
+            "name": Agent.name,
+            "agent_type": Agent.agent_type,
+            "status": case((has_phone, "active"), else_="inactive"),
+            "is_active": Agent.is_active,
+            "created_at": Agent.created_at,
+            "updated_at": Agent.updated_at,
+        }
+
+    def _agent_base_query(self):
+        """Org-scoped base query for agents (excludes soft-deleted rows)."""
+        return self.query(Agent).filter(Agent.deleted_at.is_(None))
+
+    def _phone_numbers_for(self, agent_ids: list) -> dict:
+        """Batch-fetch phone numbers for the given agents.
+
+        Returns ``{agent_id: [{type, no}, ...]}``.
+        """
+        if not agent_ids:
+            return {}
+        rows = (
+            self.db.query(PhoneNumber.agent_id, PhoneNumber.number, Channel.channel_type)
+            .join(Channel, Channel.id == PhoneNumber.channel_id)
+            .filter(
+                PhoneNumber.organization_id == self.org_id,
+                PhoneNumber.agent_id.in_(agent_ids),
+            )
+            .all()
+        )
+        grouped: dict = {}
+        for agent_id, number, channel_type in rows:
+            grouped.setdefault(agent_id, []).append({"type": channel_type, "no": number})
+        return grouped
+
+    @staticmethod
+    def _serialize_agent(
+        agent: Agent,
+        phone_map: dict,
+        readiness_map: dict,
+    ) -> dict:
+        return {
+            "id": str(agent.id),
+            "uuid": str(agent.id),
+            "name": agent.name,
+            "description": agent.description,
+            "agent_type": agent.agent_type,
+            "is_active": agent.is_active,
+            "phone_number": phone_map.get(agent.id, []),
+            # Last-known readiness for the list badge; None until a run is stored.
+            "readiness": readiness_map.get(agent.id),
+            "created_at": agent.created_at.timestamp() if agent.created_at else None,
+            "updated_at": agent.updated_at.timestamp() if agent.updated_at else None,
+        }
+
+    def list_agents(self, body: dict) -> dict:
+        """List pipeline used by both core and EE agent list endpoints."""
+        from core.services.readiness import ReadinessService
+
+        page = max(int(body.get("page") or 1), 1)
+        page_size = min(max(int(body.get("page_size") or 20), 1), 100)
+        search = body.get("search")
+        is_active = body.get("is_active")
+        agent_type = body.get("agent_type")
+
+        column_map = self._agent_column_map()
+        query = self._agent_base_query()
+
+        # Named params (back-compat).
+        if search:
+            like = f"%{search}%"
+            query = query.filter(or_(Agent.name.ilike(like), Agent.description.ilike(like)))
+        if is_active is not None:
+            query = query.filter(Agent.is_active == bool(is_active))
+        if agent_type:
+            query = query.filter(Agent.agent_type == agent_type)
+
+        # Generic faceted filters + sort.
+        query = apply_filters(query, body.get("filters"), column_map)
+        total = query.count()
+        sort_by, sort_order = resolve_sort(body, "updated_at")
+        query = apply_sort(query, column_map, sort_by, sort_order, Agent.updated_at)
+
+        offset = (page - 1) * page_size
+        items = query.offset(offset).limit(page_size).all()
+        agent_ids = [a.id for a in items]
+        phone_map = self._phone_numbers_for(agent_ids)
+        readiness_map = ReadinessService(self.db, org_id=self.org_id).latest_for_agents(agent_ids)
+        return {
+            "items": [self._serialize_agent(a, phone_map, readiness_map) for a in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def facets(self, filters=None) -> dict:
+        """Per-value facet counts for the agent filter drawer."""
+        return build_facets(
+            lambda: self._agent_base_query(),
+            self._agent_column_map(),
+            AGENT_FACET_FIELDS,
+            filters,
+        )
+
+    def filter_values(self, column_name: str) -> dict:
+        """Distinct values of a column for token-search autocomplete."""
+        column_map = self._agent_column_map()
+        allowed = {k: column_map[k] for k in ("name", "agent_type", "status")}
+        return distinct_values(self._agent_base_query(), allowed, column_name)
+
+    def get_all_agents(self) -> list:
+        """Lightweight id/name listing of all org agents (name-sorted)."""
+        rows = (
+            self.db.query(Agent.id, Agent.name)
+            .filter(Agent.organization_id == self.org_id, Agent.deleted_at.is_(None))
+            .order_by(Agent.name.asc())
+            .all()
+        )
+        return [{"id": str(r.id), "uuid": str(r.id), "name": r.name} for r in rows]
 
         return result

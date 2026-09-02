@@ -17,10 +17,9 @@ class TimestampModel(Base):
 
 
 class SoftDeleteMixin:
-    """Mixin for tables that support is_active + soft-delete/archive timestamps."""
+    """Mixin for tables that support is_active + soft-delete timestamps."""
     is_active = Column(Boolean, nullable=False, default=True)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
-    archived_at = Column(DateTime(timezone=True), nullable=True)
 
 
 class OrgScopedModel(TimestampModel):

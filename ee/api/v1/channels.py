@@ -1,10 +1,9 @@
-from typing import Any, Dict
-
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from core.api.v1.channels import list_phone_numbers_for_channel
 from core.database.session import get_db
+from core.schemas.channel import ChannelListRequest, ChannelUpsertRequest
 from core.services.channel_service import ChannelService
 from core.utils.auth_helpers import require_org_id
 from ee.middleware.auth import (
@@ -22,10 +21,11 @@ def _svc(claims: EEJWTClaims, db: Session) -> ChannelService:
 
 @router.post("/upsert", status_code=status.HTTP_200_OK)
 def upsert_channel(
-    data: Dict[str, Any] = Body(...),
+    body: ChannelUpsertRequest = Body(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
+    data = body.model_dump(exclude_unset=True)
     if not data.get("name"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -36,13 +36,15 @@ def upsert_channel(
 
 @router.post("/list")
 def list_channels(
-    body: Dict[str, Any] = Body(default={}),
+    body: ChannelListRequest = Body(default_factory=ChannelListRequest),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
-    return _svc(claims, db).list_channels(
-        channel_type=body.get("channel_type") or body.get("type"),
+    data = body.model_dump(exclude_unset=True)
+    items = _svc(claims, db).list_channels(
+        channel_type=data.get("channel_type") or data.get("type"),
     )
+    return {"items": items, "total": len(items), "page": 1, "page_size": len(items)}
 
 
 @router.get("/all")

@@ -121,7 +121,9 @@ class TestGetAllChannels:
         """Postman: Get All Channels - Success (200)."""
         response = client_as_member.post("/api/v1/channel/list", json={})
         assert response.status_code == 200
-        assert isinstance(response.json(), list)
+        body = response.json()
+        assert isinstance(body, dict)
+        assert isinstance(body["items"], list)
 
     def test_get_all_channels_unauthenticated(self, client_unauthenticated):
         response = client_unauthenticated.post("/api/v1/channel/list", json={})
@@ -132,7 +134,7 @@ class TestGetAllChannels:
         created = _create_channel(client_as_member, channel_type="web")
         response = client_as_member.post("/api/v1/channel/list", json={})
         assert response.status_code == 200
-        channels = response.json()
+        channels = response.json()["items"]
         assert any(c["id"] == created["id"] for c in channels)
 
 
@@ -592,6 +594,7 @@ class TestChannelListPostmanExamples:
             "/api/v1/channel/list", json={"channel_type": "twilio"},
         )
         assert resp.status_code == 200
-        assert isinstance(resp.json(), list)
-        for item in resp.json():
+        body = resp.json()
+        assert isinstance(body, dict)
+        for item in body["items"]:
             assert item["channel_type"] == "twilio"

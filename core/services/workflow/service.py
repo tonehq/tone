@@ -114,14 +114,21 @@ class WorkflowService(BaseService):
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workflow not found")
         return wf
 
-    def _version(self, version_id) -> Optional[WorkflowVersion]:
+    def _version(
+        self, version_id, *, for_update: bool = False
+    ) -> Optional[WorkflowVersion]:
         if not version_id:
             return None
-        return (
-            self.query(WorkflowVersion)
-            .filter(WorkflowVersion.id == version_id, WorkflowVersion.deleted_at.is_(None))
-            .first()
+        q = self.query(WorkflowVersion).filter(
+            WorkflowVersion.id == version_id, WorkflowVersion.deleted_at.is_(None)
         )
+        if for_update:
+            # Row lock (SELECT ... FOR UPDATE) so concurrent draft saves are
+            # serialized — the second txn blocks here until the first commits,
+            # then reads the first's new checksum and correctly 409s instead
+            # of silently clobbering it (lost update).
+            q = q.with_for_update()
+        return q.first()
 
     def _agents_using(self, workflow_id: UUID) -> int:
         # Count DISTINCT agents — agent_configs are versioned, so a single agent can have
@@ -384,7 +391,13 @@ class WorkflowService(BaseService):
         if size_err:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=size_err)
         wf = self._get(workflow_id)
-        draft = self._version(wf.draft_version_id)
+        # Lock the draft row FOR UPDATE before the optimistic checksum check so
+        # two concurrent saves that read the same checksum can't both pass — the
+        # second blocks until the first commits, then sees the new checksum and
+        # correctly raises the 409 below (prevents the lost-update clobber). The
+        # locked section stays short: only in-memory encrypt/validate + assigns
+        # follow before the commit, no slow external calls.
+        draft = self._version(wf.draft_version_id, for_update=True)
         if not draft:
             # Recover: create the working version if somehow missing.
             draft = WorkflowVersion(

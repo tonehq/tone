@@ -7,8 +7,7 @@ import CustomModal from '@/components/shared/CustomModal';
 import SearchableSelect from '@/components/shared/SearchableSelect';
 import TextInput from '@/components/shared/TextInput';
 import { cloneWorkflowAtom } from '@/atoms/WorkflowAtom';
-import { getAllAgents } from '@/services/agentsService';
-import type { AgentDropdownItem } from '@/types/agent';
+import { useAllAgents } from '@/lib/api/agents';
 import type { WorkflowSummary } from '@/types/workflow';
 import { showToast } from '@/utils/toast';
 import { handleApiError } from '@/utils/helpers';
@@ -24,9 +23,15 @@ const CloneWorkflowModal: React.FC<Props> = ({ workflow, onClose, onCloned, agen
   const clone = useSetAtom(cloneWorkflowAtom);
   const [name, setName] = useState('');
   const [targetAgentId, setTargetAgentId] = useState('');
-  const [agents, setAgents] = useState<AgentDropdownItem[]>([]);
-  const [agentsLoading, setAgentsLoading] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // Server list moved into the TanStack cache; only fetched while the modal is
+  // open (workflow present), matching the previous effect-gated behavior.
+  const {
+    data: agents = [],
+    isLoading: agentsLoading,
+    error: agentsError,
+  } = useAllAgents({ enabled: Boolean(workflow) });
 
   useEffect(() => {
     if (workflow) {
@@ -35,24 +40,10 @@ const CloneWorkflowModal: React.FC<Props> = ({ workflow, onClose, onCloned, agen
     }
   }, [workflow, agentId]);
 
+  // Preserve the previous toast-on-fetch-error behavior.
   useEffect(() => {
-    if (!workflow) return;
-    let cancelled = false;
-    setAgentsLoading(true);
-    getAllAgents()
-      .then((rows) => {
-        if (!cancelled) setAgents(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setAgentsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [workflow]);
+    if (agentsError) handleApiError(agentsError);
+  }, [agentsError]);
 
   const agentOptions = useMemo(() => agents.map((a) => ({ value: a.id, label: a.name })), [agents]);
 
