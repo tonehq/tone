@@ -17,6 +17,13 @@ class AgentConfig(OrgScopedModel):
             "is_template = true OR agent_id IS NOT NULL",
             name="ck_agent_configs_agent_required_unless_template",
         ),
+        # ``mode`` may only be the two conversation-flow drivers the API accepts
+        # (request schema is ``Literal["prompt", "workflow"]``). This mirrors that
+        # enforcement at the DB level so no path can persist an out-of-set value.
+        CheckConstraint(
+            "mode IN ('prompt', 'workflow')",
+            name="ck_agent_configs_mode_valid",
+        ),
     )
 
     # NULL is only legal when ``is_template = true`` (see CHECK above).

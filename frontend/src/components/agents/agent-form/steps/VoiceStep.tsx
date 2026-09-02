@@ -14,7 +14,6 @@ import {
   CustomButton,
   SearchableSelect,
   SelectInput,
-  SliderField,
   type SearchableSelectOption,
 } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
@@ -32,7 +31,14 @@ import type { AgentFormState } from '@/types/agent';
 import type { MetaDataSchemaField } from '@/types/provider';
 import { cn } from '@/utils/cn';
 
-/** Keys in voice_settings / stt_settings that are structural (not schema fields). */
+/** Keys in voice_settings / stt_settings that are structural (not schema fields).
+ *
+ * `speed` is intentionally NOT structural: it is a provider/model-specific
+ * tuning field whose valid range varies (e.g. ElevenLabs is 0.7–1.2). Treating
+ * it as structural exempted it from reset-on-provider-change and clamp-on-model-
+ * change, so a stale value from the previous provider survived and failed
+ * backend validation ("speed must be a valid number"). It now resets/clamps like
+ * every other tuning field (stability, style, …). */
 const TTS_STRUCTURAL_KEYS = new Set([
   'provider_id',
   'model_id',
@@ -40,7 +46,6 @@ const TTS_STRUCTURAL_KEYS = new Set([
   'voice_id',
   'language',
   'language_code',
-  'speed',
 ]);
 const STT_STRUCTURAL_KEYS = new Set(['provider_id', 'model_id', 'model']);
 
@@ -161,9 +166,10 @@ export default function VoiceStep() {
   // ─── selection ────────────────────────────────────────────────────────────
   // Language and provider changes both effectively invalidate the previous
   // provider's tuning fields, so both go through resetSchemaFields to drop
-  // every schema-driven key (stability, style, ssml, …) in one atomic write.
-  // TTS_STRUCTURAL_KEYS preserves language/language_code/speed — those are
-  // parent-controlled and users routinely reuse them across providers.
+  // every schema-driven key (stability, style, ssml, speed, …) in one atomic
+  // write. TTS_STRUCTURAL_KEYS preserves only language/language_code — those are
+  // parent-controlled and users routinely reuse them across providers; speed is
+  // a per-provider tuning field and must reset with the rest (see note above).
   const setLanguage = (v: string) => {
     const current = getValues('config.voice_settings' as never) as
       | Record<string, unknown>
@@ -354,7 +360,6 @@ export default function VoiceStep() {
   const showProviderField = !!language;
   const showModelField = !!providerId;
   const showVoiceField = !!providerId; // Model is optional, voice can come right after provider
-  const showSpeedSlider = !!selectedVoiceId;
 
   return (
     <div className="flex flex-col gap-4">
