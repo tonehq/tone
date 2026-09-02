@@ -73,7 +73,7 @@ class MailService:
             </html>
             """
             params = {
-                "from": "no-reply@updates.suryaweb.app",
+                "from": "notifications@updates.trytone.ai",
                 "to": [to],
                 "subject": "Verify your Tone account",
                 "html": html_template,
@@ -88,7 +88,7 @@ class MailService:
     def send_forgot_password_email(self, to: str, verification_url: str):
         try:
             params = {
-                "from": "no-reply@updates.suryaweb.app",
+                "from": "notifications@updates.trytone.ai",
                 "to": [to],
                 "subject": "Forgot Password Email",
                 "html": f'<p>Please click this link to reset your password: <a href="{verification_url}">{verification_url}</a></p>',
@@ -164,7 +164,7 @@ class MailService:
             </html>
             """
             params = {
-                "from": "no-reply@updates.suryaweb.app",
+                "from": "notifications@updates.trytone.ai",
                 "to": [to],
                 "subject": "Your Tone sign-in code",
                 "html": html_template,
@@ -241,7 +241,7 @@ class MailService:
             </html>
             """
             params = {
-                "from": "no-reply@updates.suryaweb.app",
+                "from": "notifications@updates.trytone.ai",
                 "to": [to],
                 "subject": "You've been invited to join Tone",
                 "html": html_template,
