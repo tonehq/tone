@@ -113,10 +113,13 @@ const SliderField = (props: SliderFieldProps) => {
 
 /**
  * Bridges RHF `Controller` and `PlainSliderField`. When the form value is
- * null/undefined the plain slider visually falls back to `min`, but that
- * value never gets pushed into RHF state — so submits silently ship an
- * empty value that downstream validators reject. Seed the value with `min`
- * on mount so the slider position and the form state stay in sync.
+ * null/undefined — OR a non-numeric leftover such as a stale `"normal"` string
+ * carried over from a provider whose same-named field was a select — the plain
+ * slider visually falls back to `min`, but that value never gets pushed into RHF
+ * state, so submits silently ship a value downstream validators reject
+ * ("… must be a valid number"). Seed the value with `min` on mount whenever the
+ * current value isn't a finite number, so the slider position and the form state
+ * stay in sync and always hold a valid number.
  */
 type ControlledSliderProps = Omit<SliderFieldBaseProps, 'value' | 'onValueChange'> & {
   field: {
@@ -138,7 +141,10 @@ const ControlledSlider = ({
 }: ControlledSliderProps) => {
   const seededRef = React.useRef(false);
   React.useEffect(() => {
-    if (!seededRef.current && field.value == null) {
+    // Seed `min` when the value is missing OR non-numeric (e.g. a stale string
+    // from another provider). A finite number — including 0 — is left untouched.
+    const isValidNumber = field.value != null && Number.isFinite(Number(field.value));
+    if (!seededRef.current && !isValidNumber) {
       seededRef.current = true;
       field.onChange(min);
     }
@@ -148,7 +154,9 @@ const ControlledSlider = ({
     <PlainSliderField
       {...rest}
       min={min}
-      value={field.value != null ? Number(field.value) : min}
+      value={
+        field.value != null && Number.isFinite(Number(field.value)) ? Number(field.value) : min
+      }
       onValueChange={(v) => {
         field.onChange(v);
         onValueChange?.(v);
