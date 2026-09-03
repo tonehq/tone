@@ -348,6 +348,20 @@ def build_stt(spec: dict) -> Optional[Any]:
             if model:
                 granite_kwargs["model"] = model
             return GraniteWebSocketSTTService(url=ws_url, trace_id=get_trace_id(), **granite_kwargs)
+        if provider_name == "test-stt-selfhosting":
+            # Self-hosted test ASR server. It speaks the same partial/final JSON
+            # protocol as granite, so reuse GraniteWebSocketSTTService: unlike
+            # NvidiaWebSocketService it accepts `model`, so the seeded model id
+            # actually reaches the server instead of collapsing to the default.
+            from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
+            from core.logging import get_trace_id
+            ws_url = metadata.get("base_url") or "wss://testselfhosting.com/ws"
+            selfhosted_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                selfhosted_kwargs["sample_rate"] = metadata["sample_rate"]
+            if model:
+                selfhosted_kwargs["model"] = model
+            return GraniteWebSocketSTTService(url=ws_url, trace_id=get_trace_id(), **selfhosted_kwargs)
         if provider_name == "groq":
             from pipecat.services.groq.stt import GroqSTTService
             return GroqSTTService(

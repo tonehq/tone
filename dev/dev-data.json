@@ -19505,6 +19505,51 @@
         }
       ],
       "status": "inactive"
+    },
+    {
+      "name": "test-stt-selfhosting",
+      "provider_type": "stt",
+      "display_name": "Test STT Selfhosting",
+      "description": "Self-hosted test STT server (streaming WebSocket ASR)",
+      "api_key_env": "TEST_STT_SELFHOSTING_API_KEY",
+      "models": [
+        {
+          "name": "test-stt-selfhosting",
+          "base_url": "wss://testselfhosting.com/ws",
+          "meta_data": {
+            "model": "test-stt-selfhosting"
+          },
+          "meta_data_schema": [
+            {
+              "name": "sample_rate",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 8000,
+                "max": 48000
+              },
+              "required": 0,
+              "description": "Audio sample rate in Hz sent to the server (e.g. 8000, 16000). Default: 16000"
+            }
+          ]
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "sample_rate",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 8000,
+            "max": 48000
+          },
+          "required": 0,
+          "description": "Audio sample rate in Hz sent to the server (e.g. 8000, 16000). Default: 16000"
+        }
+      ],
+      "status": "active"
     }
   ],
   "tts_providers": [
