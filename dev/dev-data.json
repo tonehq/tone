@@ -885,15 +885,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -964,15 +955,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -1043,15 +1025,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -1122,15 +1095,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -1201,15 +1165,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -1280,15 +1235,6 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         },
@@ -1359,29 +1305,11 @@
               },
               "required": 0,
               "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
-            },
-            {
-              "name": "enable_prompt_caching",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
             }
           ]
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "enable_prompt_caching",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable Anthropic prompt caching to reduce costs on repeated prompts"
-        },
         {
           "name": "max_tokens",
           "data_type": "integer",
@@ -12601,15 +12529,6 @@
           },
           "required": 0,
           "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
-        },
-        {
-          "name": "enable_affective_dialog",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable affective dialog, allowing Gemini to adapt to expression and tone"
         }
       ],
       "status": "active"
@@ -12733,51 +12652,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -12798,42 +12672,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             }
           ]
         },
@@ -12853,51 +12691,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -12918,42 +12711,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             }
           ]
         },
@@ -12973,51 +12730,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13038,42 +12750,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             }
           ]
         },
@@ -13093,51 +12769,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13158,42 +12789,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13222,51 +12817,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13287,42 +12837,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13351,51 +12865,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13416,42 +12885,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13480,51 +12913,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13545,42 +12933,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13609,51 +12961,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13674,42 +12981,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13738,51 +13009,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13803,42 +13029,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13867,51 +13057,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -13932,42 +13077,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -13996,51 +13105,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -14061,42 +13125,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -14125,51 +13153,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -14190,42 +13173,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -14254,51 +13201,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -14319,42 +13221,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             },
             {
               "name": "keywords",
@@ -14383,51 +13249,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "punctuate",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add punctuation to transcripts"
-            },
-            {
-              "name": "smart_format",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Apply smart formatting (dates, numbers, etc.)"
-            },
-            {
-              "name": "profanity_filter",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Filter profanity from transcript"
-            },
-            {
-              "name": "diarize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "filler_words",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include filler words (um, uh) in transcript"
-            },
-            {
               "name": "endpointing",
               "data_type": "integer",
               "type": "input number",
@@ -14448,42 +13269,6 @@
               },
               "required": 0,
               "description": "Silence duration to trigger utterance end (ms)"
-            },
-            {
-              "name": "no_delay",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Minimize latency at cost of accuracy"
-            },
-            {
-              "name": "dictation",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable dictation mode"
-            },
-            {
-              "name": "numerals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Convert numbers to digits"
-            },
-            {
-              "name": "interim_results",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable interim (partial) results"
             }
           ]
         }
@@ -14498,56 +13283,6 @@
           "required": 0,
           "default": "en",
           "description": "BCP-47 language code for transcription (e.g. en, es, fr, hi, de, ja). Default: en"
-        },
-        {
-          "name": "punctuate",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": true,
-          "description": "Add punctuation to the transcript. Default: true"
-        },
-        {
-          "name": "smart_format",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": true,
-          "description": "Apply smart formatting for dates, times, currency, etc. Default: true"
-        },
-        {
-          "name": "profanity_filter",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": true,
-          "description": "Filter profanity from the transcript. Default: true"
-        },
-        {
-          "name": "diarize",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable speaker diarization. Default: false"
-        },
-        {
-          "name": "filler_words",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Include filler words (um, uh) in transcript. Default: false"
         },
         {
           "name": "keywords",
@@ -14578,46 +13313,6 @@
           "validator": null,
           "required": 0,
           "description": "Duration of silence (in ms) to detect the end of an utterance"
-        },
-        {
-          "name": "no_delay",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Disable delay for improved interim results. May reduce accuracy. Default: false"
-        },
-        {
-          "name": "dictation",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable spoken punctuation (e.g. 'period', 'comma' converted to symbols). Default: false"
-        },
-        {
-          "name": "numerals",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Convert spoken numbers to numerical digits. Default: false"
-        },
-        {
-          "name": "interim_results",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": true,
-          "description": "Return interim (partial) transcription results. Default: true"
         }
       ],
       "status": "active"
@@ -14882,15 +13577,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "prompt",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Optional prompt to guide transcription"
-            },
-            {
               "name": "temperature",
               "data_type": "float",
               "type": "input number",
@@ -14921,15 +13607,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "prompt",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Optional prompt to guide transcription"
-            },
-            {
               "name": "temperature",
               "data_type": "float",
               "type": "input number",
@@ -14954,17 +13631,6 @@
           "required": 0,
           "default": "en",
           "description": "ISO-639-1 language code for transcription (e.g. en, es, fr, de, ja). Default: en"
-        },
-        {
-          "name": "prompt",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": {
-            "maxLength": 500
-          },
-          "required": 0,
-          "description": "Optional text to guide transcription style or continue a previous segment"
         },
         {
           "name": "temperature",
@@ -15003,24 +13669,6 @@
               "validator": null,
               "required": 0,
               "description": "Optional prompt to guide transcription"
-            },
-            {
-              "name": "vad_signals",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable VAD signals"
-            },
-            {
-              "name": "high_vad_sensitivity",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable high VAD sensitivity"
             }
           ]
         }
@@ -15043,26 +13691,6 @@
           "validator": null,
           "required": 0,
           "description": "Optional prompt to guide translation style/context. Only applicable to saaras (STT-Translate) models"
-        },
-        {
-          "name": "vad_signals",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable Voice Activity Detection signals in the response. Default: false"
-        },
-        {
-          "name": "high_vad_sensitivity",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable high VAD sensitivity for more responsive speech detection. Default: false"
         }
       ],
       "status": "active"
@@ -15091,42 +13719,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "speech_model",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech model to use",
-              "options": [
-                "universal-streaming-english",
-                "universal-streaming-multilingual"
-              ]
-            },
-            {
-              "name": "word_finalization_max_wait_time",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 0
-              },
-              "required": 0,
-              "description": "Max wait time for word finalization (ms)"
-            },
-            {
-              "name": "end_of_turn_confidence_threshold",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Confidence threshold for end-of-turn detection"
-            },
-            {
               "name": "keyterms_prompt",
               "data_type": "string",
               "type": "input text",
@@ -15152,42 +13744,6 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
-            },
-            {
-              "name": "speech_model",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech model to use",
-              "options": [
-                "universal-streaming-english",
-                "universal-streaming-multilingual"
-              ]
-            },
-            {
-              "name": "word_finalization_max_wait_time",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 0
-              },
-              "required": 0,
-              "description": "Max wait time for word finalization (ms)"
-            },
-            {
-              "name": "end_of_turn_confidence_threshold",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Confidence threshold for end-of-turn detection"
             }
           ]
         },
@@ -15206,42 +13762,6 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
-            },
-            {
-              "name": "speech_model",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech model to use",
-              "options": [
-                "universal-streaming-english",
-                "universal-streaming-multilingual"
-              ]
-            },
-            {
-              "name": "word_finalization_max_wait_time",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 0
-              },
-              "required": 0,
-              "description": "Max wait time for word finalization (ms)"
-            },
-            {
-              "name": "end_of_turn_confidence_threshold",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Confidence threshold for end-of-turn detection"
             },
             {
               "name": "keyterms_prompt",
@@ -15265,44 +13785,6 @@
           "required": 0,
           "default": "en",
           "description": "BCP-47 language code for transcription (e.g. en, es, fr). Default: en"
-        },
-        {
-          "name": "speech_model",
-          "data_type": "string",
-          "type": "select",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "default": "universal-streaming-english",
-          "options": [
-            "universal-streaming-english",
-            "universal-streaming-multilingual"
-          ],
-          "description": "Streaming speech model. Default: universal-streaming-english"
-        },
-        {
-          "name": "word_finalization_max_wait_time",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 0
-          },
-          "required": 0,
-          "description": "Maximum time in milliseconds to wait for word finalization"
-        },
-        {
-          "name": "end_of_turn_confidence_threshold",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0,
-            "max": 1.0
-          },
-          "required": 0,
-          "default": 0.4,
-          "description": "Confidence threshold (0.0-1.0) for end-of-turn detection. Default: 0.4"
         }
       ],
       "status": "active"
@@ -15451,33 +13933,6 @@
               "validator": null,
               "required": 0,
               "description": "Language hints for transcription"
-            },
-            {
-              "name": "language_hints_strict",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Strictly enforce language hints"
-            },
-            {
-              "name": "enable_speaker_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "enable_language_identification",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable language identification"
             }
           ]
         },
@@ -15496,33 +13951,6 @@
               "validator": null,
               "required": 0,
               "description": "Language hints for transcription"
-            },
-            {
-              "name": "language_hints_strict",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Strictly enforce language hints"
-            },
-            {
-              "name": "enable_speaker_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "enable_language_identification",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable language identification"
             }
           ]
         },
@@ -15541,33 +13969,6 @@
               "validator": null,
               "required": 0,
               "description": "Language hints for transcription"
-            },
-            {
-              "name": "language_hints_strict",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Strictly enforce language hints"
-            },
-            {
-              "name": "enable_speaker_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "enable_language_identification",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable language identification"
             }
           ]
         },
@@ -15586,33 +13987,6 @@
               "validator": null,
               "required": 0,
               "description": "Language hints for transcription"
-            },
-            {
-              "name": "language_hints_strict",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Strictly enforce language hints"
-            },
-            {
-              "name": "enable_speaker_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
-              "name": "enable_language_identification",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable language identification"
             }
           ]
         }
@@ -15626,36 +14000,6 @@
           "validator": null,
           "required": 0,
           "description": "Language hints for transcription (ISO 2-letter codes, e.g. en, es, fr)"
-        },
-        {
-          "name": "language_hints_strict",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Strictly enforce language hints — only transcribe in the provided languages. Default: false"
-        },
-        {
-          "name": "enable_speaker_diarization",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable speaker diarization. Tokens are annotated with speaker IDs. Default: false"
-        },
-        {
-          "name": "enable_language_identification",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable automatic language identification. Default: false"
         }
       ],
       "status": "active"
@@ -15684,38 +14028,6 @@
               "description": "Language code for transcription"
             },
             {
-              "name": "commit_strategy",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Commit strategy for transcription"
-            },
-            {
-              "name": "vad_silence_threshold_secs",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "VAD silence threshold in seconds"
-            },
-            {
-              "name": "vad_threshold",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "VAD detection threshold"
-            },
-            {
               "name": "min_speech_duration_ms",
               "data_type": "integer",
               "type": "input number",
@@ -15736,33 +14048,6 @@
               },
               "required": 0,
               "description": "Minimum silence duration in ms"
-            },
-            {
-              "name": "include_timestamps",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include timestamps in transcript"
-            },
-            {
-              "name": "enable_logging",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable ElevenLabs logging"
-            },
-            {
-              "name": "include_language_detection",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include language detection"
             }
           ]
         },
@@ -15783,38 +14068,6 @@
               "description": "Language code for transcription"
             },
             {
-              "name": "commit_strategy",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Commit strategy for transcription"
-            },
-            {
-              "name": "vad_silence_threshold_secs",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "VAD silence threshold in seconds"
-            },
-            {
-              "name": "vad_threshold",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "VAD detection threshold"
-            },
-            {
               "name": "min_speech_duration_ms",
               "data_type": "integer",
               "type": "input number",
@@ -15835,33 +14088,6 @@
               },
               "required": 0,
               "description": "Minimum silence duration in ms"
-            },
-            {
-              "name": "include_timestamps",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include timestamps in transcript"
-            },
-            {
-              "name": "enable_logging",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable ElevenLabs logging"
-            },
-            {
-              "name": "include_language_detection",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include language detection"
             }
           ]
         }
@@ -15875,45 +14101,6 @@
           "validator": null,
           "required": 0,
           "description": "ISO-639-1 or ISO-639-3 language code (e.g. eng, es, fr). Leave empty for auto-detection"
-        },
-        {
-          "name": "commit_strategy",
-          "data_type": "string",
-          "type": "select",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "default": "manual",
-          "options": [
-            "manual",
-            "vad"
-          ],
-          "description": "How to segment speech. 'manual' uses Pipecat VAD, 'vad' uses ElevenLabs VAD. Default: manual"
-        },
-        {
-          "name": "vad_silence_threshold_secs",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.3,
-            "max": 3.0
-          },
-          "required": 0,
-          "default": 1.5,
-          "description": "Seconds of silence before VAD commits (only when commit_strategy is vad). Default: 1.5"
-        },
-        {
-          "name": "vad_threshold",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.1,
-            "max": 0.9
-          },
-          "required": 0,
-          "description": "VAD sensitivity (0.1-0.9, lower is more sensitive). Only used when commit_strategy is vad"
         },
         {
           "name": "min_speech_duration_ms",
@@ -15940,36 +14127,6 @@
           "required": 0,
           "default": 100,
           "description": "Minimum silence duration in ms for VAD (only when commit_strategy is vad). Default: 100"
-        },
-        {
-          "name": "include_timestamps",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Include word-level timestamps in transcripts. Default: false"
-        },
-        {
-          "name": "enable_logging",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable logging on ElevenLabs side. Default: false"
-        },
-        {
-          "name": "include_language_detection",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Include language detection in transcripts. Default: false"
         }
       ],
       "status": "active"
@@ -16007,37 +14164,6 @@
               },
               "required": 0,
               "description": "Audio sample rate in Hz"
-            },
-            {
-              "name": "endpointing",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 10
-              },
-              "required": 0,
-              "description": "Endpointing duration in milliseconds"
-            },
-            {
-              "name": "maximum_duration_without_endpointing",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 0
-              },
-              "required": 0,
-              "description": "Max duration without endpointing (ms)"
-            },
-            {
-              "name": "enable_vad",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable voice activity detection"
             }
           ]
         }
@@ -16067,41 +14193,6 @@
           },
           "required": 0,
           "description": "Audio sample rate in Hz (e.g. 8000, 16000, 44100, 48000)"
-        },
-        {
-          "name": "endpointing",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0,
-            "max": 10.0
-          },
-          "required": 0,
-          "description": "Silence duration in seconds to mark end of speech utterance"
-        },
-        {
-          "name": "maximum_duration_without_endpointing",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 1,
-            "max": 60
-          },
-          "required": 0,
-          "default": 5,
-          "description": "Maximum utterance duration in seconds without silence-based endpointing. Default: 5"
-        },
-        {
-          "name": "enable_vad",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable Gladia Voice Activity Detection for speech start/stop events. Should be used without any other VAD in the agent. Default: false"
         }
       ],
       "status": "active"
@@ -16350,84 +14441,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -16438,44 +14451,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -16507,84 +14482,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -16595,44 +14492,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -16664,84 +14523,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -16752,44 +14533,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -16821,84 +14564,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -16909,44 +14574,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -16978,84 +14605,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17066,44 +14615,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17135,84 +14646,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17223,44 +14656,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17292,84 +14687,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17380,44 +14697,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17449,84 +14728,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17537,44 +14738,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17606,84 +14769,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17694,44 +14779,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17763,84 +14810,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -17851,44 +14820,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -17920,84 +14851,6 @@
               "description": "Language for transcription"
             },
             {
-              "name": "turn_detection_mode",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Turn detection mode",
-              "options": [
-                "adaptive",
-                "off"
-              ]
-            },
-            {
-              "name": "operating_point",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Operating point",
-              "options": [
-                "standard",
-                "enhanced"
-              ]
-            },
-            {
-              "name": "max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.1,
-                "max": 10.0
-              },
-              "required": 0,
-              "description": "Maximum delay for transcription (seconds)"
-            },
-            {
-              "name": "end_of_utterance_silence_trigger",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Silence duration to trigger end of utterance (seconds)"
-            },
-            {
-              "name": "end_of_utterance_max_delay",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0
-              },
-              "required": 0,
-              "description": "Max delay for end of utterance detection (seconds)"
-            },
-            {
-              "name": "domain",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Domain for transcription"
-            },
-            {
-              "name": "enable_diarization",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker diarization"
-            },
-            {
               "name": "speaker_sensitivity",
               "data_type": "float",
               "type": "input number",
@@ -18008,44 +14861,6 @@
               },
               "required": 0,
               "description": "Speaker sensitivity for diarization"
-            },
-            {
-              "name": "max_speakers",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1
-              },
-              "required": 0,
-              "description": "Maximum number of speakers"
-            },
-            {
-              "name": "prefer_current_speaker",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Prefer current speaker in diarization"
-            },
-            {
-              "name": "include_partials",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Include partial transcripts"
-            },
-            {
-              "name": "split_sentences",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Split transcript into sentences"
             },
             {
               "name": "sample_rate",
@@ -18073,89 +14888,6 @@
           "description": "Language code for transcription (e.g. en, fr, de, es). Default: en"
         },
         {
-          "name": "turn_detection_mode",
-          "data_type": "string",
-          "type": "select",
-          "format": "string",
-          "options": [
-            "fixed",
-            "external",
-            "adaptive",
-            "smart_turn"
-          ],
-          "validator": null,
-          "required": 0,
-          "default": "adaptive",
-          "description": "Endpoint and turn detection mode. 'adaptive' uses basic VAD, 'smart_turn' uses ML-based endpointing, 'external' delegates to Pipecat, 'fixed' uses fixed silence timeout. Default: adaptive"
-        },
-        {
-          "name": "operating_point",
-          "data_type": "string",
-          "type": "select",
-          "format": "string",
-          "options": [
-            "standard",
-            "enhanced"
-          ],
-          "validator": null,
-          "required": 0,
-          "default": "enhanced",
-          "description": "Transcription accuracy vs latency tradeoff. 'enhanced' is highest accuracy, 'standard' is faster. Default: enhanced"
-        },
-        {
-          "name": "max_delay",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0
-          },
-          "required": 0,
-          "default": 0.7,
-          "description": "Maximum delay in seconds for transcription. Lower values reduce latency but may impact accuracy. Default: 0.7"
-        },
-        {
-          "name": "end_of_utterance_silence_trigger",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0
-          },
-          "required": 0,
-          "description": "Silence duration in seconds to trigger end of utterance. Must be lower than max_delay"
-        },
-        {
-          "name": "end_of_utterance_max_delay",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0
-          },
-          "required": 0,
-          "description": "Maximum delay in seconds for end of utterance. Must be greater than end_of_utterance_silence_trigger"
-        },
-        {
-          "name": "domain",
-          "data_type": "string",
-          "type": "input",
-          "format": "string",
-          "validator": null,
-          "required": 0,
-          "description": "Domain for speech recognition optimization (e.g. finance, medical)"
-        },
-        {
-          "name": "enable_diarization",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Enable speaker diarization to identify and attribute words to unique speakers. Default: false"
-        },
-        {
           "name": "speaker_sensitivity",
           "data_type": "float",
           "type": "input number",
@@ -18166,47 +14898,6 @@
           },
           "required": 0,
           "description": "Diarization sensitivity. Higher values help distinguish speakers with similar voices. Requires enable_diarization"
-        },
-        {
-          "name": "max_speakers",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 1
-          },
-          "required": 0,
-          "description": "Maximum number of speakers to detect. Only use when the exact number of speakers is known. Requires enable_diarization"
-        },
-        {
-          "name": "prefer_current_speaker",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Give extra weight to grouping nearby words as the same speaker. Requires enable_diarization. Default: false"
-        },
-        {
-          "name": "include_partials",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Include partial segment fragments (words) in the formatted text output. Default: false"
-        },
-        {
-          "name": "split_sentences",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "default": false,
-          "description": "Emit finalized sentences mid-turn as soon as they are ready. Default: false"
         },
         {
           "name": "sample_rate",
@@ -19535,15 +16226,6 @@
                 "normal",
                 "fast"
               ]
-            },
-            {
-              "name": "emotion",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Emotion control for voice"
             }
           ]
         },
@@ -19613,15 +16295,6 @@
                 "normal",
                 "fast"
               ]
-            },
-            {
-              "name": "emotion",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Emotion control for voice"
             }
           ]
         }
@@ -19640,76 +16313,6 @@
           "required": 0,
           "description": "Speech speed: slow, normal, or fast",
           "default": null
-        },
-        {
-          "name": "emotion",
-          "data_type": "array",
-          "type": "multiselect",
-          "format": "array",
-          "validator": null,
-          "required": 0,
-          "description": "Emotion tags to apply to speech. Applies to non-Sonic-3 models.",
-          "options": [
-            "neutral",
-            "angry",
-            "excited",
-            "content",
-            "sad",
-            "scared",
-            "happy",
-            "enthusiastic",
-            "elated",
-            "euphoric",
-            "triumphant",
-            "amazed",
-            "surprised",
-            "flirtatious",
-            "joking/comedic",
-            "curious",
-            "peaceful",
-            "serene",
-            "calm",
-            "grateful",
-            "affectionate",
-            "trust",
-            "sympathetic",
-            "anticipation",
-            "mysterious",
-            "mad",
-            "outraged",
-            "frustrated",
-            "agitated",
-            "threatened",
-            "disgusted",
-            "contempt",
-            "envious",
-            "sarcastic",
-            "ironic",
-            "dejected",
-            "melancholic",
-            "disappointed",
-            "hurt",
-            "guilty",
-            "bored",
-            "tired",
-            "rejected",
-            "nostalgic",
-            "wistful",
-            "apologetic",
-            "hesitant",
-            "insecure",
-            "confused",
-            "resigned",
-            "anxious",
-            "panicked",
-            "alarmed",
-            "proud",
-            "confident",
-            "distant",
-            "skeptical",
-            "contemplative",
-            "determined"
-          ]
         }
       ],
       "voices": [
@@ -22198,57 +18801,17 @@
           "meta_data": {
             "model": "canopylabs/orpheus-v1-english"
           },
-          "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            }
-          ]
+          "meta_data_schema": []
         },
         {
           "name": "canopylabs/orpheus-arabic-saudi",
           "meta_data": {
             "model": "canopylabs/orpheus-arabic-saudi"
           },
-          "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            }
-          ]
+          "meta_data_schema": []
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.25,
-            "max": 4.0
-          },
-          "required": 0,
-          "description": "Speech speed multiplier. Range: 0.25 to 4.0. Default: 1.0",
-          "default": 1.0
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Autumn",
@@ -22388,18 +18951,6 @@
           },
           "meta_data_schema": [
             {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
-            {
               "name": "volume",
               "data_type": "float",
               "type": "input number",
@@ -22438,18 +18989,6 @@
             "model": "speech-2.8-turbo"
           },
           "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
             {
               "name": "volume",
               "data_type": "float",
@@ -22490,18 +19029,6 @@
           },
           "meta_data_schema": [
             {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
-            {
               "name": "volume",
               "data_type": "float",
               "type": "input number",
@@ -22540,18 +19067,6 @@
             "model": "speech-2.6-turbo"
           },
           "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
             {
               "name": "volume",
               "data_type": "float",
@@ -22592,18 +19107,6 @@
           },
           "meta_data_schema": [
             {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
-            {
               "name": "volume",
               "data_type": "float",
               "type": "input number",
@@ -22643,18 +19146,6 @@
           },
           "meta_data_schema": [
             {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            },
-            {
               "name": "volume",
               "data_type": "float",
               "type": "input number",
@@ -22688,19 +19179,6 @@
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.5,
-            "max": 2.0
-          },
-          "required": 0,
-          "description": "Speech speed multiplier. Default: 1.0",
-          "default": 1.0
-        },
         {
           "name": "volume",
           "data_type": "float",
@@ -39707,33 +36185,6 @@
               },
               "required": 0,
               "description": "Speed alpha control. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "reduce_latency",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Reduce latency at cost of quality"
-            },
-            {
-              "name": "pause_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add pauses between bracketed text"
-            },
-            {
-              "name": "phonemize_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Phonemize text between brackets"
             }
           ]
         },
@@ -39755,33 +36206,6 @@
               },
               "required": 0,
               "description": "Speed alpha control. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "reduce_latency",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Reduce latency at cost of quality"
-            },
-            {
-              "name": "pause_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add pauses between bracketed text"
-            },
-            {
-              "name": "phonemize_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Phonemize text between brackets"
             }
           ]
         },
@@ -39803,33 +36227,6 @@
               },
               "required": 0,
               "description": "Speed alpha control. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "reduce_latency",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Reduce latency at cost of quality"
-            },
-            {
-              "name": "pause_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Add pauses between bracketed text"
-            },
-            {
-              "name": "phonemize_between_brackets",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Phonemize text between brackets"
             }
           ]
         }
@@ -39847,36 +36244,6 @@
           "required": 0,
           "description": "Speed control factor. Default: 1.0",
           "default": 1.0
-        },
-        {
-          "name": "reduce_latency",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable reduced latency mode. Default: false",
-          "default": false
-        },
-        {
-          "name": "pause_between_brackets",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Insert pauses at bracketed text. Default: false",
-          "default": false
-        },
-        {
-          "name": "phonemize_between_brackets",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Phonemize text between brackets. Default: false",
-          "default": false
         }
       ],
       "voices": [
@@ -46771,15 +43138,6 @@
               },
               "required": 0,
               "description": "Temperature. Range: 0.01 to 1.0"
-            },
-            {
-              "name": "enable_preprocessing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable text preprocessing"
             }
           ]
         },
@@ -46790,18 +43148,6 @@
             "model": "bulbul:v2"
           },
           "meta_data_schema": [
-            {
-              "name": "pitch",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": -0.75,
-                "max": 0.75
-              },
-              "required": 0,
-              "description": "Voice pitch. Range: -0.75 to 0.75"
-            },
             {
               "name": "pace",
               "data_type": "float",
@@ -46825,33 +43171,11 @@
               },
               "required": 0,
               "description": "Loudness. Range: 0.3 to 3.0"
-            },
-            {
-              "name": "enable_preprocessing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable text preprocessing"
             }
           ]
         }
       ],
       "meta_data_schema": [
-        {
-          "name": "pitch",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": -0.75,
-            "max": 0.75
-          },
-          "required": 0,
-          "description": "Pitch adjustment. Range: -0.75 to 0.75. Default: 0.0",
-          "default": 0.0
-        },
         {
           "name": "pace",
           "data_type": "float",
@@ -46877,16 +43201,6 @@
           "required": 0,
           "description": "Loudness level. Range: 0.1 to 3.0. Default: 1.0",
           "default": 1.0
-        },
-        {
-          "name": "enable_preprocessing",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable text preprocessing. Default: false",
-          "default": false
         },
         {
           "name": "temperature",
@@ -53510,39 +49824,6 @@
                 "normal",
                 "balanced"
               ]
-            },
-            {
-              "name": "normalize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Normalize audio output"
-            },
-            {
-              "name": "prosody_speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.5,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody speed. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "prosody_volume",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody volume. Range: 0.0 to 2.0"
             }
           ]
         },
@@ -53565,39 +49846,6 @@
                 "normal",
                 "balanced"
               ]
-            },
-            {
-              "name": "normalize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Normalize audio output"
-            },
-            {
-              "name": "prosody_speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.5,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody speed. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "prosody_volume",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody volume. Range: 0.0 to 2.0"
             }
           ]
         },
@@ -53620,39 +49868,6 @@
                 "normal",
                 "balanced"
               ]
-            },
-            {
-              "name": "normalize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Normalize audio output"
-            },
-            {
-              "name": "prosody_speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.5,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody speed. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "prosody_volume",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody volume. Range: 0.0 to 2.0"
             }
           ]
         },
@@ -53675,39 +49890,6 @@
                 "normal",
                 "balanced"
               ]
-            },
-            {
-              "name": "normalize",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Normalize audio output"
-            },
-            {
-              "name": "prosody_speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.5,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody speed. Range: 0.5 to 2.0"
-            },
-            {
-              "name": "prosody_volume",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Prosody volume. Range: 0.0 to 2.0"
             }
           ]
         }
@@ -53725,42 +49907,6 @@
             "balanced"
           ],
           "default": "normal"
-        },
-        {
-          "name": "normalize",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable text normalization. Default: true",
-          "default": true
-        },
-        {
-          "name": "prosody_speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.5,
-            "max": 2.0
-          },
-          "required": 0,
-          "description": "Prosody speed multiplier. Default: 1.0",
-          "default": 1.0
-        },
-        {
-          "name": "prosody_volume",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": -20,
-            "max": 20
-          },
-          "required": 0,
-          "description": "Prosody volume adjustment. Default: 0",
-          "default": 0
         }
       ],
       "voices": [
@@ -53900,18 +50046,6 @@
               },
               "required": 0,
               "description": "Temperature. Range: 0.01 to 1.0"
-            },
-            {
-              "name": "speaking_rate",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speaking rate. Range: 0.25 to 4.0"
             }
           ]
         },
@@ -53933,18 +50067,6 @@
               },
               "required": 0,
               "description": "Temperature. Range: 0.01 to 1.0"
-            },
-            {
-              "name": "speaking_rate",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speaking rate. Range: 0.25 to 4.0"
             }
           ]
         }
@@ -53961,18 +50083,6 @@
           },
           "required": 0,
           "description": "Controls variation in speech generation"
-        },
-        {
-          "name": "speaking_rate",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.25,
-            "max": 4.0
-          },
-          "required": 0,
-          "description": "Speaking rate multiplier. Range: 0.25 to 4.0"
         }
       ],
       "voices": [
@@ -54747,40 +50857,14 @@
           "meta_data": {
             "model": "tts-1"
           },
-          "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            }
-          ]
+          "meta_data_schema": []
         },
         {
           "name": "tts-1-hd",
           "meta_data": {
             "model": "tts-1-hd"
           },
-          "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            }
-          ]
+          "meta_data_schema": []
         },
         {
           "name": "gpt-4o-mini-tts",
@@ -54796,18 +50880,6 @@
               "validator": null,
               "required": 0,
               "description": "Natural language instructions to control voice style, accent, emotion"
-            },
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
             }
           ]
         }
@@ -54821,19 +50893,6 @@
           "validator": null,
           "required": 0,
           "description": "Instructions to guide TTS voice style and behavior"
-        },
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.25,
-            "max": 4.0
-          },
-          "required": 0,
-          "description": "Voice speed control (0.25 to 4.0). Default is 1.0 when not specified.",
-          "default": null
         }
       ],
       "voices": [
@@ -57048,37 +53107,10 @@
           "meta_data": {
             "model": "neu_hq"
           },
-          "meta_data_schema": [
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.25,
-                "max": 4.0
-              },
-              "required": 0,
-              "description": "Speech speed multiplier"
-            }
-          ]
+          "meta_data_schema": []
         }
       ],
-      "meta_data_schema": [
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.5,
-            "max": 2.0
-          },
-          "required": 0,
-          "description": "Speech speed multiplier. Range: 0.5 to 2.0. Default: 1.0",
-          "default": 1.0
-        }
-      ],
+      "meta_data_schema": [],
       "voices": [
         {
           "name": "Abhi",
@@ -58402,18 +54434,6 @@
               "description": "Voice stability control. Range: 0.0 to 1.0"
             },
             {
-              "name": "similarity_boost",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Similarity boost control. Range: 0.0 to 1.0"
-            },
-            {
               "name": "style",
               "data_type": "float",
               "type": "input number",
@@ -58424,36 +54444,6 @@
               },
               "required": 0,
               "description": "Style control for voice expression. Range: 0.0 to 1.0"
-            },
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.7,
-                "max": 1.2
-              },
-              "required": 0,
-              "description": "Speech speed. Range: 0.7 to 1.2"
-            },
-            {
-              "name": "auto_mode",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable automatic mode optimization"
-            },
-            {
-              "name": "enable_ssml_parsing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Parse SSML tags in text"
             }
           ]
         },
@@ -58476,18 +54466,6 @@
               "description": "Voice stability control. Range: 0.0 to 1.0"
             },
             {
-              "name": "similarity_boost",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Similarity boost control. Range: 0.0 to 1.0"
-            },
-            {
               "name": "style",
               "data_type": "float",
               "type": "input number",
@@ -58498,45 +54476,6 @@
               },
               "required": 0,
               "description": "Style control for voice expression. Range: 0.0 to 1.0"
-            },
-            {
-              "name": "use_speaker_boost",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker boost enhancement"
-            },
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.7,
-                "max": 1.2
-              },
-              "required": 0,
-              "description": "Speech speed. Range: 0.7 to 1.2"
-            },
-            {
-              "name": "auto_mode",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable automatic mode optimization"
-            },
-            {
-              "name": "enable_ssml_parsing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Parse SSML tags in text"
             }
           ]
         },
@@ -58559,18 +54498,6 @@
               "description": "Voice stability control. Range: 0.0 to 1.0"
             },
             {
-              "name": "similarity_boost",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Similarity boost control. Range: 0.0 to 1.0"
-            },
-            {
               "name": "style",
               "data_type": "float",
               "type": "input number",
@@ -58581,45 +54508,6 @@
               },
               "required": 0,
               "description": "Style control for voice expression. Range: 0.0 to 1.0"
-            },
-            {
-              "name": "use_speaker_boost",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker boost enhancement"
-            },
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.7,
-                "max": 1.2
-              },
-              "required": 0,
-              "description": "Speech speed. Range: 0.7 to 1.2"
-            },
-            {
-              "name": "auto_mode",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable automatic mode optimization"
-            },
-            {
-              "name": "enable_ssml_parsing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Parse SSML tags in text"
             }
           ]
         },
@@ -58642,18 +54530,6 @@
               "description": "Voice stability control. Range: 0.0 to 1.0"
             },
             {
-              "name": "similarity_boost",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Similarity boost control. Range: 0.0 to 1.0"
-            },
-            {
               "name": "style",
               "data_type": "float",
               "type": "input number",
@@ -58664,45 +54540,6 @@
               },
               "required": 0,
               "description": "Style control for voice expression. Range: 0.0 to 1.0"
-            },
-            {
-              "name": "use_speaker_boost",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable speaker boost enhancement"
-            },
-            {
-              "name": "speed",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.7,
-                "max": 1.2
-              },
-              "required": 0,
-              "description": "Speech speed. Range: 0.7 to 1.2"
-            },
-            {
-              "name": "auto_mode",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Enable automatic mode optimization"
-            },
-            {
-              "name": "enable_ssml_parsing",
-              "data_type": "boolean",
-              "type": "radio",
-              "format": "boolean",
-              "validator": null,
-              "required": 0,
-              "description": "Parse SSML tags in text"
             }
           ]
         }
@@ -58721,18 +54558,6 @@
           "description": "Voice stability setting"
         },
         {
-          "name": "similarity_boost",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.0,
-            "max": 1.0
-          },
-          "required": 0,
-          "description": "Voice similarity boost setting"
-        },
-        {
           "name": "style",
           "data_type": "float",
           "type": "input number",
@@ -58743,46 +54568,6 @@
           },
           "required": 0,
           "description": "Style exaggeration setting"
-        },
-        {
-          "name": "use_speaker_boost",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable speaker boost for clarity"
-        },
-        {
-          "name": "speed",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.7,
-            "max": 1.2
-          },
-          "required": 0,
-          "description": "Speech speed multiplier"
-        },
-        {
-          "name": "auto_mode",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable auto mode for voice settings. Default: true",
-          "default": true
-        },
-        {
-          "name": "enable_ssml_parsing",
-          "data_type": "boolean",
-          "type": "radio",
-          "format": "boolean",
-          "validator": null,
-          "required": 0,
-          "description": "Enable SSML parsing in input text"
         }
       ],
       "voices": [
