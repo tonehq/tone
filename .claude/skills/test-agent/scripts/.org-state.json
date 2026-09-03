@@ -1,0 +1,6 @@
+{
+  "http://localhost:8000/api/v1": {
+    "organization_id": "6d3f89ee-a07a-4db8-a3c0-7f9690f10a99",
+    "name": "swap-test"
+  }
+}

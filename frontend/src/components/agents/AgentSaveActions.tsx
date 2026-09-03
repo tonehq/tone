@@ -6,12 +6,11 @@ import {
   LayoutTemplate,
   Loader2,
   MoreVertical,
-  Radio,
   Save,
   Trash2,
 } from 'lucide-react';
 
-import { CustomButton, CustomTooltip } from '@/components/shared';
+import { CustomButton } from '@/components/shared';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,6 +18,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+import PublishMenuItem from './PublishMenuItem';
 
 export type AgentSaveAction =
   | 'save'
@@ -143,34 +144,5 @@ export default function AgentSaveActions({
         </DropdownMenuContent>
       </DropdownMenu>
     </div>
-  );
-}
-
-interface PublishMenuItemProps {
-  disabled: boolean;
-  publishing: boolean;
-  tooltip: string | null;
-  onSelect: () => void;
-}
-
-/** Publish row extracted so the disabled-tooltip branch stays local. Radix
- *  disabled menu items ignore pointer events, so we wrap in a tooltip trigger
- *  span to still surface the "no drafts" hint on hover. */
-function PublishMenuItem({ disabled, publishing, tooltip, onSelect }: PublishMenuItemProps) {
-  const item = (
-    <DropdownMenuItem disabled={disabled} onSelect={onSelect}>
-      {publishing ? (
-        <Loader2 className={`${MENU_ICON_CLASS} animate-spin`} />
-      ) : (
-        <Radio className={MENU_ICON_CLASS} />
-      )}
-      Publish
-    </DropdownMenuItem>
-  );
-  if (!tooltip) return item;
-  return (
-    <CustomTooltip content={tooltip}>
-      <span className="inline-flex w-full">{item}</span>
-    </CustomTooltip>
   );
 }
