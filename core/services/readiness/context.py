@@ -351,8 +351,13 @@ def _safe_decrypt(api_key: ApiKey) -> Optional[str]:
     not an exception that aborts the whole readiness run."""
     try:
         return decrypt(api_key.encrypted_key)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning(
-            "[readiness] decrypt failed for api_key {}: {}", api_key.id, exc
+    except Exception:  # noqa: BLE001
+        # An un-decryptable ciphertext is a real misconfiguration (usually a
+        # rotated ``JWT_SECRET_KEY``), not expected control flow — capture the
+        # full traceback per the logging standard, matching the sibling
+        # embedding-key check in ``knowledge_bases.py``. The caller still gets
+        # ``None`` and reports the "no usable key" row.
+        logger.exception(
+            "[readiness] decrypt failed for api_key {}", api_key.id
         )
         return None

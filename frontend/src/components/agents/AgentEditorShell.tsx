@@ -514,8 +514,16 @@ export default function AgentEditorShell({ agentType, agentId, children }: Agent
         } catch {
           // Deep failed — let the shallow effect run so the badge still
           // refreshes off the DB fast-path.
-          skipNextShallowRef.current = false;
           bumpReadiness();
+        } finally {
+          // Disarm the one-shot guard unconditionally once the deep fetch
+          // settles. On the create-version path the config-id change already
+          // consumed it; on an in-place edit-save (config id unchanged) the
+          // shallow effect never fires to consume it, so without this the guard
+          // stays armed and silently swallows the NEXT legitimate refresh
+          // (e.g. the post-publish `bumpReadiness`), leaving the header pill
+          // stale.
+          skipNextShallowRef.current = false;
         }
       })();
     },

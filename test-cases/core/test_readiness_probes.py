@@ -700,13 +700,19 @@ class TestMcpServerHttpReachable:
 
         check = McpServerReachableCheck()
         svc = MagicMock()
-        svc._resolve_oauth_headers = MagicMock(return_value={})
         client = MagicMock()
         if exc is not None:
             client.get = AsyncMock(side_effect=exc)
         else:
             client.get = AsyncMock(return_value=response)
-        return asyncio.run(check._http_reachable(svc, client, self._make_server()))
+        # OAuth header resolution now runs on a dedicated session in a worker
+        # thread (see ``_resolve_mcp_oauth_headers_sync``); patch it so the L4
+        # reachability leg is exercised without a DB.
+        with patch(
+            "core.services.readiness.checks.mcp_servers._resolve_mcp_oauth_headers_sync",
+            return_value={},
+        ):
+            return asyncio.run(check._http_reachable(svc, client, self._make_server()))
 
     def test_pass_on_any_http_response(self):
         """SSE endpoints often return 405 to a bare GET — still counts as up."""
