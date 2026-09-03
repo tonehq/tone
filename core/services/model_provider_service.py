@@ -101,6 +101,18 @@ def _model_to_dict(m: Model) -> dict:
     }
 
 
+def _optional_json(body: dict, key: str, *, expect: type) -> Any:
+    value = body.get(key)
+    if value is None:
+        return None
+    if not isinstance(value, expect):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"{key} must be a JSON {'object' if expect is dict else 'array'}",
+        )
+    return value
+
+
 def _optional_str(body: dict, key: str) -> Optional[str]:
     """Trim a request-body string and return ``None`` for empty/missing values.
     Centralises the ``(x or "").strip() or None`` pattern used across model writes."""
@@ -1009,6 +1021,8 @@ class ModelProviderService(BaseService):
             kind=kind,
             description=_optional_str(body, "description"),
             base_url=_optional_str(body, "base_url"),
+            meta_data=_optional_json(body, "meta_data", expect=dict),
+            meta_data_schema=_optional_json(body, "meta_data_schema", expect=list),
             is_active=bool(body.get("is_active", True)),
         )
         self.db.add(record)
@@ -1057,6 +1071,12 @@ class ModelProviderService(BaseService):
             record.description = _optional_str(body, "description")
         if "base_url" in body:
             record.base_url = _optional_str(body, "base_url")
+        if "meta_data" in body:
+            record.meta_data = _optional_json(body, "meta_data", expect=dict)
+        if "meta_data_schema" in body:
+            record.meta_data_schema = _optional_json(
+                body, "meta_data_schema", expect=list
+            )
         if "is_active" in body:
             record.is_active = bool(body["is_active"])
 
