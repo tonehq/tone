@@ -7,6 +7,8 @@ from sqlalchemy.orm import Session
 
 from core.config import settings
 from core.database.session import get_db
+from core.schemas.oauth_requests import (CustomCredentialRequest,
+                                          McpDiscoverRequest)
 from core.services.oauth_providers import (
     get_catalog,
     get_supported_providers,
@@ -99,13 +101,15 @@ def catalog(
 
 @router.post("/custom_credential", status_code=status.HTTP_201_CREATED)
 def create_custom_credential(
-    body: Dict[str, Any] = Body(...),
+    body: CustomCredentialRequest = Body(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
     """Create a user-defined credential (OAuth 2.0 client-credentials or Bearer token)."""
     svc = _get_service(claims, db)
-    connection = svc.create_custom_credential({**body, "created_by_user_id": claims.user_id})
+    connection = svc.create_custom_credential(
+        {**body.model_dump(exclude_unset=True), "created_by_user_id": claims.user_id}
+    )
     return svc.connection_response(connection)
 
 
@@ -116,7 +120,7 @@ _MCP_CALLBACK_URL = f"{BACKEND_URL}/oauth/mcp/callback"
 
 @router.post("/mcp/discover")
 def mcp_discover(
-    body: Dict[str, Any] = Body(...),
+    body: McpDiscoverRequest = Body(...),
     claims: EEJWTClaims = Depends(require_ee_org_member),
     db: Session = Depends(get_db),
 ):
@@ -124,7 +128,7 @@ def mcp_discover(
     authorization URL. Body: { server_url, label?, return_to? }."""
     from core.services.mcp_oauth_service import McpOAuthService
 
-    server_url = body.get("server_url")
+    server_url = body.server_url
     if not server_url:
         raise HTTPException(status_code=400, detail="server_url is required")
     svc = McpOAuthService(
@@ -133,8 +137,8 @@ def mcp_discover(
     return svc.start_discovery(
         server_url=server_url,
         created_by_user_id=claims.user_id,
-        label=body.get("label"),
-        return_to=body.get("return_to"),
+        label=body.label,
+        return_to=body.return_to,
     )
 
 

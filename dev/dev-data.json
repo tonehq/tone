@@ -2917,18 +2917,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 8192
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3012,18 +3000,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3107,18 +3083,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3202,18 +3166,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 16384
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3297,18 +3249,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3392,18 +3332,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 16384
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3487,18 +3415,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 32768
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3582,18 +3498,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 32768
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3677,18 +3581,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 32768
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3772,18 +3664,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3867,18 +3747,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -3962,18 +3830,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -4057,18 +3913,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1"
-            },
-            {
-              "name": "max_completion_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 16,
-                "max": 4096
-              },
-              "required": 0,
-              "description": "Maximum number of completion tokens to generate. Min: 16"
             }
           ]
         },
@@ -9694,17 +9538,6 @@
           },
           "required": 0,
           "description": "Maximum number of tokens to generate. Min: 1"
-        },
-        {
-          "name": "max_completion_tokens",
-          "data_type": "integer",
-          "type": "input number",
-          "format": "integer",
-          "validator": {
-            "min": 1
-          },
-          "required": 0,
-          "description": "Maximum number of completion tokens to generate. Min: 1"
         }
       ],
       "status": "active"

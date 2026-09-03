@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { listKnowledgeBase } from '@/services/knowledgeBaseService';
+import type { ListKnowledgeBaseParams } from '@/services/knowledgeBaseService';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
 import axios from '@/utils/axios';
 
@@ -87,6 +89,22 @@ export function useKnowledgeBase(params: ListDocumentsParams = {}) {
       query.state.data?.items.some((doc) => doc.status === 'processing')
         ? PROCESSING_POLL_INTERVAL_MS
         : false,
+  });
+}
+
+/**
+ * KB uploads for the agent Knowledge step. Wraps the `listKnowledgeBase`
+ * service (which returns the richer `KnowledgeBaseUpload` shape — including the
+ * transient `pending` status the agent step renders) so the step reads server
+ * state from TanStack Query instead of a `useState` + `useEffect` fetch, while
+ * keeping its existing item type. `placeholderData` keeps the previous page on
+ * screen while a new search refetches, mirroring the old imperative refresh.
+ */
+export function useKnowledgeBaseUploads(params: ListKnowledgeBaseParams = {}) {
+  return useQuery({
+    queryKey: [KNOWLEDGE_BASE_QUERY_KEY, 'uploads', params],
+    queryFn: () => listKnowledgeBase(params),
+    placeholderData: (prev) => prev,
   });
 }
 

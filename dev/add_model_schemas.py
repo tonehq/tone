@@ -212,10 +212,14 @@ def classify_openrouter(model_name):
     if name.startswith("openai/gpt-5"):
         return ["seed", "max_completion_tokens"]
 
-    # OpenAI standard models
+    # OpenAI standard models. Expose ONLY max_tokens (not both): OpenRouter
+    # accepts max_tokens for these chat models, and a schema that offered both
+    # would let the agent config set both — which some providers reject
+    # ("setting max_tokens and max_completion_tokens at the same time is not
+    # supported"). The runtime also de-dupes as a safety net.
     if name.startswith("openai/gpt-4") or name.startswith("openai/gpt-3"):
         return ["temperature_0_2", "top_p", "frequency_penalty", "presence_penalty",
-                "seed", "max_tokens", "max_completion_tokens"]
+                "seed", "max_tokens"]
 
     # Anthropic via OpenRouter
     if name.startswith("anthropic/"):
