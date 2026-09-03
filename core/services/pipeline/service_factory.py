@@ -28,6 +28,40 @@ def _url_kwargs(metadata: dict, kwarg: str = "base_url") -> dict:
     return {kwarg: url} if url else {}
 
 
+def _dedupe_token_limit_fields(params, user_keys: set):
+    """Never send both ``max_tokens`` and ``max_completion_tokens`` on one request.
+
+    Pipecat's OpenAI-compatible ``InputParams`` exposes BOTH token-limit fields
+    and defaults ``max_tokens`` to a non-``None`` value. A model's meta_data
+    schema only ever exposes ONE of them (e.g. Cohere/OpenAI/Groq use
+    ``max_completion_tokens``; Anthropic/Google/Perplexity use ``max_tokens``),
+    so when the agent config sets that one field the built params object still
+    carries the *defaulted* counterpart — and Pipecat serializes both. Some
+    providers reject that outright (Cohere's OpenAI-compat endpoint:
+    "setting max_tokens and max_completion_tokens at the same time is not
+    supported").
+
+    Fix: when the user explicitly set exactly one of the two, null the OTHER
+    (the defaulted one) so only the intended field is sent. Conservative by
+    design — it only clears a field the user did NOT set, and only its
+    counterpart's default; single-field services (Anthropic/Google) and the
+    both-unset / both-set cases are left untouched.
+    """
+    if params is None:
+        return params
+    fields = set(type(params).model_fields.keys())
+    if not {"max_tokens", "max_completion_tokens"} <= fields:
+        return params  # single-field service — no conflict possible
+    user_mt = "max_tokens" in user_keys
+    user_mct = "max_completion_tokens" in user_keys
+    # Only reconcile when the user set exactly one of the pair.
+    if user_mct and not user_mt and getattr(params, "max_tokens", None) is not None:
+        return params.model_copy(update={"max_tokens": None})
+    if user_mt and not user_mct and getattr(params, "max_completion_tokens", None) is not None:
+        return params.model_copy(update={"max_completion_tokens": None})
+    return params
+
+
 def build_input_params(service_class, metadata: dict):
     """Convert metadata dict to proper InputParams for a Pipecat service class.
 
@@ -57,8 +91,9 @@ def build_input_params(service_class, metadata: dict):
                 )
     if not filtered:
         return input_params_class()
+    user_keys = set(filtered)
     try:
-        return input_params_class(**filtered)
+        return _dedupe_token_limit_fields(input_params_class(**filtered), user_keys)
     except Exception:
         # Bulk validation failed — one bad field would otherwise nuke ALL
         # user settings (e.g. MiniMax rejects language='English' because its
@@ -82,7 +117,9 @@ def build_input_params(service_class, metadata: dict):
                     service_class.__name__, key, value,
                 )
         try:
-            return input_params_class(**result_kwargs)
+            return _dedupe_token_limit_fields(
+                input_params_class(**result_kwargs), set(result_kwargs)
+            )
         except Exception:
             logger.bind(service_class=service_class.__name__).exception(
                 "[service-factory] failed to build InputParams for {} even after per-field retry",
@@ -122,6 +159,22 @@ def build_llm(spec: dict) -> Optional[Any]:
             if "enable_prompt_caching" not in metadata:
                 metadata["enable_prompt_caching"] = True
             params = build_input_params(AnthropicLLMService, metadata)
+            # Translate the schema's flat `thinking_budget_tokens` into Pipecat's
+            # structured `thinking` config — build_input_params can't map it because the
+            # field names differ, so extended thinking never activated otherwise. Only
+            # enable when a positive budget is set; leave params untouched otherwise.
+            _budget = metadata.get("thinking_budget_tokens")
+            if params is not None and _budget not in (None, "", "None"):
+                try:
+                    _budget_int = int(_budget)
+                except (TypeError, ValueError):
+                    _budget_int = 0
+                if _budget_int > 0:
+                    params = params.model_copy(update={
+                        "thinking": AnthropicLLMService.ThinkingConfig(
+                            type="enabled", budget_tokens=_budget_int
+                        )
+                    })
             return AnthropicLLMService(api_key=api_key, model=model or "claude-haiku-4-5-20251001", params=params)
         if provider_name == "groq":  # done
             from pipecat.services.groq.llm import GroqLLMService
@@ -262,9 +315,23 @@ def build_stt(spec: dict) -> Optional[Any]:
             dg_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
-            live_options = None
-            if metadata.get("language"):
-                live_options = LiveOptions(language=metadata["language"])
+            # Forward the selected model + Deepgram transcription options into LiveOptions.
+            # Previously only `language` was passed, so the user's model tier
+            # (nova-3 / nova-2-phonecall / nova-2-medical / …) and every option toggle
+            # below were silently dropped. Only keys present in the config are sent, so
+            # unset options keep Deepgram's own defaults.
+            lo_kwargs = {}
+            if model:
+                lo_kwargs["model"] = model
+            for _opt in (
+                "language", "punctuate", "smart_format", "profanity_filter",
+                "diarize", "filler_words", "endpointing", "utterance_end_ms",
+                "no_delay", "dictation", "numerals", "interim_results", "keywords",
+            ):
+                _val = metadata.get(_opt)
+                if _val is not None and _val != "":
+                    lo_kwargs[_opt] = _val
+            live_options = LiveOptions(**lo_kwargs) if lo_kwargs else None
             dg_url = _url_kwargs(metadata)
             _dg_host = (dg_url.get("base_url") or "").split("://")[-1].split("/")[0]
             if not _dg_host or "." not in _dg_host:
@@ -422,6 +489,23 @@ def build_stt(spec: dict) -> Optional[Any]:
                 conn_kwargs["end_of_turn_confidence_threshold"] = metadata["end_of_turn_confidence_threshold"]
             if metadata.get("speech_model") is not None:
                 conn_kwargs["speech_model"] = metadata["speech_model"]
+            if metadata.get("keyterms_prompt") is not None:
+                # AssemblyAI expects a List[str]; the schema stores it as a
+                # comma-separated string (it may also arrive as a JSON list). Previously
+                # dropped entirely. Normalize both shapes into a clean list of terms.
+                _kt = metadata["keyterms_prompt"]
+                if isinstance(_kt, str):
+                    try:
+                        _parsed = json.loads(_kt)
+                    except (json.JSONDecodeError, TypeError):
+                        _parsed = None
+                    if isinstance(_parsed, list):
+                        _kt = _parsed
+                    else:
+                        _kt = [term.strip() for term in _kt.split(",")]
+                _kt = [term for term in _kt if isinstance(term, str) and term.strip()]
+                if _kt:
+                    conn_kwargs["keyterms_prompt"] = _kt
             asm_kwargs = {}
             if metadata.get("language") is not None:
                 asm_kwargs["language"] = metadata["language"]
@@ -539,13 +623,25 @@ def build_tts(spec: dict) -> Optional[Any]:
 
     try:
         if provider_name == "cartesia":  # In code but class is different
-            from pipecat.services.cartesia.tts import CartesiaTTSService
+            from pipecat.services.cartesia.tts import (CartesiaTTSService,
+                                                       GenerationConfig)
             voice_kwargs = {}
             voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
             if tts_language is not None:
                 voice_kwargs["language"] = tts_language or "en"
-            logger.debug("[TTS {}] voice_kwargs: {}", provider_name, voice_kwargs)
-            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=build_input_params(CartesiaTTSService, metadata), **voice_kwargs, **_url_kwargs(metadata, "url"))
+            params = build_input_params(CartesiaTTSService, metadata)
+            # Sonic-3 speed/emotion are numeric and live under `generation_config`, not
+            # flat InputParams fields, so build_input_params can't map the schema's
+            # `speed`/`emotion` — wire them explicitly or the user's speed had no effect.
+            gen_kwargs = {}
+            if metadata.get("speed") is not None:
+                gen_kwargs["speed"] = metadata["speed"]
+            if isinstance(metadata.get("emotion"), str) and metadata["emotion"]:
+                gen_kwargs["emotion"] = metadata["emotion"]
+            if gen_kwargs and params is not None:
+                params = params.model_copy(update={"generation_config": GenerationConfig(**gen_kwargs)})
+            logger.debug("[TTS {}] voice_kwargs: {} generation_config: {}", provider_name, voice_kwargs, gen_kwargs)
+            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=params, **voice_kwargs, **_url_kwargs(metadata, "url"))
         if provider_name == "openai":  # In code
             from pipecat.services.openai.tts import OpenAITTSService
             voice_kwargs = {}

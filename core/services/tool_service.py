@@ -349,7 +349,10 @@ class ToolService(BaseService):
         published_map = {
             aid: cid
             for aid, cid in self.db.query(Agent.id, Agent.published_config_id)
-            .filter(Agent.id.in_(agent_ids))
+            .filter(
+                Agent.id.in_(agent_ids),
+                Agent.organization_id == self.org_id,
+            )
             .all()
             if cid is not None
         }
@@ -424,7 +427,10 @@ class ToolService(BaseService):
         published_ids = [
             cid
             for (cid,) in self.db.query(Agent.published_config_id)
-            .filter(Agent.id.in_(agent_ids))
+            .filter(
+                Agent.id.in_(agent_ids),
+                Agent.organization_id == self.org_id,
+            )
             .all()
             if cid is not None
         ]

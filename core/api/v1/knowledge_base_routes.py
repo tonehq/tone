@@ -30,6 +30,8 @@ from sqlalchemy.orm import Session
 
 from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
+from core.schemas.knowledge_base_requests import (PipelineRunRequest,
+                                                   RenameDocumentRequest)
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.upload import Upload
 from core.services.evals.eval_service import EvalRunSummary, EvalService
@@ -381,7 +383,7 @@ def build_knowledge_base_router(
     @router.patch("/{upload_id}")
     def rename_document(
         upload_id: str,
-        body: dict = Body(...),
+        body: RenameDocumentRequest = Body(...),
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
@@ -391,7 +393,7 @@ def build_knowledge_base_router(
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
 
-        new_name = (body.get("file_name") or "").strip()
+        new_name = (body.file_name or "").strip()
         if not new_name:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="file_name is required"
@@ -639,7 +641,7 @@ def build_knowledge_base_router(
     @router.post("/{upload_id}/runs", status_code=status.HTTP_202_ACCEPTED)
     async def create_pipeline_run(
         upload_id: str,
-        body: dict = Body(default={}),
+        body: PipelineRunRequest = Body(default_factory=PipelineRunRequest),
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
@@ -675,7 +677,7 @@ def build_knowledge_base_router(
                 db,
                 org_id=org_id,
                 upload=upload,
-                raw_body=body or {},
+                raw_body=body.model_dump(exclude_unset=True),
             )
         except (
             IngestionConfigNotFoundError,

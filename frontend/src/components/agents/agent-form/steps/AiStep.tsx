@@ -1,7 +1,7 @@
 'use client';
 
 import { Brain, Settings2 } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import DynamicProviderFields from '@/components/agents/agent-form/DynamicProviderFields';
@@ -11,22 +11,16 @@ import {
 } from '@/components/agents/agent-form/reconcileSchemaValues';
 import SectionCard from '@/components/agents/agent-form/SectionCard';
 import { SelectInput, SliderField, TextInput } from '@/components/shared';
-import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
-import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
+import { useLlmModels, useLlmProviderCatalog } from '@/lib/api/providerCatalog';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import type { MetaDataSchemaField } from '@/types/provider';
 import type { AgentFormState } from '@/types/agent';
-import { handleApiError } from '@/utils/helpers';
 
 /** Keys in llm_settings that are structural (not schema fields). */
 const LLM_STRUCTURAL_KEYS = new Set(['provider_id', 'model_id', 'model', 'is_s2s']);
 
 export default function AiStep() {
   const { control, setValue, getValues } = useFormContext<AgentFormState>();
-
-  const [providers, setProviders] = useState<ProviderCatalogItem[]>([]);
-  const [llmModels, setLlmModels] = useState<ProviderModel[]>([]);
-  const [loadingProviders, setLoadingProviders] = useState(false);
-  const [loadingModels, setLoadingModels] = useState(false);
 
   // LLM provider id and model id both live under `config.llm_settings`
   // (a JSONB column on the backend). We previously wrote provider id into
@@ -42,48 +36,19 @@ export default function AiStep() {
     name: 'config.llm_settings.model_id' as never,
   }) as string | null | undefined;
 
-  // ─── providers catalog ────────────────────────────────────────────────────
-  useEffect(() => {
-    let cancelled = false;
-    setLoadingProviders(true);
-    listProviderCatalog('llm')
-      .then((items) => {
-        if (cancelled) return;
-        setProviders(items);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingProviders(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  // ─── LLM models (depends on chosen provider) ──────────────────────────────
-  useEffect(() => {
-    if (!llmProviderId) {
-      setLlmModels([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingModels(true);
-    listProviderModels(llmProviderId, { service_type: 'llm', page: 1, page_size: 100 })
-      .then((res) => {
-        if (!cancelled) setLlmModels(res.rows.filter((m) => m.is_active));
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingModels(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [llmProviderId]);
+  // ─── providers catalog + LLM models (models depend on chosen provider) ────
+  const {
+    data: providers = [],
+    isLoading: loadingProviders,
+    error: providersError,
+  } = useLlmProviderCatalog();
+  const {
+    data: llmModels = [],
+    isFetching: loadingModels,
+    error: modelsError,
+  } = useLlmModels(llmProviderId);
+  useQueryErrorToast(providersError);
+  useQueryErrorToast(modelsError);
 
   const llmProviderOptions = useMemo(
     () =>
