@@ -1,0 +1,7 @@
+{
+  "name": "test-agent",
+  "version": "1.0.0",
+  "description": "Provision a test organisation with three otherwise-identical voice agents, one per pipeline layer, so an STT, LLM or TTS swap can be attributed to that layer alone.",
+  "author": { "name": "Tone" },
+  "keywords": ["voice", "testing", "agents", "stt", "llm", "tts", "ab-test"]
+}
