@@ -25,10 +25,11 @@ removes that duplication.
 from __future__ import annotations
 
 import contextlib
-from typing import Any, AsyncIterator, ClassVar, Iterable, Optional, Tuple
+from typing import Any, AsyncIterator, ClassVar, Dict, Iterable, Optional, Tuple
 
 import httpx
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from core.services.readiness.base import CheckContext, DeepCheck, ShallowCheck
 from core.services.readiness.checks._messages import oauth_failure_reason, quote
@@ -48,6 +49,35 @@ _PROBE_TIMEOUT_S = 5.0
 # cheap HTTP GET *then* the full handshake sequentially; servers run in
 # parallel, so this is ~one server's worst case plus headroom.
 _DEEP_TIMEOUT_S = 12.0
+
+
+def _resolve_mcp_oauth_headers_sync(
+    org_id: Any,
+    oauth_connection_id: Any,
+    *,
+    app_integration_id: Any = None,
+    validate: bool = False,
+) -> Dict[str, str]:
+    """Resolve an MCP server's OAuth Authorization header on a dedicated
+    short-lived DB session, in a worker thread.
+
+    The resolution can trigger a blocking synchronous token refresh; running it
+    off the event loop on its own session keeps a slow provider from freezing
+    every other concurrently-probed server and never shares the readiness
+    ``ctx.db`` across threads. ``validate=True`` additionally runs the
+    provider-match + scope checks (handshake path); like the resolver, those
+    raise ``HTTPException``, which propagates to the awaiting caller exactly as
+    the previous inline calls did.
+    """
+    from core.database.session import get_db_context
+    from core.services.mcp_server_service import McpServerService
+
+    with get_db_context() as db:
+        svc = McpServerService(db, org_id=org_id)
+        if validate:
+            svc._validate_oauth_provider_match(app_integration_id, oauth_connection_id)
+            svc._validate_oauth_scopes(oauth_connection_id)
+        return svc._resolve_oauth_headers(oauth_connection_id)
 
 
 def _is_statically_broken(server: Any) -> Optional[str]:
@@ -213,10 +243,16 @@ class McpServerReachableCheck(PerResourceCheck, DeepCheck):
             # Authorization header. Agent-version OAuth override wins over the
             # entity default — same precedence the pipeline uses.
             effective_oauth_id = effective_of(server)
+            # Offloaded to a worker thread on its own session — the OAuth
+            # resolution may block on a token refresh and must not freeze the
+            # loop or touch the shared readiness session from a thread.
+            oauth_headers = await run_in_threadpool(
+                _resolve_mcp_oauth_headers_sync, svc.org_id, effective_oauth_id
+            )
             headers = {
                 **build_auth_headers(server.auth_config, auth_type=server.auth_type),
                 **headers_from_meta(server.meta_data),
-                **svc._resolve_oauth_headers(effective_oauth_id),
+                **oauth_headers,
             }
             await client.get(url, headers=headers)
             return True, None
@@ -246,19 +282,26 @@ class McpServerReachableCheck(PerResourceCheck, DeepCheck):
             # A linked OAuth connection whose scopes were revoked in the
             # provider's dashboard still resolves to a valid token — the MCP
             # handshake would pass and only the actual tool call would fail.
-            # Validate scopes + provider match up-front (in-memory, no I/O) so
-            # revocation / wrong-provider surfaces here, not mid-conversation.
-            svc._validate_oauth_provider_match(
-                server.app_integration_id, effective_oauth_id
+            # Validate scopes + provider match up-front so revocation /
+            # wrong-provider surfaces here, not mid-conversation. Offloaded to a
+            # worker thread on its own session together with the OAuth-header
+            # resolution (which may block on a token refresh) so the loop is
+            # never frozen and the shared readiness session is never touched
+            # from a thread.
+            oauth_headers = await run_in_threadpool(
+                _resolve_mcp_oauth_headers_sync,
+                svc.org_id,
+                effective_oauth_id,
+                app_integration_id=server.app_integration_id,
+                validate=True,
             )
-            svc._validate_oauth_scopes(effective_oauth_id)
             # Mirror the runtime path (McpServerService.discover_tools): decrypt
             # the stored auth_config, then layer the custom meta_data headers and
             # the OAuth-resolved Authorization header on top via ``extra_headers``.
             decrypted_auth = decrypt_auth_config(server.auth_config)
             extra_headers = {
                 **headers_from_meta(server.meta_data),
-                **svc._resolve_oauth_headers(effective_oauth_id),
+                **oauth_headers,
             }
             await svc.validate_mcp_connection(
                 server_url=server.server_url,

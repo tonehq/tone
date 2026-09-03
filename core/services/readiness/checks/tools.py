@@ -28,6 +28,7 @@ from urllib.parse import urlparse
 
 import httpx
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from core.services.readiness.base import CheckContext, DeepCheck, ShallowCheck
 from core.services.readiness.checks._messages import oauth_failure_reason, quote
@@ -172,30 +173,35 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
 
     @contextlib.asynccontextmanager
     async def _shared(self, ctx: CheckContext) -> AsyncIterator[Any]:
-        """Tool + OAuth services and a pooled HTTP client, reused per tool.
-        Runtime tool calls don't follow redirects — match that so "URL moved"
-        fails here rather than silently succeeding."""
-        from core.services.oauth_service import OAuthService
-        from core.services.tool_service import ToolService
+        """A pooled HTTP client, reused across every tool probe. Runtime tool
+        calls don't follow redirects — match that so "URL moved" fails here
+        rather than silently succeeding.
 
-        tool_svc = ToolService(ctx.db, org_id=ctx.org_id)
-        oauth_svc = OAuthService(ctx.db, org_id=ctx.org_id)
+        OAuth resolution deliberately does NOT reuse ``ctx.db``: it runs on its
+        own short-lived session inside a worker thread (see ``_probe_oauth_sync``)
+        so a blocking token refresh neither freezes the event loop nor touches
+        the shared readiness session from another thread."""
         async with httpx.AsyncClient(
             timeout=_PROBE_TIMEOUT_S, follow_redirects=False
         ) as client:
-            yield (tool_svc, oauth_svc, client)
+            yield client
 
     async def _check_one(
         self, ctx: CheckContext, tool: Any, shared: Any
     ) -> Optional[ResourceProblem]:
-        tool_svc, oauth_svc, client = shared
+        client = shared
         reason: Optional[str] = None
 
         # 1) OAuth-connection probe. If a linked connection is broken the tool is
         #    guaranteed to fail at call time, so we skip the HTTP probe to avoid
-        #    a redundant confusing 401.
+        #    a redundant confusing 401. Offloaded to a worker thread on its own
+        #    session: the token resolution can trigger a blocking sync HTTP
+        #    refresh, which must not freeze the event loop (that would stall
+        #    every other concurrently-probed tool / MCP / provider).
         if self._has_oauth_connection(tool):
-            oauth_reason = self._probe_oauth(tool, tool_svc, oauth_svc)
+            oauth_reason = await run_in_threadpool(
+                self._probe_oauth_sync, tool, ctx.org_id
+            )
             if oauth_reason is not None:
                 reason = oauth_failure_reason(oauth_reason)
         # 2) HTTP GET probe for probeable custom tools — runs when the OAuth
@@ -243,11 +249,17 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
         return (tool.method or "GET").upper() == "GET"
 
     @staticmethod
-    def _probe_oauth(tool, tool_svc, oauth_svc) -> Optional[str]:
+    def _probe_oauth_sync(tool, org_id) -> Optional[str]:
         """Validate the tool's OAuth connection the way runtime would use it:
         provider-match + scopes + live token resolution (refresh if expired).
         Returns ``None`` on success or a short reason on failure. Never
         raises — every failure mode maps to a message.
+
+        Runs on a dedicated short-lived DB session (mirrors
+        ``custom_tool_service._resolve_connection_header``) so it can be
+        offloaded to a worker thread via ``run_in_threadpool``: the blocking
+        token refresh stays off the event loop, and its DB access never shares
+        the readiness ``ctx.db`` across threads.
 
         Unlike ``custom_tool_service._resolve_connection_header`` which
         fail-opens at call time so the LLM can react to the resulting 401,
@@ -256,22 +268,28 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
         """
         from fastapi import HTTPException
 
+        from core.database.session import get_db_context
+        from core.services.oauth_service import OAuthService
+        from core.services.tool_service import ToolService
         from core.utils.oauth_resolution import effective_of
 
         oauth_id = effective_of(tool)
         if not oauth_id:
             return None
         try:
-            tool_svc._validate_oauth_provider_match(
-                tool.app_integration_id, oauth_id
-            )
-            tool_svc._validate_oauth_scopes(tool.tool_type, oauth_id)
-            connection = oauth_svc.get_connection(oauth_id)
-            # Live token resolution: refresh if expired, mint if
-            # client-credentials, decrypt if bearer/api-key. Any provider-
-            # side failure (revoked refresh token, decrypt error, missing
-            # key) raises here.
-            oauth_svc.resolve_connection_auth_header(connection)
+            with get_db_context() as db:
+                tool_svc = ToolService(db, org_id=org_id)
+                oauth_svc = OAuthService(db, org_id=org_id)
+                tool_svc._validate_oauth_provider_match(
+                    tool.app_integration_id, oauth_id
+                )
+                tool_svc._validate_oauth_scopes(tool.tool_type, oauth_id)
+                connection = oauth_svc.get_connection(oauth_id)
+                # Live token resolution: refresh if expired, mint if
+                # client-credentials, decrypt if bearer/api-key. Any provider-
+                # side failure (revoked refresh token, decrypt error, missing
+                # key) raises here.
+                oauth_svc.resolve_connection_auth_header(connection)
         except HTTPException as exc:
             # ``detail`` is a deliberately user-facing validation message from
             # the tool/OAuth service — safe to surface.
@@ -293,7 +311,7 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
         """Return ``None`` on success, or a short human-readable reason on
         failure. Never raises — every failure mode maps to a message."""
         try:
-            headers = self._build_headers(tool)
+            headers = await self._build_headers(tool)
         except Exception:  # noqa: BLE001 — decrypt / OAuth resolver failure
             logger.debug(
                 "[readiness] tool credential prep failed for tool '{}'", tool.name
@@ -313,12 +331,18 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
             return f"authentication was rejected (HTTP {response.status_code})"
         return f"the server returned HTTP {response.status_code}"
 
-    def _build_headers(self, tool) -> dict:
+    async def _build_headers(self, tool) -> dict:
         """Assemble outbound HTTP headers exactly the way runtime does.
 
         Reuses :func:`build_auth_headers` (shared with MCP) for
         bearer / api_key / basic + custom headers, then layers the resolved
         OAuth Authorization header on top for OAuth-typed tools.
+
+        ``_resolve_connection_header`` (which may block on a token refresh and
+        opens its own short-lived session) is offloaded to a worker thread —
+        the same way the runtime tool handler awaits it (see
+        ``create_custom_tool_handler`` in ``custom_tool_service``) — so it never
+        freezes the event loop during a deep probe.
         """
         # Local imports keep this module import-cheap and avoid circulars.
         from core.services.custom_tool_service import _resolve_connection_header
@@ -333,7 +357,7 @@ class ToolReachableCheck(PerResourceCheck, DeepCheck):
         )
 
         if normalize_auth_type(tool.auth_type) == AUTH_TYPE_OAUTH:
-            resolved = _resolve_connection_header(tool)
+            resolved = await run_in_threadpool(_resolve_connection_header, tool)
             if resolved is not None:
                 header_name, header_value = resolved
                 headers[header_name] = header_value

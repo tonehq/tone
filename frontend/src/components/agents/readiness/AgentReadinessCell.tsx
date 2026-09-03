@@ -27,22 +27,22 @@ export default function AgentReadinessCell({
   readiness,
   onOpen,
 }: AgentReadinessCellProps) {
+  const handleClick = (e: React.MouseEvent<HTMLElement>) => {
+    // Stop propagation so the surrounding row-click (which opens the editor)
+    // doesn't fire in addition to the drawer.
+    e.stopPropagation();
+    onOpen?.(agentId, readiness);
+  };
+
   return (
     <ReadinessBadge
       status={readiness?.overall_status ?? 'error'}
       blockerCount={readiness?.blocker_count ?? 0}
       warningCount={readiness?.warning_count ?? 0}
       size="sm"
-      onClick={
-        onOpen
-          ? (e) => {
-              // Stop propagation so the surrounding row-click (which opens the
-              // editor) doesn't fire in addition to the drawer.
-              e.stopPropagation();
-              onOpen(agentId, readiness);
-            }
-          : undefined
-      }
+      // Pass undefined (not a no-op) when the row isn't clickable — the badge
+      // keys its interactive styling off `onClick` being a function.
+      onClick={onOpen ? handleClick : undefined}
     />
   );
 }
