@@ -7,6 +7,8 @@ from core.api.v1.channels import list_phone_numbers_for_channel
 from core.database.session import get_db
 from core.middleware.auth import (JWTClaims, require_admin_or_owner,
                                   require_org_member)
+from core.schemas.sip_requests import (SipAttachNumberRequest,
+                                        SipTrunkUpsertRequest)
 from core.services.sip.registry import supported_carriers
 from core.services.sip.trunk_service import SipTrunkService
 from core.utils.auth_helpers import require_org_id
@@ -45,21 +47,21 @@ def get_sip_trunk(
 
 @router.post("/create", status_code=status.HTTP_201_CREATED)
 def create_sip_trunk(
-    data: Dict[str, Any] = Body(...),
+    data: SipTrunkUpsertRequest = Body(...),
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
-    return _svc(claims, db).create_trunk(data)
+    return _svc(claims, db).create_trunk(data.model_dump(exclude_unset=True))
 
 
 @router.put("/update")
 def update_sip_trunk(
     trunk_id: str = Query(...),
-    data: Dict[str, Any] = Body(...),
+    data: SipTrunkUpsertRequest = Body(...),
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
-    return _svc(claims, db).update_trunk(trunk_id, data)
+    return _svc(claims, db).update_trunk(trunk_id, data.model_dump(exclude_unset=True))
 
 
 @router.delete("/delete")
@@ -103,12 +105,12 @@ def list_carrier_phone_numbers(
 @router.post("/attach_number")
 def attach_number(
     trunk_id: str = Query(...),
-    data: Dict[str, Any] = Body(...),
+    data: SipAttachNumberRequest = Body(...),
     claims: JWTClaims = Depends(require_admin_or_owner),
     db: Session = Depends(get_db),
 ):
     return _svc(claims, db).attach_number(
-        trunk_id, data.get("number") or "", label=data.get("label")
+        trunk_id, data.number or "", label=data.label
     )
 
 
