@@ -16,14 +16,22 @@ misbehaved.
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 from uuid import UUID
 
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from core.models.agent_readiness_run import AgentReadinessRun
 from core.services.readiness.schemas import ReadinessReport
+
+
+# How many times to retry the append when a concurrent run grabbed the same
+# ``run_number`` first (unique-constraint violation). Small: real contention is
+# a two-way race between the list badge and the editor load, so one recompute
+# almost always resolves it.
+_RUN_NUMBER_RETRIES = 3
 
 
 class ReadinessPersistence:
@@ -44,32 +52,58 @@ class ReadinessPersistence:
         error: Optional[str] = None,
         started_at: Optional[datetime] = None,
         run_number: int = 1,
+        next_run_number: Optional[Callable[[], int]] = None,
     ) -> None:
         """Append ``report`` as one ``agent_readiness_runs`` row. Swallows
         failures with a warning log — never raises to the caller.
 
         ``started_at`` and ``run_number`` are stamped by the caller so the
         stored row carries the same provenance as the returned report.
+
+        ``next_run_number``, when supplied, recomputes a fresh ``MAX + 1`` after
+        a unique-constraint collision (two concurrent runs picked the same
+        number) so the append is retried instead of lost. The number actually
+        persisted is written back onto ``report.run_number`` so the returned
+        report and the stored row stay in lock-step.
         """
-        try:
-            self._write(
-                report=report,
-                trigger=trigger,
-                triggered_by_user_id=triggered_by_user_id,
-                dependency_stamp=dependency_stamp,
-                duration_ms=duration_ms,
-                error=error,
-                started_at=started_at or datetime.now(timezone.utc),
-                run_number=run_number,
-            )
-        except Exception:  # noqa: BLE001
-            # Storage is best-effort. Rollback our writes so any wider
-            # transaction (e.g. the request-scoped session) stays clean.
-            logger.exception("[readiness] persistence failed")
+        started_at = started_at or datetime.now(timezone.utc)
+        for attempt in range(1, _RUN_NUMBER_RETRIES + 1):
             try:
-                self.db.rollback()
+                self._write(
+                    report=report,
+                    trigger=trigger,
+                    triggered_by_user_id=triggered_by_user_id,
+                    dependency_stamp=dependency_stamp,
+                    duration_ms=duration_ms,
+                    error=error,
+                    started_at=started_at,
+                    run_number=run_number,
+                )
+                report.run_number = run_number
+                return
+            except IntegrityError:
+                # A concurrent run committed this ``(agent_id, run_number)``
+                # first. Roll back and retry with a fresh number when the caller
+                # gave us a way to recompute one; otherwise treat it as a
+                # best-effort miss like any other persistence failure.
+                try:
+                    self.db.rollback()
+                except Exception:  # noqa: BLE001
+                    logger.exception("[readiness] rollback after run_number collision failed")
+                    return
+                if next_run_number is None or attempt == _RUN_NUMBER_RETRIES:
+                    logger.exception("[readiness] persistence failed (run_number collision)")
+                    return
+                run_number = next_run_number()
             except Exception:  # noqa: BLE001
-                logger.exception("[readiness] rollback after failed persist also failed")
+                # Storage is best-effort. Rollback our writes so any wider
+                # transaction (e.g. the request-scoped session) stays clean.
+                logger.exception("[readiness] persistence failed")
+                try:
+                    self.db.rollback()
+                except Exception:  # noqa: BLE001
+                    logger.exception("[readiness] rollback after failed persist also failed")
+                return
 
     # ── internals ──────────────────────────────────────────────────────────
 

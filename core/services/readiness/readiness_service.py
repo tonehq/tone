@@ -158,14 +158,21 @@ class ReadinessService(BaseService):
         )
 
         async def _compute() -> ReadinessReport:
-            allowed = await _rate_limiter.try_acquire(
-                RateLimiter.key(self.org_id, agent.id)
-            )
-            if not allowed:
-                raise ReadinessRateLimitedError(
-                    "Deep readiness check rate-limited. "
-                    "Please wait a minute and try again."
+            # The publish gate is an explicit, already-guarded action and must
+            # never be rate-limited: a manual "Run deep test" in the preceding
+            # minute would otherwise 429 the publish with a confusing error,
+            # exactly when an edit changed the stamp so the DB fast-path can't
+            # save it. The 1/min limiter only protects the repeatable
+            # "Run deep test" button (shallow/list badges never reach here).
+            if trigger != TRIGGER_PUBLISH_GATE:
+                allowed = await _rate_limiter.try_acquire(
+                    RateLimiter.key(self.org_id, agent.id)
                 )
+                if not allowed:
+                    raise ReadinessRateLimitedError(
+                        "Deep readiness check rate-limited. "
+                        "Please wait a minute and try again."
+                    )
             return await self._run_and_persist(
                 agent=agent,
                 config_id=config_id,
@@ -559,6 +566,10 @@ class ReadinessService(BaseService):
                 duration_ms=duration_ms,
                 started_at=started_wall,
                 run_number=run_number,
+                # Two concurrent shallow runs (list badge + editor load) can read
+                # the same ``MAX``; on the unique-constraint collision, persist
+                # retries with a fresh number and writes it back onto ``report``.
+                next_run_number=lambda: self._next_run_number(agent.id),
             )
         return report
 
@@ -566,9 +577,11 @@ class ReadinessService(BaseService):
         """Return the next run-number for this agent.
 
         Reads the highest ``run_number`` stored in the append-only event log
-        and adds one. Rate limiter + coalesce cache prevent concurrent
-        readiness runs for the same agent, so ``MAX + 1`` is race-free in
-        practice. Falls back to 1 for the very first run.
+        and adds one. Deep runs are already serialised by the rate limiter +
+        coalesce cache, but shallow runs are not, so two can read the same
+        ``MAX``; the ``uq_readiness_runs_agent_run_number`` constraint turns
+        that collision into an ``IntegrityError`` the persistence layer retries
+        against a fresh ``MAX + 1``. Falls back to 1 for the very first run.
         """
         current = self.db.execute(
             select(func.max(AgentReadinessRun.run_number))

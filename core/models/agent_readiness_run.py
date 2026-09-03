@@ -10,7 +10,7 @@ per-agent history feed.
 Columns live in :class:`ReadinessRowMixin` (shared, single source of truth).
 """
 
-from sqlalchemy import Index
+from sqlalchemy import Index, UniqueConstraint
 
 from core.models.agent_readiness_common import ReadinessRowMixin
 from core.models.base import OrgScopedModel
@@ -19,6 +19,14 @@ from core.models.base import OrgScopedModel
 class AgentReadinessRun(OrgScopedModel, ReadinessRowMixin):
     __tablename__ = "agent_readiness_runs"
     __table_args__ = (
+        # ``run_number`` is a monotonic per-agent counter. Enforce it so two
+        # concurrent runs for the same agent (e.g. the list-badge shallow read
+        # racing the editor-load shallow read) can never persist the same
+        # number — the persistence layer retries on this violation with a fresh
+        # ``MAX + 1`` instead of silently writing a duplicate.
+        UniqueConstraint(
+            "agent_id", "run_number", name="uq_readiness_runs_agent_run_number"
+        ),
         # Latest-per-agent badge lookup + the edit-based fast-path both key on
         # (agent, …) newest-first; ``computed_at`` in the index lets Postgres
         # satisfy the DISTINCT ON / ORDER BY without a sort.
