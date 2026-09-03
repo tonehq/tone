@@ -12459,6 +12459,518 @@
         }
       ],
       "status": "active"
+    },
+    {
+      "name": "sarvam-ai",
+      "provider_type": "llm",
+      "display_name": "Sarvam AI",
+      "description": "Sarvam AI",
+      "api_key_env": "SARVAMAI_API_KEY",
+      "models": [
+        {
+          "name": "sarvam-30b",
+          "base_url": "https://api.sarvam.ai/v1",
+          "meta_data": {
+            "model": "sarvam-30b"
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic sampling. Repeated requests with the same seed return the same completion where possible"
+            },
+            {
+              "name": "wiki_grounding",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Ground the response in Wikipedia content. Sarvam-specific"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "How much reasoning the model performs before answering. Sarvam-specific"
+            }
+          ]
+        },
+        {
+          "name": "sarvam-30b-16k",
+          "base_url": "https://api.sarvam.ai/v1",
+          "meta_data": {
+            "model": "sarvam-30b-16k"
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic sampling. Repeated requests with the same seed return the same completion where possible"
+            },
+            {
+              "name": "wiki_grounding",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Ground the response in Wikipedia content. Sarvam-specific"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "How much reasoning the model performs before answering. Sarvam-specific"
+            }
+          ]
+        },
+        {
+          "name": "sarvam-105b",
+          "base_url": "https://api.sarvam.ai/v1",
+          "meta_data": {
+            "model": "sarvam-105b"
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic sampling. Repeated requests with the same seed return the same completion where possible"
+            },
+            {
+              "name": "wiki_grounding",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Ground the response in Wikipedia content. Sarvam-specific"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "How much reasoning the model performs before answering. Sarvam-specific"
+            }
+          ]
+        },
+        {
+          "name": "sarvam-105b-32k",
+          "base_url": "https://api.sarvam.ai/v1",
+          "meta_data": {
+            "model": "sarvam-105b-32k"
+          },
+          "supports_tool_calling": true,
+          "meta_data_schema": [
+            {
+              "name": "temperature",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Controls randomness in output. Range: 0.0 to 2.0"
+            },
+            {
+              "name": "top_p",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": 0.0,
+                "max": 1.0
+              },
+              "required": 0,
+              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+            },
+            {
+              "name": "max_tokens",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 1
+              },
+              "required": 0,
+              "description": "Maximum number of tokens to generate. Min: 1"
+            },
+            {
+              "name": "frequency_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "presence_penalty",
+              "data_type": "float",
+              "type": "input number",
+              "format": "float",
+              "validator": {
+                "min": -2.0,
+                "max": 2.0
+              },
+              "required": 0,
+              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+            },
+            {
+              "name": "seed",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0
+              },
+              "required": 0,
+              "description": "Seed for deterministic sampling. Repeated requests with the same seed return the same completion where possible"
+            },
+            {
+              "name": "wiki_grounding",
+              "data_type": "boolean",
+              "type": "radio",
+              "format": "boolean",
+              "validator": null,
+              "required": 0,
+              "description": "Ground the response in Wikipedia content. Sarvam-specific"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "How much reasoning the model performs before answering. Sarvam-specific"
+            }
+          ]
+        }
+      ],
+      "meta_data_schema": [
+        {
+          "name": "temperature",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Controls randomness in output. Range: 0.0 to 2.0"
+        },
+        {
+          "name": "top_p",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": 0.0,
+            "max": 1.0
+          },
+          "required": 0,
+          "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
+        },
+        {
+          "name": "max_tokens",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 1
+          },
+          "required": 0,
+          "description": "Maximum number of tokens to generate. Min: 1"
+        },
+        {
+          "name": "frequency_penalty",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
+        },
+        {
+          "name": "presence_penalty",
+          "data_type": "float",
+          "type": "input number",
+          "format": "float",
+          "validator": {
+            "min": -2.0,
+            "max": 2.0
+          },
+          "required": 0,
+          "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
+        },
+        {
+          "name": "seed",
+          "data_type": "integer",
+          "type": "input number",
+          "format": "integer",
+          "validator": {
+            "min": 0
+          },
+          "required": 0,
+          "description": "Seed for deterministic sampling. Repeated requests with the same seed return the same completion where possible"
+        },
+        {
+          "name": "wiki_grounding",
+          "data_type": "boolean",
+          "type": "radio",
+          "format": "boolean",
+          "validator": null,
+          "required": 0,
+          "description": "Ground the response in Wikipedia content. Sarvam-specific"
+        },
+        {
+          "name": "reasoning_effort",
+          "data_type": "string",
+          "type": "select",
+          "format": "string",
+          "options": [
+            "low",
+            "medium",
+            "high"
+          ],
+          "required": 0,
+          "description": "How much reasoning the model performs before answering. Sarvam-specific"
+        }
+      ],
+      "status": "active"
     }
   ],
   "stt_providers": [
