@@ -10,8 +10,8 @@ import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, SearchBar, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import { useIngestionRuns, useSetAgentKbActiveRun } from '@/lib/api/ingestion-runs';
-import { listKnowledgeBase } from '@/services/knowledgeBaseService';
-import type { KnowledgeBaseUpload } from '@/services/knowledgeBaseService';
+import { useKnowledgeBaseUploads } from '@/lib/api/knowledge-base';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import type { AgentFormState } from '@/types/agent';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
@@ -44,32 +44,19 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
 
   // ─── knowledge base ──────────────────────────────────────────────────────
   const [kbSearch, setKbSearch] = useState('');
-  const [kbItems, setKbItems] = useState<KnowledgeBaseUpload[]>([]);
-  const [kbLoading, setKbLoading] = useState(false);
 
-  const refreshKb = useCallback(async () => {
-    setKbLoading(true);
-    try {
-      // Show both ready and still-processing docs so freshly uploaded files
-      // appear in the grid immediately. The row UI surfaces the status so
-      // the user can tell which ones aren't usable yet.
-      const res = await listKnowledgeBase({
-        search: kbSearch.trim() || undefined,
-        page: 1,
-        page_size: PAGE_SIZE,
-        sort_by: '-updated_at',
-      });
-      setKbItems(res.items);
-    } catch (err) {
-      handleApiError(err);
-    } finally {
-      setKbLoading(false);
-    }
-  }, [kbSearch]);
-
-  useEffect(() => {
-    refreshKb();
-  }, [refreshKb]);
+  // Show both ready and still-processing docs so freshly uploaded files appear
+  // in the grid immediately; the row UI surfaces each doc's status.
+  const kbQuery = useKnowledgeBaseUploads({
+    search: kbSearch.trim() || undefined,
+    page: 1,
+    page_size: PAGE_SIZE,
+    sort_by: '-updated_at',
+  });
+  const kbItems = kbQuery.data?.items ?? [];
+  const kbLoading = kbQuery.isLoading;
+  const refetchKb = kbQuery.refetch;
+  useQueryErrorToast(kbQuery.error);
 
   const toggleUpload = (id: string) => {
     const set = new Set(uploadIds);
@@ -84,9 +71,9 @@ export default function KnowledgePhoneStep({ agentId }: KnowledgePhoneStepProps)
       // appear in the grid without the user having to search for them.
       const merged = Array.from(new Set([...uploadIds, ...newIds]));
       setValue('upload_ids', merged, { shouldDirty: true });
-      await refreshKb();
+      await refetchKb();
     },
-    [uploadIds, setValue, refreshKb],
+    [uploadIds, setValue, refetchKb],
   );
 
   // ─── run-pin bindings & pending queue ───────────────────────────────────

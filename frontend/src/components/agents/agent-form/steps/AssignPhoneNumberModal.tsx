@@ -5,16 +5,12 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { CustomButton, CustomModal, SearchBar, SelectInput } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import {
-  listChannelPhoneNumbers,
-  listTelnyxPhoneNumbers,
-  listTwilioPhoneNumbers,
-} from '@/services/channelService';
+import { useChannelPhoneNumbers } from '@/lib/api/channels';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import type { ChannelPhoneNumber } from '@/services/channelService';
 import type { AgentPhoneNumberInput } from '@/types/agent';
 import type { Channel } from '@/types/integration';
 import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
 import { formatPhoneWithDash, getCountryIso2FromPhone } from '@/utils/phoneUtils';
 import * as FlagIcons from 'country-flag-icons/react/3x2';
 
@@ -49,8 +45,6 @@ export default function AssignPhoneNumberModal({
 }: AssignPhoneNumberModalProps) {
   const [serviceProvider, setServiceProvider] = useState<string>('');
   const [channelId, setChannelId] = useState<string>('');
-  const [numbers, setNumbers] = useState<ChannelPhoneNumber[]>([]);
-  const [loadingNumbers, setLoadingNumbers] = useState(false);
   const [search, setSearch] = useState('');
   // Selected numbers across the modal session, keyed by `${channelId}|${number}`
   // so a user can pick across providers/channels in a single open.
@@ -95,35 +89,16 @@ export default function AssignPhoneNumberModal({
   );
 
   // ─── fetch numbers for the selected channel ─────────────────────────────
-  useEffect(() => {
-    if (!open || !channelId) {
-      setNumbers([]);
-      return;
-    }
-    const selectedChannel = channels.find((c) => c.id === channelId);
-    const providerType = selectedChannel?.channel_type?.toLowerCase();
-    const fetcher =
-      providerType === 'twilio'
-        ? listTwilioPhoneNumbers
-        : providerType === 'telnyx'
-          ? listTelnyxPhoneNumbers
-          : listChannelPhoneNumbers;
-    let cancelled = false;
-    setLoadingNumbers(true);
-    fetcher(channelId)
-      .then((rows) => {
-        if (!cancelled) setNumbers(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingNumbers(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [open, channelId, channels]);
+  // The provider (Twilio / Telnyx / generic) decides which endpoint serves the
+  // numbers; the hook keys the cache by channel + provider and only fires once
+  // the modal is open and a channel is selected.
+  const selectedChannelType = channels.find((c) => c.id === channelId)?.channel_type?.toLowerCase();
+  const {
+    data: numbers = [],
+    isFetching: loadingNumbers,
+    error: numbersError,
+  } = useChannelPhoneNumbers(channelId, selectedChannelType, { enabled: open });
+  useQueryErrorToast(numbersError);
 
   // ─── selection helpers ──────────────────────────────────────────────────
   const keyOf = (chId: string, num: string) => `${chId}|${num}`;

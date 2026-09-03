@@ -2,18 +2,18 @@
 
 import { Check, Phone, PhoneIncoming, Radio, Video, X } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
 import SectionCard from '@/components/agents/agent-form/SectionCard';
 import AssignPhoneNumberModal from '@/components/agents/agent-form/steps/AssignPhoneNumberModal';
 import { CustomButton, IconChip } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
-import { listChannels } from '@/services/channelService';
+import { useChannels } from '@/lib/api/channels';
+import { useQueryErrorToast } from '@/lib/api/useQueryErrorToast';
 import type { AgentFormState, AgentPhoneNumberInput } from '@/types/agent';
 import type { Channel } from '@/types/integration';
 import { cn } from '@/utils/cn';
-import { handleApiError } from '@/utils/helpers';
 import { formatPhoneWithDash, getCountryIso2FromPhone } from '@/utils/phoneUtils';
 import * as FlagIcons from 'country-flag-icons/react/3x2';
 
@@ -36,27 +36,10 @@ export default function ChannelsStep() {
   const phoneNumbers = useWatch({ control, name: 'phone_numbers' }) ?? [];
   const webChannelIds = useWatch({ control, name: 'web_channel_ids' }) ?? [];
 
-  const [channels, setChannels] = useState<Channel[]>([]);
-  const [channelsLoading, setChannelsLoading] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    setChannelsLoading(true);
-    listChannels()
-      .then((rows) => {
-        if (!cancelled) setChannels(rows);
-      })
-      .catch((err) => {
-        if (!cancelled) handleApiError(err);
-      })
-      .finally(() => {
-        if (!cancelled) setChannelsLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+  const { data: channels = [], isLoading: channelsLoading, error: channelsError } = useChannels();
+  useQueryErrorToast(channelsError);
 
   const channelById = useMemo(() => {
     const map = new Map<string, Channel>();
