@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 
-import { SelectInput, TextInput } from '@/components/shared';
+import { CustomButton, SelectInput, TextInput } from '@/components/shared';
 import type { AgentLlmEvalFolder } from '@/types/agentLlmEval';
 
 import { NEW_FOLDER_OPTION_VALUE } from './constants';
@@ -59,13 +59,13 @@ export default function FolderPicker({
           value={newFolderName}
           onChange={(e) => onNewFolderNameChange(e.target.value)}
         />
-        <button
-          type="button"
-          className="self-start text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        <CustomButton
+          type="text"
           onClick={handlePickExistingInstead}
+          className="h-auto self-start p-0 text-[11px] text-muted-foreground underline underline-offset-2 hover:bg-transparent hover:text-foreground"
         >
           Pick an existing folder instead
-        </button>
+        </CustomButton>
       </div>
     );
   }

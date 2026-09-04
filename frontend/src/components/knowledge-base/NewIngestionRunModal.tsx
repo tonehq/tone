@@ -3,17 +3,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Loader2, Play } from 'lucide-react';
 
-import { CustomButton, CustomModal, SelectInput, TextInput } from '@/components/shared';
+import EmbeddingModelSelect from '@/components/knowledge-base/EmbeddingModelSelect';
 import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
-import {
-  EMBEDDING_MODEL_CHOICES,
-  getEmbeddingModelDefaultDimensions,
-} from '@/components/knowledge-base/optionParamSchemas';
+import { CustomButton, CustomModal, SelectInput } from '@/components/shared';
 import { useIngestionConfigs } from '@/lib/api/ingestion-configs';
 import { useCreateCustomIngestionRun, usePipelineOptions } from '@/lib/api/ingestion-runs';
 import type { IngestionConfig } from '@/types/ingestionConfig';
 import type { CreateIngestionRunPayload } from '@/types/pipelineOptions';
 import { handleApiError } from '@/utils/helpers';
+import { toStringSelectOptions } from '@/utils/selectUtils';
 import { showToast } from '@/utils/toast';
 
 interface NewIngestionRunModalProps {
@@ -44,10 +42,6 @@ const EMPTY_FORM: FormState = {
   embedding_dimensions: '',
   vector_store: '',
 };
-
-function toOptions(values: string[]): { value: string; label: string }[] {
-  return values.map((v) => ({ value: v, label: v }));
-}
 
 function formFromConfig(cfg: IngestionConfig): FormState {
   return {
@@ -135,10 +129,16 @@ export default function NewIngestionRunModal({
     // background refetches.
   }, [open, options, configId]);
 
-  const parserOptions = useMemo(() => toOptions(options?.parsers ?? []), [options]);
-  const tokeniserOptions = useMemo(() => toOptions(options?.tokenisers ?? []), [options]);
-  const embedderOptions = useMemo(() => toOptions(options?.embedders ?? []), [options]);
-  const vectorStoreOptions = useMemo(() => toOptions(options?.vector_stores ?? []), [options]);
+  const parserOptions = useMemo(() => toStringSelectOptions(options?.parsers ?? []), [options]);
+  const tokeniserOptions = useMemo(
+    () => toStringSelectOptions(options?.tokenisers ?? []),
+    [options],
+  );
+  const embedderOptions = useMemo(() => toStringSelectOptions(options?.embedders ?? []), [options]);
+  const vectorStoreOptions = useMemo(
+    () => toStringSelectOptions(options?.vector_stores ?? []),
+    [options],
+  );
 
   const dimensionsNumber = Number(form.embedding_dimensions);
   const dimensionsValid =
@@ -265,53 +265,11 @@ export default function NewIngestionRunModal({
               placeholder="Select a provider"
               disabled={fieldsDisabled}
             />
-            <SelectInput
-              name="embedding_model"
-              label="Embedding model"
-              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_model} />}
-              isRequired
-              options={
-                form.embedding_model &&
-                !EMBEDDING_MODEL_CHOICES.some((m) => m.value === form.embedding_model)
-                  ? [
-                      ...EMBEDDING_MODEL_CHOICES,
-                      { value: form.embedding_model, label: `${form.embedding_model} (legacy)` },
-                    ]
-                  : EMBEDDING_MODEL_CHOICES
-              }
-              value={form.embedding_model || undefined}
-              onValueChange={(v) =>
-                setForm((f) => {
-                  if (v === f.embedding_model) return f;
-                  const dims = getEmbeddingModelDefaultDimensions(v);
-                  return {
-                    ...f,
-                    embedding_model: v,
-                    embedding_dimensions: dims != null ? String(dims) : f.embedding_dimensions,
-                  };
-                })
-              }
-              placeholder="Select an embedding model"
+            <EmbeddingModelSelect
+              model={form.embedding_model}
+              dimensions={form.embedding_dimensions}
+              onChange={(next) => setForm((f) => ({ ...f, ...next }))}
               disabled={fieldsDisabled}
-            />
-            <TextInput
-              name="embedding_dimensions"
-              label="Embedding dimensions"
-              labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_dimensions} />}
-              isRequired
-              type="number"
-              min={1}
-              placeholder="Auto-set by model"
-              value={form.embedding_dimensions}
-              onChange={(e) => setForm((f) => ({ ...f, embedding_dimensions: e.target.value }))}
-              error={form.embedding_dimensions.trim() !== '' && !dimensionsValid}
-              helperText={
-                form.embedding_dimensions.trim() !== '' && !dimensionsValid
-                  ? 'Must be a positive integer.'
-                  : 'Determined by the selected embedding model.'
-              }
-              disabled={fieldsDisabled}
-              readOnly
             />
             <SelectInput
               name="vector_store"

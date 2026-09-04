@@ -16,6 +16,7 @@ from fastapi import APIRouter, Body, Depends, File, HTTPException, Query, Upload
 from loguru import logger
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
@@ -455,7 +456,10 @@ async def upload_llm_eval_scenarios_csv(
         )
     svc = AgentLlmScenarioService(db, org_id=org_id)
     try:
-        rows = svc.import_from_csv(agent_id, raw)
+        # Offload the blocking CSV decode + parse + DB insert to a threadpool:
+        # this is an ``async def`` route, so running it inline would freeze the
+        # event loop (and every concurrent request) for the whole import.
+        rows = await run_in_threadpool(svc.import_from_csv, agent_id, raw)
     except (
         AgentLlmScenarioKeyConflictError,
         AgentLlmEvalConfigError,
@@ -650,15 +654,12 @@ def trigger_llm_eval_run(
     triggered_by = "manual"
 
     # Resolve the judge model here so the pending row surfaces the correct
-    # value in the UI from the moment it appears — mirrors the resolution
-    # the worker's ``run_eval`` does at line ~183 (org override → env →
-    # hardcoded default). Explicit caller value still wins.
-    if payload.judge_model:
-        resolved_judge_model = payload.judge_model
-    else:
-        from core.services.org_settings import load_agent_llm_eval_settings_for_org
-
-        resolved_judge_model = load_agent_llm_eval_settings_for_org(db, org_id).judge_model
+    # value in the UI from the moment it appears — via the shared resolver
+    # the worker's run paths use (explicit wins → org default → env →
+    # hardcoded), so the displayed and scored models can't diverge.
+    resolved_judge_model = AgentLlmEvalService.resolve_judge_model(
+        db, org_id=org_id, explicit=payload.judge_model
+    )
 
     # 1. Insert the pending run row SYNCHRONOUSLY so the FE's runs list
     # shows the row the moment the invalidator fires — no more "click Run
@@ -911,15 +912,9 @@ def rename_llm_eval_folder(
         raise _handle_folder_error(e) from e
     # FE type `RenameFolderResponse = AgentLlmEvalFolder` includes `count`
     # — match `create_llm_eval_folder`'s shape so cache-hydration paths
-    # never see `undefined` on that field.
-    from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario
-
-    count = (
-        db.query(AgentLlmEvalScenario)
-        .filter(AgentLlmEvalScenario.agent_id == agent_id)
-        .filter(AgentLlmEvalScenario.folder_id == row.id)
-        .count()
-    )
+    # never see `undefined` on that field. Count comes from the folder
+    # service (org-scoped) instead of a raw query in the router.
+    count = svc.scenario_count(agent_id, row.id)
     return {**row.to_dict(), "count": int(count)}
 
 

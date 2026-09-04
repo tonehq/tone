@@ -14,6 +14,7 @@ from collections import defaultdict
 from typing import Any, List, Optional
 
 from loguru import logger
+from starlette.concurrency import run_in_threadpool
 
 from pipecat.adapters.schemas.function_schema import FunctionSchema
 from pipecat.adapters.schemas.tools_schema import ToolsSchema
@@ -56,6 +57,119 @@ def get_document_tool_schema(document_names: List[str]) -> ToolsSchema:
     )
 
     return ToolsSchema(standard_tools=[function_schema])
+
+
+def _retrieve_document_chunks(
+    *,
+    query: str,
+    org_id: Any,
+    agent_id: int,
+    groups: dict,
+    top_k: int,
+) -> tuple[list, int]:
+    """Blocking vector retrieval for one ``read_document`` call: for each
+    retrieval group decrypt the provider key, embed the query with the same
+    model that produced the stored vectors, and query the store. Returns
+    ``(merged_results, failure_count)``.
+
+    Runs in a threadpool (see the handler's ``run_in_threadpool`` call) because
+    every step here is synchronous and network/DB-bound — provider-key lookup,
+    ``embed_query`` HTTP round-trip, pgvector query — so running it inline on
+    the live call's event loop would stall the audio/STT/TTS pipeline for the
+    full embed+query latency.
+    """
+    from core.database.session import get_db_context
+    from core.services.rag.embedder_factory import get_embedder
+    from core.services.rag.factory import get_vector_store
+    from core.services.rag.provider_keys import ProviderKeyService
+
+    merged: list = []
+    failures = 0
+    for key, uploads_in_group in groups.items():
+        vector_store, provider, model, dims, ref_tuple = key
+        vector_store_ref = dict(ref_tuple) if ref_tuple else {}
+        run_ids = [u["ingestion_run_id"] for u in uploads_in_group]
+
+        # Two-tier error handling: the inner try isolates embedding
+        # failures (bad key, rate limit, model dropped) from store
+        # failures (bad SQL, dead connection). Each raises its own
+        # tagged log line so the operator can tell which step blew
+        # up from the summary alone, without opening the traceback.
+        # The outer try is the safety net for anything unclassified
+        # (get_embedder / get_vector_store / DB session errors).
+        try:
+            with get_db_context() as db:
+                api_key = ProviderKeyService.get_key(db, org_id, provider)
+            if not api_key:
+                logger.bind(
+                    tool_name="read_document",
+                    agent_id=agent_id,
+                    organization_id=org_id,
+                    embedding_provider=provider,
+                ).warning(
+                    "[doc-tool] no {!r} API key for org {} — skipping group",
+                    provider, org_id,
+                )
+                failures += 1
+                continue
+            embedder = get_embedder(
+                provider, model=model, api_key=api_key, dimensions=dims
+            )
+            store = get_vector_store(vector_store, **vector_store_ref)
+
+            try:
+                query_embedding = embedder.embed_query(query)
+            except Exception:
+                logger.bind(
+                    tool_name="read_document",
+                    agent_id=agent_id,
+                    embedding_provider=provider,
+                    embedding_model=model,
+                    embedding_dimensions=dims,
+                ).exception(
+                    "[doc-tool] embed failed provider={} model={} dims={} query='{}' "
+                    "(skipping group)",
+                    provider, model, dims, query,
+                )
+                failures += 1
+                continue
+
+            # Per-agent published-config filter still applies inside store.query;
+            # we additionally pin the exact ingestion_run_ids from this group so
+            # a stale run row can't leak in.
+            for run_id in run_ids:
+                results = store.query(
+                    query_embedding,
+                    top_k=top_k,
+                    filters={
+                        "agent_id": str(agent_id),
+                        "ingestion_run_id": run_id,
+                        "embedding_provider": provider,
+                        "embedding_model": model,
+                        "embedding_dimensions": dims,
+                    },
+                    # Forward the natural-language query so the
+                    # pgvector log line captures it alongside the
+                    # embedding hash — one grep gives you the whole
+                    # retrieval story for a call.
+                    query_text=query,
+                )
+                merged.extend(results)
+        except Exception:
+            logger.bind(
+                tool_name="read_document",
+                agent_id=agent_id,
+                vector_store=vector_store,
+                embedding_provider=provider,
+                embedding_model=model,
+                embedding_dimensions=dims,
+            ).exception(
+                "[doc-tool] group failed vector_store={} provider={} model={} dims={} query='{}'",
+                vector_store, provider, model, dims, query,
+            )
+            failures += 1
+
+    return merged, failures
 
 
 def create_document_handler(
@@ -101,11 +215,6 @@ def create_document_handler(
         }
 
         try:
-            from core.database.session import get_db_context
-            from core.services.rag.embedder_factory import get_embedder
-            from core.services.rag.factory import get_vector_store
-            from core.services.rag.provider_keys import ProviderKeyService
-
             # Group by the retrieval "space" — same embedder + store settings serve as one call.
             groups: dict[tuple, list[dict]] = defaultdict(list)
             for u in upload_runs or []:
@@ -127,91 +236,17 @@ def create_document_handler(
                 finalize_and_record(tool_call_entry, timer, tool_call_entries)
                 return
 
-            merged: list = []
-            failures = 0
-            for key, uploads_in_group in groups.items():
-                vector_store, provider, model, dims, ref_tuple = key
-                vector_store_ref = dict(ref_tuple) if ref_tuple else {}
-                run_ids = [u["ingestion_run_id"] for u in uploads_in_group]
-
-                # Two-tier error handling: the inner try isolates embedding
-                # failures (bad key, rate limit, model dropped) from store
-                # failures (bad SQL, dead connection). Each raises its own
-                # tagged log line so the operator can tell which step blew
-                # up from the summary alone, without opening the traceback.
-                # The outer try is the safety net for anything unclassified
-                # (get_embedder / get_vector_store / DB session errors).
-                try:
-                    with get_db_context() as db:
-                        api_key = ProviderKeyService.get_key(db, org_id, provider)
-                    if not api_key:
-                        logger.bind(
-                            tool_name="read_document",
-                            agent_id=agent_id,
-                            organization_id=org_id,
-                            embedding_provider=provider,
-                        ).warning(
-                            "[doc-tool] no {!r} API key for org {} — skipping group",
-                            provider, org_id,
-                        )
-                        failures += 1
-                        continue
-                    embedder = get_embedder(
-                        provider, model=model, api_key=api_key, dimensions=dims
-                    )
-                    store = get_vector_store(vector_store, **vector_store_ref)
-
-                    try:
-                        query_embedding = embedder.embed_query(query)
-                    except Exception:
-                        logger.bind(
-                            tool_name="read_document",
-                            agent_id=agent_id,
-                            embedding_provider=provider,
-                            embedding_model=model,
-                            embedding_dimensions=dims,
-                        ).exception(
-                            "[doc-tool] embed failed provider={} model={} dims={} query='{}' "
-                            "(skipping group)",
-                            provider, model, dims, query,
-                        )
-                        failures += 1
-                        continue
-
-                    # Per-agent published-config filter still applies inside store.query;
-                    # we additionally pin the exact ingestion_run_ids from this group so
-                    # a stale run row can't leak in.
-                    for run_id in run_ids:
-                        results = store.query(
-                            query_embedding,
-                            top_k=top_k,
-                            filters={
-                                "agent_id": str(agent_id),
-                                "ingestion_run_id": run_id,
-                                "embedding_provider": provider,
-                                "embedding_model": model,
-                                "embedding_dimensions": dims,
-                            },
-                            # Forward the natural-language query so the
-                            # pgvector log line captures it alongside the
-                            # embedding hash — one grep gives you the whole
-                            # retrieval story for a call.
-                            query_text=query,
-                        )
-                        merged.extend(results)
-                except Exception:
-                    logger.bind(
-                        tool_name="read_document",
-                        agent_id=agent_id,
-                        vector_store=vector_store,
-                        embedding_provider=provider,
-                        embedding_model=model,
-                        embedding_dimensions=dims,
-                    ).exception(
-                        "[doc-tool] group failed vector_store={} provider={} model={} dims={} query='{}'",
-                        vector_store, provider, model, dims, query,
-                    )
-                    failures += 1
+            # Offload the blocking retrieval (provider-key lookup + embed HTTP
+            # call + pgvector query) to a threadpool so it never stalls the live
+            # call's event loop. See ``_retrieve_document_chunks``.
+            merged, failures = await run_in_threadpool(
+                _retrieve_document_chunks,
+                query=query,
+                org_id=org_id,
+                agent_id=agent_id,
+                groups=groups,
+                top_k=top_k,
+            )
 
             if not merged:
                 if failures and failures == len(groups):

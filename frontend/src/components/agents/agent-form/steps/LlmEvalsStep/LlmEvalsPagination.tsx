@@ -1,8 +1,8 @@
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
-import { CustomButton } from '@/components/shared';
+import { CustomButton, SelectInput } from '@/components/shared';
 
-import { LLM_EVALS_PAGE_SIZE_OPTIONS } from './constants';
+import { LLM_EVALS_PAGE_SIZE_SELECT_OPTIONS } from './constants';
 
 /** Compact pagination footer shared by every paginated list inside the LLM
  * Evals section (scenarios-in-folder + runs). Mirrors the shape used by the
@@ -32,17 +32,14 @@ export default function LlmEvalsPagination({
     <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
       <div className="flex items-center gap-3 text-[13px] text-muted-foreground">
         <span>Rows per page</span>
-        <select
-          value={pageSize}
-          onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="h-8 w-16 cursor-pointer rounded-lg border border-input bg-background px-2 text-[13px] text-foreground transition-colors hover:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-        >
-          {LLM_EVALS_PAGE_SIZE_OPTIONS.map((size) => (
-            <option key={size} value={size}>
-              {size}
-            </option>
-          ))}
-        </select>
+        <SelectInput
+          name="rows-per-page"
+          value={String(pageSize)}
+          onValueChange={(v) => onPageSizeChange(Number(v))}
+          options={LLM_EVALS_PAGE_SIZE_SELECT_OPTIONS}
+          size="sm"
+          triggerClassName="w-16"
+        />
       </div>
       <div className="flex items-center gap-4">
         <span className="text-[13px] text-muted-foreground">

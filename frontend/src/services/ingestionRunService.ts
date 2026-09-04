@@ -1,3 +1,4 @@
+import { pruneParams } from '@/utils/apiHelpers';
 import axiosInstance from '@/utils/axios';
 
 import type {
@@ -20,10 +21,7 @@ export const listIngestionRuns = async (
   uploadId: string,
   params: ListIngestionRunsParams = {},
 ): Promise<PaginatedIngestionRuns> => {
-  const body: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') body[k] = v;
-  }
+  const body = pruneParams(params);
   const res = await axiosInstance.post<PaginatedIngestionRuns>(
     `/knowledge-base/${uploadId}/runs/list`,
     body,
@@ -99,10 +97,7 @@ export const listIngestionRunChunks = async (
   runId: string,
   params: ListIngestionRunChunksParams = {},
 ): Promise<PaginatedIngestionRunChunks> => {
-  const query: Record<string, string | number> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') query[k] = v as string | number;
-  }
+  const query = pruneParams(params);
   const res = await axiosInstance.get<PaginatedIngestionRunChunks>(
     `/knowledge-base/${uploadId}/runs/${runId}/chunks`,
     { params: query },

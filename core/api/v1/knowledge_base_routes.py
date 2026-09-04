@@ -32,7 +32,6 @@ from core.api.v1.faceted_schemas import FacetsRequest
 from core.database.session import get_db
 from core.schemas.knowledge_base_requests import (PipelineRunRequest,
                                                    RenameDocumentRequest)
-from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.upload import Upload
 from core.services.evals.eval_service import EvalRunSummary, EvalService
 from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
@@ -589,12 +588,15 @@ def build_knowledge_base_router(
             uid = UUID(upload_id)
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid upload_id")
-        upload = (
-            db.query(Upload).filter(Upload.id == uid, Upload.organization_id == org_id).first()
-        )
-        if not upload:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found")
-        return upload
+        # Reuse the shared org-scoped fetch-or-404 (same filter as the inline
+        # query, and the pattern the replace-file route already uses) instead
+        # of a raw db.query in the router.
+        try:
+            return UploadService(db, org_id=org_id).get_org_upload(uid)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Upload not found"
+            ) from exc
 
     @router.get("/{upload_id}/runs")
     def list_pipeline_runs(
@@ -703,27 +705,14 @@ def build_knowledge_base_router(
             rid = UUID(run_id)
         except ValueError:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id")
-        run = (
-            db.query(IngestionPipelineRun)
-            .filter(
-                IngestionPipelineRun.id == rid,
-                IngestionPipelineRun.upload_id == upload.id,
-                IngestionPipelineRun.organization_id == org_id,
+        try:
+            run = IngestionRunService.get_activatable_run(
+                db, upload_id=upload.id, run_id=rid, org_id=org_id
             )
-            .first()
-        )
-        if run is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Run not found for this upload",
-            )
-        if run.status != "ready":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot activate a run with status={run.status!r}; only 'ready' is allowed",
-            )
-        activated = IngestionRunService.activate_run(db, run.id, org_id=org_id)
-        return activated.to_dict()
+            activated = IngestionRunService.activate_run(db, run.id, org_id=org_id)
+            return activated.to_dict()
+        except (IngestionRunNotFoundError, IngestionRunNotReadyError) as exc:
+            _raise_http_for_ingestion_error(exc)
 
     @router.delete("/{upload_id}/runs/{run_id}", status_code=status.HTTP_200_OK)
     def delete_pipeline_run(
@@ -1135,41 +1124,19 @@ def build_knowledge_base_router(
                 detail="No eval questions exist for this upload — add or generate questions first.",
             )
 
-        if body.ingestion_run_id is not None:
-            run = (
-                db.query(IngestionPipelineRun)
-                .filter(
-                    IngestionPipelineRun.id == body.ingestion_run_id,
-                    IngestionPipelineRun.upload_id == upload.id,
-                    IngestionPipelineRun.organization_id == org_id,
-                )
-                .first()
+        try:
+            run = IngestionRunService.resolve_eval_target_run(
+                db,
+                upload_id=upload.id,
+                org_id=org_id,
+                ingestion_run_id=body.ingestion_run_id,
             )
-            if run is None:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail="Ingestion run not found for this upload",
-                )
-        else:
-            run = (
-                db.query(IngestionPipelineRun)
-                .filter(
-                    IngestionPipelineRun.upload_id == upload.id,
-                    IngestionPipelineRun.organization_id == org_id,
-                    IngestionPipelineRun.is_active.is_(True),
-                )
-                .first()
-            )
-            if run is None:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="No active ingestion run for this upload — ingest the document first.",
-                )
-        if run.status != "ready":
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Cannot run eval against a run with status={run.status!r}; only 'ready' is allowed",
-            )
+        except (
+            IngestionRunNotFoundError,
+            IngestionRunNotReadyError,
+            IngestionValidationError,
+        ) as exc:
+            _raise_http_for_ingestion_error(exc)
 
         try:
             job_id = await enqueue_eval_for_ingestion_run(run.id, triggered_by="manual")

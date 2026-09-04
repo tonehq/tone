@@ -36,7 +36,6 @@ from core.services.evals.deepeval.telemetry import opt_out as _opt_out
 
 _opt_out()
 
-import asyncio  # noqa: E402
 from typing import List, Optional, Tuple  # noqa: E402
 
 from deepeval.metrics.base_metric import BaseMetric  # noqa: E402
@@ -52,10 +51,11 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
     build_metrics,
 )
-from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
+from core.services.evals.deepeval.runner import (  # noqa: E402
+    JudgeOrchestratorError,
+    run_scorecard,
+)
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
-from core.services.evals.errors import EvalConfigurationError  # noqa: E402
-from core.services.rag.errors import humanize_provider_error  # noqa: E402
 
 
 class CallTranscriptJudgeService:
@@ -177,28 +177,23 @@ class CallTranscriptJudgeService:
             # against the flavor it consumes — conversation-native metrics see
             # the ``ConversationalTestCase``, everything else the joined
             # ``LLMTestCase``. ``CONVERSATION_METRICS`` is the single source of
-            # truth for that dispatch.
-            scorecard = asyncio.run(
-                run_metrics(
-                    named_metrics,
-                    lambda name: (
-                        conv_case if name in CONVERSATION_METRICS else llm_case
-                    ),
-                    log_tag="[call-transcript-eval]",
-                )
+            # truth for that dispatch. The asyncio.run + orchestrator-error
+            # policy is shared via run_scorecard.
+            scorecard = run_scorecard(
+                named_metrics,
+                lambda name: (
+                    conv_case if name in CONVERSATION_METRICS else llm_case
+                ),
+                log_tag="[call-transcript-eval]",
+                model=model,
             )
-        except EvalConfigurationError:
-            raise
-        except Exception as e:  # noqa: BLE001
-            logger.exception(
-                "[call-transcript-eval] judge orchestrator failed model={}", model,
-            )
+        except JudgeOrchestratorError as e:
             # Preserve any pre-run skipped entries even on catastrophic
             # orchestrator failure so the FE can still see "role_adherence
             # was skipped because the agent had no system prompt".
             return {
                 "verdict": "FAIL",
-                "reasoning": f"Judge error: {humanize_provider_error(e)}",
+                "reasoning": f"Judge error: {e}",
                 "metric_scores": dict(skipped),
             }
 

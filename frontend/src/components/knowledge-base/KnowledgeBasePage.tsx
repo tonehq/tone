@@ -1,52 +1,41 @@
 'use client';
 
-import { useAtom } from 'jotai';
 import {
-  AlertTriangle,
-  Calendar,
   ExternalLink,
   FileText,
-  HardDrive,
   ListChecks,
   Pencil,
   Plus,
   RotateCcw,
   Trash2,
-  User,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 
-import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
-import DetailRow from '@/components/knowledge-base/DetailRow';
 import DocumentUpload from '@/components/knowledge-base/DocumentUpload';
 import EditDocument from '@/components/knowledge-base/EditDocument';
 import KnowledgeBaseEmptyState from '@/components/knowledge-base/KnowledgeBaseEmptyState';
+import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
 import {
   CustomButton,
   CustomModal,
   CustomTable,
   FacetFilterBar,
   FacetFilterDrawer,
-  IconChip,
   SelectionBar,
   useFacetedList,
 } from '@/components/shared';
 import { statusConfig, statusDot } from '@/components/knowledge-base/knowledgeBaseConstants';
 import {
   formatFileSize,
+  getErrorMessage,
   getTypeBadge,
   truncateFileName,
 } from '@/components/knowledge-base/knowledgeBaseHelpers';
-import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import { knowledgeBaseListConfig } from '@/components/knowledge-base/knowledgeBaseListConfig';
-import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
-import {
-  knowledgeBaseApi,
-  useDeleteKnowledgeBase,
-  useReprocessKnowledgeBase,
-} from '@/lib/api/knowledge-base';
+import { useAgents } from '@/hooks/useAgents';
+import { useDeleteKnowledgeBase, useReprocessKnowledgeBase } from '@/lib/api/knowledge-base';
 import type { AgentDropdownItem } from '@/types/agent';
 import type { CustomTableColumn } from '@/types/components';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
@@ -55,15 +44,8 @@ import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-/** Extract the human-readable failure reason stored on a failed upload. */
-function getErrorMessage(doc: Pick<KnowledgeBaseDocument, 'meta_data'>): string | null {
-  return formatIngestionError(doc.meta_data?.error);
-}
-
 export default function KnowledgeBasePage() {
-  const [agentData] = useAtom(agentsAtom);
-  const [, fetchAgents] = useAtom(fetchAllAgentsAtom);
-  const hasFetchedAgentsRef = useRef(false);
+  const { data: agentList = [] } = useAgents();
 
   const fl = useFacetedList(knowledgeBaseListConfig);
   const documents = fl.rows;
@@ -83,22 +65,14 @@ export default function KnowledgeBasePage() {
   const reprocessMutation = useReprocessKnowledgeBase();
   const [reprocessingId, setReprocessingId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (hasFetchedAgentsRef.current) return;
-    hasFetchedAgentsRef.current = true;
-    fetchAgents().catch(() => {
-      // agents endpoint may be disabled; the upload modal will show an empty list
-    });
-  }, [fetchAgents]);
-
   const agentNameMap = useMemo(() => {
     const map = new Map<string, string>();
-    agentData.agentList.forEach((a: AgentDropdownItem) => {
+    agentList.forEach((a: AgentDropdownItem) => {
       if (a.uuid) map.set(a.uuid, a.name);
       if (a.id != null) map.set(String(a.id), a.name);
     });
     return map;
-  }, [agentData.agentList]);
+  }, [agentList]);
 
   const toggleRow = useCallback((id: string) => {
     setSelectedIds((prev) => {
@@ -153,7 +127,9 @@ export default function KnowledgeBasePage() {
     if (selectedIds.size === 0) return;
     setBulkDeleting(true);
     const ids = Array.from(selectedIds);
-    const results = await Promise.allSettled(ids.map((id) => knowledgeBaseApi.delete(id)));
+    // Route bulk delete through the same mutation as single delete so query
+    // invalidation stays consistent across both paths.
+    const results = await Promise.allSettled(ids.map((id) => deleteMutation.mutateAsync(id)));
     const failed = results.filter((r) => r.status === 'rejected').length;
     fl.refresh();
     setBulkDeleting(false);
@@ -177,7 +153,7 @@ export default function KnowledgeBasePage() {
       });
       setSelectedIds(failedIds);
     }
-  }, [selectedIds, fl]);
+  }, [selectedIds, fl, deleteMutation]);
 
   const handleUploadSuccess = useCallback(() => {
     setUploadModalOpen(false);
@@ -397,13 +373,6 @@ export default function KnowledgeBasePage() {
     ],
   );
 
-  const detailBadge = selectedDoc ? getTypeBadge(selectedDoc.file_type) : null;
-  const detailStatus = selectedDoc
-    ? (statusConfig[selectedDoc.status] ?? statusConfig.processing)
-    : null;
-  const detailError =
-    selectedDoc && selectedDoc.status === 'failed' ? getErrorMessage(selectedDoc) : null;
-
   const handleDetailDelete = () => {
     if (selectedDoc) setDeleteTarget(selectedDoc);
   };
@@ -513,7 +482,7 @@ export default function KnowledgeBasePage() {
         hideFooter
       >
         <DocumentUpload
-          agents={agentData.agentList}
+          agents={agentList}
           agentsLoading={false}
           onUploadSuccess={handleUploadSuccess}
         />
@@ -562,90 +531,12 @@ export default function KnowledgeBasePage() {
         }
       >
         {selectedDoc && (
-          <div className="space-y-4">
-            <div className="flex items-start gap-3">
-              <IconChip icon={<FileText strokeWidth={1.75} />} tone="primary" size="lg" />
-              <div className="min-w-0 flex-1">
-                <p
-                  className="break-all text-sm font-semibold text-foreground"
-                  title={selectedDoc.file_name}
-                >
-                  {truncateFileName(selectedDoc.file_name, 72)}
-                </p>
-                <div className="mt-1 flex items-center gap-2">
-                  {detailBadge && (
-                    <span
-                      className={cn(
-                        'inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider leading-none',
-                        detailBadge.color,
-                      )}
-                    >
-                      {detailBadge.label}
-                    </span>
-                  )}
-                  {detailStatus && (
-                    <Badge className={detailStatus.className}>{detailStatus.label}</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {detailError && (
-              <div
-                role="alert"
-                className="flex items-start gap-2.5 rounded-xl border border-destructive/20 bg-destructive/10 px-3.5 py-3"
-              >
-                <AlertTriangle className="mt-0.5 size-4 shrink-0 text-destructive" />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[13px] font-medium text-destructive">Processing failed</p>
-                  <p className="mt-0.5 break-words text-[13px] text-destructive/90">
-                    {detailError}
-                  </p>
-                  <CustomButton
-                    type="default"
-                    size="sm"
-                    icon={
-                      <RotateCcw
-                        className={cn(
-                          'size-4',
-                          reprocessingId === selectedDoc.id && 'animate-spin',
-                        )}
-                      />
-                    }
-                    disabled={!!reprocessingId}
-                    onClick={() => handleReprocess(selectedDoc)}
-                    className="mt-2.5"
-                  >
-                    Retry processing
-                  </CustomButton>
-                </div>
-              </div>
-            )}
-
-            <div className="rounded-xl border border-border bg-muted/20">
-              <DetailRow
-                icon={<User className="size-4" />}
-                label="Agent"
-                value={agentNameMap.get(selectedDoc.agent_id ?? '') ?? 'Unknown agent'}
-              />
-              <DetailRow
-                icon={<HardDrive className="size-4" />}
-                label="File size"
-                value={formatFileSize(selectedDoc.size_bytes)}
-              />
-              <DetailRow
-                icon={<Calendar className="size-4" />}
-                label="Uploaded"
-                value={formatDate(selectedDoc.created_at)}
-              />
-              <DetailRow
-                icon={<Calendar className="size-4" />}
-                label="Last updated"
-                value={formatDate(selectedDoc.updated_at)}
-                last
-              />
-            </div>
-          </div>
+          <KnowledgeBaseOverview
+            doc={selectedDoc}
+            agentName={agentNameMap.get(selectedDoc.agent_id ?? '') ?? 'Unknown agent'}
+            onRetry={handleReprocess}
+            retrying={reprocessingId === selectedDoc.id}
+          />
         )}
       </CustomModal>
 

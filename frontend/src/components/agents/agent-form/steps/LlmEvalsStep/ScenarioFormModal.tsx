@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 
 import { CustomButton, CustomModal, TextAreaField, TextInput } from '@/components/shared';
 import {
-  useCreateAgentLlmEvalFolder,
   useCreateAgentLlmEvalScenario,
   useUpdateAgentLlmEvalScenario,
 } from '@/lib/api/agentLlmEvals';
@@ -15,8 +14,8 @@ import type {
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-import { NEW_FOLDER_OPTION_VALUE } from './constants';
 import FolderPicker from './FolderPicker';
+import { useFolderPicker } from './useFolderPicker';
 
 export default function ScenarioFormModal({
   open,
@@ -36,7 +35,14 @@ export default function ScenarioFormModal({
   const isEdit = !!scenario;
   const create = useCreateAgentLlmEvalScenario(agentId);
   const update = useUpdateAgentLlmEvalScenario(agentId);
-  const createFolder = useCreateAgentLlmEvalFolder(agentId);
+  const {
+    folderId,
+    setFolderId,
+    newFolderName,
+    setNewFolderName,
+    resolveFolderIdOrCreate,
+    isCreatingFolder,
+  } = useFolderPicker(agentId, { open, folderOptions });
 
   const [key, setKey] = useState('');
   const [prompt, setPrompt] = useState('');
@@ -44,9 +50,6 @@ export default function ScenarioFormModal({
   const [persona, setPersona] = useState('');
   const [instruction, setInstruction] = useState('');
   const [tags, setTags] = useState('');
-  // Folder id, or the ``NEW_FOLDER_OPTION_VALUE`` sentinel while creating.
-  const [folderId, setFolderId] = useState('');
-  const [newFolderName, setNewFolderName] = useState('');
 
   // Initialise once when the modal opens or the target scenario changes.
   // Deliberately omit ``folderOptions`` from deps — the folders query has
@@ -63,17 +66,7 @@ export default function ScenarioFormModal({
     setTags((scenario?.tags ?? []).join(', '));
     setFolderId(scenario?.folder_id ?? defaultFolderId ?? '');
     setNewFolderName('');
-  }, [open, scenario, defaultFolderId]);
-
-  // Defensive backfill: if the modal opened before the folders query
-  // resolved, folderId is '' — pick the first folder once folders arrive
-  // so the SelectInput's rendered value matches state (fixes silent
-  // display/state divergence in ``FolderPicker``).
-  useEffect(() => {
-    if (!open || folderId || folderId === NEW_FOLDER_OPTION_VALUE) return;
-    if (folderOptions.length === 0) return;
-    setFolderId(folderOptions[0].id);
-  }, [open, folderId, folderOptions]);
+  }, [open, scenario, defaultFolderId, setFolderId, setNewFolderName]);
 
   const submit = async () => {
     const parsedTags = tags
@@ -83,16 +76,8 @@ export default function ScenarioFormModal({
     try {
       // Resolve the folder id — either an existing selection or a
       // just-created folder from the "+ Create new folder…" affordance.
-      let resolvedFolderId = folderId;
-      if (folderId === NEW_FOLDER_OPTION_VALUE) {
-        const trimmed = newFolderName.trim();
-        if (!trimmed) {
-          showToast.error('Folder name is required');
-          return;
-        }
-        const created = await createFolder.mutateAsync({ name: trimmed });
-        resolvedFolderId = created.id;
-      }
+      const { folderId: resolvedFolderId, valid } = await resolveFolderIdOrCreate();
+      if (!valid) return;
 
       if (isEdit && scenario) {
         // Only send fields the user actually changed — otherwise a
@@ -135,7 +120,7 @@ export default function ScenarioFormModal({
     }
   };
 
-  const pending = create.isPending || update.isPending || createFolder.isPending;
+  const pending = create.isPending || update.isPending || isCreatingFolder;
 
   return (
     <CustomModal

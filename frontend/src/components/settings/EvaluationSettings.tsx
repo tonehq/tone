@@ -15,6 +15,11 @@ import {
   useEvalSettings,
   useUpdateEvalSettings,
 } from '@/lib/api/evalSettings';
+import type {
+  EvalSettingsPatch,
+  LlmEvalPatch,
+  RagEvalPatch,
+} from '@/services/evalSettingsService';
 import type { EvalSettings, LlmEvalOrgSettings, RagEvalOrgSettings } from '@/types/evalSettings';
 import {
   AGENT_LLM_EVAL_METRIC_NAMES,
@@ -99,14 +104,8 @@ function formFromServer(server: EvalSettings): FormState {
 //      value in place, breaking the "revert to fallback" affordance.
 // The backend validator + merge accept `null` for every field for exactly
 // this purpose — see ``_validate_eval_settings_patch`` in auth_service.py.
-
-type SlotPatch<T> = { [K in keyof T]?: T[K] | null };
-type RagPatch = SlotPatch<RagEvalOrgSettings>;
-type LlmPatch = SlotPatch<LlmEvalOrgSettings>;
-interface SettingsPatch {
-  rag_evals?: RagPatch;
-  llm_evals?: LlmPatch;
-}
+// Patch shapes come from the service layer (single source of truth):
+// `RagEvalPatch` / `LlmEvalPatch` / `EvalSettingsPatch`.
 
 function trimmedOrEmpty(value: string): string {
   return value.trim();
@@ -116,7 +115,7 @@ function trimmedOrEmpty(value: string): string {
 // changed → the caller omits the slot from the outer patch entirely (so
 // touching only the LLM fields sends `{llm_evals: {...}}` without
 // clobbering unchanged RAG state on the server).
-function diffRagSlot(form: FormState, serverRag: RagEvalOrgSettings): RagPatch | undefined {
+function diffRagSlot(form: FormState, serverRag: RagEvalOrgSettings): RagEvalPatch | undefined {
   const patch: Record<string, unknown> = {};
 
   // Boolean — three states:
@@ -173,10 +172,10 @@ function diffRagSlot(form: FormState, serverRag: RagEvalOrgSettings): RagPatch |
     }
   }
 
-  return Object.keys(patch).length > 0 ? (patch as RagPatch) : undefined;
+  return Object.keys(patch).length > 0 ? (patch as RagEvalPatch) : undefined;
 }
 
-function diffLlmSlot(form: FormState, serverLlm: LlmEvalOrgSettings): LlmPatch | undefined {
+function diffLlmSlot(form: FormState, serverLlm: LlmEvalOrgSettings): LlmEvalPatch | undefined {
   const patch: Record<string, unknown> = {};
 
   // See diffRagSlot for the null-vs-undefined rationale on booleans.
@@ -218,11 +217,11 @@ function diffLlmSlot(form: FormState, serverLlm: LlmEvalOrgSettings): LlmPatch |
     }
   }
 
-  return Object.keys(patch).length > 0 ? (patch as LlmPatch) : undefined;
+  return Object.keys(patch).length > 0 ? (patch as LlmEvalPatch) : undefined;
 }
 
-function patchFromForm(form: FormState, server: EvalSettings): SettingsPatch {
-  const patch: SettingsPatch = {};
+function patchFromForm(form: FormState, server: EvalSettings): EvalSettingsPatch {
+  const patch: EvalSettingsPatch = {};
   const rag = diffRagSlot(form, server.rag_evals ?? {});
   const llm = diffLlmSlot(form, server.llm_evals ?? {});
   if (rag !== undefined) patch.rag_evals = rag;

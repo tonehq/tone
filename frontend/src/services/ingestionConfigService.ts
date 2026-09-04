@@ -1,3 +1,4 @@
+import { pruneParams } from '@/utils/apiHelpers';
 import axiosInstance from '@/utils/axios';
 
 import type {
@@ -14,10 +15,7 @@ import type {
 export const listIngestionConfigs = async (
   params: ListIngestionConfigsParams = {},
 ): Promise<PaginatedIngestionConfigs> => {
-  const body: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') body[k] = v;
-  }
+  const body = pruneParams(params);
   const res = await axiosInstance.post<PaginatedIngestionConfigs>('/ingestion-configs/list', body);
   return res.data;
 };

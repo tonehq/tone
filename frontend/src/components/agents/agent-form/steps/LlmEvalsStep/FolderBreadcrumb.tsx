@@ -1,5 +1,6 @@
 import { ArrowLeft, ChevronRight, Folder as FolderIcon, Pencil, Trash2 } from 'lucide-react';
 
+import { CustomButton } from '@/components/shared';
 import { cn } from '@/utils/cn';
 
 import InlineFolderNameEditor from './InlineFolderNameEditor';
@@ -41,14 +42,15 @@ export default function FolderBreadcrumb({
   const displayName = folderName;
   return (
     <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-      <button
-        type="button"
+      <CustomButton
+        type="text"
+        size="xs"
         onClick={onBack}
-        className="inline-flex cursor-pointer items-center gap-1 font-medium text-muted-foreground transition-colors hover:text-foreground"
+        icon={<ArrowLeft className="size-3.5" />}
+        className="h-auto gap-1 p-0 text-[12.5px] font-medium text-muted-foreground hover:bg-transparent hover:text-foreground"
       >
-        <ArrowLeft className="size-3.5" />
         All folders
-      </button>
+      </CustomButton>
       <ChevronRight className="size-3.5 text-muted-foreground/60" />
       <FolderIcon className="size-3.5 text-muted-foreground" />
       {isEditing && onSaveRename && onCancelRename ? (
@@ -71,20 +73,22 @@ export default function FolderBreadcrumb({
             · {count} scenario{count === 1 ? '' : 's'}
           </span>
           {onRename && (
-            <button
-              type="button"
+            <CustomButton
+              type="text"
+              size="icon-xs"
               onClick={onRename}
               aria-label={`Rename ${displayName}`}
               title="Rename folder"
-              className="ml-1 inline-flex cursor-pointer items-center justify-center rounded p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+              className="ml-1 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
             >
               <Pencil className="size-3.5" />
-            </button>
+            </CustomButton>
           )}
           {onDelete && (
-            <button
-              type="button"
-              onClick={canDelete ? onDelete : undefined}
+            <CustomButton
+              type="text"
+              size="icon-xs"
+              onClick={onDelete}
               disabled={!canDelete}
               aria-label={`Delete folder ${displayName}`}
               title={
@@ -93,14 +97,14 @@ export default function FolderBreadcrumb({
                   : 'Every agent must have at least one folder — create another folder before deleting this one.'
               }
               className={cn(
-                'inline-flex items-center justify-center rounded p-1 transition-colors',
+                'rounded p-1',
                 canDelete
-                  ? 'cursor-pointer text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
-                  : 'cursor-not-allowed text-muted-foreground/40',
+                  ? 'text-muted-foreground hover:bg-destructive/10 hover:text-destructive'
+                  : 'text-muted-foreground/40',
               )}
             >
               <Trash2 className="size-3.5" />
-            </button>
+            </CustomButton>
           )}
         </>
       )}

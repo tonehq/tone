@@ -41,6 +41,7 @@ import { showToast } from '@/utils/toast';
 
 import AgentLlmEvalResultsDrawer from './AgentLlmEvalResultsDrawer';
 import FolderBreadcrumb from './FolderBreadcrumb';
+import FolderDeleteImpact from './FolderDeleteImpact';
 import FoldersView from './FoldersView';
 import GenerateScenariosModal from './GenerateScenariosModal';
 import { downloadSampleCsv } from './helpers';
@@ -678,29 +679,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         description="This permanently deletes every scenario in this folder. Past eval-run history for the folder is preserved."
         impact={
           pendingDeleteFolderId ? (
-            <div className="space-y-2 text-sm text-foreground">
-              {(() => {
-                const target = folders.find((f) => f.id === pendingDeleteFolderId);
-                if (!target) return null;
-                return (
-                  <>
-                    <p>
-                      You’re about to delete the folder{' '}
-                      <span className="font-medium">{target.name}</span> and every scenario in it.
-                    </p>
-                    {target.count > 0 ? (
-                      <p className="text-muted-foreground">
-                        <span className="font-medium text-foreground">{target.count}</span> scenario
-                        {target.count === 1 ? '' : 's'} will be removed. To keep any of them, edit
-                        each scenario and change its folder before deleting.
-                      </p>
-                    ) : (
-                      <p className="text-muted-foreground">This folder is empty.</p>
-                    )}
-                  </>
-                );
-              })()}
-            </div>
+            <FolderDeleteImpact folder={folders.find((f) => f.id === pendingDeleteFolderId)} />
           ) : null
         }
         loading={deleteFolder.isPending}

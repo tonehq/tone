@@ -398,33 +398,18 @@ class CallTranscriptEvalService(BaseService):
         judge_model: str,
         fallback_provider: Optional[str],
     ) -> str:
-        """Resolve the API key for the judge model's provider — mirrors
-        :meth:`AgentLlmEvalService._resolve_judge_key`. The judge model may
-        point at a different provider than the agent, so we route through
-        the shared LLM router to derive the provider then fetch the org's
-        stored key."""
-        from core.services.llm.chat_complete import resolve_provider
-        from core.services.rag.provider_keys import ProviderKeyService
+        """Resolve the API key for the judge model's provider. Delegates to
+        the shared :func:`resolve_judge_key` (same rule + error wording as the
+        agent-LLM eval) using this service's own session."""
+        from core.services.evals.judge_key import resolve_judge_key
 
-        try:
-            judge_provider = resolve_provider(judge_model)
-        except Exception as e:  # noqa: BLE001
-            raise CallTranscriptEvalConfigError(
-                f"Cannot resolve provider for judge model {judge_model!r}: {e}"
-            ) from e
-
-        key = ProviderKeyService.get_key(self.db, organization_id, judge_provider)
-        if not key and fallback_provider and fallback_provider == judge_provider:
-            # Same-provider fallback for dev setups that only have one key.
-            key = ProviderKeyService.get_key(
-                self.db, organization_id, fallback_provider,
-            )
-        if not key:
-            raise CallTranscriptEvalConfigError(
-                f"No {judge_provider!r} API key configured for organisation "
-                f"{organization_id} (needed by judge model {judge_model!r})."
-            )
-        return key
+        return resolve_judge_key(
+            self.db,
+            organization_id=organization_id,
+            judge_model=judge_model,
+            fallback_provider=fallback_provider,
+            error_cls=CallTranscriptEvalConfigError,
+        )
 
     def _persist_row(
         self,
