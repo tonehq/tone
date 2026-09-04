@@ -81,6 +81,10 @@ _LLM_MAX_COMPLETION_TOKEN_PROVIDERS = frozenset({
     "openai", "azure", "groq", "openrouter", "deepseek", "cerebras",
     "fireworks", "perplexity", "sambanova", "nebius", "together",
     "xai", "grok", "novita", "qwen", "inception",
+    # Also OpenAI-compatible (routed through BaseOpenAILLMService in
+    # service_factory) and configured with ``max_completion_tokens`` — must
+    # inject the SAME key so the probe never sends both and trips a 422/400.
+    "cohere", "mistral", "nvidia_nim", "gemma", "mistral-self-hosted",
 })
 
 
