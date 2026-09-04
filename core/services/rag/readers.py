@@ -7,15 +7,6 @@ import time
 from abc import ABC, abstractmethod
 from typing import List, Optional, Tuple
 
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_EGRET_MEDIUM
-from docling.datamodel.pipeline_options import (
-    AcceleratorDevice,
-    AcceleratorOptions,
-    LayoutOptions,
-    PdfPipelineOptions,
-)
-from docling.document_converter import DocumentConverter, PdfFormatOption
 from docx import Document as _Docx
 from loguru import logger
 from PyPDF2 import PdfReader as _PdfReader
@@ -63,6 +54,21 @@ class DoclingReader(DocumentReader):
 
     def _get_converter(self):
         if self._converter is None:
+            # docling (and its torch/transformers stack) is imported lazily here
+            # — NOT at module top — so importing this module at API-pod startup
+            # (via parser_factory) never pulls the heavy parsing stack into pods
+            # that never parse. Only the ingestion worker, which actually builds
+            # a converter, pays the ~1 GB import cost. See lazy-loading notes.
+            from docling.datamodel.base_models import InputFormat
+            from docling.datamodel.layout_model_specs import DOCLING_LAYOUT_EGRET_MEDIUM
+            from docling.datamodel.pipeline_options import (
+                AcceleratorDevice,
+                AcceleratorOptions,
+                LayoutOptions,
+                PdfPipelineOptions,
+            )
+            from docling.document_converter import DocumentConverter, PdfFormatOption
+
             num_threads = int(os.getenv("DOCLING_NUM_THREADS", "4"))
             options = PdfPipelineOptions(
                 do_ocr=self._ocr,

@@ -5,7 +5,6 @@ from typing import Optional
 
 import tiktoken
 from loguru import logger
-from transformers import AutoTokenizer
 
 
 class Tokenizer(ABC):
@@ -35,6 +34,11 @@ class OpenAITokenizer(Tokenizer):
 
 class HuggingFaceTokenizer(Tokenizer):
     def __init__(self, model: str = "sentence-transformers/all-MiniLM-L6-v2"):
+        # transformers (and its torch stack) is imported lazily on first HF
+        # tokenizer construction so importing this module at API-pod startup
+        # doesn't pull ~200 MB of transformers/torch into pods that never chunk.
+        from transformers import AutoTokenizer
+
         self._tok = AutoTokenizer.from_pretrained(model)
 
     def count_tokens(self, text: str) -> int:
