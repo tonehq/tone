@@ -830,14 +830,20 @@ def build_knowledge_base_router(
         was run for that ingestion run."""
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
-        by_ingestion = EvalService().latest_summaries_by_ingestion(
+        eval_service = EvalService()
+        by_ingestion = eval_service.latest_summaries_by_ingestion(
             db,
             org_id=org_id,
             upload_id=upload.id,
             ingestion_run_ids=body.ingestion_run_ids,
         )
+        in_flight = eval_service.list_in_flight_ingestion_runs(
+            db,
+            ingestion_run_ids=body.ingestion_run_ids,
+        )
         return {
             "items": {k: _eval_run_summary_to_dict(v) for k, v in by_ingestion.items()},
+            "in_flight_ingestion_run_ids": in_flight,
         }
 
     @router.get("/{upload_id}/runs/{ingestion_run_id}/eval-runs")

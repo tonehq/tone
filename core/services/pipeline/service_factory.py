@@ -74,6 +74,13 @@ def build_input_params(service_class, metadata: dict):
         return None
     valid_keys = set(input_params_class.model_fields.keys())
     filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None and v != "None"}
+    # OpenAI-compatible endpoints (e.g. Cohere's /compatibility/v1, and any
+    # provider routed through BaseOpenAILLMService) reject a request that
+    # carries BOTH max_tokens and max_completion_tokens. When both survive
+    # filtering, keep max_completion_tokens (the preferred key) and drop the
+    # legacy max_tokens so the mutually-exclusive pair never reaches the API.
+    if "max_tokens" in filtered and "max_completion_tokens" in filtered:
+        filtered.pop("max_tokens", None)
     # Deserialize JSON-encoded strings for fields that expect list/dict types
     for k, v in filtered.items():
         if isinstance(v, str):

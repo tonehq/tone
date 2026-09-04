@@ -6,6 +6,7 @@ import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, Trash2, XCircle } from 
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
 import CustomModal from '@/components/shared/CustomModal';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
+import EvalsCell from '@/components/knowledge-base/EvalsCell';
 import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDrawer';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
@@ -16,7 +17,6 @@ import {
   useDeleteIngestionRun,
   useIngestionRuns,
 } from '@/lib/api/ingestion-runs';
-import type { EvalRunSummary, EvalRunSummaryTotals } from '@/types/eval';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { IngestionRun, IngestionRunStatus } from '@/types/ingestionRun';
 import { cn } from '@/utils/cn';
@@ -61,46 +61,6 @@ const statusStyle: Record<
 
 const DEFAULT_PAGE_SIZE = 20;
 
-// Color the "Evals" chip by pass rate — grey when no batch exists yet, red
-// on any FAIL, amber on any PARTIAL (no FAIL), green when everything passed.
-function evalChipTone(summary: EvalRunSummary | undefined): {
-  className: string;
-  label: string;
-} {
-  if (!summary) {
-    return {
-      className: 'bg-muted text-muted-foreground ring-1 ring-border/60',
-      label: '—',
-    };
-  }
-  const totals = summary.summary as EvalRunSummaryTotals;
-  const total = totals?.total ?? 0;
-  if (total === 0) {
-    return {
-      className: 'bg-muted text-muted-foreground ring-1 ring-border/60',
-      label: '—',
-    };
-  }
-  const label = `${totals.pass}/${total}`;
-  if (summary.status === 'failed' || totals.fail > 0) {
-    return {
-      className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
-      label,
-    };
-  }
-  if (totals.partial > 0) {
-    return {
-      className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
-      label,
-    };
-  }
-  return {
-    className:
-      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
-    label,
-  };
-}
-
 export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRunsTabProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
@@ -144,6 +104,12 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const { data: evalSummariesResp } = useEvalSummariesByIngestion(uploadId, visibleRunIds);
   const evalSummariesByIngestion = useMemo(
     () => evalSummariesResp?.items ?? {},
+    [evalSummariesResp],
+  );
+  // Ingestion runs whose eval batch is queued/running (no score row yet). The
+  // hook polls while this is non-empty; the "Evals" cell shows a spinner.
+  const inFlightEvalRunIds = useMemo(
+    () => new Set(evalSummariesResp?.in_flight_ingestion_run_ids ?? []),
     [evalSummariesResp],
   );
 
@@ -339,32 +305,13 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         title: 'Evals',
         align: 'center',
         width: 'w-[110px]',
-        render: (_v, r) => {
-          const summary = evalSummariesByIngestion[r.id];
-          const chip = evalChipTone(summary);
-          const totals = summary?.summary as EvalRunSummaryTotals | undefined;
-          const tooltip = summary
-            ? `${totals?.pass ?? 0} pass · ${totals?.partial ?? 0} partial · ${totals?.fail ?? 0} fail (batch #${summary.run_number}) — click to view`
-            : 'No eval batch has scored this run yet — click to view';
-          return (
-            <CustomTooltip content={tooltip}>
-              <CustomButton
-                type="text"
-                size="xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDrawerRun(r);
-                }}
-                className={cn(
-                  'h-auto rounded-full px-2 py-0.5 text-[11px] font-medium tabular-nums transition-colors hover:brightness-110',
-                  chip.className,
-                )}
-              >
-                {chip.label}
-              </CustomButton>
-            </CustomTooltip>
-          );
-        },
+        render: (_v, r) => (
+          <EvalsCell
+            summary={evalSummariesByIngestion[r.id]}
+            isInFlight={inFlightEvalRunIds.has(r.id)}
+            onView={() => setDrawerRun(r)}
+          />
+        ),
       },
       {
         key: 'completed_at',
@@ -437,11 +384,14 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         render: (_v, r) => {
           const isActive = resolvedActiveRunId === r.id;
           const activateDisabled = r.status !== 'ready' || isActive || !!activatingId;
-          const runningEvals = runningEvalId === r.id;
+          // A batch is in flight for this row (enqueue call OR a queued/running
+          // Procrastinate job the server reports) — show the button as busy.
+          const runningEvals = runningEvalId === r.id || inFlightEvalRunIds.has(r.id);
           // A run must be ready before it can be scored — a
           // pending/running/failed run has nothing for retrieval to hit.
-          // Single-flight across rows via runningEvalId (see handleRunEvals).
-          const evalsDisabled = r.status !== 'ready' || !!runningEvalId;
+          // Single-flight across rows via runningEvalId; also block re-runs
+          // while this row already has a batch in flight (see handleRunEvals).
+          const evalsDisabled = r.status !== 'ready' || !!runningEvalId || runningEvals;
           return (
             // Fill the whole cell so clicks on the surrounding <td> padding
             // are also absorbed — otherwise clicking just off-target inside
@@ -504,7 +454,13 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         },
       },
     ],
-    [resolvedActiveRunId, activatingId, runningEvalId, evalSummariesByIngestion],
+    [
+      resolvedActiveRunId,
+      activatingId,
+      runningEvalId,
+      evalSummariesByIngestion,
+      inFlightEvalRunIds,
+    ],
   );
 
   return (
