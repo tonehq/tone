@@ -35,6 +35,7 @@ from core.models.eval_result import EvalResult
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
+from core.models.procrastinate import ProcrastinateJob
 from core.models.upload import Upload
 from core.services.evals.csv_import import (
     EvalCsvParseError,
@@ -915,6 +916,54 @@ class EvalService:
                 continue
             by_ingestion[key] = _row_to_run_summary(r)
         return by_ingestion
+
+    def list_in_flight_ingestion_runs(
+        self,
+        db: Session,
+        *,
+        ingestion_run_ids: Iterable[Any],
+    ) -> list[str]:
+        """Return the subset of ``ingestion_run_ids`` that currently have an
+        eval batch queued or running.
+
+        Eval scoring runs as a Procrastinate ``eval_ingestion_run`` job and only
+        writes ``eval_results`` at the very end, so a run being scored has no
+        summary row yet — the "Evals" chip would sit on "—" for the whole
+        ~10-minute batch with no signal. The source of truth for "a batch is in
+        flight" is Procrastinate's own ``procrastinate_jobs`` table (same DB):
+        a job is pending while ``status`` is ``todo``/``doing``. We match by the
+        task's ``ingestion_run_id`` arg, restricted to the caller's already
+        org-scoped ids, so no cross-tenant id can leak in.
+
+        This is a best-effort UX hint: any failure (table absent on an
+        environment that hasn't applied the Procrastinate schema, connectivity)
+        degrades to an empty list so the existing chip keeps working.
+        """
+        ids = [str(i) for i in ingestion_run_ids if i is not None]
+        if not ids:
+            return []
+        # ``->>`` the ingestion_run_id out of the job's JSONB args; 'todo'/'doing'
+        # are Procrastinate's queued/running statuses (all others are terminal).
+        run_id_expr = ProcrastinateJob.args["ingestion_run_id"].astext
+        try:
+            rows = (
+                db.query(run_id_expr)
+                .filter(
+                    ProcrastinateJob.task_name == "eval_ingestion_run",
+                    ProcrastinateJob.status.in_(("todo", "doing")),
+                    run_id_expr.in_(ids),
+                )
+                .distinct()
+                .all()
+            )
+        except Exception:
+            logger.exception(
+                "[eval] in-flight lookup failed for %d ingestion run(s); "
+                "degrading to no in-flight hint",
+                len(ids),
+            )
+            return []
+        return [row[0] for row in rows if row[0]]
 
     def list_runs_for_ingestion(
         self,
