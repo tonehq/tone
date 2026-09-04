@@ -6,6 +6,7 @@ by `service_resolver.load_agent_service_config` / the Redis-cached prefetch dict
 the constructed Pipecat service instance (or None on unsupported/failed init).
 """
 
+import dataclasses
 import json
 from typing import Any, Optional
 
@@ -62,17 +63,14 @@ def _dedupe_token_limit_fields(params, user_keys: set):
     return params
 
 
-def build_input_params(service_class, metadata: dict):
-    """Convert metadata dict to proper InputParams for a Pipecat service class.
+def _filter_metadata(valid_keys: set, metadata: dict) -> dict:
+    """Narrow an agent-config metadata dict to the fields a service config accepts.
 
-    Filters metadata to only include keys that the service's InputParams accepts,
-    then constructs and returns the InputParams instance.
-    Returns None if the service has no InputParams class.
+    Drops unset values and any key the target config does not declare, then
+    deserializes JSON-encoded strings so fields expecting a list/dict get one.
+    Shared by `build_input_params` (Pydantic `InputParams`) and `build_settings`
+    (dataclass `Settings`) so both layers filter identically.
     """
-    input_params_class = getattr(service_class, "InputParams", None)
-    if not input_params_class:
-        return None
-    valid_keys = set(input_params_class.model_fields.keys())
     filtered = {k: v for k, v in metadata.items() if k in valid_keys and v is not None and v != "None"}
     # OpenAI-compatible endpoints (e.g. Cohere's /compatibility/v1, and any
     # provider routed through BaseOpenAILLMService) reject a request that
@@ -96,6 +94,20 @@ def build_input_params(service_class, metadata: dict):
                     "[service-factory] metadata field={} raw={!r} not JSON — leaving as-is",
                     k, v,
                 )
+    return filtered
+
+
+def build_input_params(service_class, metadata: dict):
+    """Convert metadata dict to proper InputParams for a Pipecat service class.
+
+    Filters metadata to only include keys that the service's InputParams accepts,
+    then constructs and returns the InputParams instance.
+    Returns None if the service has no InputParams class.
+    """
+    input_params_class = getattr(service_class, "InputParams", None)
+    if not input_params_class:
+        return None
+    filtered = _filter_metadata(set(input_params_class.model_fields.keys()), metadata)
     if not filtered:
         return input_params_class()
     user_keys = set(filtered)
@@ -133,6 +145,26 @@ def build_input_params(service_class, metadata: dict):
                 service_class.__name__,
             )
             return input_params_class()
+
+
+def build_settings(settings_class, metadata: dict, **overrides):
+    """Build a delta-mode Pipecat `Settings` dataclass from agent metadata.
+
+    Newer Pipecat services are configured through `settings=` rather than the
+    deprecated `model=` / `params=` kwargs, and where a class accepts both,
+    `settings` wins — `OpenAILLMService.__init__` applies the settings delta last
+    and skips `params` entirely once `settings` is passed. A service exposing
+    `Settings` must therefore be configured through this helper, or every field
+    the user set is discarded without an error.
+
+    Only fields the metadata actually sets are populated; the rest stay NOT_GIVEN
+    so the service keeps its own defaults. `overrides` win over metadata — call
+    sites pass values resolved outside the agent config (the model name from the
+    DB row, say) that must not be shadowed by a stray metadata key of the same name.
+    """
+    filtered = _filter_metadata({f.name for f in dataclasses.fields(settings_class)}, metadata)
+    filtered.update({k: v for k, v in overrides.items() if v is not None})
+    return settings_class(**filtered) if filtered else None
 
 
 def build_llm(spec: dict) -> Optional[Any]:
@@ -200,6 +232,17 @@ def build_llm(spec: dict) -> Optional[Any]:
             from pipecat.services.ollama.llm import OLLamaLLMService
             base_url = api_key if api_key else "http://localhost:11434/v1"
             return OLLamaLLMService(model=model or "llama2", base_url=base_url, params=build_input_params(OLLamaLLMService, metadata))
+        if provider_name == "sarvam-ai":
+            from pipecat.services.sarvam.llm import SarvamLLMService
+            return SarvamLLMService(
+                api_key=api_key,
+                settings=build_settings(
+                    SarvamLLMService.Settings,
+                    metadata,
+                    model=model or "sarvam-30b",
+                ),
+                **_url_kwargs(metadata),
+            )
         if provider_name in ["azure", "cerebras", "nvidia_nim", "fireworks", "together", "perplexity", "qwen", "deepseek", "mistral", "sambanova", "grok", "cohere", "gemma", "mistral-self-hosted"]:
             from pipecat.services.openai.llm import BaseOpenAILLMService
             base_url = model_meta.get("base_url") or metadata.get("base_url")

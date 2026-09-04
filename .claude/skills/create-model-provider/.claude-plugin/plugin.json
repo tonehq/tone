@@ -1,0 +1,7 @@
+{
+  "name": "create-model-provider",
+  "version": "1.0.0",
+  "description": "Guided end-to-end flow for adding an LLM, STT or TTS provider to the Tone voice pipeline — asks for every required detail as a stepper, writes the service_factory branch, seeds dev-data.json, and verifies the result.",
+  "author": { "name": "Tone" },
+  "keywords": ["voice", "pipecat", "provider", "stt", "tts", "llm", "seed"]
+}
