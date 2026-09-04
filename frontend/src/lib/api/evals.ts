@@ -25,10 +25,13 @@ export function useEvalSummariesByIngestion(uploadId: string | null, ingestionRu
     queryKey: [EVAL_QUERY_KEY, 'by-ingestion', uploadId, sortedIds],
     queryFn: () => listEvalSummariesByIngestion(uploadId as string, sortedIds),
     enabled: !!uploadId && sortedIds.length > 0,
-    // Cheap SQL aggregate; refetch on tab focus is enough — no polling
-    // (the table already polls ingestion runs, which drives this refetch
-    // via the changed id list).
+    // Cheap SQL aggregate; refetch on tab focus is enough for scored batches.
     staleTime: 15_000,
+    // While any eval batch is queued/running its results don't exist yet, so
+    // poll every 4s to swap the per-row spinner for the score the moment the
+    // batch lands. Stops polling once nothing is in flight.
+    refetchInterval: (query) =>
+      (query.state.data?.in_flight_ingestion_run_ids?.length ?? 0) > 0 ? 4_000 : false,
   });
 }
 

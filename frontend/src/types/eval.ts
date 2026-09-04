@@ -82,6 +82,9 @@ export interface EvalSummaryByIngestionResponse {
   // Keyed by ingestion_run_id. Missing key ⇒ no eval batch has scored that
   // ingestion run.
   items: Record<string, EvalRunSummary>;
+  // Ingestion run ids whose eval batch is currently queued or running (no
+  // summary row exists yet). Drives the per-row "Evals" loading spinner.
+  in_flight_ingestion_run_ids: string[];
 }
 
 // One question row in the `evals` table. Mirrors the payload built by
