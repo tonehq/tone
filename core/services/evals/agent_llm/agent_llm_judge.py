@@ -27,7 +27,6 @@ from core.services.evals.deepeval.telemetry import opt_out as _opt_out
 
 _opt_out()
 
-import asyncio  # noqa: E402
 from typing import List, Optional, Tuple  # noqa: E402
 
 from deepeval.metrics.base_metric import BaseMetric  # noqa: E402
@@ -43,10 +42,12 @@ from core.services.evals.deepeval.metric_registry import (  # noqa: E402
     CONVERSATION_METRICS,
     build_metrics,
 )
-from core.services.evals.deepeval.runner import run_metrics  # noqa: E402
+from core.services.evals.deepeval.runner import (  # noqa: E402
+    JudgeOrchestratorError,
+    run_scorecard,
+)
 from core.services.evals.deepeval.scorecard import aggregate_scorecard  # noqa: E402
 from core.services.evals.errors import EvalConfigurationError  # noqa: E402
-from core.services.rag.errors import humanize_provider_error  # noqa: E402
 
 
 class AgentLlmJudgeService:
@@ -201,22 +202,18 @@ class AgentLlmJudgeService:
 
             try:
                 # Agent-LLM measures every metric against the same test case.
-                scorecard = asyncio.run(
-                    run_metrics(
-                        named_metrics,
-                        lambda _name: test_case,
-                        log_tag="[agent-llm-eval]",
-                    )
+                # The asyncio.run + orchestrator-error policy is shared via
+                # run_scorecard; EvalConfigurationError still propagates.
+                scorecard = run_scorecard(
+                    named_metrics,
+                    lambda _name: test_case,
+                    log_tag="[agent-llm-eval]",
+                    model=model,
                 )
-            except EvalConfigurationError:
-                raise
-            except Exception as e:  # noqa: BLE001
-                logger.exception(
-                    "[agent-llm-eval] judge orchestrator failed model={}", model
-                )
+            except JudgeOrchestratorError as e:
                 return {
                     "verdict": "FAIL",
-                    "reasoning": f"Judge error: {humanize_provider_error(e)}",
+                    "reasoning": f"Judge error: {e}",
                     "metric_scores": {},
                 }
 

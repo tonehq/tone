@@ -1,17 +1,16 @@
 'use client';
 
-import { useEffect, useMemo, useRef } from 'react';
+import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useAtom } from 'jotai';
 import { ArrowLeft, ClipboardCheck, FileText, ListChecks, Settings2 } from 'lucide-react';
 import Link from 'next/link';
 
-import agentsAtom, { fetchAllAgentsAtom } from '@/atoms/AgentsAtom';
 import IngestionConfigsTab from '@/components/knowledge-base/IngestionConfigsTab';
 import IngestionRunsTab from '@/components/knowledge-base/IngestionRunsTab';
 import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
 import ManageEvalsTab from '@/components/knowledge-base/ManageEvalsTab';
 import { CustomButton, CustomTab, type TabItem } from '@/components/shared';
+import { useAgents } from '@/hooks/useAgents';
 import { knowledgeBaseApi, KNOWLEDGE_BASE_QUERY_KEY } from '@/lib/api/knowledge-base';
 import type { AgentDropdownItem } from '@/types/agent';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
@@ -25,21 +24,10 @@ interface KnowledgeBaseDetailPageProps {
 // today) — we fetch the first page and pick the matching row. Cheap because
 // the list is small in practice; swap for a dedicated GET if that changes.
 export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetailPageProps) {
-  const [agentData] = useAtom(agentsAtom);
-  const [, fetchAgents] = useAtom(fetchAllAgentsAtom);
-  const hasFetchedAgentsRef = useRef(false);
-
-  // The agent name is resolved from the agents atom, but this page can be
-  // opened directly (deep link) with an empty atom — without fetching, the
-  // lookup below always falls back to "Unknown agent". Mirrors the fetch the
-  // KB list page does so the atom is populated regardless of entry point.
-  useEffect(() => {
-    if (hasFetchedAgentsRef.current) return;
-    hasFetchedAgentsRef.current = true;
-    fetchAgents().catch(() => {
-      // agents endpoint may be disabled; the name falls back to "Unknown agent"
-    });
-  }, [fetchAgents]);
+  // The agent list (for name resolution) comes from the shared TanStack Query
+  // hook, so a deep link into this page fetches + caches it the same way the KB
+  // list page does — no ref-guarded atom priming needed.
+  const { data: agentList = [] } = useAgents();
 
   const { data, isLoading, isError } = useQuery({
     queryKey: [KNOWLEDGE_BASE_QUERY_KEY, 'detail', uploadId],
@@ -53,11 +41,11 @@ export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetai
 
   const agentName = useMemo(() => {
     if (!doc?.agent_id) return null;
-    const found = agentData.agentList.find(
+    const found = agentList.find(
       (a: AgentDropdownItem) => a.uuid === doc.agent_id || String(a.id) === doc.agent_id,
     );
     return found?.name ?? 'Unknown agent';
-  }, [doc, agentData.agentList]);
+  }, [doc, agentList]);
 
   const tabs: TabItem[] = useMemo(
     () => [

@@ -141,6 +141,7 @@ class AgentLlmEvalService:
         triggered_by: str = "cli",
         judge_model: Optional[str] = None,
         run_id: Optional[UUID] = None,
+        organization_id: Optional[UUID] = None,
     ) -> AgentLlmRunSummary:
         """Execute every ``LLMScenario`` against the agent's LLM. Persists
         one ``agent_llm_eval_results`` row per scenario tagged with the same
@@ -192,23 +193,22 @@ class AgentLlmEvalService:
         run_id = run_id or uuid.uuid4()
 
         # 1. Snapshot the agent's config while the session is still open,
-        # then close it so nothing is held during the LLM loop.
-        agent_config: AgentEvalConfig = self._loader.load_for_eval(db, agent_id)
+        # then close it so nothing is held during the LLM loop. Pass
+        # ``organization_id`` when the caller supplied it (the DB-backed
+        # ``run_eval_for_agent`` / worker path always does) so the agent row +
+        # decrypted provider key are fetched tenant-scoped — a cross-org
+        # ``agent_id`` then fails cleanly instead of loading another tenant's
+        # config. The CLI/fixture path passes ``None`` and stays unscoped.
+        agent_config: AgentEvalConfig = self._loader.load_for_eval(
+            db, agent_id, organization_id=organization_id
+        )
 
-        # Resolve judge model with per-org override (DB → env → hardcoded
-        # default). Uses the AGENT-LLM resolver (``llm_evals.judge_model``,
-        # AGENT_LLM_EVAL_JUDGE_MODEL env, hardcoded fallback) so this CLI /
-        # fixture path stays in lock-step with ``run_eval_for_agent`` — one
-        # judge policy for agent-LLM evals regardless of transport. Explicit
-        # caller kwarg still wins so the CLI can pin a specific model.
-        if judge_model is None:
-            from core.services.org_settings import (
-                load_agent_llm_eval_settings_for_org,
-            )
-
-            judge_model = load_agent_llm_eval_settings_for_org(
-                db, agent_config.organization_id
-            ).judge_model
+        # Resolve judge model via the shared rule (explicit wins → org default
+        # → env → hardcoded), so this CLI / fixture path stays in lock-step
+        # with ``run_eval_for_agent`` and the trigger route.
+        judge_model = self.resolve_judge_model(
+            db, org_id=agent_config.organization_id, explicit=judge_model
+        )
         # When the caller wired us to a runs-table row (FE flow via the
         # router's ``begin_pending_run``), reuse THAT row's ``run_number``
         # so the runs table and the per-scenario results rows agree.
@@ -365,9 +365,6 @@ class AgentLlmEvalService:
             AgentLlmScenarioService,
             scenario_row_to_llm_scenario,
         )
-        from core.services.org_settings import (
-            load_agent_llm_eval_settings_for_org,
-        )
 
         # Resolve the agent's organization_id BEFORE calling into the
         # scenario service — the caller may not know it yet (Procrastinate
@@ -401,14 +398,12 @@ class AgentLlmEvalService:
             )
         llm_scenarios = [scenario_row_to_llm_scenario(r) for r in rows]
 
-        # Resolve judge_model with the AGENT-LLM resolver (falls back through
-        # ``agent_llm.judge_model`` → env → hardcoded default). Explicit
-        # caller kwarg still wins so the FE Run modal's per-run override
-        # threads through unchanged.
-        if judge_model is None:
-            judge_model = load_agent_llm_eval_settings_for_org(
-                db, organization_id
-            ).judge_model
+        # Resolve judge_model via the shared rule (explicit wins → org default
+        # → env → hardcoded) so the FE Run modal's per-run override threads
+        # through unchanged.
+        judge_model = self.resolve_judge_model(
+            db, org_id=organization_id, explicit=judge_model
+        )
 
         return self.run_eval(
             db,
@@ -417,6 +412,7 @@ class AgentLlmEvalService:
             triggered_by=triggered_by,
             judge_model=judge_model,
             run_id=run_id,
+            organization_id=organization_id,
         )
 
     # ── Run lifecycle (agent_llm_eval_runs) ─────────────────────────────
@@ -528,19 +524,35 @@ class AgentLlmEvalService:
           block the INSERT and the scoring-phase except would flip the
           completed run to ``failed``).
         """
-        run = (
+        now = datetime.now(timezone.utc)
+        # Atomic claim: flip ONLY a pending row in a single conditional UPDATE
+        # (``WHERE status = 'pending'``). This closes the read-check-then-write
+        # race — two concurrent deliveries can't both observe ``pending`` and
+        # both proceed — and preserves the idempotency contract: a replay whose
+        # row is already ``running``/terminal is left untouched (started_at not
+        # clobbered, a terminal row not re-opened).
+        db.query(AgentLlmEvalRun).filter(
+            AgentLlmEvalRun.id == run_id,
+            AgentLlmEvalRun.status == "pending",
+        ).update(
+            {
+                "status": "running",
+                "started_at": now,
+                "updated_at": now,
+            },
+            synchronize_session=False,
+        )
+        db.commit()
+        # Re-read so the caller sees the authoritative current status: ``running``
+        # when this (or another) delivery claimed it, or ``completed``/``failed``
+        # when a prior attempt already finished — the worker short-circuits on
+        # the terminal states. ``None`` when the runs-table row doesn't exist
+        # (legacy CLI/test callers).
+        return (
             db.query(AgentLlmEvalRun)
             .filter(AgentLlmEvalRun.id == run_id)
             .first()
         )
-        if run is None:
-            return None
-        if run.status == "pending":
-            run.status = "running"
-            run.started_at = datetime.now(timezone.utc)
-            db.commit()
-            db.refresh(run)
-        return run
 
     def complete_run(
         self,
@@ -758,7 +770,26 @@ class AgentLlmEvalService:
             db, run_id=run_id, organization_id=org_id
         ).first()
         if summary_row is None:
-            return None
+            # A pending / running (or freshly-triggered) run has no results
+            # rows yet, so the grouped query over results returns nothing.
+            # Fall back to the runs-table row — mirroring what ``list`` (which
+            # reads the runs table) already shows — instead of 404-ing a run
+            # the user can see listed. Only a genuinely unknown / cross-tenant
+            # id returns ``None`` (→ 404).
+            run_row = (
+                db.query(AgentLlmEvalRun)
+                .filter(
+                    AgentLlmEvalRun.id == run_id,
+                    AgentLlmEvalRun.organization_id == org_id,
+                )
+                .first()
+            )
+            if run_row is None:
+                return None
+            return {
+                "summary": _run_and_stats_to_summary(run_row, None),
+                "scenarios": [],
+            }
         summary = _row_to_run_summary(summary_row)
         scenario_rows = (
             db.query(AgentLlmEvalResult)
@@ -801,6 +832,26 @@ class AgentLlmEvalService:
         )
         return int(row or 1)
 
+    @staticmethod
+    def resolve_judge_model(
+        db: Session,
+        *,
+        org_id: UUID,
+        explicit: Optional[str] = None,
+    ) -> str:
+        """Judge-model resolution rule: an explicit caller value wins, else the
+        org's configured default (``llm_evals.judge_model`` → env →
+        hardcoded) via ``load_agent_llm_eval_settings_for_org``. One rule
+        shared by the trigger route (so the pending row shows the right model
+        immediately) and the worker's run paths, so they can't drift."""
+        if explicit:
+            return explicit
+        from core.services.org_settings import (
+            load_agent_llm_eval_settings_for_org,
+        )
+
+        return load_agent_llm_eval_settings_for_org(db, org_id).judge_model
+
     def _resolve_judge_key(
         self,
         *,
@@ -810,31 +861,23 @@ class AgentLlmEvalService:
         fallback_key: Optional[str],
     ) -> str:
         """The judge model may point at a different provider than the agent
-        (e.g. agent on Anthropic, judge on OpenAI). Resolve the key via the
-        shared router; fall back to the agent's own key when the two share
-        a provider so dev machines with only ONE key set still work."""
+        (e.g. agent on Anthropic, judge on OpenAI). Delegates to the shared
+        :func:`resolve_judge_key` so agent-LLM, call-transcript, and the
+        scenario generator share one resolution rule + error wording. Uses a
+        fresh session because this runs after the run's own session is closed
+        for the LLM loop; the agent's own key is the same-provider fallback."""
         from core.database.session import SessionLocal
-        from core.services.llm.chat_complete import resolve_provider
-        from core.services.rag.provider_keys import ProviderKeyService
-
-        try:
-            judge_provider = resolve_provider(judge_model)
-        except Exception as e:  # noqa: BLE001
-            raise AgentLlmEvalConfigError(
-                f"Cannot resolve provider for judge model {judge_model!r}: {e}"
-            ) from e
-
-        if fallback_provider and judge_provider == fallback_provider and fallback_key:
-            return fallback_key
+        from core.services.evals.judge_key import resolve_judge_key
 
         with SessionLocal() as tmp:
-            key = ProviderKeyService.get_key(tmp, organization_id, judge_provider)
-        if not key:
-            raise AgentLlmEvalConfigError(
-                f"No {judge_provider!r} API key configured for organisation "
-                f"{organization_id} (needed by judge model {judge_model!r})."
+            return resolve_judge_key(
+                tmp,
+                organization_id=organization_id,
+                judge_model=judge_model,
+                fallback_provider=fallback_provider,
+                fallback_key=fallback_key,
+                error_cls=AgentLlmEvalConfigError,
             )
-        return key
 
     def _score_one_scenario(
         self,

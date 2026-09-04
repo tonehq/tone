@@ -118,35 +118,37 @@ export default function IngestionConfigsTab() {
         render: (_v, record) => (
           <CustomPopover
             trigger={
-              <button
-                type="button"
-                className="inline-flex size-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              <CustomButton
+                type="text"
+                size="icon-xs"
                 aria-label={`Actions for ${record.name}`}
-              >
-                <MoreVertical className="size-4" />
-              </button>
+                className="size-7"
+                icon={<MoreVertical className="size-4" />}
+              />
             }
             align="end"
             sideOffset={4}
             width="w-36"
             contentClassName="max-h-none overflow-visible p-1"
           >
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            <CustomButton
+              type="text"
+              fullWidth
               onClick={() => setEditing(record)}
+              className="h-auto justify-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-normal text-foreground hover:bg-muted"
+              icon={<Pencil className="size-3.5" />}
             >
-              <Pencil className="size-3.5" />
               Edit
-            </button>
-            <button
-              type="button"
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-destructive transition-colors hover:bg-destructive/10"
+            </CustomButton>
+            <CustomButton
+              type="text"
+              fullWidth
               onClick={() => setDeleting(record)}
+              className="h-auto justify-start gap-2 rounded-sm px-2 py-1.5 text-left text-sm font-normal text-destructive hover:bg-destructive/10 hover:text-destructive"
+              icon={<Trash2 className="size-3.5" />}
             >
-              <Trash2 className="size-3.5" />
               Delete
-            </button>
+            </CustomButton>
           </CustomPopover>
         ),
       },

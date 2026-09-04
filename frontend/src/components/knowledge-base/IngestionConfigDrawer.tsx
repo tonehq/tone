@@ -3,6 +3,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Cog, Loader2, Save } from 'lucide-react';
 
+import EmbeddingModelSelect from '@/components/knowledge-base/EmbeddingModelSelect';
+import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
+import OptionParamsModal from '@/components/knowledge-base/OptionParamsModal';
+import {
+  getCompatibilityHint,
+  hasParams,
+  type ParamSection,
+} from '@/components/knowledge-base/optionParamSchemas';
 import {
   CustomButton,
   CustomDrawer,
@@ -10,20 +18,11 @@ import {
   TextAreaField,
   TextInput,
 } from '@/components/shared';
-import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
-import OptionParamsModal from '@/components/knowledge-base/OptionParamsModal';
-import {
-  EMBEDDING_MODEL_CHOICES,
-  getCompatibilityHint,
-  getEmbeddingModelDefaultDimensions,
-  getEmbeddingModelMaxTokens,
-  hasParams,
-  type ParamSection,
-} from '@/components/knowledge-base/optionParamSchemas';
 import { useCreateIngestionConfig, useUpdateIngestionConfig } from '@/lib/api/ingestion-configs';
 import { usePipelineOptions } from '@/lib/api/ingestion-runs';
 import type { CreateIngestionConfigPayload, IngestionConfig } from '@/types/ingestionConfig';
 import { handleApiError } from '@/utils/helpers';
+import { toStringSelectOptions } from '@/utils/selectUtils';
 import { showToast } from '@/utils/toast';
 
 interface IngestionConfigDrawerProps {
@@ -62,10 +61,6 @@ const EMPTY_FORM: FormState = {
   vector_store: '',
   vector_store_ref: null,
 };
-
-function toOptions(values: string[]): { value: string; label: string }[] {
-  return values.map((v) => ({ value: v, label: v }));
-}
 
 function formFromConfig(config: IngestionConfig): FormState {
   return {
@@ -142,10 +137,16 @@ export default function IngestionConfigDrawer({
     });
   }, [open, config, options]);
 
-  const parserOptions = useMemo(() => toOptions(options?.parsers ?? []), [options]);
-  const tokeniserOptions = useMemo(() => toOptions(options?.tokenisers ?? []), [options]);
-  const embedderOptions = useMemo(() => toOptions(options?.embedders ?? []), [options]);
-  const vectorStoreOptions = useMemo(() => toOptions(options?.vector_stores ?? []), [options]);
+  const parserOptions = useMemo(() => toStringSelectOptions(options?.parsers ?? []), [options]);
+  const tokeniserOptions = useMemo(
+    () => toStringSelectOptions(options?.tokenisers ?? []),
+    [options],
+  );
+  const embedderOptions = useMemo(() => toStringSelectOptions(options?.embedders ?? []), [options]);
+  const vectorStoreOptions = useMemo(
+    () => toStringSelectOptions(options?.vector_stores ?? []),
+    [options],
+  );
 
   const dimensionsNumber = Number(form.embedding_dimensions);
   const dimensionsValid =
@@ -365,61 +366,12 @@ export default function IngestionConfigDrawer({
             </div>
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SelectInput
-                name="embedding_model"
-                label="Embedding model"
-                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_model} />}
-                isRequired
-                // If an edited config carries a legacy model that's no longer
-                // in the curated list, keep it selectable so the drawer can
-                // still open and save without silently switching models.
-                options={
-                  form.embedding_model &&
-                  !EMBEDDING_MODEL_CHOICES.some((m) => m.value === form.embedding_model)
-                    ? [
-                        ...EMBEDDING_MODEL_CHOICES,
-                        { value: form.embedding_model, label: `${form.embedding_model} (legacy)` },
-                      ]
-                    : EMBEDDING_MODEL_CHOICES
-                }
-                value={form.embedding_model || undefined}
-                onValueChange={(v) =>
-                  setForm((f) => {
-                    if (v === f.embedding_model) return f;
-                    const dims = getEmbeddingModelDefaultDimensions(v);
-                    return {
-                      ...f,
-                      embedding_model: v,
-                      embedding_dimensions: dims != null ? String(dims) : f.embedding_dimensions,
-                    };
-                  })
-                }
-                placeholder="Select an embedding model"
+              <EmbeddingModelSelect
+                model={form.embedding_model}
+                dimensions={form.embedding_dimensions}
+                onChange={(next) => setForm((f) => ({ ...f, ...next }))}
                 disabled={pending}
-                helperText={
-                  getEmbeddingModelMaxTokens(form.embedding_model) !== undefined
-                    ? `Max input: ${getEmbeddingModelMaxTokens(form.embedding_model)} tokens`
-                    : undefined
-                }
-              />
-              <TextInput
-                name="embedding_dimensions"
-                label="Embedding dimensions"
-                labelHint={<HintIcon text={INGESTION_FIELD_HINTS.embedding_dimensions} />}
-                isRequired
-                type="number"
-                min={1}
-                placeholder="Auto-set by model"
-                value={form.embedding_dimensions}
-                onChange={(e) => setForm((f) => ({ ...f, embedding_dimensions: e.target.value }))}
-                error={form.embedding_dimensions.trim() !== '' && !dimensionsValid}
-                helperText={
-                  form.embedding_dimensions.trim() !== '' && !dimensionsValid
-                    ? 'Must be a positive integer.'
-                    : 'Determined by the selected embedding model.'
-                }
-                disabled={pending}
-                readOnly
+                showMaxTokensHint
               />
             </div>
 

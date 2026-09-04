@@ -36,6 +36,7 @@ from core.services.ingestion_errors import (
     IngestionRunKbMismatchError,
     IngestionRunNotFoundError,
     IngestionRunNotReadyError,
+    IngestionValidationError,
     UnknownRagComponentError,
 )
 from core.services.rag.component_registry import ensure_rag_component
@@ -495,17 +496,61 @@ class IngestionRunService:
         return tid
 
     @staticmethod
-    def mark_running(db: Session, run_id: Any) -> IngestionPipelineRun:
-        """Flip a pending run to ``running`` and stamp ``started_at``. Called
-        by the worker at the start of ``process_document``. The run row was
-        created earlier by the router in ``begin_pending_run``."""
-        run = db.query(IngestionPipelineRun).filter(IngestionPipelineRun.id == run_id).first()
-        if run is None:
-            raise ValueError(f"IngestionPipelineRun {run_id} not found")
-        run.status = "running"
-        run.started_at = datetime.now(timezone.utc)
+    def mark_running(db: Session, run_id: Any) -> Optional[IngestionPipelineRun]:
+        """Atomically claim a pending run for processing: flip ``pending →
+        running`` and stamp ``started_at`` in ONE conditional UPDATE
+        (``WHERE status = 'pending'``). Called by the worker at the start of
+        ``process_document``; the run row was created earlier by the router in
+        ``begin_pending_run``.
+
+        Idempotency guard for Procrastinate's at-least-once delivery: returns
+        the run only when THIS call won the claim. Returns ``None`` when the
+        row is missing or already advanced past ``pending``
+        (``running``/``ready``/``failed``) — a duplicate or redelivered job
+        whose work another delivery already owns. The caller MUST skip
+        re-processing in that case; without the guard the pipeline would
+        re-embed and append duplicate chunks/embeddings for the same run.
+        """
+        now = datetime.now(timezone.utc)
+        claimed = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.status == "pending",
+            )
+            .update(
+                {
+                    "status": "running",
+                    "started_at": now,
+                    "updated_at": now,
+                },
+                synchronize_session=False,
+            )
+        )
         db.commit()
-        db.refresh(run)
+        if not claimed:
+            existing = (
+                db.query(IngestionPipelineRun)
+                .filter(IngestionPipelineRun.id == run_id)
+                .first()
+            )
+            if existing is None:
+                logger.warning(
+                    "[ingestion] mark_running skipped: run {} not found", run_id,
+                )
+            else:
+                logger.info(
+                    "[ingestion] mark_running skipped: run {} already status={} "
+                    "(duplicate delivery — no-op)",
+                    run_id, existing.status,
+                )
+            return None
+
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(IngestionPipelineRun.id == run_id)
+            .first()
+        )
         logger.info(
             "[ingestion] running run {} (upload={}, run_number={})",
             run.id, run.upload_id, run.run_number,
@@ -782,6 +827,86 @@ class IngestionRunService:
                 f"This ingestion run is still {run.status!r}. Wait for it to "
                 "finish (or fail) before deleting."
             )
+        return run
+
+    @staticmethod
+    def resolve_eval_target_run(
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        ingestion_run_id: Optional[Any] = None,
+    ) -> IngestionPipelineRun:
+        """Resolve the ingestion run a manual eval should score, org+upload
+        scoped. An explicit ``ingestion_run_id`` wins; otherwise the upload's
+        active run is used. The resolved run must be ``ready``.
+
+        Raises typed ingestion errors the router maps to HTTP:
+        - :class:`IngestionRunNotFoundError` (→ 404) — explicit id not found;
+        - :class:`IngestionValidationError` (→ 400) — no active run to score;
+        - :class:`IngestionRunNotReadyError` (→ 400) — resolved run not ready.
+
+        Read-only. Keeps the "which run does the eval score?" rule in the
+        service instead of duplicated inline in the router.
+        """
+        if ingestion_run_id is not None:
+            run = (
+                db.query(IngestionPipelineRun)
+                .filter(
+                    IngestionPipelineRun.id == ingestion_run_id,
+                    IngestionPipelineRun.upload_id == upload_id,
+                    IngestionPipelineRun.organization_id == org_id,
+                )
+                .first()
+            )
+            if run is None:
+                raise IngestionRunNotFoundError(
+                    "Ingestion run not found for this upload"
+                )
+        else:
+            run = (
+                db.query(IngestionPipelineRun)
+                .filter(
+                    IngestionPipelineRun.upload_id == upload_id,
+                    IngestionPipelineRun.organization_id == org_id,
+                    IngestionPipelineRun.is_active.is_(True),
+                )
+                .first()
+            )
+            if run is None:
+                raise IngestionValidationError(
+                    "No active ingestion run for this upload — ingest the document first."
+                )
+        if run.status != "ready":
+            raise IngestionRunNotReadyError(run.status, action="run eval against")
+        return run
+
+    @staticmethod
+    def get_activatable_run(
+        db: Session, *, upload_id: Any, run_id: Any, org_id: Any
+    ) -> IngestionPipelineRun:
+        """Resolve one ingestion run for activation, org+upload scoped, and
+        refuse to activate a run that isn't ``ready``.
+
+        Raises :class:`IngestionRunNotFoundError` (→ 404) when the run doesn't
+        exist for this (org, upload, id), and :class:`IngestionRunNotReadyError`
+        (→ 400) when its status isn't ``ready``. Read-only — the caller then
+        calls :meth:`activate_run`. Mirrors :meth:`get_deletable_run` so the
+        router stays a thin transport instead of hand-rolling the fetch+guard.
+        """
+        run = (
+            db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.id == run_id,
+                IngestionPipelineRun.upload_id == upload_id,
+                IngestionPipelineRun.organization_id == org_id,
+            )
+            .first()
+        )
+        if run is None:
+            raise IngestionRunNotFoundError("Run not found for this upload")
+        if run.status != "ready":
+            raise IngestionRunNotReadyError(run.status, action="activate")
         return run
 
     @staticmethod

@@ -7,6 +7,7 @@ import ChunkRow from '@/components/knowledge-base/ChunkRow';
 import VerdictChip from '@/components/knowledge-base/VerdictChip';
 import { formatDecimal } from '@/components/knowledge-base/evalResultsHelpers';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
+import { CustomButton } from '@/components/shared';
 import type { EvalScoredQuestion } from '@/types/eval';
 
 export default function QuestionRow({ q }: { q: EvalScoredQuestion }) {
@@ -14,10 +15,12 @@ export default function QuestionRow({ q }: { q: EvalScoredQuestion }) {
   const chunks = q.retrieved_chunks ?? [];
   return (
     <div className="rounded-md border border-border/60 bg-card">
-      <button
-        type="button"
+      <CustomButton
+        type="text"
+        fullWidth
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start gap-2 px-3 py-2 text-left"
+        aria-expanded={expanded}
+        className="h-auto items-start justify-start gap-2 whitespace-normal rounded-none bg-transparent px-3 py-2 text-left font-normal hover:bg-transparent"
       >
         {expanded ? (
           <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
@@ -43,7 +46,7 @@ export default function QuestionRow({ q }: { q: EvalScoredQuestion }) {
           </div>
           <div className="mt-1 text-[13px] font-medium text-foreground">{q.question}</div>
         </div>
-      </button>
+      </CustomButton>
 
       {expanded && (
         <div className="border-t border-border/60 px-3 py-3">

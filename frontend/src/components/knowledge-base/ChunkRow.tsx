@@ -3,6 +3,8 @@
 import { useId, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
+import { CustomButton } from '@/components/shared';
+
 interface ChunkRowProps {
   index: number;
   score: number | null | undefined;
@@ -14,10 +16,11 @@ export default function ChunkRow({ index, score, text }: ChunkRowProps) {
   const panelId = useId();
   return (
     <div className="rounded bg-muted/40">
-      <button
-        type="button"
+      <CustomButton
+        type="text"
+        fullWidth
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-center gap-2 px-2 py-1.5 text-left font-sans text-[11px] text-muted-foreground"
+        className="h-auto justify-start gap-2 rounded-none bg-transparent px-2 py-1.5 text-left font-sans text-[11px] font-normal text-muted-foreground hover:bg-transparent hover:text-muted-foreground"
         aria-expanded={expanded}
         aria-controls={panelId}
       >
@@ -30,7 +33,7 @@ export default function ChunkRow({ index, score, text }: ChunkRowProps) {
         {typeof score === 'number' && (
           <span className="tabular-nums">score {score.toFixed(3)}</span>
         )}
-      </button>
+      </CustomButton>
       {expanded && (
         <div
           id={panelId}

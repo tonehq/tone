@@ -1,5 +1,6 @@
 import { CustomDrawer } from '@/components/shared';
 import { useAgentLlmEvalRunDetail } from '@/lib/api/agentLlmEvals';
+import type { AgentLlmEvalRunSummaryTotals } from '@/types/agentLlmEval';
 
 import AgentPromptPanel from './AgentPromptPanel';
 import ScoredScenarioRow from './ScoredScenarioRow';
@@ -18,7 +19,10 @@ export default function AgentLlmEvalResultsDrawer({
 }) {
   const detailQuery = useAgentLlmEvalRunDetail(open ? agentId : null, open ? runId : null);
   const summary = detailQuery.data?.summary;
-  const totals = summary?.summary as Record<string, number> | undefined;
+  // ``summary.summary`` is typed as the full totals object or an empty record
+  // (a run that hasn't been scored yet); narrow to the typed totals shape so
+  // the cells below read named fields instead of an untyped string map.
+  const totals: AgentLlmEvalRunSummaryTotals | undefined = summary?.summary;
 
   // Every scenario in a run scores against the SAME snapshotted agent
   // config, so the system prompt is identical row-to-row. Pull it once from
@@ -48,7 +52,7 @@ export default function AgentLlmEvalResultsDrawer({
               <SummaryCell label="Score" value={`${totals.pass ?? 0} / ${totals.total ?? 0}`} />
               <SummaryCell
                 label="Pass rate"
-                value={`${Math.round(((totals.pass_rate ?? 0) as number) * 100)}%`}
+                value={`${Math.round((totals.pass_rate ?? 0) * 100)}%`}
               />
               <SummaryCell label="Partial" value={String(totals.partial ?? 0)} />
               <SummaryCell label="Fail" value={String(totals.fail ?? 0)} />

@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { FileUp, Loader2, Pencil, Play, Plus, Trash2 } from 'lucide-react';
+import { FileUp, Loader2, Play, Plus } from 'lucide-react';
 
+import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
+import EvalQuestionRow from '@/components/knowledge-base/EvalQuestionRow';
 import {
   CustomButton,
-  CustomModal,
   CustomTooltip,
   SelectInput,
   TextAreaField,
@@ -21,7 +22,6 @@ import {
 } from '@/lib/api/evals';
 import { useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type { EvalQuestion, ManualQuestionInput, UpdateQuestionPatch } from '@/types/eval';
-import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -29,7 +29,7 @@ interface ManageEvalsTabProps {
   uploadId: string;
 }
 
-interface DraftQuestion {
+export interface DraftQuestion {
   question: string;
   expected_answer: string;
   expected_source_snippet: string;
@@ -42,25 +42,6 @@ const EMPTY_DRAFT: DraftQuestion = {
   expected_source_snippet: '',
   category: '',
 };
-
-// Human label for the `generated_by_model` audit tag. LLM-generated rows use
-// the model name (e.g. 'gpt-4o'); benchmark imports use the source key
-// (e.g. 'hotpotqa-mini'); manual rows are always 'manual'.
-function sourceBadge(row: EvalQuestion): { label: string; className: string } {
-  const src = row.generated_by_model;
-  if (!src) return { label: 'unknown', className: 'bg-muted text-muted-foreground' };
-  if (src === 'manual') {
-    return {
-      label: 'manual',
-      className:
-        'bg-primary/10 text-primary ring-1 ring-primary/20 dark:bg-primary/20 dark:text-primary-foreground',
-    };
-  }
-  return {
-    label: src,
-    className: 'bg-muted text-muted-foreground ring-1 ring-border/60',
-  };
-}
 
 export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const { data: questions = [], isLoading } = useEvalQuestions(uploadId);
@@ -105,10 +86,8 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-  // Two-step delete: clicking the trash icon opens a themed confirm modal
-  // (matches the destructive-confirm pattern used elsewhere in the app —
-  // `CustomModal` with `confirmType="danger"`), NOT the native browser
-  // `window.confirm` popup.
+  // Two-step delete: clicking the trash icon opens the shared
+  // `ConfirmDeleteModal`, NOT the native browser `window.confirm` popup.
   const [deleteConfirmRow, setDeleteConfirmRow] = useState<EvalQuestion | null>(null);
 
   // Trim once at read-time so we don't fight React strict-mode double-renders
@@ -310,6 +289,14 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
           not replaced.
         </p>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          {/*
+            TODO(shared-file-input): consider reusing the shared
+            `@/components/contacts/shared/ContactFileInput` here. Kept as a raw
+            styled native input for now to preserve this control's exact look +
+            behavior (no extension-rejection toast); ContactFileInput is a
+            controlled button+filename picker with different chrome, so swapping
+            it is a visual/behavior change out of scope for this refactor.
+          */}
           <input
             ref={csvInputRef}
             type="file"
@@ -406,166 +393,47 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
           </div>
         ) : (
           <ul className="flex flex-col gap-2">
-            {questions.map((row) => {
-              const isEditing = editingId === row.id;
-              const badge = sourceBadge(row);
-              const isDeletingRow = deletingId === row.id;
-              return (
-                <li
-                  key={row.id}
-                  className={cn(
-                    'rounded-lg border border-border/60 bg-background p-3 transition-shadow',
-                    isEditing && 'ring-1 ring-primary/40',
-                  )}
-                >
-                  {isEditing ? (
-                    <div className="flex flex-col gap-3">
-                      <TextAreaField
-                        name={`edit-question-${row.id}`}
-                        label="Question"
-                        value={editDraft.question}
-                        onChange={(e) => setEditDraft((d) => ({ ...d, question: e.target.value }))}
-                        isRequired
-                        rows={2}
-                      />
-                      <TextAreaField
-                        name={`edit-expected-${row.id}`}
-                        label="Expected answer"
-                        value={editDraft.expected_answer}
-                        onChange={(e) =>
-                          setEditDraft((d) => ({ ...d, expected_answer: e.target.value }))
-                        }
-                        isRequired
-                        rows={2}
-                      />
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <TextInput
-                          name={`edit-category-${row.id}`}
-                          label="Category"
-                          value={editDraft.category}
-                          onChange={(e) =>
-                            setEditDraft((d) => ({ ...d, category: e.target.value }))
-                          }
-                        />
-                        <TextInput
-                          name={`edit-snippet-${row.id}`}
-                          label="Expected source snippet"
-                          value={editDraft.expected_source_snippet}
-                          onChange={(e) =>
-                            setEditDraft((d) => ({
-                              ...d,
-                              expected_source_snippet: e.target.value,
-                            }))
-                          }
-                        />
-                      </div>
-                      <div className="flex justify-end gap-2">
-                        <CustomButton type="default" size="sm" onClick={cancelEdit}>
-                          Cancel
-                        </CustomButton>
-                        <CustomButton
-                          type="primary"
-                          size="sm"
-                          onClick={handleSaveEdit}
-                          disabled={!canSaveEdit || updateMutation.isPending}
-                          loading={updateMutation.isPending}
-                        >
-                          Save
-                        </CustomButton>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="mb-1 flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                            #{row.question_ord + 1}
-                          </span>
-                          <span
-                            className={cn(
-                              'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium',
-                              badge.className,
-                            )}
-                          >
-                            {badge.label}
-                          </span>
-                          {row.category && (
-                            <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground ring-1 ring-border/60">
-                              {row.category}
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-sm font-medium text-foreground">{row.question}</p>
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          <span className="font-medium text-foreground/70">Expected:</span>{' '}
-                          {row.expected_answer}
-                        </p>
-                        {row.expected_source_snippet && (
-                          <p className="mt-1 line-clamp-2 text-xs italic text-muted-foreground">
-                            “{row.expected_source_snippet}”
-                          </p>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        <CustomTooltip content="Edit">
-                          <CustomButton
-                            type="text"
-                            size="icon-xs"
-                            aria-label="Edit question"
-                            onClick={() => startEdit(row)}
-                            disabled={isDeletingRow}
-                          >
-                            <Pencil className="size-3.5" />
-                          </CustomButton>
-                        </CustomTooltip>
-                        <CustomTooltip content="Delete">
-                          <CustomButton
-                            type="text"
-                            size="icon-xs"
-                            aria-label="Delete question"
-                            onClick={() => requestDelete(row)}
-                            disabled={isDeletingRow}
-                            loading={isDeletingRow}
-                          >
-                            {!isDeletingRow && <Trash2 className="size-3.5 text-destructive" />}
-                          </CustomButton>
-                        </CustomTooltip>
-                      </div>
-                    </div>
-                  )}
-                </li>
-              );
-            })}
+            {questions.map((row) => (
+              <EvalQuestionRow
+                key={row.id}
+                row={row}
+                isEditing={editingId === row.id}
+                editDraft={editDraft}
+                setEditDraft={setEditDraft}
+                canSaveEdit={canSaveEdit}
+                savingEdit={updateMutation.isPending}
+                isDeleting={deletingId === row.id}
+                onStartEdit={startEdit}
+                onCancelEdit={cancelEdit}
+                onSaveEdit={handleSaveEdit}
+                onRequestDelete={requestDelete}
+              />
+            ))}
           </ul>
         )}
       </section>
 
-      {/*
-        Destructive-confirm dialog — matches the app-wide pattern used by
-        `ConfirmDeleteModal` in the contacts feature (CustomModal +
-        `confirmType="danger"`).
-      */}
-      <CustomModal
+      {/* Destructive-confirm dialog — the shared contacts-feature primitive. */}
+      <ConfirmDeleteModal
         open={deleteConfirmRow !== null}
         onClose={() => {
           if (!deletingId) setDeleteConfirmRow(null);
         }}
+        onConfirm={performDelete}
         title="Delete this question?"
         description="Historic eval results for this question will also be removed. This cannot be undone."
         confirmText="Delete"
         cancelText="Cancel"
-        confirmType="danger"
-        confirmLoading={deletingId !== null}
-        onConfirm={performDelete}
-        width="sm:max-w-md"
-      >
-        {deleteConfirmRow && (
-          <p className="rounded-md bg-muted/60 px-3 py-2 text-sm italic text-muted-foreground">
-            &ldquo;{deleteConfirmRow.question.slice(0, 200)}
-            {deleteConfirmRow.question.length > 200 ? '…' : ''}&rdquo;
-          </p>
-        )}
-      </CustomModal>
+        loading={deletingId !== null}
+        impact={
+          deleteConfirmRow ? (
+            <p className="rounded-md bg-muted/60 px-3 py-2 text-sm italic text-muted-foreground">
+              &ldquo;{deleteConfirmRow.question.slice(0, 200)}
+              {deleteConfirmRow.question.length > 200 ? '…' : ''}&rdquo;
+            </p>
+          ) : undefined
+        }
+      />
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { postMultipart } from '@/utils/apiHelpers';
 import axiosInstance from '@/utils/axios';
 
 import type {
@@ -64,23 +65,13 @@ export const addManualEvalQuestions = async (
 };
 
 // Multipart upload — server parses the CSV and reuses the manual-append path,
-// so validation and audit tags match a hand-typed entry exactly.
-// NOTE: the axios instance defaults `Content-Type` to `application/json`; we
-// override to `multipart/form-data` here (with no explicit boundary) so
-// axios/browser fills in the correct `boundary=...` — otherwise FastAPI can't
-// parse the body and returns `{loc: ["body","file"], msg: "Field required"}`.
+// so validation and audit tags match a hand-typed entry exactly. The
+// multipart/form-data + boundary handling lives in `postMultipart`.
 export const uploadEvalQuestionsCsv = async (
   uploadId: string,
   file: File,
 ): Promise<EvalSetSummary> => {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await axiosInstance.post<EvalSetSummary>(
-    `/knowledge-base/${uploadId}/evals/upload-csv`,
-    form,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
-  );
-  return res.data;
+  return postMultipart<EvalSetSummary>(`/knowledge-base/${uploadId}/evals/upload-csv`, file);
 };
 
 export const updateEvalQuestion = async (

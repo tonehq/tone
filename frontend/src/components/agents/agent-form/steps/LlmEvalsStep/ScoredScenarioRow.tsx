@@ -2,6 +2,7 @@ import { ChevronDown, ChevronRight, Folder as FolderIcon, Wrench } from 'lucide-
 import { useState } from 'react';
 
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
+import { CustomButton } from '@/components/shared';
 import type { AgentLlmEvalScoredScenario } from '@/types/agentLlmEval';
 
 import VerdictChip from './VerdictChip';
@@ -13,10 +14,11 @@ export default function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScor
   // at the top of the drawer (see ``AgentPromptPanel``).
   return (
     <div className="rounded-md border border-border/60 bg-card">
-      <button
-        type="button"
+      <CustomButton
+        type="text"
+        fullWidth
         onClick={() => setExpanded((v) => !v)}
-        className="flex w-full items-start gap-2 px-3 py-2 text-left"
+        className="flex h-auto items-start justify-start gap-2 rounded-none px-3 py-2 text-left hover:bg-transparent"
         aria-expanded={expanded}
       >
         {expanded ? (
@@ -47,7 +49,7 @@ export default function ScoredScenarioRow({ scored }: { scored: AgentLlmEvalScor
             {scored.prompt}
           </div>
         </div>
-      </button>
+      </CustomButton>
       {expanded && (
         <div className="grid grid-cols-1 gap-3 border-t border-border/60 px-3 py-3 text-[12.5px] md:grid-cols-2">
           <div>

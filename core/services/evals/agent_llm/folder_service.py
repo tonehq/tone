@@ -145,6 +145,18 @@ class AgentLlmEvalFolderService(BaseService):
             .count()
         )
 
+    def scenario_count(self, agent_id: UUID, folder_id: UUID) -> int:
+        """Number of scenarios in one folder (org-scoped via ``BaseService``).
+        Lets the rename route echo the ``count`` field the FE type expects
+        without a raw ``db.query`` in the router — matches the count
+        ``list_folders`` / create already surface."""
+        return int(
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.folder_id == folder_id)
+            .count()
+        )
+
     # ── Write ───────────────────────────────────────────────────────────
 
     def get_or_create_folder(
