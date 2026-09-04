@@ -1,3 +1,4 @@
+import { pruneParams } from '@/utils/apiHelpers';
 import axiosInstance from '@/utils/axios';
 
 export interface KnowledgeBaseUpload {
@@ -32,10 +33,7 @@ export interface PaginatedKnowledgeBase {
 export const listKnowledgeBase = async (
   params: ListKnowledgeBaseParams = {},
 ): Promise<PaginatedKnowledgeBase> => {
-  const body: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(params)) {
-    if (v !== undefined && v !== null && v !== '') body[k] = v;
-  }
+  const body = pruneParams(params);
   const res = await axiosInstance.post<PaginatedKnowledgeBase>('/knowledge-base/list', body);
   return res.data;
 };

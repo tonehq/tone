@@ -140,20 +140,22 @@ class LlmGenerator(ScenarioGenerator):
         return load_agent_llm_eval_settings_for_org(db, organization_id).judge_model
 
     def _resolve_judge_key(self, agent_config, judge_model: str) -> str:
-        """Reuses the exact key-resolution helper the eval runner uses so a
-        misconfigured provider surfaces the same error in the generator flow
-        as in the scoring flow."""
-        # Local import breaks a possible import cycle (service imports
-        # scenario_service → scenario_service imports us via
-        # generate_scenarios lazy path).
-        from core.services.evals.agent_llm.service import AgentLlmEvalService
+        """Reuses the shared key resolver so a misconfigured provider surfaces
+        the same error in the generator flow as in the scoring flow. Uses a
+        fresh session (this runs outside a request-scoped session); the agent's
+        own key is the same-provider fallback."""
+        from core.database.session import SessionLocal
+        from core.services.evals.judge_key import resolve_judge_key
 
-        return AgentLlmEvalService()._resolve_judge_key(
-            organization_id=agent_config.organization_id,
-            judge_model=judge_model,
-            fallback_provider=agent_config.llm_provider,
-            fallback_key=agent_config.llm_api_key,
-        )
+        with SessionLocal() as tmp:
+            return resolve_judge_key(
+                tmp,
+                organization_id=agent_config.organization_id,
+                judge_model=judge_model,
+                fallback_provider=agent_config.llm_provider,
+                fallback_key=agent_config.llm_api_key,
+                error_cls=AgentLlmEvalConfigError,
+            )
 
     # ── LLM call + parse ───────────────────────────────────────────────
 

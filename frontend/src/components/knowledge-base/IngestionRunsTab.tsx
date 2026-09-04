@@ -3,8 +3,8 @@
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, Trash2, XCircle } from 'lucide-react';
 
+import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
-import CustomModal from '@/components/shared/CustomModal';
 import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
 import EvalsCell from '@/components/knowledge-base/EvalsCell';
 import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDrawer';
@@ -549,15 +549,14 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         uploadId={uploadId}
       />
 
-      <CustomModal
+      <ConfirmDeleteModal
         open={deleteTarget !== null}
         onClose={() => setDeleteTarget(null)}
         title="Delete ingestion run?"
         description="This permanently deletes this run's chunks and its evaluation results. The document's eval questions are kept. This can't be undone."
         confirmText="Delete run"
         cancelText="Cancel"
-        confirmType="danger"
-        confirmLoading={deleteRun.isPending}
+        loading={deleteRun.isPending}
         onConfirm={handleConfirmDelete}
       />
     </div>

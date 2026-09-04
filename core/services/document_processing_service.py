@@ -65,22 +65,32 @@ class DocumentProcessingService:
                 upload_id, ingestion_run_id, len(file_bytes), delete_existing,
             )
             with get_db_context() as db:
-                upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                upload = (
+                    db.query(Upload)
+                    .filter(Upload.id == upload_id, Upload.organization_id == org_id)
+                    .first()
+                )
                 if not upload:
                     logger.warning(
                         "[ingestion] upload {} not found, skipping processing (run={})",
                         upload_id, ingestion_run_id,
                     )
                     return
+
+                # The pending run row was created by the router before the
+                # Procrastinate defer — atomically claim it (pending → running)
+                # here. Pipeline params (parser/tokeniser/embedder/store) live
+                # on that row, so no resolve_run_config is needed on the worker
+                # side. Claim BEFORE mutating the upload state so a duplicate /
+                # redelivered job (run already running/ready/failed) is a clean
+                # no-op that leaves the upload's current status untouched
+                # instead of re-embedding and appending duplicate chunks.
+                run = IngestionRunService.mark_running(db, ingestion_run_id)
+                if run is None:
+                    return
                 file_type = upload.file_type
                 upload.status = "processing"
                 db.commit()
-
-                # The pending run row was created by the router before the
-                # Procrastinate defer — just flip it to running here. Pipeline
-                # params (parser/tokeniser/embedder/store) live on that row, so
-                # no resolve_run_config is needed on the worker side.
-                run = IngestionRunService.mark_running(db, ingestion_run_id)
 
                 if delete_existing:
                     # Wipe the previous ready run's data so re-ingest starts clean.
@@ -88,6 +98,7 @@ class DocumentProcessingService:
                         db.query(IngestionPipelineRun)
                         .filter(
                             IngestionPipelineRun.upload_id == upload_id,
+                            IngestionPipelineRun.organization_id == org_id,
                             IngestionPipelineRun.id != run.id,
                             IngestionPipelineRun.is_active.is_(True),
                         )
@@ -207,7 +218,11 @@ class DocumentProcessingService:
                     chunk_count=num_chunks,
                     ingestion_stats=ingestion_stats,
                 )
-                upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                upload = (
+                    db.query(Upload)
+                    .filter(Upload.id == upload_id, Upload.organization_id == org_id)
+                    .first()
+                )
                 if upload:
                     upload.status = "ready"
                     if ingestion_stats is not None:
@@ -216,7 +231,8 @@ class DocumentProcessingService:
                     upload.file_name if upload else None, file_type
                 )
                 db.query(KnowledgeBase).filter(
-                    KnowledgeBase.upload_id == upload_id
+                    KnowledgeBase.upload_id == upload_id,
+                    KnowledgeBase.organization_id == org_id,
                 ).update(
                     {
                         KnowledgeBase.status: "ready",
@@ -245,9 +261,10 @@ class DocumentProcessingService:
             user_error = humanize_ingestion_error(e)
             try:
                 with get_db_context() as db:
-                    # Use the router-created pending run id as the fallback in
-                    # case mark_running itself raised — the row still exists
-                    # and needs to be flipped to failed.
+                    # Fall back to the router-created pending run id when the
+                    # failure fired before the run was claimed (``run`` still
+                    # None) — the row still exists and needs to be flipped to
+                    # failed.
                     fail_id = run.id if run is not None else ingestion_run_id
                     try:
                         IngestionRunService.fail_run(db, fail_id, error=user_error)
@@ -256,12 +273,17 @@ class DocumentProcessingService:
                             "[ingestion] pending run {} missing during failure handling",
                             fail_id,
                         )
-                    upload = db.query(Upload).filter(Upload.id == upload_id).first()
+                    upload = (
+                        db.query(Upload)
+                        .filter(Upload.id == upload_id, Upload.organization_id == org_id)
+                        .first()
+                    )
                     if upload:
                         upload.status = "failed"
                         upload.meta_data = {**(upload.meta_data or {}), "error": user_error}
                     db.query(KnowledgeBase).filter(
-                        KnowledgeBase.upload_id == upload_id
+                        KnowledgeBase.upload_id == upload_id,
+                        KnowledgeBase.organization_id == org_id,
                     ).update(
                         {KnowledgeBase.status: "failed"},
                         synchronize_session=False,
@@ -278,7 +300,11 @@ class DocumentProcessingService:
         delete_existing: bool = False,
     ):
         with get_db_context() as db:
-            upload = db.query(Upload).filter(Upload.id == upload_id).first()
+            upload = (
+                db.query(Upload)
+                .filter(Upload.id == upload_id, Upload.organization_id == org_id)
+                .first()
+            )
             if not upload or not upload.file_path:
                 logger.warning(
                     "[ingestion] upload {} not found or has no file_path (run={})",

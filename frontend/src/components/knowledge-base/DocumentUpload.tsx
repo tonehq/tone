@@ -1,10 +1,12 @@
 'use client';
 
-import { CloudUpload, File, FileCode, FileSpreadsheet, FileText, Upload, X } from 'lucide-react';
-import React, { useCallback, useMemo, useRef, useState } from 'react';
+import { CloudUpload, Upload, X } from 'lucide-react';
+import React, { useCallback, useMemo, useState } from 'react';
 
+import { formatFileSize, getFileIcon } from '@/components/knowledge-base/knowledgeBaseHelpers';
 import CustomButton from '@/components/shared/CustomButton';
 import SelectInput from '@/components/shared/SelectInput';
+import { useFileDropzone } from '@/hooks/useFileDropzone';
 import { useIngestionConfigs } from '@/lib/api/ingestion-configs';
 import { useUploadKnowledgeBase } from '@/lib/api/knowledge-base';
 import type { AgentDropdownItem } from '@/types/agent';
@@ -18,46 +20,10 @@ import { showToast } from '@/utils/toast';
 // "Custom (one-off)" because upload has no per-field editor.
 const DEFAULT_CONFIG_SENTINEL = '__default__';
 
-const ACCEPTED_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'text/csv',
-  'text/html',
-  'application/json',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-];
-const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'html', 'json', 'docx'];
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-
 interface DocumentUploadProps {
   agents: AgentDropdownItem[];
   agentsLoading: boolean;
   onUploadSuccess: () => void;
-}
-
-function getFileIcon(fileName: string) {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'pdf':
-      return <FileText className="size-5 text-red-500" />;
-    case 'docx':
-    case 'doc':
-      return <FileText className="size-5 text-blue-500" />;
-    case 'csv':
-      return <FileSpreadsheet className="size-5 text-emerald-500" />;
-    case 'json':
-      return <FileCode className="size-5 text-amber-500" />;
-    case 'txt':
-      return <FileText className="size-5 text-gray-500" />;
-    default:
-      return <File className="size-5 text-muted-foreground" />;
-  }
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 const DocumentUpload: React.FC<DocumentUploadProps> = ({
@@ -68,9 +34,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
   const [files, setFiles] = useState<File[]>([]);
   const [selectedAgentId, setSelectedAgentId] = useState<string>('');
   const [ingestionConfigId, setIngestionConfigId] = useState<string>(DEFAULT_CONFIG_SENTINEL);
-  const [isDragging, setIsDragging] = useState(false);
   const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const uploadMutation = useUploadKnowledgeBase();
 
@@ -96,65 +60,31 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
     [configsPage],
   );
 
-  const validateFile = useCallback((f: File): boolean => {
-    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      showToast.error(`Unsupported: ${f.name}`, `Supported: ${ACCEPTED_EXTENSIONS.join(', ')}`);
-      return false;
-    }
-    if (f.size > MAX_FILE_SIZE) {
-      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 100 MB');
-      return false;
-    }
-    return true;
+  // Validation lives in the hook; here we only dedupe (by name + size) against
+  // already-queued files before appending.
+  const addFiles = useCallback((incoming: File[]) => {
+    setFiles((prev) => {
+      const additions = incoming.filter(
+        (f) => !prev.some((ef) => ef.name === f.name && ef.size === f.size),
+      );
+      return additions.length > 0 ? [...prev, ...additions] : prev;
+    });
   }, []);
 
-  const addFiles = useCallback(
-    (newFiles: FileList | File[]) => {
-      const validated: File[] = [];
-      for (const f of Array.from(newFiles)) {
-        const isDuplicate = files.some((ef) => ef.name === f.name && ef.size === f.size);
-        if (isDuplicate) continue;
-        if (validateFile(f)) validated.push(f);
-      }
-      if (validated.length > 0) setFiles((prev) => [...prev, ...validated]);
-    },
-    [validateFile, files],
-  );
+  const {
+    isDragging,
+    fileInputRef,
+    acceptAttr,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleInputChange,
+    openFilePicker,
+  } = useFileDropzone({ onFiles: addFiles });
 
   const removeFile = useCallback((index: number) => {
     setFiles((prev) => prev.filter((_, i) => i !== index));
   }, []);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-      if (e.dataTransfer.files.length > 0) addFiles(e.dataTransfer.files);
-    },
-    [addFiles],
-  );
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) addFiles(e.target.files);
-      e.target.value = '';
-    },
-    [addFiles],
-  );
 
   const uploading = uploadMutation.isPending || progress != null;
 
@@ -253,7 +183,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
-          onClick={() => fileInputRef.current?.click()}
+          onClick={openFilePicker}
           className={cn(
             'relative flex min-h-[148px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all',
             isDragging
@@ -315,7 +245,7 @@ const DocumentUpload: React.FC<DocumentUploadProps> = ({
           ref={fileInputRef}
           type="file"
           multiple
-          accept={ACCEPTED_TYPES.join(',')}
+          accept={acceptAttr}
           onChange={handleInputChange}
           className="hidden"
         />

@@ -1,7 +1,7 @@
 import { ChevronRight, Folder as FolderIcon, History } from 'lucide-react';
 
 import { CustomButton } from '@/components/shared';
-import type { AgentLlmEvalRunSummary } from '@/types/agentLlmEval';
+import type { AgentLlmEvalRunSummary, AgentLlmEvalRunSummaryTotals } from '@/types/agentLlmEval';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 
@@ -74,12 +74,15 @@ export default function RunsTable({
         </thead>
         <tbody>
           {runs.map((r) => {
-            const summary = r.summary as Record<string, number> | Record<string, never>;
-            const total = (summary.total as number) ?? 0;
-            const pass = (summary.pass as number) ?? 0;
-            const fail = (summary.fail as number) ?? 0;
-            const partial = (summary.partial as number) ?? 0;
-            const passRate = (summary.pass_rate as number) ?? 0;
+            // ``r.summary`` is the full totals object once scored, or an empty
+            // record for a not-yet-scored run — read it as a partial so the
+            // fallbacks stay honest without an untyped ``Record`` cast.
+            const summary: Partial<AgentLlmEvalRunSummaryTotals> = r.summary;
+            const total = summary.total ?? 0;
+            const pass = summary.pass ?? 0;
+            const fail = summary.fail ?? 0;
+            const partial = summary.partial ?? 0;
+            const passRate = summary.pass_rate ?? 0;
             const isTerminal = RUN_TERMINAL_STATUSES.has(r.status);
             // Non-terminal rows: swap the pass/fail readout for a
             // "Scoring N of M" progress line. Also disables the drawer

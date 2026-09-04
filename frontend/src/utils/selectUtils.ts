@@ -26,6 +26,15 @@
  *   valueFormatter: (m) => m.meta_data?.model ?? m.name,
  * })
  */
+/**
+ * Map a flat string array to `{ value, label }` select options where the value
+ * and the label are the same string. Use for enum-like option lists (e.g.
+ * pipeline parsers/tokenisers) — for arrays of objects use `toSelectOptions`.
+ */
+export function toStringSelectOptions(values: string[]): { value: string; label: string }[] {
+  return values.map((v) => ({ value: v, label: v }));
+}
+
 export function toSelectOptions<T extends object>(
   items: T[],
   config: {

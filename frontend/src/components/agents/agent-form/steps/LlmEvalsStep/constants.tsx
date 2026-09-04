@@ -148,6 +148,24 @@ export const SOURCE_FILTER_ALL_VALUE = '__all__';
 
 export const LLM_EVALS_PAGE_SIZE_OPTIONS = [10, 25, 50, 100] as const;
 
+// ``SelectInput``-shaped variant of the page-size options (string values, as
+// the shared select works in strings). Kept alongside the source-of-truth
+// array above so the two never drift.
+export const LLM_EVALS_PAGE_SIZE_SELECT_OPTIONS = LLM_EVALS_PAGE_SIZE_OPTIONS.map((size) => ({
+  value: String(size),
+  label: String(size),
+}));
+
+// ── Run eval modal ──────────────────────────────────────────────────────
+
+// Scope selector options for the Run-eval modal. A function (not a static
+// array) because the "Every scenario" label embeds the live scenario count.
+export const getRunEvalScopeOptions = (scenarioCount: number) => [
+  { value: 'all', label: `Every scenario (${scenarioCount})` },
+  { value: 'folders', label: 'Filter by folder(s)' },
+  { value: 'tags', label: 'Filter by tag' },
+];
+
 // ── Generate scenarios modal ────────────────────────────────────────────
 
 // Bound + default match the backend's ``_MAX_COUNT`` in

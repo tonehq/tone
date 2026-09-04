@@ -1,6 +1,7 @@
 import { Check, Loader2, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
+import { CustomButton, TextInput } from '@/components/shared';
 import { cn } from '@/utils/cn';
 
 /** Inline single-field editor for a folder name. Replaces the old
@@ -96,46 +97,50 @@ export default function InlineFolderNameEditor({
       onKeyDown={handleContainerKeyDown}
       role="presentation"
     >
-      <input
-        ref={inputRef}
+      <div className="min-w-0 flex-1">
+        <TextInput
+          ref={inputRef}
+          name="folder-name"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleInputKeyDown}
+          disabled={pending}
+          maxLength={120}
+          className={cn(
+            'font-semibold text-foreground',
+            size === 'sm' ? 'h-7 text-[13px]' : 'h-8 text-[14px]',
+          )}
+          aria-label="Folder name"
+        />
+      </div>
+      <CustomButton
         type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleInputKeyDown}
-        disabled={pending}
-        maxLength={120}
-        className={cn(
-          'min-w-0 flex-1 rounded-md border border-input bg-background px-2 font-semibold text-foreground outline-none transition-colors focus:border-ring focus:ring-2 focus:ring-ring/30 disabled:cursor-not-allowed disabled:opacity-60',
-          size === 'sm' ? 'h-7 text-[13px]' : 'h-8 text-[14px]',
-        )}
-        aria-label="Folder name"
-      />
-      <button
-        type="button"
+        size="icon-sm"
         onClick={handleSaveClick}
         disabled={pending}
         aria-label="Save folder name"
         title="Save"
         className={cn(
-          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-emerald-700 transition-colors hover:bg-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-50 dark:text-emerald-400',
+          'shrink-0 rounded-md text-emerald-700 hover:bg-emerald-500/10 dark:text-emerald-400',
           size === 'sm' ? 'size-7' : 'size-8',
         )}
       >
         {pending ? <Loader2 className="size-3.5 animate-spin" /> : <Check className="size-3.5" />}
-      </button>
-      <button
-        type="button"
+      </CustomButton>
+      <CustomButton
+        type="text"
+        size="icon-sm"
         onClick={handleCancelClick}
         disabled={pending}
         aria-label="Cancel rename"
         title="Cancel"
         className={cn(
-          'inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50',
+          'shrink-0 rounded-md text-muted-foreground hover:bg-muted hover:text-foreground',
           size === 'sm' ? 'size-7' : 'size-8',
         )}
       >
         <X className="size-3.5" />
-      </button>
+      </CustomButton>
     </div>
   );
 }

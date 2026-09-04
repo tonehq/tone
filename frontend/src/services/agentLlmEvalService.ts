@@ -1,3 +1,4 @@
+import { postMultipart } from '@/utils/apiHelpers';
 import axiosInstance from '@/utils/axios';
 
 import type {
@@ -69,14 +70,10 @@ export const uploadAgentLlmEvalScenariosCsv = async (
   agentId: string,
   file: File,
 ): Promise<{ items: AgentLlmEvalScenario[]; created: number }> => {
-  const form = new FormData();
-  form.append('file', file);
-  const res = await axiosInstance.post<{ items: AgentLlmEvalScenario[]; created: number }>(
+  return postMultipart<{ items: AgentLlmEvalScenario[]; created: number }>(
     `${base(agentId)}/scenarios/upload-csv`,
-    form,
-    { headers: { 'Content-Type': 'multipart/form-data' } },
+    file,
   );
-  return res.data;
 };
 
 export const updateAgentLlmEvalScenario = async (

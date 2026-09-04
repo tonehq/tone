@@ -1,134 +1,56 @@
 'use client';
 
-import {
-  CloudUpload,
-  File as FileIcon,
-  FileCode,
-  FileSpreadsheet,
-  FileText,
-  Save,
-  X,
-} from 'lucide-react';
-import React, { useCallback, useRef, useState } from 'react';
+import { CloudUpload, Save, X } from 'lucide-react';
+import React, { useCallback, useState } from 'react';
 
+import { formatFileSize, getFileIcon } from '@/components/knowledge-base/knowledgeBaseHelpers';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomModal from '@/components/shared/CustomModal';
 import TextInput from '@/components/shared/TextInput';
+import { useFileDropzone } from '@/hooks/useFileDropzone';
 import { useRenameKnowledgeBase, useReplaceKnowledgeBaseFile } from '@/lib/api/knowledge-base';
 import type { KnowledgeBaseDocument } from '@/types/knowledgeBase';
 import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-const ACCEPTED_TYPES = [
-  'application/pdf',
-  'text/plain',
-  'text/csv',
-  'text/html',
-  'application/json',
-  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-];
-const ACCEPTED_EXTENSIONS = ['pdf', 'txt', 'csv', 'html', 'json', 'docx'];
-const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100 MB
-
 interface EditDocumentProps {
   document: KnowledgeBaseDocument;
   onSaved: (updated?: KnowledgeBaseDocument) => void;
 }
 
-function getFileIcon(fileName: string) {
-  const ext = fileName.split('.').pop()?.toLowerCase();
-  switch (ext) {
-    case 'pdf':
-      return <FileText className="size-5 text-red-500" />;
-    case 'docx':
-    case 'doc':
-      return <FileText className="size-5 text-blue-500" />;
-    case 'csv':
-      return <FileSpreadsheet className="size-5 text-emerald-500" />;
-    case 'json':
-      return <FileCode className="size-5 text-amber-500" />;
-    case 'txt':
-      return <FileText className="size-5 text-gray-500" />;
-    default:
-      return <FileIcon className="size-5 text-muted-foreground" />;
-  }
-}
-
-function formatFileSize(bytes: number): string {
-  if (!bytes) return '—';
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-}
-
 const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
   const [fileName, setFileName] = useState(document.file_name);
   const [replacementFile, setReplacementFile] = useState<File | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
   const [showReplaceConfirm, setShowReplaceConfirm] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const renameMutation = useRenameKnowledgeBase();
   const replaceMutation = useReplaceKnowledgeBaseFile();
 
-  const validateFile = useCallback((f: File): boolean => {
-    const ext = f.name.split('.').pop()?.toLowerCase() ?? '';
-    if (!ACCEPTED_EXTENSIONS.includes(ext)) {
-      showToast.error(`Unsupported: ${f.name}`, `Supported: ${ACCEPTED_EXTENSIONS.join(', ')}`);
-      return false;
-    }
-    if (f.size > MAX_FILE_SIZE) {
-      showToast.error(`Too large: ${f.name}`, 'Maximum file size is 100 MB');
-      return false;
-    }
-    return true;
-  }, []);
-
-  const setFromList = useCallback(
-    (list: FileList | File[]) => {
-      const arr = Array.from(list);
-      if (arr.length === 0) return;
-      const candidate = arr[0];
-      if (!validateFile(candidate)) return;
+  // Validation happens in the hook; this only takes the first validated file
+  // and (when the name field is still untouched) follows the new file's name.
+  const acceptReplacement = useCallback(
+    (list: File[]) => {
+      const candidate = list[0];
+      if (!candidate) return;
       setReplacementFile(candidate);
-      // If the user never edited the name field, follow the new file's name.
       if (fileName.trim() === document.file_name.trim()) {
         setFileName(candidate.name);
       }
     },
-    [validateFile, fileName, document.file_name],
+    [fileName, document.file_name],
   );
 
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    setIsDragging(false);
-  }, []);
-
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      e.stopPropagation();
-      setIsDragging(false);
-      if (e.dataTransfer.files.length > 0) setFromList(e.dataTransfer.files);
-    },
-    [setFromList],
-  );
-
-  const handleInputChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files && e.target.files.length > 0) setFromList(e.target.files);
-      e.target.value = '';
-    },
-    [setFromList],
-  );
+  const {
+    isDragging,
+    fileInputRef,
+    acceptAttr,
+    handleDragOver,
+    handleDragLeave,
+    handleDrop,
+    handleInputChange,
+    openFilePicker,
+  } = useFileDropzone({ onFiles: acceptReplacement });
 
   const trimmedName = fileName.trim();
   const nameChanged = trimmedName.length > 0 && trimmedName !== document.file_name.trim();
@@ -228,7 +150,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
-            onClick={() => fileInputRef.current?.click()}
+            onClick={openFilePicker}
             className={cn(
               'relative flex min-h-[110px] cursor-pointer flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed transition-all',
               isDragging
@@ -284,7 +206,7 @@ const EditDocument: React.FC<EditDocumentProps> = ({ document, onSaved }) => {
         <input
           ref={fileInputRef}
           type="file"
-          accept={ACCEPTED_TYPES.join(',')}
+          accept={acceptAttr}
           onChange={handleInputChange}
           className="hidden"
         />

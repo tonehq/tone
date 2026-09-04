@@ -1,6 +1,7 @@
 import { Pencil, Play, Trash2, Wrench } from 'lucide-react';
 import { useMemo } from 'react';
 
+import { CustomButton } from '@/components/shared';
 import { useIndeterminateCheckbox } from '@/hooks/useIndeterminateCheckbox';
 import type { AgentLlmEvalScenario } from '@/types/agentLlmEval';
 import { cn } from '@/utils/cn';
@@ -148,32 +149,35 @@ export default function ScenariosTable({
               </td>
               <td className="px-3 py-2 align-top">
                 <div className="flex items-center justify-end gap-1">
-                  <button
-                    type="button"
+                  <CustomButton
+                    type="text"
+                    size="icon-xs"
                     onClick={() => onRun(s)}
                     disabled={isRunning}
-                    className="cursor-pointer rounded p-1 text-muted-foreground transition-colors hover:bg-primary/10 hover:text-primary disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
+                    className="rounded p-1 text-muted-foreground hover:bg-primary/10 hover:text-primary disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-muted-foreground"
                     aria-label={`Run ${s.scenario_key}`}
                     title="Run this scenario"
                   >
                     <Play className="size-4" />
-                  </button>
-                  <button
-                    type="button"
+                  </CustomButton>
+                  <CustomButton
+                    type="text"
+                    size="icon-xs"
                     onClick={() => onEdit(s)}
-                    className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
                     aria-label="Edit scenario"
                   >
                     <Pencil className="size-4" />
-                  </button>
-                  <button
-                    type="button"
+                  </CustomButton>
+                  <CustomButton
+                    type="text"
+                    size="icon-xs"
                     onClick={() => onDelete(s)}
-                    className="cursor-pointer rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                    className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
                     aria-label="Delete scenario"
                   >
                     <Trash2 className="size-4" />
-                  </button>
+                  </CustomButton>
                 </div>
               </td>
             </tr>

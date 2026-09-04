@@ -3,7 +3,6 @@ import { useEffect, useState } from 'react';
 
 import { CustomButton, CustomModal, TextInput } from '@/components/shared';
 import {
-  useCreateAgentLlmEvalFolder,
   useCreateAgentLlmEvalScenariosBulk,
   useGenerateAgentLlmEvalScenarios,
 } from '@/lib/api/agentLlmEvals';
@@ -11,9 +10,10 @@ import type { AgentLlmEvalFolder, GeneratedScenario, ScenarioInput } from '@/typ
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-import { GENERATE_DEFAULT_COUNT, GENERATE_MAX_COUNT, NEW_FOLDER_OPTION_VALUE } from './constants';
+import { GENERATE_DEFAULT_COUNT, GENERATE_MAX_COUNT } from './constants';
 import FolderPicker from './FolderPicker';
 import GeneratedScenariosPreview from './GeneratedScenariosPreview';
+import { useFolderPicker } from './useFolderPicker';
 
 export default function GenerateScenariosModal({
   open,
@@ -36,10 +36,15 @@ export default function GenerateScenariosModal({
   // keeps the scenario-write invariants in one place.
   const generate = useGenerateAgentLlmEvalScenarios(agentId);
   const persist = useCreateAgentLlmEvalScenariosBulk(agentId);
-  const createFolder = useCreateAgentLlmEvalFolder(agentId);
+  const {
+    folderId,
+    setFolderId,
+    newFolderName,
+    setNewFolderName,
+    resolveFolderIdOrCreate,
+    isCreatingFolder,
+  } = useFolderPicker(agentId, { open, folderOptions });
   const [count, setCount] = useState(String(GENERATE_DEFAULT_COUNT));
-  const [folderId, setFolderId] = useState('');
-  const [newFolderName, setNewFolderName] = useState('');
   // Preview state — ``null`` = the form is showing; a non-null array
   // = the preview table is showing. Kept as separate state (not derived
   // from ``generate.data``) so switching from preview back to form
@@ -60,29 +65,7 @@ export default function GenerateScenariosModal({
     }
     setFolderId(defaultFolderId ?? '');
     setNewFolderName('');
-  }, [open, defaultFolderId]);
-
-  // Backfill folderId once folders load — see the matching effect on
-  // ``ScenarioFormModal`` for the rationale.
-  useEffect(() => {
-    if (!open || folderId || folderId === NEW_FOLDER_OPTION_VALUE) return;
-    if (folderOptions.length === 0) return;
-    setFolderId(folderOptions[0].id);
-  }, [open, folderId, folderOptions]);
-
-  const resolveFolderIdOrCreate = async (): Promise<string | null> => {
-    if (folderId === NEW_FOLDER_OPTION_VALUE) {
-      const trimmed = newFolderName.trim();
-      if (!trimmed) {
-        showToast.error('Folder name is required');
-        return null;
-      }
-      const created = await createFolder.mutateAsync({ name: trimmed });
-      setFolderId(created.id);
-      return created.id;
-    }
-    return folderId || null;
-  };
+  }, [open, defaultFolderId, setFolderId, setNewFolderName]);
 
   const runGenerate = async () => {
     const parsedCount = Math.max(
@@ -119,7 +102,7 @@ export default function GenerateScenariosModal({
     const chosen = preview.filter((s) => selectedKeys.has(s.scenario_key));
     if (chosen.length === 0) return;
     try {
-      const resolvedFolderId = await resolveFolderIdOrCreate();
+      const { folderId: resolvedFolderId } = await resolveFolderIdOrCreate();
       const result = await persist.mutateAsync({
         source: 'generated',
         scenarios: chosen.map<ScenarioInput>((s) => ({
@@ -159,7 +142,7 @@ export default function GenerateScenariosModal({
   };
 
   const inPreview = preview !== null;
-  const anyPending = generate.isPending || persist.isPending || createFolder.isPending;
+  const anyPending = generate.isPending || persist.isPending || isCreatingFolder;
   // Cancel = full modal close; Regenerate = go back to the form to
   // re-run generation (keeps count + folder inputs so the user can tweak).
   const modalClose = anyPending ? () => undefined : onClose;

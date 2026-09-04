@@ -8,6 +8,8 @@ import { cn } from '@/utils/cn';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
+import { getRunEvalScopeOptions } from './constants';
+import ToggleChip from './ToggleChip';
 import type { FolderScope } from './types';
 
 export default function RunEvalModal({
@@ -49,6 +51,8 @@ export default function RunEvalModal({
       })),
     [folders],
   );
+
+  const scopeOptions = useMemo(() => getRunEvalScopeOptions(scenarios.length), [scenarios.length]);
 
   useEffect(() => {
     if (!open) {
@@ -137,11 +141,7 @@ export default function RunEvalModal({
           label="Scope"
           value={scope}
           onValueChange={(v) => setScope((v as 'all' | 'tags' | 'folders') ?? 'all')}
-          options={[
-            { value: 'all', label: `Every scenario (${scenarios.length})` },
-            { value: 'folders', label: 'Filter by folder(s)' },
-            { value: 'tags', label: 'Filter by tag' },
-          ]}
+          options={scopeOptions}
         />
         {scope === 'folders' && folderOptions.length > 0 && (
           <div className="flex flex-col gap-2">
@@ -150,20 +150,13 @@ export default function RunEvalModal({
                 const active = selectedFolderIds.includes(f.value);
                 const isEmpty = f.count === 0;
                 return (
-                  <button
-                    type="button"
+                  <ToggleChip
                     key={f.value}
+                    active={active}
                     onClick={() => toggleFolder(f.value)}
                     disabled={isEmpty}
-                    className={cn(
-                      'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium ring-1 transition-colors',
-                      active
-                        ? 'bg-primary text-primary-foreground ring-primary'
-                        : 'bg-muted text-muted-foreground ring-border hover:bg-muted/80',
-                      isEmpty && 'cursor-not-allowed opacity-50',
-                    )}
-                    aria-pressed={active}
                     title={isEmpty ? 'Folder is empty' : `${f.label} (${f.count})`}
+                    className="inline-flex items-center gap-1.5"
                   >
                     <FolderIcon className="size-3" />
                     <span>{f.label}</span>
@@ -177,7 +170,7 @@ export default function RunEvalModal({
                     >
                       {f.count}
                     </span>
-                  </button>
+                  </ToggleChip>
                 );
               })}
             </div>
@@ -193,19 +186,9 @@ export default function RunEvalModal({
             {tagOptions.map((t) => {
               const active = selectedTags.includes(t.value);
               return (
-                <button
-                  type="button"
-                  key={t.value}
-                  onClick={() => toggleTag(t.value)}
-                  className={cn(
-                    'rounded-full px-2.5 py-1 text-[11px] font-medium ring-1',
-                    active
-                      ? 'bg-primary text-primary-foreground ring-primary'
-                      : 'bg-muted text-muted-foreground ring-border hover:bg-muted/80',
-                  )}
-                >
+                <ToggleChip key={t.value} active={active} onClick={() => toggleTag(t.value)}>
                   {t.label}
-                </button>
+                </ToggleChip>
               );
             })}
           </div>
