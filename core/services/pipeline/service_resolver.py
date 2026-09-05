@@ -43,7 +43,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v7"  # v7: add voice-response rules (brevity + no Markdown) alongside tool-usage rules
+PAYLOAD_FORMAT_VERSION = "v8"  # v8: populate model_meta_data from Model.meta_data (was always {})
 
 
 # Appended to every agent's system prompt so responses stay TTS-friendly. Two rule sets:
@@ -131,7 +131,7 @@ def get_active_agent_config(db: Session, agent: Any) -> Optional[AgentConfig]:
     )
 
 
-def _make_service_spec(provider, model_name, api_key, metadata) -> Optional[dict]:
+def _make_service_spec(provider, model_name, api_key, metadata, model_meta_data=None) -> Optional[dict]:
     """Assemble the {provider_name, api_key, model_name, metadata, model_meta_data} spec."""
     if not provider or not api_key:
         return None
@@ -143,7 +143,7 @@ def _make_service_spec(provider, model_name, api_key, metadata) -> Optional[dict
         "api_key": api_key,
         "model_name": model_name,
         "metadata": metadata,
-        "model_meta_data": {},
+        "model_meta_data": model_meta_data or {},
     }
 
 
@@ -246,6 +246,8 @@ def _build_service_specs(
         "system_prompt", "system_instruction", "base_url",
     }
 
+    _mismatch_warned = set()
+
     def _filter_by_model_schema(settings: dict, model_id) -> dict:
         m = model_by_id.get(model_id) if model_id else None
         if not m or not m.meta_data_schema:
@@ -253,39 +255,62 @@ def _build_service_specs(
         allowed = {f["name"] for f in m.meta_data_schema if "name" in f} | _structural
         return {k: v for k, v in settings.items() if k in allowed}
 
+    def _owned_model_row(settings: dict, model_id):
+        """Return the `Model` row for `model_id`, but only when it belongs to the
+        settings' provider.
+
+        Defense (staging incident 2026-07-03): a stale `model_id` left behind by a
+        provider switch can point at another provider's model row — using that row
+        silently redirects the service (Deepgram STT ended up on the parakeet k8s
+        URL). On mismatch, warn once and return None so both `base_url` and
+        `meta_data` fall back to the factory's per-provider defaults.
+        """
+        if not model_id:
+            return None
+        m = model_by_id.get(model_id)
+        if not m:
+            return None
+        spec_pid = _to_uuid(settings.get("provider_id"))
+        if spec_pid and m.provider_id != spec_pid:
+            if m.id not in _mismatch_warned:
+                _mismatch_warned.add(m.id)
+                logger.bind(
+                    agent_id=config.agent_id,
+                    model_id=m.id,
+                    model_name=m.name,
+                    model_provider_id=m.provider_id,
+                    settings_provider_id=spec_pid,
+                ).warning(
+                    "[resolver] provider/model_id mismatch for agent_id={}: "
+                    "model {} ({!r}) belongs to provider {} but settings.provider_id={} "
+                    "— skipping base_url and meta_data injection",
+                    config.agent_id, m.id, m.name, m.provider_id, spec_pid,
+                )
+            return None
+        return m
+
     def _build_metadata(settings: dict, model_id) -> dict:
         """Filter agent settings to model-allowed keys, then inject `Model.base_url`
         from the DB row when present. Missing/NULL `base_url` falls through — the
         factory's per-provider default (or Pipecat's class default) applies, so
         behavior is byte-identical to pre-base_url for any model without a URL.
-
-        Defense (staging incident 2026-07-03): a stale `model_id` left behind by a
-        provider switch can point at another provider's model row — injecting that
-        row's base_url silently redirects the service (Deepgram STT ended up on the
-        parakeet k8s URL). Only inject when the model row belongs to the settings'
-        provider; on mismatch, warn and skip.
         """
         metadata = _filter_by_model_schema(settings, model_id)
-        if model_id:
-            m = model_by_id.get(model_id)
-            if m and m.base_url:
-                spec_pid = _to_uuid(settings.get("provider_id"))
-                if spec_pid and m.provider_id != spec_pid:
-                    logger.bind(
-                        agent_id=config.agent_id,
-                        model_id=m.id,
-                        model_name=m.name,
-                        model_provider_id=m.provider_id,
-                        settings_provider_id=spec_pid,
-                    ).warning(
-                        "[resolver] provider/model_id mismatch for agent_id={}: "
-                        "model {} ({!r}) belongs to provider {} but settings.provider_id={} "
-                        "— skipping base_url injection",
-                        config.agent_id, m.id, m.name, m.provider_id, spec_pid,
-                    )
-                else:
-                    metadata["base_url"] = m.base_url
+        m = _owned_model_row(settings, model_id)
+        if m and m.base_url:
+            metadata["base_url"] = m.base_url
         return metadata
+
+    def _build_model_meta(settings: dict, model_id) -> dict:
+        """Provider-level defaults stored on the `Model` row (`Model.meta_data`).
+
+        These are operator-configured connection facts the agent never sets —
+        NVCF `function_id`, Azure `region`, PlayHT `user_id`, MiniMax `group_id`.
+        The factory reads them as `model_meta` and falls back to `metadata`, so an
+        agent setting still wins where both exist.
+        """
+        m = _owned_model_row(settings, model_id)
+        return dict(m.meta_data) if m and m.meta_data else {}
 
     # ── LLM ──
     is_s2s = bool(llm_settings.get("is_s2s"))
@@ -300,6 +325,7 @@ def _build_service_specs(
         _mname(llm_mid),
         _key(llm_pid, "llm") if llm_pid else None,
         llm_metadata,
+        _build_model_meta(llm_settings, llm_mid),
     )
 
     # ── STT ──
@@ -308,6 +334,7 @@ def _build_service_specs(
         stt_model_literal or _mname(stt_mid),
         _key(stt_pid, "stt") if stt_pid else None,
         _build_metadata(stt_settings, stt_mid),
+        _build_model_meta(stt_settings, stt_mid),
     )
 
     # ── TTS ──
@@ -348,6 +375,7 @@ def _build_service_specs(
         _mname(tts_mid),
         _key(tts_pid, "tts") if tts_pid else None,
         tts_metadata,
+        _build_model_meta(voice_settings, tts_mid),
     )
 
     return llm_spec, stt_spec, tts_spec, is_s2s
