@@ -14553,7 +14553,9 @@
           "name": "nvidia/Parakeet 0.6b CTC",
           "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
-            "model": "nvidia/Parakeet 0.6b CTC"
+            "model": "nvidia/Parakeet 0.6b CTC",
+            "function_id": "d8dd4e9b-fbf5-4fb0-9dba-8cf436c8d965",
+            "model_name": "parakeet-ctc-0_6b-asr"
           },
           "meta_data_schema": [
             {
@@ -14564,6 +14566,24 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
             }
           ]
         },
@@ -14571,7 +14591,9 @@
           "name": "nvidia/Parakeet 1.1b CTC",
           "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
-            "model": "nvidia/Parakeet 1.1b CTC"
+            "model": "nvidia/Parakeet 1.1b CTC",
+            "function_id": "1598d209-5e27-4d3c-8079-4751568b1081",
+            "model_name": "parakeet-ctc-1_1b-asr"
           },
           "meta_data_schema": [
             {
@@ -14582,24 +14604,24 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Parakeet 0.6b TDT v2",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Parakeet 0.6b TDT v2"
-          },
-          "meta_data_schema": [
+            },
             {
-              "name": "language",
+              "name": "function_id",
               "data_type": "string",
-              "type": "select",
+              "type": "input text",
               "format": "string",
               "validator": null,
               "required": 0,
-              "description": "Language for transcription"
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
             }
           ]
         },
@@ -14607,7 +14629,9 @@
           "name": "nvidia/Parakeet 1.1b RNNT Multilingual",
           "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
-            "model": "nvidia/Parakeet 1.1b RNNT Multilingual"
+            "model": "nvidia/Parakeet 1.1b RNNT Multilingual",
+            "function_id": "71203149-d3b7-4460-8231-1be2543a1fca",
+            "model_name": "parakeet-1_1b-rnnt-multilingual-asr"
           },
           "meta_data_schema": [
             {
@@ -14618,6 +14642,252 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC 1.1b Inworld",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC 1.1b Inworld",
+            "function_id": "ac04dbc6-29f9-4be5-bf32-010f01c4669b",
+            "model_name": "parakeet-ctc-1_1b-asr-inworld"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC Riva",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC Riva",
+            "function_id": "22164014-a6cc-4a6f-b048-f3a303e745bb",
+            "model_name": "parakeet-ctc-riva"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC 0.6b Spanish",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC 0.6b Spanish",
+            "function_id": "a9eeee8f-b509-4712-b19d-194361fa5f31",
+            "model_name": "parakeet-ctc-0_6b-es"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC 0.6b Vietnamese",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC 0.6b Vietnamese",
+            "function_id": "f3dff2bb-99f9-403d-a5f1-f574a757deb0",
+            "model_name": "parakeet-ctc-0_6b-vi"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC 0.6b Chinese Simplified",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC 0.6b Chinese Simplified",
+            "function_id": "9add5ef7-322e-47e0-ad7a-5653fb8d259b",
+            "model_name": "parakeet-ctc-0_6b-zh-cn"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
+            }
+          ]
+        },
+        {
+          "name": "nvidia/Parakeet CTC 0.6b Chinese Traditional",
+          "base_url": "grpc.nvcf.nvidia.com:443",
+          "meta_data": {
+            "model": "nvidia/Parakeet CTC 0.6b Chinese Traditional",
+            "function_id": "8473f56d-51ef-473c-bb26-efd4f5def2bf",
+            "model_name": "parakeet-ctc-0_6b-zh-tw"
+          },
+          "meta_data_schema": [
+            {
+              "name": "language",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
             }
           ]
         },
@@ -14625,7 +14895,9 @@
           "name": "nvidia/Conformer CTC",
           "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
-            "model": "nvidia/Conformer CTC"
+            "model": "nvidia/Conformer CTC",
+            "function_id": "50124cf2-fb60-4a8c-9d25-d85b85199526",
+            "model_name": "conformer-ctc-asr"
           },
           "meta_data_schema": [
             {
@@ -14636,14 +14908,34 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
+            },
+            {
+              "name": "function_id",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
+            {
+              "name": "model_name",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "NVCF model name, used as the reported label"
             }
           ]
         },
         {
-          "name": "nvidia/Conformer CTC XL",
+          "name": "nvidia/Nemotron 3.5 ASR Streaming",
           "base_url": "grpc.nvcf.nvidia.com:443",
           "meta_data": {
-            "model": "nvidia/Conformer CTC XL"
+            "model": "nvidia/Nemotron 3.5 ASR Streaming",
+            "function_id": "bb0837de-8c7b-481f-9ec8-ef5663e9c1fa",
+            "model_name": "nemotron-asr-streaming"
           },
           "meta_data_schema": [
             {
@@ -14654,96 +14946,24 @@
               "validator": null,
               "required": 0,
               "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Canary 1b Multilingual",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Canary 1b Multilingual"
-          },
-          "meta_data_schema": [
+            },
             {
-              "name": "language",
+              "name": "function_id",
               "data_type": "string",
-              "type": "select",
+              "type": "input text",
               "format": "string",
               "validator": null,
               "required": 0,
-              "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Parakeet 1.1B Unified Universal CTC",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Parakeet 1.1B Unified Universal CTC"
-          },
-          "meta_data_schema": [
+              "description": "NVIDIA Cloud Function ID that routes the request (from build.nvidia.com)"
+            },
             {
-              "name": "language",
+              "name": "model_name",
               "data_type": "string",
-              "type": "select",
+              "type": "input text",
               "format": "string",
               "validator": null,
               "required": 0,
-              "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Parakeet 1.1B Unified Universal RNNT",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Parakeet 1.1B Unified Universal RNNT"
-          },
-          "meta_data_schema": [
-            {
-              "name": "language",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Canary 1B",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Canary 1B"
-          },
-          "meta_data_schema": [
-            {
-              "name": "language",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language for transcription"
-            }
-          ]
-        },
-        {
-          "name": "nvidia/Canary 0.6B Turbo",
-          "base_url": "grpc.nvcf.nvidia.com:443",
-          "meta_data": {
-            "model": "nvidia/Canary 0.6B Turbo"
-          },
-          "meta_data_schema": [
-            {
-              "name": "language",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language for transcription"
+              "description": "NVCF model name, used as the reported label"
             }
           ]
         }
@@ -16541,6 +16761,45 @@
         }
       ],
       "status": "inactive"
+    },
+    {
+      "name": "mistral",
+      "provider_type": "stt",
+      "display_name": "Mistral Cloud API (Voxtral)",
+      "description": "Voxtral realtime STT on Mistral's hosted API (api.mistral.ai)",
+      "api_key_env": "MISTRAL_API_KEY",
+      "models": [
+        {
+          "name": "voxtral-mini-transcribe-realtime-2602",
+          "meta_data": {
+            "model": "voxtral-mini-transcribe-realtime-2602"
+          },
+          "meta_data_schema": [
+            {
+              "name": "target_streaming_delay_ms",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 0,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Higher values trade latency for accuracy"
+            },
+            {
+              "name": "base_url",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "Override to point at a self-hosted Mistral-compatible endpoint"
+            }
+          ]
+        }
+      ],
+      "status": "active"
     }
   ],
   "tts_providers": [
