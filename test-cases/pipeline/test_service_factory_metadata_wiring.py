@@ -24,6 +24,8 @@ import sys
 import types
 from unittest import mock
 
+from core.services.pipeline.service_factory import build_llm, build_stt, build_tts
+
 
 # --- Fakes -----------------------------------------------------------------
 
@@ -141,11 +143,67 @@ class _FakeSarvam:
         self.base_url = base_url
 
 
+class _FakeNvidia:
+    """Stand-in for NvidiaSTTService, which selects models via `model_function_map`.
+
+    Mirrors the real class's trap: it has no `model=` kwarg at all, so a branch
+    passing only `model` leaves every agent on the class-default function id.
+    """
+
+    class InputParams(_FakeParams):
+        model_fields = {"language": None}
+
+    def __init__(self, api_key=None, params=None, model_function_map=None,
+                 sample_rate=None, server=None):
+        self.api_key = api_key
+        self.params = params
+        self.model_function_map = model_function_map
+        self.sample_rate = sample_rate
+        self.server = server
+
+
+class _FakeHostedTTS:
+
+    def __init__(self, api_key=None, base_url=None, model=None, voice_id=None,
+                 trace_id=None, **kwargs):
+        self.api_key = api_key
+        self.base_url = base_url
+        self.model = model
+        self.voice_id = voice_id
+        self.kwargs = kwargs
+
+
+class _FakeOpenAISTT:
+
+    def __init__(self, api_key=None, model=None, language=None, prompt=None,
+                 temperature=None, base_url=None):
+        self.api_key = api_key
+        self.model = model
+        self.base_url = base_url
+
+
 def _module(name, **attrs):
     mod = types.ModuleType(name)
     for key, value in attrs.items():
         setattr(mod, key, value)
     return mod
+
+
+class _FakeMistralSettings:
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+class _FakeMistralSTT:
+    Settings = _FakeMistralSettings
+
+    def __init__(self, **kwargs):
+        self.kwargs = kwargs
+
+
+def _fake_nvidia_language(language):
+    """Mirror pipecat's mapper: bare codes resolve to a regional Riva code."""
+    return {"en": "en-US", "es": "es-ES", "hi": "hi-IN"}.get(str(language), str(language))
 
 
 def _patched_modules():
@@ -168,6 +226,20 @@ def _patched_modules():
         "pipecat.services.sarvam.llm": _module(
             "pipecat.services.sarvam.llm", SarvamLLMService=_FakeSarvam,
         ),
+        "pipecat.services.nvidia.stt": _module(
+            "pipecat.services.nvidia.stt",
+            NvidiaSTTService=_FakeNvidia,
+            language_to_nvidia_nemotron_speech_language=_fake_nvidia_language,
+        ),
+        "pipecat.services.openai.stt": _module(
+            "pipecat.services.openai.stt", OpenAISTTService=_FakeOpenAISTT,
+        ),
+        "pipecat.services.mistral.stt": _module(
+            "pipecat.services.mistral.stt", MistralSTTService=_FakeMistralSTT,
+        ),
+        "core.services.pipeline.hosted_tts_service": _module(
+            "core.services.pipeline.hosted_tts_service", HostedTTSService=_FakeHostedTTS,
+        ),
         "pipecat.services.assemblyai.models": _module(
             "pipecat.services.assemblyai.models",
             AssemblyAIConnectionParams=_FakeAssemblyConnectionParams,
@@ -188,7 +260,6 @@ def _spec(provider, model="", metadata=None, model_meta=None):
 # --- Tests -----------------------------------------------------------------
 
 def test_deepgram_forwards_model_and_options():
-    from core.services.pipeline.service_factory import build_stt
     with _patched_modules():
         svc = build_stt(_spec("deepgram", model="nova-2-phonecall", metadata={
             "language": "en", "smart_format": True, "diarize": False,
@@ -205,7 +276,6 @@ def test_deepgram_forwards_model_and_options():
 
 
 def test_deepgram_no_options_yields_no_live_options():
-    from core.services.pipeline.service_factory import build_stt
     with _patched_modules():
         svc = build_stt(_spec("deepgram", model="", metadata={}))
     assert isinstance(svc, _FakeDeepgram)
@@ -213,7 +283,6 @@ def test_deepgram_no_options_yields_no_live_options():
 
 
 def test_anthropic_enables_thinking_from_budget():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("anthropic", model="claude-x", metadata={
             "temperature": 0.5, "thinking_budget_tokens": 2048,
@@ -225,7 +294,6 @@ def test_anthropic_enables_thinking_from_budget():
 
 
 def test_anthropic_no_thinking_when_budget_absent_or_zero():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc_absent = build_llm(_spec("anthropic", metadata={"temperature": 0.5}))
         svc_zero = build_llm(_spec("anthropic", metadata={"thinking_budget_tokens": 0}))
@@ -234,7 +302,6 @@ def test_anthropic_no_thinking_when_budget_absent_or_zero():
 
 
 def test_cartesia_wires_speed_and_emotion_into_generation_config():
-    from core.services.pipeline.service_factory import build_tts
     with _patched_modules():
         svc = build_tts(_spec("cartesia", model="sonic-3", metadata={
             "speed": 1.1, "emotion": "happy",
@@ -246,7 +313,6 @@ def test_cartesia_wires_speed_and_emotion_into_generation_config():
 
 
 def test_cartesia_without_speed_leaves_generation_config_unset():
-    from core.services.pipeline.service_factory import build_tts
     with _patched_modules():
         svc = build_tts(_spec("cartesia", model="sonic-3", metadata={}))
     assert isinstance(svc, _FakeCartesia)
@@ -254,7 +320,6 @@ def test_cartesia_without_speed_leaves_generation_config_unset():
 
 
 def test_assemblyai_parses_comma_separated_keyterms():
-    from core.services.pipeline.service_factory import build_stt
     with _patched_modules():
         svc = build_stt(_spec("assemblyai", metadata={
             "keyterms_prompt": "acme corp, refund, billing",
@@ -266,7 +331,6 @@ def test_assemblyai_parses_comma_separated_keyterms():
 
 
 def test_assemblyai_parses_json_list_keyterms():
-    from core.services.pipeline.service_factory import build_stt
     with _patched_modules():
         svc = build_stt(_spec("assemblyai", metadata={
             "keyterms_prompt": '["alpha", "beta"]',
@@ -275,7 +339,6 @@ def test_assemblyai_parses_json_list_keyterms():
 
 
 def test_sarvam_ai_forwards_model_and_settings_not_params():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("sarvam-ai", model="sarvam-105b-32k", metadata={
             "temperature": 0.4, "max_tokens": 1024, "seed": 42,
@@ -292,7 +355,6 @@ def test_sarvam_ai_forwards_model_and_settings_not_params():
 
 
 def test_sarvam_ai_model_name_beats_stray_metadata_model():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("sarvam-ai", model="sarvam-105b",
                               metadata={"model": "sarvam-30b"}))
@@ -302,14 +364,12 @@ def test_sarvam_ai_model_name_beats_stray_metadata_model():
 
 
 def test_sarvam_ai_falls_back_to_default_model():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("sarvam-ai", model="", metadata={}))
     assert svc.settings.model == "sarvam-30b"
 
 
 def test_sarvam_ai_forwards_base_url_from_model_row():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("sarvam-ai", model="sarvam-30b",
                               metadata={"base_url": "https://api.sarvam.ai/v1"}))
@@ -320,7 +380,6 @@ def test_sarvam_ai_forwards_base_url_from_model_row():
 
 
 def test_sarvam_ai_drops_unknown_metadata_fields():
-    from core.services.pipeline.service_factory import build_llm
     with _patched_modules():
         svc = build_llm(_spec("sarvam-ai", model="sarvam-30b", metadata={
             "temperature": 0.2, "not_a_sarvam_field": "x",
@@ -352,3 +411,116 @@ if __name__ == "__main__":
             print(f"FAIL {fn.__name__}: {type(exc).__name__}: {exc}")
     print(f"\n{len(fns) - failed}/{len(fns)} passed")
     sys.exit(1 if failed else 0)
+
+
+def test_nvidia_stt_forwards_function_id_and_model_name():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "nvidia/Parakeet 0.6b TDT v2",
+            model_meta={"function_id": "abc-123", "model_name": "parakeet-tdt-0.6b"},
+        ))
+    assert svc.model_function_map == {
+        "function_id": "abc-123", "model_name": "parakeet-tdt-0.6b",
+    }
+
+
+def test_nvidia_stt_falls_back_to_model_name_when_only_function_id_given():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "canary-1b", model_meta={"function_id": "def-456"},
+        ))
+    assert svc.model_function_map == {
+        "function_id": "def-456", "model_name": "canary-1b",
+    }
+
+
+def test_nvidia_stt_omits_map_without_function_id():
+    with _patched_modules():
+        svc = build_stt(_spec("nvidia", "nvidia/Canary 1B"))
+    assert svc.model_function_map is None
+
+
+def test_nvidia_stt_forwards_sample_rate_and_server():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "x",
+            metadata={"sample_rate": 16000, "base_url": "grpc.example.com:443"},
+            model_meta={"function_id": "f", "model_name": "m"},
+        ))
+    assert svc.sample_rate == 16000
+    assert svc.server == "grpc.example.com:443"
+
+
+def test_hosted_tts_forwards_fal_style_response_shape():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "maya1", "maya1-3b", metadata={"voice_id": "v1"},
+            model_meta={"base_url": "https://fal.run/fal-ai/maya",
+                        "audio_url_field": "audio.url"},
+        ))
+    assert svc.base_url == "https://fal.run/fal-ai/maya"
+    assert svc.kwargs["audio_url_field"] == "audio.url"
+    assert svc.voice_id == "v1"
+
+
+def test_hosted_tts_forwards_custom_auth_prefix_and_fields():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "higgs-audio", "higgs-v2",
+            model_meta={"base_url": "https://api.replicate.com/v1/predictions",
+                        "auth_prefix": "Token ", "text_field": "input"},
+        ))
+    assert svc.kwargs["auth_prefix"] == "Token "
+    assert svc.kwargs["text_field"] == "input"
+
+
+def test_hosted_tts_forwards_extra_body_and_headers():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "indextts", "indextts-2",
+            model_meta={"base_url": "https://api.siliconflow.cn/v1/audio/speech",
+                        "extra_body": {"response_format": "pcm"},
+                        "extra_headers": {"X-Region": "in"}},
+        ))
+    assert svc.kwargs["extra_body"] == {"response_format": "pcm"}
+    assert svc.kwargs["extra_headers"] == {"X-Region": "in"}
+
+
+def test_hosted_tts_returns_none_without_base_url():
+    with _patched_modules():
+        svc = build_tts(_spec("maya1", "maya1-3b"))
+    assert svc is None
+
+
+def test_openai_compatible_stt_covers_aggregators_with_base_url():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "openrouter", "openai/whisper-large-v3",
+            metadata={"base_url": "https://openrouter.ai/api/v1"},
+        ))
+    assert svc.base_url == "https://openrouter.ai/api/v1"
+    assert svc.model == "openai/whisper-large-v3"
+
+
+def test_openai_stt_without_base_url_uses_vendor_default():
+    with _patched_modules():
+        svc = build_stt(_spec("openai", "gpt-4o-transcribe"))
+    assert svc.base_url is None
+
+
+def test_mistral_stt_forwards_streaming_delay_and_base_url():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "mistral", "voxtral-mini-transcribe-realtime-2602",
+            metadata={"target_streaming_delay_ms": 250, "base_url": "https://self.hosted/v1"},
+        ))
+    assert svc.kwargs["target_streaming_delay_ms"] == 250
+    assert svc.kwargs["base_url"] == "https://self.hosted/v1"
+    assert svc.kwargs["settings"].kwargs["model"] == "voxtral-mini-transcribe-realtime-2602"
+
+
+def test_mistral_stt_omits_streaming_delay_when_unset():
+    with _patched_modules():
+        svc = build_stt(_spec("mistral", "voxtral-mini-transcribe-realtime-2602"))
+    assert "target_streaming_delay_ms" not in svc.kwargs
+    assert "base_url" not in svc.kwargs

@@ -167,6 +167,50 @@ def build_settings(settings_class, metadata: dict, **overrides):
     return settings_class(**filtered) if filtered else None
 
 
+_CARTESIA_SPEED_MIN = 0.6
+_CARTESIA_SPEED_MAX = 1.5
+_CARTESIA_SPEED_WORDS = {
+    "slowest": 0.6,
+    "slow": 0.8,
+    "normal": 1.0,
+    "default": 1.0,
+    "fast": 1.2,
+    "fastest": 1.5,
+}
+
+
+def _clamp_cartesia_speed(value: float) -> float:
+    if value < _CARTESIA_SPEED_MIN or value > _CARTESIA_SPEED_MAX:
+        clamped = min(max(value, _CARTESIA_SPEED_MIN), _CARTESIA_SPEED_MAX)
+        logger.warning(
+            "[service-factory][TTS] cartesia speed={} outside {}-{} — clamped to {}",
+            value, _CARTESIA_SPEED_MIN, _CARTESIA_SPEED_MAX, clamped,
+        )
+        return clamped
+    return value
+
+
+def _coerce_cartesia_speed(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return _clamp_cartesia_speed(float(value))
+    if isinstance(value, str):
+        text = value.strip().lower()
+        if text in _CARTESIA_SPEED_WORDS:
+            return _CARTESIA_SPEED_WORDS[text]
+        try:
+            return _clamp_cartesia_speed(float(text))
+        except ValueError:
+            logger.warning(
+                "[service-factory][TTS] cartesia speed={!r} is not a number or a known "
+                "keyword {} — ignoring it", value, sorted(_CARTESIA_SPEED_WORDS),
+            )
+            return None
+    logger.warning("[service-factory][TTS] cartesia speed={!r} unusable — ignoring it", value)
+    return None
+
+
 def build_llm(spec: dict) -> Optional[Any]:
     """Build an LLM service instance from a resolved spec dict.
 
@@ -230,7 +274,12 @@ def build_llm(spec: dict) -> Optional[Any]:
             return GoogleLLMService(api_key=api_key, model=model or "gemini-2.5-flash", params=params)
         if provider_name == "ollama":  # done
             from pipecat.services.ollama.llm import OLLamaLLMService
-            base_url = api_key if api_key else "http://localhost:11434/v1"
+            base_url = (
+                metadata.get("base_url")
+                or model_meta.get("base_url")
+                or api_key
+                or "http://localhost:11434/v1"
+            )
             return OLLamaLLMService(model=model or "llama2", base_url=base_url, params=build_input_params(OLLamaLLMService, metadata))
         if provider_name == "sarvam-ai":
             from pipecat.services.sarvam.llm import SarvamLLMService
@@ -387,7 +436,7 @@ def build_stt(spec: dict) -> Optional[Any]:
             if not _dg_host or "." not in _dg_host:
                 dg_url.pop("base_url", None)
             return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **dg_url)
-        if provider_name == "openai":
+        if provider_name in ("openai", "openrouter", "together", "fireworks"):
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
                 api_key=api_key,
@@ -395,6 +444,26 @@ def build_stt(spec: dict) -> Optional[Any]:
                 language=metadata.get("language"),
                 prompt=metadata.get("prompt"),
                 temperature=metadata.get("temperature"),
+                **_url_kwargs(metadata),
+            )
+        if provider_name == "mistral":
+            from pipecat.services.mistral.stt import MistralSTTService
+            mistral_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                mistral_kwargs["sample_rate"] = metadata["sample_rate"]
+            if metadata.get("target_streaming_delay_ms") is not None:
+                mistral_kwargs["target_streaming_delay_ms"] = metadata["target_streaming_delay_ms"]
+            settings_kwargs = {}
+            if model:
+                settings_kwargs["model"] = model
+            if metadata.get("language") is not None:
+                settings_kwargs["language"] = metadata["language"]
+            if settings_kwargs:
+                mistral_kwargs["settings"] = MistralSTTService.Settings(**settings_kwargs)
+            return MistralSTTService(
+                api_key=api_key,
+                **mistral_kwargs,
+                **_url_kwargs(metadata),
             )
         if provider_name == "voxtral":
             # Self-hosted Voxtral via the custom transformers server, which speaks
@@ -490,8 +559,46 @@ def build_stt(spec: dict) -> Optional[Any]:
             from pipecat.services.google.stt import GoogleSTTService
             return GoogleSTTService(credentials=api_key, params=build_input_params(GoogleSTTService, metadata))
         if provider_name == "nvidia":
-            from pipecat.services.nvidia.stt import NvidiaSTTService
-            return NvidiaSTTService(api_key=api_key, params=build_input_params(NvidiaSTTService, metadata))
+            from pipecat.services.nvidia.stt import (
+                NvidiaSTTService,
+                language_to_nvidia_nemotron_speech_language,
+            )
+            from pipecat.transcriptions.language import Language
+            nvidia_kwargs = {}
+            function_id = model_meta.get("function_id") or metadata.get("function_id")
+            nvcf_model = model_meta.get("model_name") or metadata.get("model_name") or model
+            if function_id and nvcf_model:
+                nvidia_kwargs["model_function_map"] = {
+                    "function_id": function_id,
+                    "model_name": nvcf_model,
+                }
+            if metadata.get("sample_rate") is not None:
+                nvidia_kwargs["sample_rate"] = metadata["sample_rate"]
+            nvidia_metadata = metadata
+            raw_language = (metadata or {}).get("language")
+            if raw_language:
+                try:
+                    mapped = language_to_nvidia_nemotron_speech_language(Language(raw_language))
+                except (ValueError, TypeError):
+                    logger.warning(
+                        "[service-factory][STT] nvidia: language={!r} is not a known Language — "
+                        "passing through unmapped",
+                        raw_language,
+                    )
+                    mapped = None
+                if mapped and mapped != raw_language:
+                    nvidia_metadata = dict(metadata)
+                    nvidia_metadata["language"] = mapped
+                    logger.info(
+                        "[service-factory][STT] nvidia: language {!r} -> {!r}",
+                        raw_language, mapped,
+                    )
+            return NvidiaSTTService(
+                api_key=api_key,
+                params=build_input_params(NvidiaSTTService, nvidia_metadata),
+                **nvidia_kwargs,
+                **_url_kwargs(metadata, "server"),
+            )
         if provider_name == "nvidia_sage":
             from pipecat.services.stt_service import WebsocketSTTService
             return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
@@ -684,8 +791,9 @@ def build_tts(spec: dict) -> Optional[Any]:
             # flat InputParams fields, so build_input_params can't map the schema's
             # `speed`/`emotion` — wire them explicitly or the user's speed had no effect.
             gen_kwargs = {}
-            if metadata.get("speed") is not None:
-                gen_kwargs["speed"] = metadata["speed"]
+            speed_value = _coerce_cartesia_speed(metadata.get("speed"))
+            if speed_value is not None:
+                gen_kwargs["speed"] = speed_value
             if isinstance(metadata.get("emotion"), str) and metadata["emotion"]:
                 gen_kwargs["emotion"] = metadata["emotion"]
             if gen_kwargs and params is not None:
@@ -978,12 +1086,51 @@ def build_tts(spec: dict) -> Optional[Any]:
                 **xai_kwargs,
             )
 
+        if provider_name in ("maya1", "higgs-audio", "indextts", "chatterbox-hosted", "cosyvoice-hosted"):
+            from core.services.pipeline.hosted_tts_service import HostedTTSService
+            from core.logging import get_trace_id
+            endpoint = model_meta.get("base_url") or metadata.get("base_url")
+            if not endpoint:
+                logger.error(
+                    "[service-factory][TTS] {} has no base_url — set the hosted endpoint "
+                    "on the model row", provider_name,
+                )
+                return None
+            hosted_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                hosted_kwargs["sample_rate"] = metadata["sample_rate"]
+            for key in (
+                "auth_header", "auth_prefix", "text_field", "model_field",
+                "voice_field", "audio_field", "audio_url_field", "strip_wav_header",
+            ):
+                value = model_meta.get(key, metadata.get(key))
+                if value is not None:
+                    hosted_kwargs[key] = value
+            extra_body = model_meta.get("extra_body") or metadata.get("extra_body")
+            if isinstance(extra_body, dict):
+                hosted_kwargs["extra_body"] = extra_body
+            extra_headers = model_meta.get("extra_headers") or metadata.get("extra_headers")
+            if isinstance(extra_headers, dict):
+                hosted_kwargs["extra_headers"] = extra_headers
+            return HostedTTSService(
+                api_key=api_key,
+                base_url=endpoint,
+                model=model,
+                voice_id=tts_voice_id,
+                trace_id=get_trace_id(),
+                **hosted_kwargs,
+            )
+
         if provider_name == "chatterbox":
             # Self-hosted Resemble AI Chatterbox — same /ws/tts protocol + 24kHz as Qwen,
             # so we reuse QwenWebSocketTTSService pointed at the chatterbox service.
             from core.services.pipeline.qwen_tts_service import QwenWebSocketTTSService
             from core.logging import get_trace_id
-            ws_url = "ws://staging-tts-chatterbox-service.staging.svc.cluster.local/ws/tts"
+            ws_url = (
+                metadata.get("base_url")
+                or model_meta.get("base_url")
+                or "ws://staging-tts-chatterbox-service.staging.svc.cluster.local/ws/tts"
+            )
             cb_kwargs = {}
             if tts_voice_id is not None:
                 cb_kwargs["voice_id"] = tts_voice_id

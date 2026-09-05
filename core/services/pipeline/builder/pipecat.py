@@ -136,6 +136,15 @@ def _build_service(kind: str, factory, spec: Any) -> Any:
             kind, provider, model,
         )
         raise
+    if service is None:
+        logger.bind(service_kind=kind, provider=provider, model=model).error(
+            "[pipeline-builder] service build returned None kind={} provider={} model={}",
+            kind, provider, model,
+        )
+        raise ValueError(
+            f"{kind} service could not be built for provider={provider} model={model} — "
+            f"check the provider config and credentials"
+        )
     logger.bind(
         service_kind=kind,
         provider=provider,
