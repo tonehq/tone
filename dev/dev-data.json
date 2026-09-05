@@ -14584,6 +14584,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14622,6 +14685,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14660,6 +14786,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14698,6 +14887,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14736,6 +14988,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14774,6 +15089,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14812,6 +15190,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14850,6 +15291,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14888,6 +15392,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14926,6 +15493,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         },
@@ -14964,6 +15594,69 @@
               "validator": null,
               "required": 0,
               "description": "NVCF model name, used as the reported label"
+            },
+            {
+              "name": "start_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva VAD start history in frames. -1 uses the server default"
+            },
+            {
+              "name": "start_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD start threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "Riva end-of-utterance silence window in frames (pipecat default 320). Lower cuts STT latency, raises the risk of clipping"
+            },
+            {
+              "name": "stop_threshold",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "Riva VAD stop threshold. -1 uses the server default"
+            },
+            {
+              "name": "stop_history_eou",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": -1,
+                "max": 5000
+              },
+              "required": 0,
+              "description": "End-of-utterance stop history in frames. -1 uses the server default"
+            },
+            {
+              "name": "stop_threshold_eou",
+              "data_type": "number",
+              "type": "input number",
+              "format": "number",
+              "validator": null,
+              "required": 0,
+              "description": "End-of-utterance stop threshold. -1 uses the server default"
             }
           ]
         }
