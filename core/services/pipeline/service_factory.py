@@ -211,6 +211,36 @@ def _coerce_cartesia_speed(value):
     return None
 
 
+_NVIDIA_ENDPOINTING_FIELDS = (
+    "start_history",
+    "start_threshold",
+    "stop_history",
+    "stop_threshold",
+    "stop_history_eou",
+    "stop_threshold_eou",
+)
+_NVIDIA_ENDPOINTING_INT_FIELDS = frozenset(
+    {"start_history", "stop_history", "stop_history_eou"}
+)
+
+
+def _coerce_nvidia_endpointing(key: str, value):
+    if value is None:
+        return None
+    if isinstance(value, str):
+        value = value.strip()
+        if not value or value == "None":
+            return None
+    try:
+        return int(value) if key in _NVIDIA_ENDPOINTING_INT_FIELDS else float(value)
+    except (TypeError, ValueError):
+        logger.warning(
+            "[service-factory][STT] nvidia: endpointing {}={!r} is not numeric — ignoring it",
+            key, value,
+        )
+        return None
+
+
 def build_llm(spec: dict) -> Optional[Any]:
     """Build an LLM service instance from a resolved spec dict.
 
@@ -574,17 +604,13 @@ def build_stt(spec: dict) -> Optional[Any]:
                 }
             if metadata.get("sample_rate") is not None:
                 nvidia_kwargs["sample_rate"] = metadata["sample_rate"]
-            for _endpointing_key in (
-                "start_history",
-                "start_threshold",
-                "stop_history",
-                "stop_threshold",
-                "stop_history_eou",
-                "stop_threshold_eou",
-            ):
+            for _endpointing_key in _NVIDIA_ENDPOINTING_FIELDS:
                 _endpointing_value = model_meta.get(_endpointing_key)
                 if _endpointing_value is None:
                     _endpointing_value = metadata.get(_endpointing_key)
+                _endpointing_value = _coerce_nvidia_endpointing(
+                    _endpointing_key, _endpointing_value
+                )
                 if _endpointing_value is not None:
                     nvidia_kwargs[_endpointing_key] = _endpointing_value
             nvidia_metadata = metadata
