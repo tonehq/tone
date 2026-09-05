@@ -574,6 +574,19 @@ def build_stt(spec: dict) -> Optional[Any]:
                 }
             if metadata.get("sample_rate") is not None:
                 nvidia_kwargs["sample_rate"] = metadata["sample_rate"]
+            for _endpointing_key in (
+                "start_history",
+                "start_threshold",
+                "stop_history",
+                "stop_threshold",
+                "stop_history_eou",
+                "stop_threshold_eou",
+            ):
+                _endpointing_value = model_meta.get(_endpointing_key)
+                if _endpointing_value is None:
+                    _endpointing_value = metadata.get(_endpointing_key)
+                if _endpointing_value is not None:
+                    nvidia_kwargs[_endpointing_key] = _endpointing_value
             nvidia_metadata = metadata
             raw_language = (metadata or {}).get("language")
             if raw_language:
