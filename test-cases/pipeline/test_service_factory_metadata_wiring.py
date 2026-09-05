@@ -543,3 +543,26 @@ def test_nvidia_stt_omits_endpointing_when_unset():
         svc = build_stt(_spec("nvidia", "x", model_meta={"function_id": "f", "model_name": "m"}))
     for key in ("start_history", "stop_history", "stop_threshold_eou"):
         assert key not in svc.kwargs
+
+
+def test_nvidia_stt_coerces_endpointing_strings_from_ui():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "nvidia/Parakeet 0.6b CTC",
+            model_meta={"function_id": "f", "model_name": "m"},
+            metadata={"stop_history": "160", "stop_threshold": "0.5"},
+        ))
+    assert svc.kwargs["stop_history"] == 160
+    assert isinstance(svc.kwargs["stop_history"], int)
+    assert svc.kwargs["stop_threshold"] == 0.5
+
+
+def test_nvidia_stt_drops_blank_and_invalid_endpointing():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "nvidia/Parakeet 0.6b CTC",
+            model_meta={"function_id": "f", "model_name": "m"},
+            metadata={"stop_history_eou": "", "start_history": "abc"},
+        ))
+    assert "stop_history_eou" not in svc.kwargs
+    assert "start_history" not in svc.kwargs
