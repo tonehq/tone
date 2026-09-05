@@ -154,7 +154,8 @@ class _FakeNvidia:
         model_fields = {"language": None}
 
     def __init__(self, api_key=None, params=None, model_function_map=None,
-                 sample_rate=None, server=None):
+                 sample_rate=None, server=None, **kwargs):
+        self.kwargs = kwargs
         self.api_key = api_key
         self.params = params
         self.model_function_map = model_function_map
@@ -524,3 +525,21 @@ def test_mistral_stt_omits_streaming_delay_when_unset():
         svc = build_stt(_spec("mistral", "voxtral-mini-transcribe-realtime-2602"))
     assert "target_streaming_delay_ms" not in svc.kwargs
     assert "base_url" not in svc.kwargs
+
+
+def test_nvidia_stt_forwards_endpointing_from_model_meta():
+    with _patched_modules():
+        svc = build_stt(_spec(
+            "nvidia", "nvidia/Nemotron 3.5 ASR Streaming",
+            model_meta={"function_id": "abc-123", "model_name": "nemotron-asr-streaming",
+                        "stop_history": 120, "stop_threshold_eou": 0.5},
+        ))
+    assert svc.kwargs["stop_history"] == 120
+    assert svc.kwargs["stop_threshold_eou"] == 0.5
+
+
+def test_nvidia_stt_omits_endpointing_when_unset():
+    with _patched_modules():
+        svc = build_stt(_spec("nvidia", "x", model_meta={"function_id": "f", "model_name": "m"}))
+    for key in ("start_history", "stop_history", "stop_threshold_eou"):
+        assert key not in svc.kwargs
