@@ -7,6 +7,7 @@ import type {
   CreateAgentPayload,
   ListAgentsParams,
   PaginatedAgents,
+  TurnDetectorOption,
   UpdateAgentPayload,
 } from '@/types/agent';
 
@@ -17,6 +18,11 @@ export const listAgents = async (params: ListAgentsParams = {}): Promise<Paginat
 
 export const getAllAgents = async (): Promise<AgentDropdownItem[]> => {
   const res = await axiosInstance.get<AgentDropdownItem[]>('/agent/get_all_agents');
+  return Array.isArray(res.data) ? res.data : [];
+};
+
+export const listTurnDetectors = async (): Promise<TurnDetectorOption[]> => {
+  const res = await axiosInstance.get<TurnDetectorOption[]>('/agent/turn-detectors');
   return Array.isArray(res.data) ? res.data : [];
 };
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { Mic, Pause, Play, Volume2 } from 'lucide-react';
+import { Ear, Mic, Pause, Play, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useFormContext, useWatch } from 'react-hook-form';
 
@@ -25,10 +25,12 @@ import {
   useTtsModels,
   useTtsProviders,
   useTtsVoices,
+  useTurnDetectors,
 } from '@/lib/api/voiceCatalog';
 import type { TtsVoice } from '@/services/ttsService';
 import type { AgentFormState } from '@/types/agent';
 import type { MetaDataSchemaField } from '@/types/provider';
+import { DEFAULT_TURN_DETECTOR } from '@/utils/agentFormUtils';
 import { cn } from '@/utils/cn';
 
 /** Keys in voice_settings / stt_settings that are structural (not schema fields).
@@ -67,6 +69,11 @@ export default function VoiceStep() {
     control,
     name: 'config.voice_settings.model_id' as never,
   }) as string | null | undefined;
+  const turnDetectorId =
+    (useWatch({
+      control,
+      name: 'config.conversation_settings.turn_detection.provider' as never,
+    }) as string | null | undefined) ?? DEFAULT_TURN_DETECTOR;
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -84,7 +91,9 @@ export default function VoiceStep() {
   const voicesQuery = useTtsVoices(providerId, language, ttsModelId);
   const ttsModelsQuery = useTtsModels(providerId);
   const sttModelsQuery = useSttModels(sttProviderId ?? '');
+  const turnDetectorsQuery = useTurnDetectors();
 
+  const turnDetectors = useMemo(() => turnDetectorsQuery.data ?? [], [turnDetectorsQuery.data]);
   const sttProviders = useMemo(() => sttProvidersQuery.data ?? [], [sttProvidersQuery.data]);
   const languages = useMemo(() => languagesQuery.data ?? [], [languagesQuery.data]);
   const providers = useMemo(() => providersQuery.data ?? [], [providersQuery.data]);
@@ -98,8 +107,10 @@ export default function VoiceStep() {
   const loadingVoices = voicesQuery.isLoading;
   const loadingTtsModels = ttsModelsQuery.isLoading;
   const loadingSttModels = sttModelsQuery.isLoading;
+  const loadingTurnDetectors = turnDetectorsQuery.isLoading;
 
   // Preserve the old `.catch(handleApiError)` toast on any catalog failure.
+  useQueryErrorToast(turnDetectorsQuery.error);
   useQueryErrorToast(sttProvidersQuery.error);
   useQueryErrorToast(languagesQuery.error);
   useQueryErrorToast(providersQuery.error);
@@ -238,6 +249,21 @@ export default function VoiceStep() {
       shouldDirty: true,
     });
   };
+
+  const setTurnDetector = (v: string) => {
+    setValue(
+      'config.conversation_settings.turn_detection' as never,
+      { provider: v || DEFAULT_TURN_DETECTOR } as never,
+      { shouldDirty: true },
+    );
+  };
+
+  const turnDetectorOptions = useMemo(
+    () => turnDetectors.map((d) => ({ value: d.id, label: d.display_name })),
+    [turnDetectors],
+  );
+  const selectedTurnDetector = turnDetectors.find((d) => d.id === turnDetectorId);
+  const turnDetectorSchema = selectedTurnDetector?.meta_data_schema ?? [];
 
   const languageOptions = useMemo(
     () =>
@@ -522,6 +548,31 @@ export default function VoiceStep() {
         <p className="text-[11px] text-muted-foreground">
           Caller speech is transcribed by this provider/model before reaching the LLM.
         </p>
+      </SectionCard>
+
+      <SectionCard
+        icon={<Ear className="size-3.5" strokeWidth={2.25} />}
+        tone="amber"
+        title="Turn detection"
+        description="How the agent decides the caller has finished speaking."
+      >
+        <SelectInput
+          name="config.conversation_settings.turn_detection.provider"
+          label="Model"
+          options={turnDetectorOptions}
+          loading={loadingTurnDetectors}
+          value={turnDetectorId}
+          onValueChange={setTurnDetector}
+          placeholder="Select a turn detection model"
+          helperText={selectedTurnDetector?.description}
+        />
+        {turnDetectorSchema.length > 0 && (
+          <DynamicProviderFields
+            fields={turnDetectorSchema}
+            basePath="config.conversation_settings.turn_detection"
+            exclude={['provider']}
+          />
+        )}
       </SectionCard>
     </div>
   );
