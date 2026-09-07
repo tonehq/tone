@@ -4,18 +4,21 @@ from typing import Dict, Type
 
 from core.services.rag.vector_stores.base import VectorStore
 from core.services.rag.vector_stores.pgvector_store import PgVectorStore
+from core.services.rag.vector_stores.turbopuffer_store import TurbopufferVectorStore
 
 # ``InMemoryVectorStore`` (``core/services/rag/vector_stores/memory_store.py``)
-# is intentionally NOT registered here — pgvector is the only production
-# backend. The class is kept for the RAG test suite (``test-cases/rag/…``)
-# which imports it directly by class; if you re-add it, also revisit the
-# frontend Configure-params schema in
+# is intentionally NOT registered here — it exists for the RAG test suite
+# (``test-cases/rag/…``) which imports it directly by class; if you re-add it,
+# also revisit the frontend Configure-params schema in
 # ``frontend/src/components/knowledge-base/optionParamSchemas.ts``.
 VECTOR_STORES: Dict[str, Type[VectorStore]] = {
     "pgvector": PgVectorStore,
+    "turbopuffer": TurbopufferVectorStore,
 }
 
 DEFAULT_BACKEND = "pgvector"
+
+DB_BACKED_STORES = frozenset({"pgvector"})
 
 
 def get_vector_store(backend: str = None, **kwargs) -> VectorStore:
