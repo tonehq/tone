@@ -1,3 +1,4 @@
+import type { MetaDataSchemaField } from '@/types/provider';
 import type { ReadinessOverallStatus } from '@/types/readiness';
 
 export type AgentType = 'inbound' | 'outbound' | 'both';
@@ -30,9 +31,22 @@ export interface AgentSttSettings {
   [key: string]: unknown;
 }
 
+export interface AgentTurnDetectionSettings {
+  provider?: string | null;
+  [key: string]: unknown;
+}
+
 export interface AgentConversationSettings {
   max_duration_seconds?: number | null;
+  turn_detection?: AgentTurnDetectionSettings | null;
   [key: string]: unknown;
+}
+
+export interface TurnDetectorOption {
+  id: string;
+  display_name: string;
+  description: string;
+  meta_data_schema: MetaDataSchemaField[];
 }
 
 export interface AgentConfig {
