@@ -213,8 +213,7 @@ export function useUploadAgentLlmEvalScenariosCsv(agentId: string) {
 export function useGenerateAgentLlmEvalVersion(agentId: string) {
   const invalidate = useInvalidateAgentLlmEvals(agentId);
   return useMutation({
-    mutationFn: (payload: GenerateVersionPayload) =>
-      generateAgentLlmEvalVersion(agentId, payload),
+    mutationFn: (payload: GenerateVersionPayload) => generateAgentLlmEvalVersion(agentId, payload),
     onSuccess: invalidate,
   });
 }

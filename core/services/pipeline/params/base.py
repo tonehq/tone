@@ -65,7 +65,7 @@ class PipelineParams:
     # without an extra DB hit on the call-insert path.
     kb_refs: List[dict] = field(default_factory=list)
     mcp_servers: List[dict] = field(default_factory=list)
-    turn_detection: Optional[dict] = None
+    turn_settings: Optional[dict] = None
     telephony_creds: Optional[dict] = None
     # Raw workflow graph + api-fn-name map for the runtime engine (workflow mode only).
     # Absent ⇒ prompt mode / playbook fallback; `is_workflow` gates the runtime path.
@@ -176,7 +176,7 @@ class PipelineParams:
             kb=d.get("kb"),
             kb_refs=d.get("kb_refs") or [],
             mcp_servers=d.get("mcp_servers") or [],
-            turn_detection=d.get("turn_detection"),
+            turn_settings=d.get("turn_settings"),
             workflow=d.get("workflow"),
             workflow_fn_names=d.get("workflow_fn_names") or {},
         )

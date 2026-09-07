@@ -36,9 +36,18 @@ export interface AgentTurnDetectionSettings {
   [key: string]: unknown;
 }
 
+export interface AgentVadSettings {
+  [key: string]: unknown;
+}
+
+export interface AgentTurnSettings {
+  turn_detection?: AgentTurnDetectionSettings | null;
+  vad?: AgentVadSettings | null;
+  [key: string]: unknown;
+}
+
 export interface AgentConversationSettings {
   max_duration_seconds?: number | null;
-  turn_detection?: AgentTurnDetectionSettings | null;
   [key: string]: unknown;
 }
 
@@ -47,6 +56,12 @@ export interface TurnDetectorOption {
   display_name: string;
   description: string;
   meta_data_schema: MetaDataSchemaField[];
+}
+
+export interface TurnSettingsOptions {
+  turn_detectors: TurnDetectorOption[];
+  default_turn_detector: string;
+  vad_schema: MetaDataSchemaField[];
 }
 
 export interface AgentConfig {
@@ -64,6 +79,7 @@ export interface AgentConfig {
   voice_settings?: AgentVoiceSettings | null;
   stt_settings?: AgentSttSettings | null;
   conversation_settings?: AgentConversationSettings | null;
+  turn_settings?: AgentTurnSettings | null;
 }
 
 export interface AgentConfigResponse extends AgentConfig {
@@ -306,6 +322,7 @@ export interface AgentFormState {
     voice_settings: AgentVoiceSettings;
     stt_settings: AgentSttSettings;
     conversation_settings: AgentConversationSettings;
+    turn_settings: AgentTurnSettings;
   };
   tool_ids: string[];
   mcp_server_ids: string[];

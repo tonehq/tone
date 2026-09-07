@@ -636,6 +636,15 @@ class UploadService(BaseService):
         upload = self._get_org_upload(upload_id)
         file_path = upload.file_path
 
+        runs = (
+            self.db.query(IngestionPipelineRun)
+            .filter(
+                IngestionPipelineRun.upload_id == upload_id,
+                IngestionPipelineRun.organization_id == self.org_id,
+            )
+            .all()
+        )
+        IngestionRunService.purge_remote_vectors(self.db, runs)
         self.db.query(KnowledgeBase).filter(
             KnowledgeBase.upload_id == upload_id,
             KnowledgeBase.organization_id == self.org_id,

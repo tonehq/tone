@@ -3,15 +3,21 @@
 import { useEffect, useMemo, useState } from 'react';
 import { FileUp, Loader2, Play, Plus, Sparkles } from 'lucide-react';
 
+import AddEvalQuestionModal from '@/components/knowledge-base/AddEvalQuestionModal';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
-import AddQuestionModal from '@/components/knowledge-base/AddQuestionModal';
 import EvalQuestionRow from '@/components/knowledge-base/EvalQuestionRow';
+import EvalReviewToolbar from '@/components/knowledge-base/EvalReviewToolbar';
 import EvalVersionBar from '@/components/knowledge-base/EvalVersionBar';
 import GenerateEvalModal from '@/components/knowledge-base/GenerateEvalModal';
-import ImportCsvModal from '@/components/knowledge-base/ImportCsvModal';
-import { EMPTY_DRAFT, type DraftQuestion } from '@/components/knowledge-base/evalsConstants';
+import ImportEvalCsvModal from '@/components/knowledge-base/ImportEvalCsvModal';
+import {
+  EMPTY_DRAFT,
+  type DraftQuestion,
+  type EvalStatusFilter,
+} from '@/components/knowledge-base/evalsConstants';
 import { CustomButton, CustomTooltip, SelectInput } from '@/components/shared';
 import {
+  useAddManualEvalQuestions,
   useApproveAllEvalQuestions,
   useApproveEvalQuestion,
   useDeleteEvalQuestion,
@@ -21,12 +27,14 @@ import {
   useRejectAllEvalQuestions,
   useTriggerEvalRun,
   useUpdateEvalQuestion,
+  useUploadEvalQuestionsCsv,
 } from '@/lib/api/evals';
 import { useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type {
   EvalQuestion,
   EvalVersion,
   GenerateEvalVersionPayload,
+  ManualQuestionInput,
   UpdateQuestionPatch,
 } from '@/types/eval';
 import { handleApiError } from '@/utils/helpers';
@@ -58,6 +66,7 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     selectedVersionId,
   );
 
+  const addMutation = useAddManualEvalQuestions(uploadId);
   const updateMutation = useUpdateEvalQuestion(uploadId);
   const deleteMutation = useDeleteEvalQuestion(uploadId);
   const approveMutation = useApproveEvalQuestion(uploadId);
@@ -65,10 +74,32 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const rejectAllMutation = useRejectAllEvalQuestions(uploadId);
   const generateMutation = useGenerateEvalVersion(uploadId);
   const runMutation = useTriggerEvalRun(uploadId);
+  const uploadCsvMutation = useUploadEvalQuestionsCsv(uploadId);
 
   const [generateOpen, setGenerateOpen] = useState(false);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  // Which questions to show. Default to Pending when a version has unreviewed
+  // questions so the reviewer lands on their queue; reset only when the
+  // selected version changes (not on every count update, so a user's manual
+  // filter choice isn't clobbered mid-review).
+  const [statusFilter, setStatusFilter] = useState<EvalStatusFilter>('all');
+  useEffect(() => {
+    const v = versions.find((x) => x.id === selectedVersionId);
+    if (!v) return;
+    setStatusFilter(v.counts.pending > 0 ? 'pending' : 'all');
+  }, [selectedVersionId]);
+
+  const counts = useMemo(() => {
+    const approved = questions.filter((q) => q.approval_status === 'approved').length;
+    return { total: questions.length, approved, pending: questions.length - approved };
+  }, [questions]);
+
+  const filteredQuestions = useMemo(() => {
+    if (statusFilter === 'all') return questions;
+    return questions.filter((q) => q.approval_status === statusFilter);
+  }, [questions, statusFilter]);
 
   const { data: runsResp } = useIngestionRuns(uploadId, {
     status_filter: ['ready'],
@@ -99,6 +130,7 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     [readyRuns],
   );
 
+  // Inline edit state for a question row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -108,8 +140,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const canSaveEdit =
     editDraft.question.trim().length > 0 && editDraft.expected_answer.trim().length > 0;
 
-  const approvedCount = selectedVersion?.counts.approved ?? 0;
-
   const handleGenerate = async (payload: GenerateEvalVersionPayload) => {
     try {
       await generateMutation.mutateAsync(payload);
@@ -118,6 +148,37 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         'The eval set is being drafted — it will appear here shortly.',
       );
       setGenerateOpen(false);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleAddSubmit = async (draft: DraftQuestion) => {
+    if (!selectedVersionId) return;
+    const payload: ManualQuestionInput = {
+      question: draft.question.trim(),
+      expected_answer: draft.expected_answer.trim(),
+      expected_source_snippet: draft.expected_source_snippet.trim() || null,
+      category: draft.category.trim() || null,
+    };
+    try {
+      await addMutation.mutateAsync({ versionId: selectedVersionId, questions: [payload] });
+      showToast.success('Question added', 'Your Q&A pair has been saved.');
+      setAddOpen(false);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleCsvUpload = async (file: File) => {
+    if (!selectedVersionId) return;
+    try {
+      const summary = await uploadCsvMutation.mutateAsync({ versionId: selectedVersionId, file });
+      showToast.success(
+        'Questions imported',
+        `Added ${summary.question_count} question(s) from ${file.name}.`,
+      );
+      setImportOpen(false);
     } catch (error) {
       handleApiError(error);
     }
@@ -224,13 +285,14 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     }
   };
 
+  const hasVersion = !!selectedVersionId;
   const hasReadyRuns = readyRuns.length > 0;
+  const isGenerating = selectedVersion?.status === 'generating';
   const runDisabled =
-    approvedCount === 0 || runMutation.isPending || !hasReadyRuns || !selectedVersionId;
+    counts.approved === 0 || runMutation.isPending || !hasReadyRuns || !hasVersion;
   const runButton = (
     <CustomButton
       type="primary"
-      size="sm"
       onClick={handleRunEval}
       loading={runMutation.isPending}
       disabled={runDisabled}
@@ -241,12 +303,12 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   );
 
   return (
-    <div className="flex flex-col gap-6 py-4">
+    <div className="flex flex-col gap-5 py-4">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Manage evals</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Generate an eval version, review each question, approve the good ones (reject deletes),
-          then run the approved set against a ready ingestion recipe.
+          Generate a version, review each question and approve the good ones (reject deletes), then
+          run the approved set against a ready ingestion recipe.
         </p>
       </div>
 
@@ -255,10 +317,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         selectedVersion={selectedVersion}
         onSelectVersion={setSelectedVersionId}
         onOpenGenerate={() => setGenerateOpen(true)}
-        onApproveAll={handleApproveAll}
-        onRejectAll={handleRejectAll}
-        approvingAll={approveAllMutation.isPending}
-        rejectingAll={rejectAllMutation.isPending}
       />
 
       {versionsLoading ? (
@@ -278,77 +336,39 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         </div>
       ) : (
         <>
-          {/* Compact action toolbar — Add / Import / Run stay up top without
-              eating vertical space; the questions list sits right below. */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5">
-            <p className="text-sm font-medium text-foreground">
-              {selectedVersion?.counts.total ?? 0} question(s) · {approvedCount} approved
-            </p>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              <CustomButton
-                type="default"
-                size="sm"
-                onClick={() => setAddOpen(true)}
-                disabled={!selectedVersionId}
-              >
-                <Plus className="mr-1 size-4" />
-                Add question
-              </CustomButton>
-              <CustomButton
-                type="default"
-                size="sm"
-                onClick={() => setImportOpen(true)}
-                disabled={!selectedVersionId}
-              >
-                <FileUp className="mr-1 size-4" />
-                Import CSV
-              </CustomButton>
-              <div className="mx-1 hidden h-6 w-px bg-border/60 sm:block" aria-hidden />
-              {hasReadyRuns && (
-                <div className="min-w-[200px] sm:min-w-[240px]">
-                  <SelectInput
-                    name="eval-ingestion-run"
-                    value={selectedRunId ?? undefined}
-                    onValueChange={(v) => setSelectedRunId(v || null)}
-                    options={runOptions}
-                    placeholder="Ingest recipe"
-                    disabled={runMutation.isPending}
-                  />
-                </div>
-              )}
-              {runDisabled && approvedCount === 0 ? (
-                <CustomTooltip content="Approve at least one question to run">
-                  <span>{runButton}</span>
-                </CustomTooltip>
-              ) : !hasReadyRuns ? (
-                <CustomTooltip content="No ready ingestion runs to evaluate against">
-                  <span>{runButton}</span>
-                </CustomTooltip>
-              ) : (
-                runButton
-              )}
-            </div>
-          </div>
+          {/* Review: status filter + bulk approve/reject, right above the list. */}
+          <section className="flex flex-col gap-3">
+            <EvalReviewToolbar
+              counts={counts}
+              activeFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+              onApproveAll={handleApproveAll}
+              onRejectAll={handleRejectAll}
+              approvingAll={approveAllMutation.isPending}
+              rejectingAll={rejectAllMutation.isPending}
+            />
 
-          {/* Questions */}
-          <section>
             {questionsLoading ? (
               <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
                 Loading questions…
               </div>
-            ) : selectedVersion?.status === 'generating' ? (
+            ) : isGenerating ? (
               <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-8 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />
                 Generating questions…
               </div>
             ) : questions.length === 0 ? (
               <div className="rounded-lg border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
-                No questions in this version. Add one above or generate a new version.
+                No questions in this version. Add one or generate a new version.
+              </div>
+            ) : filteredQuestions.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+                No {statusFilter} questions.
               </div>
             ) : (
               <ul className="flex flex-col gap-2">
-                {questions.map((row) => (
+                {filteredQuestions.map((row) => (
                   <EvalQuestionRow
                     key={row.id}
                     row={row}
@@ -368,6 +388,61 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
                 ))}
               </ul>
             )}
+
+            {/* Secondary: adding questions is not the main task — keep in modals. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomButton type="default" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1 size-4" />
+                Add question
+              </CustomButton>
+              <CustomButton type="default" size="sm" onClick={() => setImportOpen(true)}>
+                <FileUp className="mr-1 size-4" />
+                Import CSV
+              </CustomButton>
+            </div>
+          </section>
+
+          {/* Final step: run the approved questions. */}
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Run eval</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Scores the {counts.approved} approved question(s) against the selected recipe.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {hasReadyRuns && (
+                <div className="flex items-center gap-2">
+                  <label
+                    htmlFor="eval-ingestion-run"
+                    className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground"
+                  >
+                    Ingest recipe
+                  </label>
+                  <div className="min-w-[220px] sm:min-w-[260px]">
+                    <SelectInput
+                      name="eval-ingestion-run"
+                      value={selectedRunId ?? undefined}
+                      onValueChange={(v) => setSelectedRunId(v || null)}
+                      options={runOptions}
+                      placeholder="Select an ingestion run"
+                      disabled={runMutation.isPending}
+                    />
+                  </div>
+                </div>
+              )}
+              {counts.approved === 0 ? (
+                <CustomTooltip content="Approve at least one question to run">
+                  <span>{runButton}</span>
+                </CustomTooltip>
+              ) : !hasReadyRuns ? (
+                <CustomTooltip content="No ready ingestion runs to evaluate against">
+                  <span>{runButton}</span>
+                </CustomTooltip>
+              ) : (
+                runButton
+              )}
+            </div>
           </section>
         </>
       )}
@@ -380,18 +455,18 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         onGenerate={handleGenerate}
       />
 
-      <AddQuestionModal
+      <AddEvalQuestionModal
         open={addOpen}
+        saving={addMutation.isPending}
         onClose={() => setAddOpen(false)}
-        uploadId={uploadId}
-        versionId={selectedVersionId}
+        onSubmit={handleAddSubmit}
       />
 
-      <ImportCsvModal
+      <ImportEvalCsvModal
         open={importOpen}
+        uploading={uploadCsvMutation.isPending}
         onClose={() => setImportOpen(false)}
-        uploadId={uploadId}
-        versionId={selectedVersionId}
+        onUpload={handleCsvUpload}
       />
 
       <ConfirmDeleteModal

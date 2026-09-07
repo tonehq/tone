@@ -7,7 +7,7 @@ import type {
   CreateAgentPayload,
   ListAgentsParams,
   PaginatedAgents,
-  TurnDetectorOption,
+  TurnSettingsOptions,
   UpdateAgentPayload,
 } from '@/types/agent';
 
@@ -21,9 +21,9 @@ export const getAllAgents = async (): Promise<AgentDropdownItem[]> => {
   return Array.isArray(res.data) ? res.data : [];
 };
 
-export const listTurnDetectors = async (): Promise<TurnDetectorOption[]> => {
-  const res = await axiosInstance.get<TurnDetectorOption[]>('/agent/turn-detectors');
-  return Array.isArray(res.data) ? res.data : [];
+export const getTurnSettingsOptions = async (): Promise<TurnSettingsOptions> => {
+  const res = await axiosInstance.get<TurnSettingsOptions>('/agent/turn-settings/options');
+  return res.data;
 };
 
 /** Fetch an agent. When `configId` is passed, the agent is rendered against
