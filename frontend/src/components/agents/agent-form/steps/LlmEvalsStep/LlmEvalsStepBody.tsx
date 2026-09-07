@@ -127,7 +127,8 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // version once versions load.
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   // Version filter for the Results tab (``VERSION_FILTER_ALL_VALUE`` = all).
-  const [resultsVersionFilter, setResultsVersionFilter] = useState<string>(VERSION_FILTER_ALL_VALUE);
+  const [resultsVersionFilter, setResultsVersionFilter] =
+    useState<string>(VERSION_FILTER_ALL_VALUE);
   // Per-row review in-flight ids + reject confirmations.
   const [pendingRejectScenario, setPendingRejectScenario] = useState<AgentLlmEvalScenario | null>(
     null,
@@ -419,9 +420,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     if (!selectedVersionId) return;
     try {
       const result = await rejectAll.mutateAsync(selectedVersionId);
-      showToast.success(
-        `${result.rejected} scenario${result.rejected === 1 ? '' : 's'} rejected`,
-      );
+      showToast.success(`${result.rejected} scenario${result.rejected === 1 ? '' : 's'} rejected`);
       setPendingRejectAll(false);
     } catch (error) {
       handleApiError(error);
@@ -631,8 +630,8 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
             onToggleAll={togglePageSelection}
             onApprove={selectedVersion ? handleApproveScenario : undefined}
             onReject={selectedVersion ? setPendingRejectScenario : undefined}
-            approvingId={approveScenario.isPending ? approveScenario.variables ?? null : null}
-            rejectingId={rejectScenario.isPending ? rejectScenario.variables ?? null : null}
+            approvingId={approveScenario.isPending ? (approveScenario.variables ?? null) : null}
+            rejectingId={rejectScenario.isPending ? (rejectScenario.variables ?? null) : null}
           />
           <LlmEvalsPagination
             page={page}

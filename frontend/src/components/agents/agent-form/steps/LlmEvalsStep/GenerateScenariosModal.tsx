@@ -1,7 +1,13 @@
 import { Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
-import { CustomButton, CustomModal, SelectInput, TextAreaField, TextInput } from '@/components/shared';
+import {
+  CustomButton,
+  CustomModal,
+  SelectInput,
+  TextAreaField,
+  TextInput,
+} from '@/components/shared';
 import { useGenerateAgentLlmEvalVersion } from '@/lib/api/agentLlmEvals';
 import type { AgentLlmEvalFolder, AgentLlmEvalScenarioVersion } from '@/types/agentLlmEval';
 import { handleApiError } from '@/utils/helpers';
@@ -36,8 +42,14 @@ export default function GenerateScenariosModal({
   // Generation persists all scenarios as ``pending`` under a draft version;
   // the user then reviews (approve/reject) them in the Manage-Evals list.
   const generate = useGenerateAgentLlmEvalVersion(agentId);
-  const { folderId, setFolderId, newFolderName, setNewFolderName, resolveFolderIdOrCreate, isCreatingFolder } =
-    useFolderPicker(agentId, { open, folderOptions });
+  const {
+    folderId,
+    setFolderId,
+    newFolderName,
+    setNewFolderName,
+    resolveFolderIdOrCreate,
+    isCreatingFolder,
+  } = useFolderPicker(agentId, { open, folderOptions });
   const [mode, setMode] = useState<GenerateMode>('new');
   const [overwriteVersionId, setOverwriteVersionId] = useState('');
   const [generationPrompt, setGenerationPrompt] = useState('');

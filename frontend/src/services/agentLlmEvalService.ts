@@ -70,12 +70,11 @@ export const createAgentLlmEvalScenariosBulk = async (
 export const uploadAgentLlmEvalScenariosCsv = async (
   agentId: string,
   file: File,
-): Promise<{ items: AgentLlmEvalScenario[]; created: number }> => {
-  return postMultipart<{ items: AgentLlmEvalScenario[]; created: number }>(
+): Promise<{ items: AgentLlmEvalScenario[]; created: number }> =>
+  postMultipart<{ items: AgentLlmEvalScenario[]; created: number }>(
     `${base(agentId)}/scenarios/upload-csv`,
     file,
   );
-};
 
 export const updateAgentLlmEvalScenario = async (
   agentId: string,
@@ -112,12 +111,8 @@ export const deleteAgentLlmEvalScenario = async (
 
 // ── Versions (generate / review / approve) ────────────────────────────────
 
-export const listAgentLlmEvalVersions = async (
-  agentId: string,
-): Promise<ListVersionsResponse> => {
-  const res = await axiosInstance.post<ListVersionsResponse>(
-    `${base(agentId)}/versions/list`,
-  );
+export const listAgentLlmEvalVersions = async (agentId: string): Promise<ListVersionsResponse> => {
+  const res = await axiosInstance.post<ListVersionsResponse>(`${base(agentId)}/versions/list`);
   return res.data;
 };
 

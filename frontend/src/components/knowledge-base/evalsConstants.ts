@@ -17,6 +17,10 @@ export const EMPTY_DRAFT: DraftQuestion = {
   category: '',
 };
 
+// Which questions the review list shows. 'pending' is the default when a
+// version still has unreviewed questions so the reviewer sees their queue.
+export type EvalStatusFilter = 'all' | 'pending' | 'approved';
+
 // Human label for a version in a picker, e.g. "v3 · draft · 12 approved".
 export function versionLabel(v: EvalVersion): string {
   const status =
