@@ -19,6 +19,7 @@ export default function RunEvalModal({
   scenarios,
   folders,
   defaultFolderId,
+  versionId,
 }: {
   open: boolean;
   onClose: () => void;
@@ -26,6 +27,9 @@ export default function RunEvalModal({
   scenarios: AgentLlmEvalScenario[];
   folders: AgentLlmEvalFolder[];
   defaultFolderId: FolderScope;
+  // When a version is selected, the run scores only that version's approved
+  // scenarios (threaded through to `TriggerRunPayload.version_id`).
+  versionId?: string | null;
 }) {
   const trigger = useTriggerAgentLlmEvalRun(agentId);
   const [judge, setJudge] = useState('');
@@ -101,6 +105,7 @@ export default function RunEvalModal({
         // Send the plural `folder_ids` field on multi-select. Backend
         // prefers `folder_ids` when both are provided.
         folder_ids: scope === 'folders' && selectedFolderIds.length ? selectedFolderIds : undefined,
+        version_id: versionId ?? undefined,
       });
       showToast.success(
         'Evaluation started',

@@ -12,14 +12,16 @@ from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbedding
 from core.models.upload import Upload
-from core.services.rag.errors import EmbeddingCompatibilityError
 from core.services.rag.logging_utils import (
     format_scores,
     summarize_vector,
     truncate_query_text,
 )
+from core.services.rag.run_scope import resolve_active_run_id
 from core.services.rag.types import SearchResult, VectorRecord
 from core.services.rag.vector_stores.base import VectorStore
+from core.services.rag.vector_stores.chunk_rows import chunk_rows_query, insert_chunk_rows
+from core.utils.agent_scope import published_config_subquery
 
 
 class PgVectorStore(VectorStore):
@@ -42,13 +44,6 @@ class PgVectorStore(VectorStore):
             with get_db_context() as db:
                 yield db
 
-    @staticmethod
-    def _require(meta: dict, key: str) -> object:
-        value = meta.get(key)
-        if value is None:
-            raise ValueError(f"PgVectorStore.add: record.metadata missing required key {key!r}")
-        return value
-
     def add(self, records: List[VectorRecord]) -> int:
         if not records:
             return 0
@@ -60,31 +55,7 @@ class PgVectorStore(VectorStore):
         )
         with self._db() as db:
             try:
-                chunk_rows: List[KnowledgeBaseChunk] = []
-                for r in records:
-                    dims = int(self._require(r.metadata, "embedding_dimensions"))
-                    if dims != len(r.embedding):
-                        logger.error(
-                            "[pgvector] dimension mismatch run={} metadata_dims={} vector_dims={}",
-                            run_id, dims, len(r.embedding),
-                        )
-                        raise EmbeddingCompatibilityError(
-                            f"Embedding dimension mismatch: metadata says {dims} but vector is "
-                            f"{len(r.embedding)}-D"
-                        )
-                    chunk_rows.append(
-                        KnowledgeBaseChunk(
-                            organization_id=self._require(r.metadata, "organization_id"),
-                            upload_id=self._require(r.metadata, "upload_id"),
-                            ingestion_run_id=self._require(r.metadata, "ingestion_run_id"),
-                            chunk_index=int(self._require(r.metadata, "chunk_index")),
-                            chunk_text=r.text,
-                            chunk_metadata=r.metadata.get("chunk_metadata"),
-                        )
-                    )
-                db.add_all(chunk_rows)
-                db.flush()  # allocate chunk.id so embedding rows can reference them
-
+                chunk_rows = insert_chunk_rows(db, records)
                 embedding_rows: List[KnowledgeBaseChunkEmbedding] = []
                 for chunk, r in zip(chunk_rows, records):
                     dims = int(r.metadata["embedding_dimensions"])
@@ -155,9 +126,7 @@ class PgVectorStore(VectorStore):
                 # The resolver enforces the (agent-KB override → KB default →
                 # legacy is_active fallback) chain — same rule in one place.
                 if ingestion_run_id is None and upload_id is not None and org_id is not None:
-                    from core.services.ingestion_run_service import IngestionRunService
-
-                    ingestion_run_id = IngestionRunService.resolve_active_run_id(
+                    ingestion_run_id = resolve_active_run_id(
                         db,
                         org_id=org_id,
                         upload_id=upload_id,
@@ -214,8 +183,6 @@ class PgVectorStore(VectorStore):
                     # Per-version KB: only chunks attached to the agent's published
                     # config should be retrievable at call-time. Otherwise a draft
                     # version's docs could leak into a live conversation.
-                    from core.utils.agent_scope import published_config_subquery
-
                     published_config_sq = published_config_subquery(str(agent_id))
                     q = (
                         q.join(Upload, KnowledgeBaseChunk.upload_id == Upload.id)
@@ -283,41 +250,21 @@ class PgVectorStore(VectorStore):
 
     def delete(self, *, filters: dict) -> int:
         filters = filters or {}
-        upload_id = filters.get("upload_id")
-        ingestion_run_id = filters.get("ingestion_run_id")
-        org_id = filters.get("organization_id")
-        if upload_id is None and ingestion_run_id is None:
+        if filters.get("upload_id") is None and filters.get("ingestion_run_id") is None:
             raise ValueError(
                 "PgVectorStore.delete requires filters['upload_id'] or filters['ingestion_run_id']"
             )
         with self._db() as db:
-            q = db.query(KnowledgeBaseChunk)
             # Tenant scoping (defense-in-depth): when the caller supplies an org,
             # scope the delete to it so an ``upload_id``/``ingestion_run_id`` from
             # another tenant can't wipe this org's chunks. Additive — unchanged
             # for callers that don't pass ``organization_id``.
-            if org_id is not None:
-                q = q.filter(KnowledgeBaseChunk.organization_id == org_id)
-            if ingestion_run_id is not None:
-                q = q.filter(KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id)
-            if upload_id is not None:
-                q = q.filter(KnowledgeBaseChunk.upload_id == upload_id)
-            n = q.delete(synchronize_session=False)
+            n = chunk_rows_query(db, filters).delete(synchronize_session=False)
             if self._session is None:
                 db.commit()
         logger.debug("[pgvector] deleted {} chunks (filters={})", n, filters)
         return n
 
     def count(self, *, filters: Optional[dict] = None) -> int:
-        filters = filters or {}
         with self._db() as db:
-            q = db.query(KnowledgeBaseChunk)
-            if filters.get("upload_id") is not None:
-                q = q.filter(KnowledgeBaseChunk.upload_id == filters["upload_id"])
-            if filters.get("ingestion_run_id") is not None:
-                q = q.filter(
-                    KnowledgeBaseChunk.ingestion_run_id == filters["ingestion_run_id"]
-                )
-            if filters.get("organization_id") is not None:
-                q = q.filter(KnowledgeBaseChunk.organization_id == filters["organization_id"])
-            return q.count()
+            return chunk_rows_query(db, filters or {}).count()
