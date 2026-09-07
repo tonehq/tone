@@ -64,3 +64,21 @@ export const statusConfig: Record<StatusKey, { label: string; className: string 
     className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
   },
 };
+
+// Chunk-metadata keys that describe the ingestion RUN (identical for every
+// chunk) rather than the chunk itself — hidden on the per-chunk cards since
+// the run's recipe is already shown once at the top of the drawer. Anything
+// not listed here (e.g. page_range) is genuinely chunk-specific and kept.
+export const RUN_LEVEL_CHUNK_META_KEYS: ReadonlySet<string> = new Set([
+  'parser',
+  'tokeniser',
+  'tokenizer',
+  'chunker',
+  'chunk_size',
+  'chunk_overlap',
+  'embedder',
+  'embedding_model',
+  'embedding_provider',
+  'embedding_dimensions',
+  'vector_store',
+]);

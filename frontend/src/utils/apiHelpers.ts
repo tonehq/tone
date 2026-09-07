@@ -24,9 +24,16 @@ export const pruneParams = <T extends object>(params: T): Record<string, unknown
  * in the correct `boundary=...` — otherwise FastAPI can't parse the body and
  * returns `{loc: ["body","file"], msg: "Field required"}`.
  */
-export const postMultipart = async <T>(url: string, file: File): Promise<T> => {
+export const postMultipart = async <T>(
+  url: string,
+  file: File,
+  fields?: Record<string, string>,
+): Promise<T> => {
   const form = new FormData();
   form.append('file', file);
+  if (fields) {
+    for (const [key, value] of Object.entries(fields)) form.append(key, value);
+  }
   const res = await axiosInstance.post<T>(url, form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });

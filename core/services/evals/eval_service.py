@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 from core.models.eval import Eval
 from core.models.eval_result import EvalResult
+from core.models.eval_version import EvalVersion
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
@@ -92,6 +93,7 @@ class EvalSetSummary:
     question_count: int
     generated_by_model: Optional[str]
     generation_prompt_hash: Optional[str]
+    eval_version_id: Optional[UUID] = None
 
 
 @dataclass
@@ -113,6 +115,7 @@ class EvalRunSummary:
     started_at: Optional[datetime]
     completed_at: Optional[datetime]
     summary: dict = field(default_factory=dict)
+    eval_version_id: Optional[UUID] = None
 
 
 class EvalService:
@@ -149,32 +152,37 @@ class EvalService:
 
     # ── Question-set lifecycle ─────────────────────────────────────────
 
-    def generate_eval(
+    def generate_version(
         self,
         db: Session,
         *,
         upload_id: Any,
         org_id: Any,
+        mode: str = "new",
+        version_id: Optional[Any] = None,
+        instructions: Optional[str] = None,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
         ingestion_run_id: Optional[Any] = None,
+        approval_status: str = "pending",
+        source: str = "generated",
     ) -> EvalSetSummary:
-        """Extract source text for ``upload_id``, generate a Q&A set, replace
-        any existing questions for the upload with the new batch. Returns an
-        ``EvalSetSummary``.
+        """Generate an LLM Q&A set into an eval VERSION.
 
-        When ``ingestion_run_id`` is provided, source text is reconstructed by
-        concatenating the already-persisted ``knowledge_base_chunks`` for that
-        run (ordered by ``chunk_index``) — avoiding a redundant R2 download +
-        docling re-parse and, more importantly, making the question-generator
-        see the exact same text the retriever will hit at run time. When
-        omitted (manual CLI / tests), the original R2 + reader path is used.
+        ``mode='new'`` creates the next version for the upload; ``mode='overwrite'``
+        reuses ``version_id`` (guarded — a version that already has results cannot
+        be overwritten, so make a new one instead). New questions land with
+        ``approval_status`` (``'pending'`` for the reviewed on-demand flow;
+        ``'approved'`` for the auto/CLI path so they are immediately runnable).
+        ``instructions`` is the user's custom generation prompt — stored on the
+        version and fed to the LLM.
+
+        The version row is created/reset (``status='generating'``) and committed
+        BEFORE the slow LLM call so the UI's poll sees it immediately.
         """
-        # Per-org overrides (DB → env → hardcoded default). Callers may still
-        # pin an explicit model / max_chars via kwargs — those win, matching
-        # the pre-resolver contract used by CLI tests. Explicit ``None`` from
-        # the caller is the "no override" signal (not falsy 0 / "" — those
-        # are intentional test values a caller might pass).
+        if mode not in {"new", "overwrite"}:
+            raise EvalGenerationError(f"mode must be 'new' or 'overwrite'; got {mode!r}")
+
         org_eval_cfg = load_eval_settings_for_org(db, org_id)
         if model is None:
             model = org_eval_cfg.generation_model
@@ -194,18 +202,82 @@ class EvalService:
             .first()
         )
         if kb is None:
-            raise EvalNotFoundError(
-                f"No KnowledgeBase found for upload {upload_id}"
-            )
+            raise EvalNotFoundError(f"No KnowledgeBase found for upload {upload_id}")
 
-        api_key = _require_llm_key(db, org_id, model)
-
-        source_mode = "chunks" if ingestion_run_id is not None else "source_file"
-        logger.info(
-            "[eval] generate_eval start upload={} org={} content_type={} model={} max_chars={} source={}",
-            upload_id, org_id, upload.file_type, model, max_chars, source_mode,
+        version = self._resolve_generation_version(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            knowledge_base_id=kb.id,
+            mode=mode,
+            version_id=version_id,
+            instructions=instructions,
+            source=source,
         )
 
+        api_key = _require_llm_key(db, org_id, model)
+        document_text = self._extract_document_text(
+            db, upload=upload, org_id=org_id, ingestion_run_id=ingestion_run_id
+        )
+        payload = self._questions.generate(
+            document_text=document_text,
+            api_key=api_key,
+            model=model,
+            max_chars=max_chars,
+            custom_instructions=instructions,
+        )
+        prompt_hash = self._questions.prompt_hash()
+
+        return self._persist_version_questions(
+            db,
+            version=version,
+            questions=payload["questions"],
+            approval_status=approval_status,
+            generated_by_model=payload["generated_by_model"],
+            generation_prompt_hash=prompt_hash,
+        )
+
+    def generate_eval(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        model: Optional[str] = None,
+        max_chars: Optional[int] = None,
+        ingestion_run_id: Optional[Any] = None,
+    ) -> EvalSetSummary:
+        """Back-compat generation (CLI / benchmark tooling / auto path): create a
+        fresh version whose questions are auto-approved so they are immediately
+        runnable. The reviewed on-demand flow uses ``generate_version`` (pending)."""
+        return self.generate_version(
+            db,
+            upload_id=upload_id,
+            org_id=org_id,
+            mode="new",
+            model=model,
+            max_chars=max_chars,
+            ingestion_run_id=ingestion_run_id,
+            approval_status="approved",
+            source="generated",
+        )
+
+    def _extract_document_text(
+        self,
+        db: Session,
+        *,
+        upload: Upload,
+        org_id: Any,
+        ingestion_run_id: Optional[Any],
+    ) -> str:
+        """Assemble the source text the generator sees: the persisted KB chunks
+        for ``ingestion_run_id`` (so the generator sees exactly what retrieval
+        hits) or the R2 source file when no run is given (CLI / tests)."""
+        source_mode = "chunks" if ingestion_run_id is not None else "source_file"
+        logger.info(
+            "[eval] extract text upload={} org={} content_type={} source={}",
+            upload.id, org_id, upload.file_type, source_mode,
+        )
         if ingestion_run_id is not None:
             chunks = (
                 db.query(KnowledgeBaseChunk)
@@ -222,47 +294,101 @@ class EvalService:
                 )
             document_text = "\n\n".join(c.chunk_text for c in chunks)
             logger.info(
-                "[eval] generate_eval assembled {} chunks ({} chars) upload={} run={}",
-                len(chunks), len(document_text), upload_id, ingestion_run_id,
+                "[eval] extract assembled {} chunks ({} chars) upload={} run={}",
+                len(chunks), len(document_text), upload.id, ingestion_run_id,
             )
-        else:
-            try:
-                file_bytes = self._download(upload.file_path)
-            except Exception:
-                logger.exception(
-                    "[eval] R2 download failed upload={} path={}",
-                    upload_id, upload.file_path,
-                )
-                raise
-            try:
-                document = self._reader.read(file_bytes, upload.file_type)
-            except Exception as e:
-                logger.exception(
-                    "[eval] source extraction failed upload={} content_type={}",
-                    upload_id, upload.file_type,
-                )
+            return document_text
+        try:
+            file_bytes = self._download(upload.file_path)
+        except Exception:
+            logger.exception(
+                "[eval] R2 download failed upload={} path={}", upload.id, upload.file_path,
+            )
+            raise
+        try:
+            document = self._reader.read(file_bytes, upload.file_type)
+        except Exception as e:
+            logger.exception(
+                "[eval] source extraction failed upload={} content_type={}",
+                upload.id, upload.file_type,
+            )
+            raise EvalGenerationError(
+                f"Source extraction failed: {humanize_provider_error(e)}"
+            ) from e
+        return document.text
+
+    def _resolve_generation_version(
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        knowledge_base_id: Any,
+        mode: str,
+        version_id: Optional[Any],
+        instructions: Optional[str],
+        source: str,
+    ) -> EvalVersion:
+        """Create (mode='new') or reuse (mode='overwrite') the target version,
+        set it to ``status='generating'`` and commit so the UI sees it while the
+        LLM call runs. Overwrite is refused once a version has been run."""
+        if mode == "overwrite":
+            version = (
+                db.query(EvalVersion)
+                .filter(EvalVersion.id == version_id, EvalVersion.organization_id == org_id)
+                .first()
+            )
+            if version is None:
+                raise EvalNotFoundError(f"Eval version {version_id} not found")
+            if self._version_has_results(db, version_id=version.id, org_id=org_id):
                 raise EvalGenerationError(
-                    f"Source extraction failed: {humanize_provider_error(e)}"
-                ) from e
-            document_text = document.text
+                    "This version has already been run — create a new version "
+                    "instead of overwriting it."
+                )
+            db.query(Eval).filter(
+                Eval.eval_version_id == version.id,
+                Eval.organization_id == org_id,
+            ).delete(synchronize_session=False)
+            version.status = "generating"
+            version.source = source
+            version.generation_instructions = instructions
+            db.add(version)
+            db.commit()
+            db.refresh(version)
+            return version
 
-        payload = self._questions.generate(
-            document_text=document_text,
-            api_key=api_key,
-            model=model,
-            max_chars=max_chars,
+        next_number = int(
+            db.query(func.coalesce(func.max(EvalVersion.version_number), 0) + 1)
+            .filter(
+                EvalVersion.upload_id == upload_id,
+                EvalVersion.organization_id == org_id,
+            )
+            .scalar()
         )
-        questions = payload["questions"]
-        prompt_hash = self._questions.prompt_hash()
-
-        return self._persist_question_set(
-            db,
+        version = EvalVersion(
+            organization_id=org_id,
             upload_id=upload_id,
-            org_id=org_id,
-            knowledge_base_id=kb.id,
-            questions=questions,
-            generated_by_model=payload["generated_by_model"],
-            generation_prompt_hash=prompt_hash,
+            knowledge_base_id=knowledge_base_id,
+            version_number=next_number,
+            source=source,
+            status="generating",
+            generation_instructions=instructions,
+        )
+        db.add(version)
+        db.commit()
+        db.refresh(version)
+        return version
+
+    def _version_has_results(self, db: Session, *, version_id: Any, org_id: Any) -> bool:
+        return bool(
+            db.query(
+                db.query(EvalResult)
+                .filter(
+                    EvalResult.eval_version_id == version_id,
+                    EvalResult.organization_id == org_id,
+                )
+                .exists()
+            ).scalar()
         )
 
     def import_eval(
@@ -296,12 +422,21 @@ class EvalService:
                 f"No KnowledgeBase found for upload {upload_id}"
             )
 
-        summary = self._persist_question_set(
+        version = self._resolve_generation_version(
             db,
             upload_id=upload_id,
             org_id=org_id,
             knowledge_base_id=kb.id,
+            mode="new",
+            version_id=None,
+            instructions=None,
+            source="imported",
+        )
+        summary = self._persist_version_questions(
+            db,
+            version=version,
             questions=list(questions),
+            approval_status="approved",
             generated_by_model=source_key,
             generation_prompt_hash=None,
         )
@@ -318,6 +453,8 @@ class EvalService:
         upload_id: Any,
         org_id: Any,
         questions: List[dict],
+        version_id: Optional[Any] = None,
+        approval_status: str = "approved",
     ) -> EvalSetSummary:
         """Append user-authored questions to the eval set for ``upload_id`` —
         does NOT wipe existing rows (unlike ``import_eval`` / ``generate_eval``
@@ -396,12 +533,12 @@ class EvalService:
                 f"No KnowledgeBase found for upload {upload_id}"
             )
 
-        ord_row = (
-            db.query(func.coalesce(func.max(Eval.question_ord), -1))
-            .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
-            .scalar()
+        ord_query = db.query(func.coalesce(func.max(Eval.question_ord), -1)).filter(
+            Eval.upload_id == upload_id, Eval.organization_id == org_id
         )
-        next_ord = int(ord_row) + 1
+        if version_id is not None:
+            ord_query = ord_query.filter(Eval.eval_version_id == version_id)
+        next_ord = int(ord_query.scalar()) + 1
 
         existing_ids = {
             row[0]
@@ -425,12 +562,14 @@ class EvalService:
                     "organization_id": org_id,
                     "knowledge_base_id": kb.id,
                     "upload_id": upload_id,
+                    "eval_version_id": version_id,
                     "external_id": external_id,
                     "question_ord": next_ord + offset,
                     "question": q["question"],
                     "expected_answer": q["expected_answer"],
                     "expected_source_snippet": q["expected_source_snippet"],
                     "category": q["category"],
+                    "approval_status": approval_status,
                     "generated_by_model": "manual",
                     "generation_prompt_hash": None,
                     "extras": q["extras"],
@@ -457,6 +596,8 @@ class EvalService:
         upload_id: Any,
         org_id: Any,
         csv_bytes: bytes,
+        version_id: Optional[Any] = None,
+        approval_status: str = "approved",
     ) -> EvalSetSummary:
         """Append CSV-authored questions to the eval set for ``upload_id``.
         Thin adapter around :meth:`add_questions_manual` — the CSV is parsed
@@ -478,6 +619,8 @@ class EvalService:
             upload_id=upload_id,
             org_id=org_id,
             questions=questions,
+            version_id=version_id,
+            approval_status=approval_status,
         )
 
     def update_question(
@@ -627,16 +770,143 @@ class EvalService:
         return n
 
     def list_questions(
-        self, db: Session, *, upload_id: Any, org_id: Any
+        self,
+        db: Session,
+        *,
+        upload_id: Any,
+        org_id: Any,
+        eval_version_id: Optional[Any] = None,
     ) -> List[Eval]:
         """Return the ordered ``Eval`` ORM rows for one upload — the internal
-        seam every runner uses so ordering + org-scoping live in one place."""
-        return list(
-            db.query(Eval)
-            .filter(Eval.upload_id == upload_id, Eval.organization_id == org_id)
-            .order_by(Eval.question_ord.asc())
+        seam every runner uses so ordering + org-scoping live in one place.
+        Optionally scoped to one version."""
+        q = db.query(Eval).filter(
+            Eval.upload_id == upload_id, Eval.organization_id == org_id
+        )
+        if eval_version_id is not None:
+            q = q.filter(Eval.eval_version_id == eval_version_id)
+        return list(q.order_by(Eval.question_ord.asc()).all())
+
+    # ── Version lifecycle (review / approval) ──────────────────────────
+
+    def _get_version(self, db: Session, *, version_id: Any, org_id: Any) -> EvalVersion:
+        v = (
+            db.query(EvalVersion)
+            .filter(EvalVersion.id == version_id, EvalVersion.organization_id == org_id)
+            .first()
+        )
+        if v is None:
+            raise EvalNotFoundError(f"Eval version {version_id} not found")
+        return v
+
+    def _latest_version_with_approved(
+        self, db: Session, *, upload_id: Any, org_id: Any
+    ) -> Optional[EvalVersion]:
+        """The highest-numbered version that has at least one approved question —
+        the set the auto path scores. ``None`` when nothing is approved yet."""
+        return (
+            db.query(EvalVersion)
+            .join(Eval, Eval.eval_version_id == EvalVersion.id)
+            .filter(
+                EvalVersion.upload_id == upload_id,
+                EvalVersion.organization_id == org_id,
+                Eval.approval_status == "approved",
+            )
+            .order_by(EvalVersion.version_number.desc())
+            .first()
+        )
+
+    def list_versions(self, db: Session, *, upload_id: Any, org_id: Any) -> List[dict]:
+        """Every version for an upload (newest first) with per-version approval
+        counts and a ``has_results`` flag (whether it's been run — overwrite is
+        blocked once true). One grouped query each; no N+1."""
+        versions = (
+            db.query(EvalVersion)
+            .filter(
+                EvalVersion.upload_id == upload_id,
+                EvalVersion.organization_id == org_id,
+            )
+            .order_by(EvalVersion.version_number.desc())
             .all()
         )
+        if not versions:
+            return []
+        version_ids = [v.id for v in versions]
+        count_rows = (
+            db.query(
+                Eval.eval_version_id,
+                func.count(Eval.id),
+                func.sum(case((Eval.approval_status == "approved", 1), else_=0)),
+            )
+            .filter(Eval.eval_version_id.in_(version_ids))
+            .group_by(Eval.eval_version_id)
+            .all()
+        )
+        counts = {
+            vid: (int(total or 0), int(approved or 0))
+            for vid, total, approved in count_rows
+        }
+        with_results = {
+            r[0]
+            for r in db.query(EvalResult.eval_version_id)
+            .filter(EvalResult.eval_version_id.in_(version_ids))
+            .distinct()
+            .all()
+        }
+        out: List[dict] = []
+        for v in versions:
+            total, approved = counts.get(v.id, (0, 0))
+            d = v.to_dict()
+            d["counts"] = {
+                "total": total,
+                "approved": approved,
+                "pending": total - approved,
+            }
+            d["has_results"] = v.id in with_results
+            out.append(d)
+        return out
+
+    def approve_question(self, db: Session, *, question_id: Any, org_id: Any) -> Eval:
+        """Mark one question approved (goes into the final scored set)."""
+        row = (
+            db.query(Eval)
+            .filter(Eval.id == question_id, Eval.organization_id == org_id)
+            .first()
+        )
+        if row is None:
+            raise EvalNotFoundError(f"Question {question_id} not found")
+        row.approval_status = "approved"
+        db.commit()
+        db.refresh(row)
+        logger.info("[eval] approved question id={} version={}", row.id, row.eval_version_id)
+        return row
+
+    def approve_all(self, db: Session, *, version_id: Any, org_id: Any) -> int:
+        """Approve every question in a version and mark the version finalized."""
+        version = self._get_version(db, version_id=version_id, org_id=org_id)
+        n = (
+            db.query(Eval)
+            .filter(Eval.eval_version_id == version_id, Eval.organization_id == org_id)
+            .update({Eval.approval_status: "approved"}, synchronize_session=False)
+        )
+        version.status = "finalized"
+        db.add(version)
+        db.commit()
+        logger.info("[eval] approved all ({}) in version={}", n, version_id)
+        return n
+
+    def reject_all(self, db: Session, *, version_id: Any, org_id: Any) -> int:
+        """Reject (delete) every question in a version. Rejected questions are
+        not stored. Guarded by version existence (org-scoped)."""
+        self._get_version(db, version_id=version_id, org_id=org_id)
+        n = (
+            db.query(Eval)
+            .filter(Eval.eval_version_id == version_id, Eval.organization_id == org_id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+        logger.info("[eval] rejected (deleted) all ({}) in version={}", n, version_id)
+        return n
 
     def get_or_generate_eval(
         self,
@@ -646,14 +916,39 @@ class EvalService:
         org_id: Any,
         ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
-        existing = self.get_eval_by_upload(db, upload_id=upload_id, org_id=org_id)
-        if existing is not None and existing.question_count > 0:
-            return existing
-        return self.generate_eval(
+        """Auto path: reuse the latest version that has approved questions; else
+        generate a fresh auto-approved version so scoring has something to run.
+        Returns a summary carrying ``eval_version_id`` for the run."""
+        latest = self._latest_version_with_approved(
+            db, upload_id=upload_id, org_id=org_id
+        )
+        if latest is not None:
+            count = (
+                db.query(func.count(Eval.id))
+                .filter(
+                    Eval.eval_version_id == latest.id,
+                    Eval.organization_id == org_id,
+                    Eval.approval_status == "approved",
+                )
+                .scalar()
+            )
+            return EvalSetSummary(
+                upload_id=upload_id,
+                organization_id=org_id,
+                knowledge_base_id=latest.knowledge_base_id,
+                question_count=int(count or 0),
+                generated_by_model=latest.generated_by_model,
+                generation_prompt_hash=latest.generation_prompt_hash,
+                eval_version_id=latest.id,
+            )
+        return self.generate_version(
             db,
             upload_id=upload_id,
             org_id=org_id,
+            mode="new",
             ingestion_run_id=ingestion_run_id,
+            approval_status="approved",
+            source="generated",
         )
 
     # ── Run lifecycle ──────────────────────────────────────────────────
@@ -665,6 +960,7 @@ class EvalService:
         upload_id: Any,
         ingestion_run_id: Any,
         triggered_by: str,
+        eval_version_id: Optional[Any] = None,
         top_k: Optional[int] = None,
         answer_model: Optional[str] = None,
         judge_model: Optional[str] = None,
@@ -683,10 +979,18 @@ class EvalService:
                 f"triggered_by must be one of 'auto'|'manual'|'cli'; got {triggered_by!r}"
             )
 
-        questions = self._questions_scoped(db, upload_id=upload_id)
+        # Score the APPROVED questions of the chosen version. Legacy callers
+        # (CLI without a version) fall back to every question for the upload.
+        questions = self._questions_scoped(
+            db,
+            upload_id=upload_id,
+            eval_version_id=eval_version_id,
+            approved_only=eval_version_id is not None,
+        )
         if not questions:
             raise EvalRunError(
-                f"Upload {upload_id} has no eval questions — regenerate before running"
+                f"Upload {upload_id} has no approved eval questions for this version "
+                "— approve questions before running"
             )
         organization_id = questions[0].organization_id
 
@@ -751,6 +1055,7 @@ class EvalService:
             started_at=started_at,
             completed_at=None,
             summary={},
+            eval_version_id=eval_version_id,
         )
 
         logger.info(
@@ -821,6 +1126,7 @@ class EvalService:
                 organization_id=organization_id,
                 run_id=run_id,
                 ingestion_run_id=run.id,
+                eval_version_id=eval_version_id,
                 run_number=next_run_number,
                 triggered_by=triggered_by,
                 top_k=int(top_k),
@@ -965,21 +1271,24 @@ class EvalService:
             return []
         return [row[0] for row in rows if row[0]]
 
-    def list_runs_for_ingestion(
+    def list_runs_filtered(
         self,
         db: Session,
         *,
         org_id: Any,
         upload_id: Any,
-        ingestion_run_id: Any,
+        ingestion_run_id: Optional[Any] = None,
+        eval_version_id: Optional[Any] = None,
     ) -> List[EvalRunSummary]:
-        """Every eval batch that scored the given ingestion run — newest first.
-        Powers the drawer's run-picker."""
+        """Eval batches for an upload, optionally narrowed by ingestion run
+        and/or eval version — powers the Eval-results tab's two filters. Newest
+        first, org-scoped."""
         rows = _run_grouped_query(
             db,
             upload_id=upload_id,
             organization_id=org_id,
-            ingestion_run_ids=[ingestion_run_id],
+            ingestion_run_ids=[ingestion_run_id] if ingestion_run_id is not None else None,
+            eval_version_id=eval_version_id,
         ).all()
         return [_row_to_run_summary(r) for r in rows]
 
@@ -1048,28 +1357,37 @@ class EvalService:
         r2 = self._r2 or _default_r2_service()
         return r2.download_file(file_path)
 
-    def _questions_scoped(self, db: Session, *, upload_id: Any) -> List[Eval]:
-        return list(
-            db.query(Eval)
-            .filter(Eval.upload_id == upload_id)
-            .order_by(Eval.question_ord.asc())
-            .all()
-        )
-
-    def _persist_question_set(
+    def _questions_scoped(
         self,
         db: Session,
         *,
         upload_id: Any,
-        org_id: Any,
-        knowledge_base_id: Any,
+        eval_version_id: Optional[Any] = None,
+        approved_only: bool = False,
+    ) -> List[Eval]:
+        q = db.query(Eval).filter(Eval.upload_id == upload_id)
+        if eval_version_id is not None:
+            q = q.filter(Eval.eval_version_id == eval_version_id)
+        if approved_only:
+            q = q.filter(Eval.approval_status == "approved")
+        return list(q.order_by(Eval.question_ord.asc()).all())
+
+    def _persist_version_questions(
+        self,
+        db: Session,
+        *,
+        version: EvalVersion,
         questions: List[dict],
+        approval_status: str,
         generated_by_model: Optional[str],
         generation_prompt_hash: Optional[str],
     ) -> EvalSetSummary:
-        """Replace every question for ``upload_id`` with the new batch. Cascade
-        drops any existing ``eval_results`` rows for the deleted questions."""
-        db.query(Eval).filter(Eval.upload_id == upload_id).delete(
+        """Insert the batch into ``version`` (replacing only THIS version's
+        questions), stamp ``approval_status``, and mark the version ready. The
+        ``external_id`` is prefixed with the version number so it stays unique
+        under the current ``(upload_id, external_id)`` constraint even though the
+        same document now has multiple versions."""
+        db.query(Eval).filter(Eval.eval_version_id == version.id).delete(
             synchronize_session=False
         )
         rows = []
@@ -1077,18 +1395,21 @@ class EvalService:
             extras = {
                 k: v for k, v in q.items() if k not in _RESERVED_QUESTION_KEYS
             } or None
+            base_id = str(q.get("id") or f"q{idx + 1}")
             rows.append(
                 {
                     "id": uuid.uuid4(),
-                    "organization_id": org_id,
-                    "knowledge_base_id": knowledge_base_id,
-                    "upload_id": upload_id,
-                    "external_id": str(q.get("id") or f"q{idx + 1}"),
+                    "organization_id": version.organization_id,
+                    "knowledge_base_id": version.knowledge_base_id,
+                    "upload_id": version.upload_id,
+                    "eval_version_id": version.id,
+                    "external_id": f"v{version.version_number}-{base_id}",
                     "question_ord": idx,
                     "question": str(q.get("question", "")),
                     "expected_answer": str(q.get("expected_answer", "")),
                     "expected_source_snippet": q.get("expected_source_snippet") or None,
                     "category": q.get("category"),
+                    "approval_status": approval_status,
                     "generated_by_model": generated_by_model,
                     "generation_prompt_hash": generation_prompt_hash,
                     "extras": extras,
@@ -1096,18 +1417,23 @@ class EvalService:
             )
         if rows:
             db.bulk_insert_mappings(Eval, rows)
+        version.status = "finalized" if approval_status == "approved" else "draft"
+        version.generated_by_model = generated_by_model
+        version.generation_prompt_hash = generation_prompt_hash
+        db.add(version)
         db.commit()
         logger.info(
-            "[eval] persisted question set upload={} questions={} model={}",
-            upload_id, len(rows), generated_by_model,
+            "[eval] persisted version={} upload={} questions={} approval={} model={}",
+            version.id, version.upload_id, len(rows), approval_status, generated_by_model,
         )
         return EvalSetSummary(
-            upload_id=upload_id,
-            organization_id=org_id,
-            knowledge_base_id=knowledge_base_id,
+            upload_id=version.upload_id,
+            organization_id=version.organization_id,
+            knowledge_base_id=version.knowledge_base_id,
             question_count=len(rows),
             generated_by_model=generated_by_model,
             generation_prompt_hash=generation_prompt_hash,
+            eval_version_id=version.id,
         )
 
     def _score_one_question(
@@ -1271,6 +1597,7 @@ class EvalService:
                 organization_id=organization_id,
                 run_id=run_summary.run_id,
                 ingestion_run_id=run_summary.ingestion_run_id,
+                eval_version_id=run_summary.eval_version_id,
                 run_number=run_summary.run_number,
                 triggered_by=run_summary.triggered_by,
                 top_k=run_summary.top_k,
@@ -1309,6 +1636,7 @@ class EvalService:
         scored_rows: List[dict],
         question_dtos: List[dict],
         statuses: List[str],
+        eval_version_id: Optional[Any] = None,
     ) -> None:
         """Bulk-insert every scored answer on a brand-new session so we never
         inherit a broken pool connection from the LLM-loop session."""
@@ -1323,6 +1651,7 @@ class EvalService:
                     "id": uuid.uuid4(),
                     "organization_id": organization_id,
                     "eval_id": scored["eval_id"],
+                    "eval_version_id": eval_version_id,
                     "ingestion_run_id": ingestion_run_id,
                     "run_id": run_id,
                     "run_number": run_number,
@@ -1335,9 +1664,6 @@ class EvalService:
                     "retrieval_hit": bool(scored.get("retrieval_hit")),
                     "retrieved_chunks": scored.get("retrieved_chunks"),
                     "verdict": judge.get("verdict"),
-                    "correctness": _to_float(judge.get("correctness")),
-                    "groundedness": _to_float(judge.get("groundedness")),
-                    "relevance": _to_float(judge.get("relevance")),
                     "judge_reasoning": judge.get("reasoning"),
                     "metric_scores": judge.get("metric_scores"),
                     "latency_ms": scored.get("latency_ms"),
@@ -1429,15 +1755,6 @@ def _question_to_dto(row: Eval) -> dict:
     }
 
 
-def _to_float(v: Any) -> Optional[float]:
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
 def _build_context(chunks: Iterable[dict]) -> str:
     parts = [f"[chunk {i}] {c.get('text', '')}" for i, c in enumerate(chunks, 1)]
     return "\n\n".join(parts) if parts else "(no chunks retrieved)"
@@ -1450,6 +1767,7 @@ def _run_grouped_query(
     run_id: Any = None,
     organization_id: Any = None,
     ingestion_run_ids: Optional[Iterable[Any]] = None,
+    eval_version_id: Any = None,
 ):
     """Aggregate ``eval_results`` rows into one row per run, computing the
     summary via SQL so we never buffer every answer into memory just to
@@ -1486,6 +1804,7 @@ def _run_grouped_query(
             Eval.upload_id.label("upload_id"),
             EvalResult.organization_id.label("organization_id"),
             EvalResult.ingestion_run_id.label("ingestion_run_id"),
+            EvalResult.eval_version_id.label("eval_version_id"),
             EvalResult.run_number.label("run_number"),
             EvalResult.triggered_by.label("triggered_by"),
             EvalResult.top_k.label("top_k"),
@@ -1499,9 +1818,6 @@ def _run_grouped_query(
             func.sum(case((EvalResult.verdict == "FAIL", 1), else_=0)).label("fail_count"),
             func.sum(case((EvalResult.retrieval_hit.is_(True), 1), else_=0)).label("hit_count"),
             func.sum(case((EvalResult.status == "failed", 1), else_=0)).label("failed_status_count"),
-            func.coalesce(func.avg(EvalResult.correctness), 0.0).label("avg_correctness"),
-            func.coalesce(func.avg(EvalResult.groundedness), 0.0).label("avg_groundedness"),
-            func.coalesce(func.avg(EvalResult.relevance), 0.0).label("avg_relevance"),
             func.coalesce(func.sum(EvalResult.latency_ms), 0).label("duration_ms"),
             *metric_avg_cols,
         )
@@ -1511,6 +1827,7 @@ def _run_grouped_query(
             Eval.upload_id,
             EvalResult.organization_id,
             EvalResult.ingestion_run_id,
+            EvalResult.eval_version_id,
             EvalResult.run_number,
             EvalResult.triggered_by,
             EvalResult.top_k,
@@ -1531,6 +1848,8 @@ def _run_grouped_query(
         # ``.in_([])`` returns no rows, which is exactly what we want when
         # the caller passes an empty list.
         q = q.filter(EvalResult.ingestion_run_id.in_(list(ingestion_run_ids)))
+    if eval_version_id is not None:
+        q = q.filter(EvalResult.eval_version_id == eval_version_id)
     return q
 
 
@@ -1550,9 +1869,6 @@ def _row_to_run_summary(row) -> EvalRunSummary:
         "partial_rate": (partials / total) if total else 0.0,
         "fail_rate": (fails / total) if total else 0.0,
         "retrieval_hit_rate": (hits / total) if total else 0.0,
-        "avg_correctness": float(row.avg_correctness or 0.0),
-        "avg_groundedness": float(row.avg_groundedness or 0.0),
-        "avg_relevance": float(row.avg_relevance or 0.0),
         "total_questions": total,
         "duration_ms": int(row.duration_ms or 0),
     }
@@ -1575,6 +1891,7 @@ def _row_to_run_summary(row) -> EvalRunSummary:
         started_at=row.started_at,
         completed_at=row.completed_at,
         summary=summary,
+        eval_version_id=getattr(row, "eval_version_id", None),
     )
 
 
@@ -1591,9 +1908,6 @@ def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
         "actual_answer": result.actual_answer or "",
         "judge": {
             "verdict": result.verdict or "FAIL",
-            "correctness": float(result.correctness or 0.0),
-            "groundedness": float(result.groundedness or 0.0),
-            "relevance": float(result.relevance or 0.0),
             "reasoning": result.judge_reasoning,
             "metric_scores": result.metric_scores or {},
         },

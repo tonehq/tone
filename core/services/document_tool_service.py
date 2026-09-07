@@ -311,31 +311,6 @@ def create_document_handler(
     return handle_read_document
 
 
-def get_document_names_for_agent(agent_id: int, org_id: Any) -> List[str]:
-    """Fetch file names of all ready KB uploads for an agent's published version."""
-    from core.database.session import get_db_context
-    from core.models.upload import Upload
-    from core.models.agent_knowledge_base import AgentKnowledgeBase
-    from core.models.knowledge_base import KnowledgeBase
-    from core.utils.agent_scope import published_config_subquery
-
-    published_config_sq = published_config_subquery(agent_id)
-
-    with get_db_context() as db:
-        rows = (
-            db.query(Upload.file_name)
-            .join(KnowledgeBase, KnowledgeBase.upload_id == Upload.id)
-            .join(AgentKnowledgeBase, AgentKnowledgeBase.knowledge_base_id == KnowledgeBase.id)
-            .filter(
-                AgentKnowledgeBase.agent_id == agent_id,
-                AgentKnowledgeBase.agent_config_id == published_config_sq,
-                Upload.status == "ready",
-            )
-            .all()
-        )
-    return [row[0] for row in rows if row[0]]
-
-
 def get_openai_api_key_for_agent(org_id: Any) -> Optional[str]:
     """Fetch and decrypt the OpenAI API key from DB for embedding.
 
@@ -547,15 +522,3 @@ def build_document_tool(
         agent_id, len(doc_names), len(upload_runs), doc_names,
     )
     return tools_schema
-
-
-def register_document_tool(llm: Any, agent_id: int, org_id: Any, tool_call_entries: Optional[list] = None, tool_request_ts: Optional[dict] = None, current_turn: Optional[dict] = None) -> Optional[ToolsSchema]:
-    """Back-compat entry point: fetch the agent's KB docs from the DB, then build the tool.
-    New callers should cache `get_kb_document_names()` and call `build_document_tool()`."""
-    kb = get_kb_document_names(agent_id)
-    return build_document_tool(
-        llm, agent_id, org_id, kb,
-        tool_call_entries=tool_call_entries,
-        tool_request_ts=tool_request_ts,
-        current_turn=current_turn,
-    )

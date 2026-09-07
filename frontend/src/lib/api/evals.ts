@@ -2,16 +2,26 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
   addManualEvalQuestions,
+  approveAllEvalQuestions,
+  approveEvalQuestion,
   deleteEvalQuestion,
+  generateEvalVersion,
   getEvalRunDetail,
   listEvalQuestions,
-  listEvalRunsForIngestion,
+  listEvalRunsFiltered,
   listEvalSummariesByIngestion,
+  listEvalVersions,
+  rejectAllEvalQuestions,
   triggerEvalRun,
   updateEvalQuestion,
   uploadEvalQuestionsCsv,
 } from '@/services/evalService';
-import type { ManualQuestionInput, TriggerEvalRunPayload, UpdateQuestionPatch } from '@/types/eval';
+import type {
+  GenerateEvalVersionPayload,
+  ManualQuestionInput,
+  TriggerEvalRunPayload,
+  UpdateQuestionPatch,
+} from '@/types/eval';
 
 export const EVAL_QUERY_KEY = 'evals';
 
@@ -35,17 +45,7 @@ export function useEvalSummariesByIngestion(uploadId: string | null, ingestionRu
   });
 }
 
-// Runs-picker for the drawer.
-export function useEvalRunsForIngestion(uploadId: string | null, ingestionRunId: string | null) {
-  return useQuery({
-    queryKey: [EVAL_QUERY_KEY, 'runs', uploadId, ingestionRunId],
-    queryFn: () => listEvalRunsForIngestion(uploadId as string, ingestionRunId as string),
-    enabled: !!uploadId && !!ingestionRunId,
-    staleTime: 15_000,
-  });
-}
-
-// Drawer body — summary + per-question rows for one batch.
+// Batch detail — summary + per-question rows for one batch.
 export function useEvalRunDetail(uploadId: string | null, runId: string | null) {
   return useQuery({
     queryKey: [EVAL_QUERY_KEY, 'detail', uploadId, runId],
@@ -55,16 +55,75 @@ export function useEvalRunDetail(uploadId: string | null, runId: string | null) 
   });
 }
 
-// ── Manual eval-question authoring ─────────────────────────────────────
+// ── Eval versions (generate / review / approve) ────────────────────────
 
-// Every question for one upload — feeds the manual-authoring modal's list.
-// Short staleTime (0) so a mutation → invalidate → immediate refetch feels
-// snappy to the user typing.
-export function useEvalQuestions(uploadId: string | null) {
+// Versions for an upload. Polls every 4s while any version is still
+// generating (the async LLM job flips it generating → draft).
+export function useEvalVersions(uploadId: string | null) {
   return useQuery({
-    queryKey: [EVAL_QUERY_KEY, 'questions', uploadId],
-    queryFn: () => listEvalQuestions(uploadId as string),
+    queryKey: [EVAL_QUERY_KEY, 'versions', uploadId],
+    queryFn: () => listEvalVersions(uploadId as string),
     enabled: !!uploadId,
+    staleTime: 5_000,
+    refetchInterval: (query) =>
+      (query.state.data ?? []).some((v) => v.status === 'generating') ? 4_000 : false,
+  });
+}
+
+export function useGenerateEvalVersion(uploadId: string) {
+  const invalidate = useInvalidateEvals(uploadId);
+  return useMutation({
+    mutationFn: (payload: GenerateEvalVersionPayload) => generateEvalVersion(uploadId, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveEvalQuestion(uploadId: string) {
+  const invalidate = useInvalidateEvals(uploadId);
+  return useMutation({
+    mutationFn: (questionId: string) => approveEvalQuestion(uploadId, questionId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveAllEvalQuestions(uploadId: string) {
+  const invalidate = useInvalidateEvals(uploadId);
+  return useMutation({
+    mutationFn: (versionId: string) => approveAllEvalQuestions(uploadId, versionId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectAllEvalQuestions(uploadId: string) {
+  const invalidate = useInvalidateEvals(uploadId);
+  return useMutation({
+    mutationFn: (versionId: string) => rejectAllEvalQuestions(uploadId, versionId),
+    onSuccess: invalidate,
+  });
+}
+
+// Eval batches for the results tab, filtered by ingestion run and/or version.
+export function useEvalRunsFiltered(
+  uploadId: string | null,
+  filters: { ingestion_run_id?: string | null; eval_version_id?: string | null },
+) {
+  return useQuery({
+    queryKey: [EVAL_QUERY_KEY, 'runs-filtered', uploadId, filters],
+    queryFn: () => listEvalRunsFiltered(uploadId as string, filters),
+    enabled: !!uploadId,
+    staleTime: 15_000,
+  });
+}
+
+// ── Eval-question authoring (scoped to a version) ──────────────────────
+
+// Questions for one version — feeds the manage-evals review list. Short
+// staleTime (0) so a mutation → invalidate → immediate refetch feels snappy.
+export function useEvalQuestions(uploadId: string | null, versionId?: string | null) {
+  return useQuery({
+    queryKey: [EVAL_QUERY_KEY, 'questions', uploadId, versionId ?? null],
+    queryFn: () => listEvalQuestions(uploadId as string, versionId),
+    enabled: !!uploadId && !!versionId,
     staleTime: 0,
   });
 }
@@ -77,25 +136,27 @@ function useInvalidateEvals(uploadId: string) {
   const qc = useQueryClient();
   return () => {
     qc.invalidateQueries({ queryKey: [EVAL_QUERY_KEY, 'questions', uploadId] });
+    qc.invalidateQueries({ queryKey: [EVAL_QUERY_KEY, 'versions', uploadId] });
     qc.invalidateQueries({ queryKey: [EVAL_QUERY_KEY, 'by-ingestion', uploadId] });
+    qc.invalidateQueries({ queryKey: [EVAL_QUERY_KEY, 'runs-filtered', uploadId] });
   };
 }
 
 export function useAddManualEvalQuestions(uploadId: string) {
   const invalidate = useInvalidateEvals(uploadId);
   return useMutation({
-    mutationFn: (questions: ManualQuestionInput[]) => addManualEvalQuestions(uploadId, questions),
+    mutationFn: (args: { versionId: string; questions: ManualQuestionInput[] }) =>
+      addManualEvalQuestions(uploadId, args.versionId, args.questions),
     onSuccess: invalidate,
   });
 }
 
-// CSV upload → parsed + appended server-side via the same manual-append path
-// (identical validation + audit tag). Invalidates the same queries so the
-// list refreshes as soon as the upload completes.
+// CSV upload → parsed + appended into the given version server-side.
 export function useUploadEvalQuestionsCsv(uploadId: string) {
   const invalidate = useInvalidateEvals(uploadId);
   return useMutation({
-    mutationFn: (file: File) => uploadEvalQuestionsCsv(uploadId, file),
+    mutationFn: (args: { versionId: string; file: File }) =>
+      uploadEvalQuestionsCsv(uploadId, args.versionId, args.file),
     onSuccess: invalidate,
   });
 }

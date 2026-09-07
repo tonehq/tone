@@ -514,7 +514,7 @@ export default function KnowledgeBasePage() {
                 <CustomButton
                   type="default"
                   icon={<ExternalLink className="size-4" />}
-                  onClick={() => window.open(selectedDoc.url ?? '', '_blank')}
+                  onClick={() => window.open(selectedDoc.url ?? '', '_blank', 'noopener,noreferrer')}
                 >
                   View file
                 </CustomButton>
