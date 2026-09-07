@@ -34,6 +34,7 @@ export function sectionKeyForFieldPath(path: string): string {
   if (path.startsWith('config.llm_settings')) return 'setup';
   if (path.startsWith('config.voice_settings')) return 'voice';
   if (path.startsWith('config.stt_settings')) return 'voice';
+  if (path.startsWith('config.turn_settings')) return 'voice';
   if (
     path.startsWith('config.system_prompt_template') ||
     path.startsWith('config.first_message') ||

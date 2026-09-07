@@ -9,7 +9,7 @@ from core.services.agent_service import AgentService
 from core.services.pipeline import turn_detection as td
 from core.services.pipeline.builder.pipecat import _build_turn_detection
 from core.services.pipeline.params.base import PipelineParams
-from core.services.pipeline.service_resolver import _turn_detection_settings
+from core.services.pipeline.service_resolver import _turn_settings
 from core.services.pipeline.turn_detection import livekit, smart_turn, ten
 
 
@@ -162,31 +162,37 @@ def test_builder_reraises_bad_provider(fake_pipecat):
         _build_turn_detection({"provider": "nope"}, object(), None)
 
 
-def test_pipeline_params_carry_turn_detection():
-    params = PipelineParams.from_cache_dict({"llm": {}, "turn_detection": {"provider": "ten"}})
-    assert params.turn_detection == {"provider": "ten"}
-    assert PipelineParams.from_cache_dict({"llm": {}}).turn_detection is None
+def test_pipeline_params_carry_turn_settings():
+    payload = {"turn_detection": {"provider": "ten"}, "vad": {"stop_secs": 0.3}}
+    params = PipelineParams.from_cache_dict({"llm": {}, "turn_settings": payload})
+    assert params.turn_settings == payload
+    assert PipelineParams.from_cache_dict({"llm": {}}).turn_settings is None
 
 
-def test_resolver_reads_turn_detection_from_conversation_settings():
-    config = mock.Mock(
-        conversation_settings={"max_duration_seconds": 600, "turn_detection": {"provider": "livekit"}}
-    )
-    assert _turn_detection_settings(config) == {"provider": "livekit"}
-    assert _turn_detection_settings(mock.Mock(conversation_settings=None)) is None
-    assert _turn_detection_settings(mock.Mock(conversation_settings={"turn_detection": "livekit"})) is None
+def test_resolver_reads_turn_settings_column():
+    config = mock.Mock(turn_settings={"turn_detection": {"provider": "livekit"}, "vad": {}})
+    assert _turn_settings(config) == {"turn_detection": {"provider": "livekit"}, "vad": {}}
+    assert _turn_settings(mock.Mock(turn_settings=None)) is None
+    assert _turn_settings(mock.Mock(turn_settings="livekit")) is None
 
 
-def test_agent_service_rejects_invalid_turn_detection():
+def test_agent_service_rejects_invalid_turn_settings():
     service = AgentService(mock.MagicMock(), org_id="00000000-0000-0000-0000-000000000001")
-    service._validate_turn_detection({"conversation_settings": {"turn_detection": {"provider": "smart_turn"}}})
-    service._validate_turn_detection({"conversation_settings": {"max_duration_seconds": 10}})
-    service._validate_turn_detection({})
+    service._validate_turn_settings({"turn_settings": {"turn_detection": {"provider": "smart_turn"}}})
+    service._validate_turn_settings({"turn_settings": {"vad": {"stop_secs": 0.4}}})
+    service._validate_turn_settings({"conversation_settings": {"max_duration_seconds": 10}})
+    service._validate_turn_settings({})
     with pytest.raises(HTTPException) as exc:
-        service._validate_turn_detection(
-            {"conversation_settings": {"turn_detection": {"provider": "livekit", "max_history_turns": 99}}}
+        service._validate_turn_settings(
+            {
+                "turn_settings": {
+                    "turn_detection": {"provider": "livekit", "max_history_turns": 99},
+                    "vad": {"confidence": 3},
+                }
+            }
         )
     assert exc.value.status_code == 400
-    assert exc.value.detail["errors"]["conversation_settings"] == {
-        "max_history_turns": ["max_history_turns must be at most 20"]
+    assert exc.value.detail["errors"]["turn_settings"] == {
+        "turn_detection": {"max_history_turns": ["max_history_turns must be at most 20"]},
+        "vad": {"confidence": ["confidence must be at most 1"]},
     }
