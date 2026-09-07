@@ -58,7 +58,7 @@ export default function IngestionChunksDrawer({
       onClose={onClose}
       title={ingestionRun ? `Chunks · ingestion run #${ingestionRun.run_number}` : 'Chunks'}
       description="Every chunk this ingestion run produced, in order."
-      width="w-[900px] sm:max-w-[95vw]"
+      width="w-[720px] sm:max-w-[95vw]"
     >
       <div className="flex flex-col gap-4">
         {ingestionRun && <IngestionRunRecipe run={ingestionRun} />}

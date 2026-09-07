@@ -32,6 +32,8 @@ from dataclasses import dataclass, field
 from typing import Any, List, Optional, Sequence
 from uuid import UUID
 
+from loguru import logger
+
 from core.services.evals.csv_decode import decode_csv_bytes
 from sqlalchemy import String, bindparam
 from sqlalchemy.dialects.postgresql import ARRAY
@@ -721,6 +723,9 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
         if folder_row is not None:
             folder_name = folder_row.name
     except Exception:  # noqa: BLE001 — detached / expired instance
+        logger.debug(
+            "[agent-llm-eval] scenario folder_ref unavailable (detached instance)"
+        )
         folder_name = None
 
     return LLMScenario(

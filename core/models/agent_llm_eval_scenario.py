@@ -1,5 +1,6 @@
 from typing import Optional
 
+from loguru import logger
 from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
@@ -117,6 +118,9 @@ class AgentLlmEvalScenario(OrgScopedModel):
             if folder_row is not None:
                 folder_name = folder_row.name
         except Exception:  # noqa: BLE001 — detached / expired instance
+            logger.debug(
+                "[agent-llm-eval] scenario folder_ref unavailable (detached instance)"
+            )
             folder_name = None
         return {
             "id": str(self.id),

@@ -44,7 +44,10 @@ def _remove_files(*paths: str) -> None:
         try:
             os.remove(path)
         except OSError:
-            pass
+            # Best-effort temp cleanup — a leftover temp file is harmless, but
+            # log at debug (never silently swallow) so a recurring failure is
+            # traceable.
+            logger.debug("[ingestion] temp file cleanup failed path={}", path)
 
 
 class DocumentProcessingService:

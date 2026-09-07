@@ -56,6 +56,9 @@ def get_tokenizer(model: Optional[str] = None) -> Tokenizer:
             logger.info("No OpenAI tokenizer for {!r}; falling back to HuggingFace", model)
     try:
         return HuggingFaceTokenizer(model) if (model and "/" in model) else HuggingFaceTokenizer()
-    except Exception as e:
-        logger.warning("HuggingFace tokenizer unavailable ({}); using ApproxTokenizer", e)
+    except Exception:
+        # Falls back to ApproxTokenizer, but log the full traceback (not just
+        # the message) so a genuine HF load failure isn't masked as a benign
+        # fallback.
+        logger.exception("HuggingFace tokenizer unavailable; using ApproxTokenizer")
         return ApproxTokenizer()

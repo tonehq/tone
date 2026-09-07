@@ -1,4 +1,4 @@
-import { formatDecimal, formatPercent } from '@/components/knowledge-base/evalResultsHelpers';
+import { formatPercent } from '@/components/knowledge-base/evalResultsHelpers';
 import type { EvalRunSummary, EvalRunSummaryTotals } from '@/types/eval';
 import { formatDate } from '@/utils/date';
 
@@ -28,22 +28,10 @@ export default function SummaryStrip({
       label: 'Retrieval hit',
       value: <span className="tabular-nums">{formatPercent(summary.retrieval_hit_rate)}</span>,
     },
-    {
-      label: 'Avg correctness',
-      value: <span className="tabular-nums">{formatDecimal(summary.avg_correctness)}</span>,
-    },
-    {
-      label: 'Avg groundedness',
-      value: <span className="tabular-nums">{formatDecimal(summary.avg_groundedness)}</span>,
-    },
-    {
-      label: 'Avg relevance',
-      value: <span className="tabular-nums">{formatDecimal(summary.avg_relevance)}</span>,
-    },
   ];
   return (
     <section className="rounded-lg border border-border/60 bg-card p-3">
-      <div className="grid grid-cols-3 gap-3 text-[12.5px] sm:grid-cols-6">
+      <div className="grid grid-cols-3 gap-3 text-[12.5px]">
         {cells.map((c) => (
           <div key={c.label}>
             <div className="text-[11px] uppercase tracking-wide text-muted-foreground">

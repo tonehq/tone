@@ -21,6 +21,7 @@ class Eval(OrgScopedModel):
     __table_args__ = (
         UniqueConstraint("upload_id", "external_id", name="uq_evals_upload_external_id"),
         Index("ix_evals_upload_ord", "upload_id", "question_ord"),
+        Index("ix_evals_version_id", "eval_version_id"),
     )
 
     knowledge_base_id = Column(
@@ -35,16 +36,27 @@ class Eval(OrgScopedModel):
         nullable=False,
         index=True,
     )
+    # Nullable during the expand→backfill window; tightened to NOT NULL in a
+    # follow-up migration once every row is backfilled and new code writes it.
+    eval_version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("eval_versions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
     external_id = Column(String(64), nullable=False)
     question_ord = Column(Integer, nullable=False)
     question = Column(Text, nullable=False)
     expected_answer = Column(Text, nullable=False)
     expected_source_snippet = Column(Text, nullable=True)
     category = Column(String(64), nullable=True)
+    # 'pending' (generated, awaiting review) | 'approved' (kept, scored on run).
+    # Rejected questions are hard-deleted, so there is no 'rejected' value.
+    approval_status = Column(String(16), nullable=False, default="pending")
     generated_by_model = Column(String(120), nullable=True)
     generation_prompt_hash = Column(String(64), nullable=True)
     extras = Column(JSONB, nullable=True)
 
+    version = relationship("EvalVersion", back_populates="evals")
     results = relationship(
         "EvalResult",
         back_populates="eval",
@@ -57,12 +69,14 @@ class Eval(OrgScopedModel):
             "organization_id": str(self.organization_id),
             "knowledge_base_id": str(self.knowledge_base_id),
             "upload_id": str(self.upload_id),
+            "eval_version_id": str(self.eval_version_id) if self.eval_version_id else None,
             "external_id": self.external_id,
             "question_ord": self.question_ord,
             "question": self.question,
             "expected_answer": self.expected_answer,
             "expected_source_snippet": self.expected_source_snippet,
             "category": self.category,
+            "approval_status": self.approval_status,
             "generated_by_model": self.generated_by_model,
             "generation_prompt_hash": self.generation_prompt_hash,
             "extras": self.extras,

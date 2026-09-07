@@ -8,6 +8,10 @@ import type {
   EvalRunSummary,
   EvalSetSummary,
   EvalSummaryByIngestionResponse,
+  EvalVersion,
+  EvalVersionsResponse,
+  GenerateEvalVersionPayload,
+  GenerateEvalVersionResponse,
   ManualQuestionInput,
   TriggerEvalRunPayload,
   TriggerEvalRunResponse,
@@ -28,16 +32,6 @@ export const listEvalSummariesByIngestion = async (
   return res.data;
 };
 
-export const listEvalRunsForIngestion = async (
-  uploadId: string,
-  ingestionRunId: string,
-): Promise<EvalRunSummary[]> => {
-  const res = await axiosInstance.get<{ items: EvalRunSummary[] }>(
-    `/knowledge-base/${uploadId}/runs/${ingestionRunId}/eval-runs`,
-  );
-  return res.data.items;
-};
-
 export const getEvalRunDetail = async (uploadId: string, runId: string): Promise<EvalRunDetail> => {
   const res = await axiosInstance.get<EvalRunDetail>(
     `/knowledge-base/${uploadId}/eval-runs/${runId}`,
@@ -45,33 +39,101 @@ export const getEvalRunDetail = async (uploadId: string, runId: string): Promise
   return res.data;
 };
 
-// ── Manual eval-question authoring ─────────────────────────────────────
+// ── Eval versions (generate / review / approve) ────────────────────────
 
-export const listEvalQuestions = async (uploadId: string): Promise<EvalQuestion[]> => {
+export const listEvalVersions = async (uploadId: string): Promise<EvalVersion[]> => {
+  const res = await axiosInstance.get<EvalVersionsResponse>(
+    `/knowledge-base/${uploadId}/eval-versions`,
+  );
+  return res.data.items;
+};
+
+export const generateEvalVersion = async (
+  uploadId: string,
+  payload: GenerateEvalVersionPayload,
+): Promise<GenerateEvalVersionResponse> => {
+  const res = await axiosInstance.post<GenerateEvalVersionResponse>(
+    `/knowledge-base/${uploadId}/eval-versions/generate`,
+    payload,
+  );
+  return res.data;
+};
+
+export const approveEvalQuestion = async (
+  uploadId: string,
+  questionId: string,
+): Promise<EvalQuestion> => {
+  const res = await axiosInstance.post<EvalQuestion>(
+    `/knowledge-base/${uploadId}/evals/questions/${questionId}/approve`,
+  );
+  return res.data;
+};
+
+export const approveAllEvalQuestions = async (
+  uploadId: string,
+  versionId: string,
+): Promise<{ approved: number }> => {
+  const res = await axiosInstance.post<{ approved: number }>(
+    `/knowledge-base/${uploadId}/eval-versions/${versionId}/approve-all`,
+  );
+  return res.data;
+};
+
+export const rejectAllEvalQuestions = async (
+  uploadId: string,
+  versionId: string,
+): Promise<{ rejected: number }> => {
+  const res = await axiosInstance.post<{ rejected: number }>(
+    `/knowledge-base/${uploadId}/eval-versions/${versionId}/reject-all`,
+  );
+  return res.data;
+};
+
+// ── Eval-question authoring (scoped to a version) ──────────────────────
+
+export const listEvalQuestions = async (
+  uploadId: string,
+  versionId?: string | null,
+): Promise<EvalQuestion[]> => {
   const res = await axiosInstance.get<EvalQuestionsResponse>(
     `/knowledge-base/${uploadId}/evals/questions`,
+    { params: versionId ? { version_id: versionId } : undefined },
   );
   return res.data.items;
 };
 
 export const addManualEvalQuestions = async (
   uploadId: string,
+  versionId: string,
   questions: ManualQuestionInput[],
 ): Promise<EvalSetSummary> => {
   const res = await axiosInstance.post<EvalSetSummary>(`/knowledge-base/${uploadId}/evals/manual`, {
     questions,
+    eval_version_id: versionId,
   });
   return res.data;
 };
 
-// Multipart upload — server parses the CSV and reuses the manual-append path,
-// so validation and audit tags match a hand-typed entry exactly. The
-// multipart/form-data + boundary handling lives in `postMultipart`.
+// Multipart upload — server parses the CSV and appends into the given version.
 export const uploadEvalQuestionsCsv = async (
   uploadId: string,
+  versionId: string,
   file: File,
-): Promise<EvalSetSummary> => {
-  return postMultipart<EvalSetSummary>(`/knowledge-base/${uploadId}/evals/upload-csv`, file);
+): Promise<EvalSetSummary> =>
+  postMultipart<EvalSetSummary>(`/knowledge-base/${uploadId}/evals/upload-csv`, file, {
+    eval_version_id: versionId,
+  });
+
+// Eval batches for the results tab, optionally filtered by ingestion + version.
+export const listEvalRunsFiltered = async (
+  uploadId: string,
+  filters: { ingestion_run_id?: string | null; eval_version_id?: string | null },
+): Promise<EvalRunSummary[]> => {
+  const res = await axiosInstance.post<{ items: EvalRunSummary[] }>(
+    `/knowledge-base/${uploadId}/eval-runs/list`,
+    filters,
+  );
+  return res.data.items;
 };
 
 export const updateEvalQuestion = async (

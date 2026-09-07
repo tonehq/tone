@@ -8,6 +8,36 @@
 export type EvalVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 export type EvalBatchStatus = 'completed' | 'failed';
 
+// A question is 'pending' (generated, awaiting review) or 'approved' (kept —
+// scored on run). Rejected questions are deleted, so there is no 'rejected'.
+export type EvalApprovalStatus = 'pending' | 'approved';
+export type EvalVersionStatus = 'generating' | 'draft' | 'finalized';
+export type EvalVersionSource = 'generated' | 'manual' | 'imported';
+
+// One version of an upload's eval question set. Mirrors backend
+// EvalVersion.to_dict + the counts/has_results added by EvalService.list_versions.
+export interface EvalVersion {
+  id: string;
+  organization_id: string;
+  upload_id: string;
+  knowledge_base_id: string;
+  version_number: number;
+  source: EvalVersionSource;
+  status: EvalVersionStatus;
+  generation_instructions: string | null;
+  generated_by_model: string | null;
+  generation_prompt_hash: string | null;
+  counts: { total: number; approved: number; pending: number };
+  // True once a batch has scored this version — overwrite is then blocked.
+  has_results: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface EvalVersionsResponse {
+  items: EvalVersion[];
+}
+
 export interface EvalRunSummaryTotals {
   total: number;
   pass: number;
@@ -17,9 +47,6 @@ export interface EvalRunSummaryTotals {
   partial_rate: number;
   fail_rate: number;
   retrieval_hit_rate: number;
-  avg_correctness: number;
-  avg_groundedness: number;
-  avg_relevance: number;
   total_questions: number;
   duration_ms: number;
 }
@@ -28,6 +55,7 @@ export interface EvalRunSummary {
   run_id: string;
   upload_id: string;
   ingestion_run_id: string | null;
+  eval_version_id: string | null;
   run_number: number;
   triggered_by: string;
   top_k: number;
@@ -47,12 +75,21 @@ export interface EvalRetrievedChunk {
   [key: string]: unknown;
 }
 
+// One DeepEval metric's score inside `metric_scores`. Keyed by the metric's
+// stable snake_case name (e.g. 'faithfulness'). `verdict` is lowercase
+// (pass/partial/fail), distinct from the uppercase batch-level EvalVerdict.
+export interface EvalMetricScore {
+  score: number;
+  verdict: string;
+  reason: string | null;
+}
+
 export interface EvalJudgeResult {
   verdict: EvalVerdict;
-  correctness: number;
-  groundedness: number;
-  relevance: number;
   reasoning: string | null;
+  // Full DeepEval scorecard — one entry per enabled metric. Empty for
+  // legacy-judge rows. Keys drive the per-metric columns in the results table.
+  metric_scores: Record<string, EvalMetricScore>;
 }
 
 // One scored question inside a batch.
@@ -93,12 +130,14 @@ export interface EvalQuestion {
   id: string;
   upload_id: string;
   knowledge_base_id: string;
+  eval_version_id: string | null;
   external_id: string;
   question_ord: number;
   question: string;
   expected_answer: string;
   expected_source_snippet: string | null;
   category: string | null;
+  approval_status: EvalApprovalStatus;
   // 'manual' for user-authored rows; model name (e.g. 'gpt-4o') for
   // LLM-generated; benchmark source-key (e.g. 'hotpotqa-mini') for imports.
   generated_by_model: string | null;
@@ -144,6 +183,23 @@ export interface EvalSetSummary {
 // only when the shared Procrastinate task grows the corresponding params.
 export interface TriggerEvalRunPayload {
   ingestion_run_id?: string | null;
+  // Which version to score; omit to let the backend pick the latest approved.
+  eval_version_id?: string | null;
+}
+
+// Payload for POST /eval-versions/generate — generate into a new version or
+// overwrite an existing (un-run) one, with an optional custom prompt.
+export interface GenerateEvalVersionPayload {
+  mode: 'new' | 'overwrite';
+  version_id?: string | null;
+  instructions?: string | null;
+  ingestion_run_id?: string | null;
+}
+
+export interface GenerateEvalVersionResponse {
+  upload_id: string;
+  job_id: number;
+  status: 'queued';
 }
 
 export interface TriggerEvalRunResponse {

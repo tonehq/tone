@@ -1,9 +1,9 @@
 'use client';
 
 import type { Dispatch, SetStateAction } from 'react';
-import { Pencil, Trash2 } from 'lucide-react';
+import { Check, Pencil, Trash2 } from 'lucide-react';
 
-import type { DraftQuestion } from '@/components/knowledge-base/ManageEvalsTab';
+import type { DraftQuestion } from '@/components/knowledge-base/evalsConstants';
 import { CustomButton, CustomTooltip, TextAreaField, TextInput } from '@/components/shared';
 import type { EvalQuestion } from '@/types/eval';
 import { cn } from '@/utils/cn';
@@ -35,9 +35,11 @@ interface EvalQuestionRowProps {
   canSaveEdit: boolean;
   savingEdit: boolean;
   isDeleting: boolean;
+  isApproving: boolean;
   onStartEdit: (row: EvalQuestion) => void;
   onCancelEdit: () => void;
   onSaveEdit: () => void;
+  onApprove: (row: EvalQuestion) => void;
   onRequestDelete: (row: EvalQuestion) => void;
 }
 
@@ -52,12 +54,15 @@ export default function EvalQuestionRow({
   canSaveEdit,
   savingEdit,
   isDeleting,
+  isApproving,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
+  onApprove,
   onRequestDelete,
 }: EvalQuestionRowProps) {
   const badge = sourceBadge(row);
+  const isApproved = row.approval_status === 'approved';
   return (
     <li
       className={cn(
@@ -137,6 +142,16 @@ export default function EvalQuestionRow({
                   {row.category}
                 </span>
               )}
+              <span
+                className={cn(
+                  'inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium ring-1',
+                  isApproved
+                    ? 'bg-emerald-500/10 text-emerald-700 ring-emerald-500/20 dark:text-emerald-400'
+                    : 'bg-amber-500/10 text-amber-700 ring-amber-500/20 dark:text-amber-400',
+                )}
+              >
+                {isApproved ? 'approved' : 'pending'}
+              </span>
             </div>
             <p className="text-sm font-medium text-foreground">{row.question}</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -150,6 +165,20 @@ export default function EvalQuestionRow({
             )}
           </div>
           <div className="flex shrink-0 items-center gap-1">
+            {!isApproved && (
+              <CustomTooltip content="Approve">
+                <CustomButton
+                  type="text"
+                  size="icon-xs"
+                  aria-label="Approve question"
+                  onClick={() => onApprove(row)}
+                  disabled={isDeleting || isApproving}
+                  loading={isApproving}
+                >
+                  {!isApproving && <Check className="size-3.5 text-emerald-600" />}
+                </CustomButton>
+              </CustomTooltip>
+            )}
             <CustomTooltip content="Edit">
               <CustomButton
                 type="text"
@@ -161,11 +190,11 @@ export default function EvalQuestionRow({
                 <Pencil className="size-3.5" />
               </CustomButton>
             </CustomTooltip>
-            <CustomTooltip content="Delete">
+            <CustomTooltip content="Reject (delete)">
               <CustomButton
                 type="text"
                 size="icon-xs"
-                aria-label="Delete question"
+                aria-label="Reject question"
                 onClick={() => onRequestDelete(row)}
                 disabled={isDeleting}
                 loading={isDeleting}
