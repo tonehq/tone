@@ -17,7 +17,7 @@ This project is indexed by GitNexus as **quebec** (19718 symbols, 50684 relation
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/quebec/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/tone/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -56,10 +56,10 @@ This project is indexed by GitNexus as **quebec** (19718 symbols, 50684 relation
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/quebec/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/quebec/clusters` | All functional areas |
-| `gitnexus://repo/quebec/processes` | All execution flows |
-| `gitnexus://repo/quebec/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/tone/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/tone/clusters` | All functional areas |
+| `gitnexus://repo/tone/processes` | All execution flows |
+| `gitnexus://repo/tone/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

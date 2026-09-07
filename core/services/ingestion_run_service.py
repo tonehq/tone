@@ -39,9 +39,10 @@ from core.services.ingestion_errors import (
     IngestionValidationError,
     UnknownRagComponentError,
 )
+from core.services.rag import run_scope
 from core.services.rag.component_registry import ensure_rag_component
 from core.services.rag.embedder_factory import EMBEDDERS
-from core.services.rag.factory import VECTOR_STORES
+from core.services.rag.factory import DB_BACKED_STORES, VECTOR_STORES, get_vector_store
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
 from shared.config import settings
@@ -786,6 +787,7 @@ class IngestionRunService:
         )
         if run is None:
             return
+        IngestionRunService.purge_remote_vectors(db, [run])
         db.delete(run)
         db.commit()
 
@@ -981,14 +983,12 @@ class IngestionRunService:
         ``Upload`` and ``KnowledgeBase`` rows themselves are left intact (the
         document identity is preserved — only its ingested content is cleared).
         """
-        n = (
-            db.query(IngestionPipelineRun)
-            .filter(
-                IngestionPipelineRun.upload_id == upload_id,
-                IngestionPipelineRun.organization_id == org_id,
-            )
-            .delete(synchronize_session=False)
+        scoped = db.query(IngestionPipelineRun).filter(
+            IngestionPipelineRun.upload_id == upload_id,
+            IngestionPipelineRun.organization_id == org_id,
         )
+        IngestionRunService.purge_remote_vectors(db, scoped.all())
+        n = scoped.delete(synchronize_session=False)
         db.commit()
         logger.info(
             "[ingestion] purged {} pipeline run(s) (+chunks/embeddings) for upload={} org={}",
@@ -1134,52 +1134,20 @@ class IngestionRunService:
         method so the resolution rule is not duplicated. Callers that already
         have an explicit ``ingestion_run_id`` filter should bypass this.
         """
-        # 1) Per-agent pin scoped to the agent's published config.
-        if agent_id is not None:
-            pinned = (
-                db.query(AgentKnowledgeBase.active_ingestion_pipeline_run_id)
-                .join(
-                    KnowledgeBase,
-                    KnowledgeBase.id == AgentKnowledgeBase.knowledge_base_id,
-                )
-                .join(Agent, Agent.id == AgentKnowledgeBase.agent_id)
-                .filter(
-                    AgentKnowledgeBase.agent_id == agent_id,
-                    AgentKnowledgeBase.organization_id == org_id,
-                    AgentKnowledgeBase.agent_config_id == Agent.published_config_id,
-                    KnowledgeBase.upload_id == upload_id,
-                    AgentKnowledgeBase.active_ingestion_pipeline_run_id.isnot(None),
-                )
-                .scalar()
-            )
-            if pinned is not None:
-                return pinned
-
-        # 2) KB-level default pointer.
-        kb_default = (
-            db.query(KnowledgeBase.active_ingestion_pipeline_run_id)
-            .filter(
-                KnowledgeBase.upload_id == upload_id,
-                KnowledgeBase.organization_id == org_id,
-                KnowledgeBase.active_ingestion_pipeline_run_id.isnot(None),
-            )
-            .scalar()
+        return run_scope.resolve_active_run_id(
+            db, org_id=org_id, upload_id=upload_id, agent_id=agent_id
         )
-        if kb_default is not None:
-            return kb_default
 
-        # 3) Legacy fallback — any run with is_active=True. Pre-migration KBs
-        # won't have the pointer set until the next complete_run/activate_run.
-        legacy = (
-            db.query(IngestionPipelineRun.id)
-            .filter(
-                IngestionPipelineRun.upload_id == upload_id,
-                IngestionPipelineRun.organization_id == org_id,
-                IngestionPipelineRun.is_active.is_(True),
+    @staticmethod
+    def purge_remote_vectors(db: Session, runs: Sequence[IngestionPipelineRun]) -> None:
+        for run in runs:
+            if run.vector_store in DB_BACKED_STORES:
+                continue
+            store = get_vector_store(run.vector_store, session=db, **(run.vector_store_ref or {}))
+            store.delete(filters={"ingestion_run_id": run.id, "organization_id": run.organization_id})
+            logger.info(
+                "[ingestion] purged remote vectors run={} store={}", run.id, run.vector_store
             )
-            .scalar()
-        )
-        return legacy
 
     @staticmethod
     def set_agent_kb_active_run(

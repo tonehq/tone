@@ -34,6 +34,11 @@ class EmbeddingCompatibilityError(RagError):
     similarity across mismatched models is meaningless."""
 
 
+class VectorStoreUnavailableError(RagError):
+    """The vector store backend is registered but the server is missing the
+    credentials or region it needs to reach it."""
+
+
 class IngestionRunFailed(RagError):
     """An ingestion run terminated with ``status='failed'``. Carries the run
     id and stored error message so callers can surface both."""

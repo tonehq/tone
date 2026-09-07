@@ -131,6 +131,8 @@ Registered so future work discovers them (paths are import targets):
 
 - **`build_user_turn_stop_strategies(settings, TurnDetectionContext)` / `TURN_DETECTORS`** (`core/services/pipeline/turn_detection/`) — the ONE place a per-agent turn-detection choice (`conversation_settings.turn_detection = {provider, …params}`) becomes Pipecat user-turn stop strategies. `TurnDetector` (ABC, one file per kind: `smart_turn` / `ten` / `livekit`) owns its slug, `meta_data_schema`, defaults and `fallback_timeout_secs`; `factory.py` registers kinds, coerces + defaults settings, and exposes `list_turn_detectors()` (`GET /agent/turn-detectors`) and `validate_turn_detection()` (called by `AgentService._validate_turn_detection` on every config write); both only offer detectors whose `available()` is true (TEN needs `TEN_TURN_DETECTION_BASE_URL`). Operator guide: `docs/TURN_DETECTION.md`. The builder (`_build_turn_detection`) appends the telephony `TranscriptionTimeoutUserTurnStopStrategy` only when the detector asks for it. Add a detector = new `TurnDetector` subclass + registry entry; never branch on the provider slug in the builder.
 
+- **`VECTOR_STORES` / `get_vector_store` / `DB_BACKED_STORES`** (`core/services/rag/factory.py`) — the ONE registry of ingestion vector stores (`pgvector`, `turbopuffer`). Every store implements `VectorStore` and reuses **`chunk_rows.insert_chunk_rows` / `chunk_rows_query`** (`core/services/rag/vector_stores/chunk_rows.py`) for the Postgres chunk rows and **`run_scope.scoped_runs` / `resolve_active_run_id`** (`core/services/rag/run_scope.py`) for retrieval scoping (explicit run → agent pin → KB default → legacy `is_active`, plus the published-config join for `agent_id`). **`IngestionRunService.purge_remote_vectors(db, runs)`** is the ONE hook that deletes vectors held outside Postgres; every path that drops run rows (delete run, replace file, re-ingest with `delete_existing`, delete document) calls it before the cascade. Operator guide: `docs/VECTOR_STORES.md`.
+
 ### Frontend: shared components
 
 - **Buttons:** Use `CustomButton` from `@/components/shared` only. Do not use native `<button>` or `Button` from `@/components/ui/button` in app/feature code (exception: inside `CustomButton.tsx` itself).
@@ -204,7 +206,7 @@ This project is indexed by GitNexus as **quebec** (19718 symbols, 50684 relation
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/quebec/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/tone/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -243,10 +245,10 @@ This project is indexed by GitNexus as **quebec** (19718 symbols, 50684 relation
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/quebec/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/quebec/clusters` | All functional areas |
-| `gitnexus://repo/quebec/processes` | All execution flows |
-| `gitnexus://repo/quebec/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/tone/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/tone/clusters` | All functional areas |
+| `gitnexus://repo/tone/processes` | All execution flows |
+| `gitnexus://repo/tone/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
