@@ -25,6 +25,7 @@ from core.models.model import Model
 from core.services.agent_config_service import AgentConfigService
 from core.services.channel_service import ChannelService
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator
+from core.services.pipeline.turn_detection import validate_turn_detection
 from core.services.r2_storage_service import R2StorageService, signed_url_or_none
 from core.services.webrtc import supported_providers
 from core.utils.model_settings import SETTINGS_MODEL_KINDS, as_uuid
@@ -1383,6 +1384,7 @@ class AgentService(BaseService):
             config_data = data.get("config")
             if config_data is not None:
                 self._validate_meta_data_schema(config_data)
+                self._validate_turn_detection(config_data)
                 self._apply_config_fields_audited(agent, target, config_data)
             self._sync_config_attachments(agent, target, data)
             self.db.commit()
@@ -1744,6 +1746,20 @@ class AgentService(BaseService):
                 detail={"message": "Validation failed", "errors": all_errors},
             )
 
+    def _validate_turn_detection(self, config_data: Dict[str, Any]) -> None:
+        conversation = config_data.get("conversation_settings")
+        if not isinstance(conversation, dict) or conversation.get("turn_detection") is None:
+            return
+        errors = validate_turn_detection(conversation["turn_detection"])
+        if errors:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "message": "Validation failed",
+                    "errors": {"conversation_settings": errors},
+                },
+            )
+
     # ── Config field metadata (shared by in-place updates and version cloning) ──
     _CONFIG_FIELDS = (
         "first_message", "end_call_message", "system_prompt_template",
@@ -2093,6 +2109,7 @@ class AgentService(BaseService):
     def _upsert_new_config(self, agent: Agent, config_data: Dict[str, Any], user_id: Optional[UUID]) -> AgentConfig:
         """Update the live config in place, or create v1 if the agent has none yet."""
         self._validate_meta_data_schema(config_data)
+        self._validate_turn_detection(config_data)
         existing = self._resolve_current_config(agent)
 
         if existing:
@@ -2156,6 +2173,7 @@ class AgentService(BaseService):
           repointed and ``published_at`` is stamped to now.
         """
         self._validate_meta_data_schema(config_data)
+        self._validate_turn_detection(config_data)
         if not user_id:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,

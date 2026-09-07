@@ -4321,6 +4321,46 @@
           ]
         },
         {
+          "name": "GET /agent/turn-detectors (catalog)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{base_url}}/api/v1/agent/turn-detectors",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "agent",
+                "turn-detectors"
+              ]
+            },
+            "description": "Turn-detection models an agent can select in `config.conversation_settings.turn_detection` (`{provider, ...params}`). Each entry carries the `meta_data_schema` the UI renders and the backend validates on every config write. Always offered: `smart_turn` (default, local audio model) and `livekit` (local ONNX model from Hugging Face). `ten` appears only when the server has TEN_TURN_DETECTION_BASE_URL configured (see docs/TURN_DETECTION.md)."
+          },
+          "response": [
+            {
+              "name": "200 OK",
+              "code": 200,
+              "status": "OK",
+              "body": "[\n  {\"id\": \"smart_turn\", \"display_name\": \"Smart Turn v3\", \"description\": \"Pipecat's local audio end-of-turn model. Runs on CPU with no external service.\", \"meta_data_schema\": [{\"name\": \"confidence_threshold\", \"data_type\": \"float\", \"type\": \"input number\", \"format\": \"float\", \"validator\": {\"min\": 0.1, \"max\": 1}, \"required\": 0, \"default\": 0.7, \"description\": \"Probability above which the model treats the turn as complete\"}, {\"name\": \"stop_secs\", \"data_type\": \"float\", \"type\": \"input number\", \"format\": \"float\", \"validator\": {\"min\": 0.1, \"max\": 3}, \"required\": 0, \"default\": 0.8, \"description\": \"Silence in seconds that ends the turn when the model stays undecided\"}]},\n  {\"id\": \"livekit\", \"display_name\": \"LiveKit Turn Detector\", \"description\": \"LiveKit's end-of-utterance language model. Runs locally on CPU and downloads from Hugging Face on first use.\", \"meta_data_schema\": [{\"name\": \"model_type\", \"data_type\": \"string\", \"type\": \"select\", \"format\": \"string\", \"validator\": null, \"required\": 0, \"default\": \"multilingual\", \"options\": [\"multilingual\", \"en\"], \"description\": \"Multilingual covers 14 languages including English. The en variant is deprecated\"}]}\n]"
+            },
+            {
+              "name": "200 OK (TEN endpoint configured)",
+              "code": 200,
+              "status": "OK",
+              "body": "[\n  {\"id\": \"smart_turn\", \"display_name\": \"Smart Turn v3\", \"description\": \"...\", \"meta_data_schema\": []},\n  {\"id\": \"ten\", \"display_name\": \"TEN Turn Detection\", \"description\": \"Text-based turn detection served from an OpenAI-compatible endpoint. Configure TEN_TURN_DETECTION_BASE_URL on the server.\", \"meta_data_schema\": [{\"name\": \"unfinished_timeout\", \"data_type\": \"float\", \"type\": \"input number\", \"format\": \"float\", \"validator\": {\"min\": 0.5, \"max\": 15}, \"required\": 0, \"default\": 5.0, \"description\": \"Seconds to keep listening after the model says the user is not done\"}]},\n  {\"id\": \"livekit\", \"display_name\": \"LiveKit Turn Detector\", \"description\": \"...\", \"meta_data_schema\": []}\n]"
+            },
+            {
+              "name": "401 Not authenticated",
+              "code": 401,
+              "status": "Unauthorized",
+              "body": "{\"detail\": \"Not authenticated\"}"
+            }
+          ]
+        },
+        {
           "name": "POST /agent/create_agent",
           "request": {
             "method": "POST",
