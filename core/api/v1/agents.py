@@ -10,6 +10,7 @@ from core.api.v1.faceted_schemas import FacetsRequest, ListRequest
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.services.agent_service import AgentService
+from core.services.pipeline.turn_detection import list_turn_detectors
 from core.services.readiness import ReadinessService
 from shared.config import settings
 
@@ -187,6 +188,11 @@ def get_all_agents(
     db: Session = Depends(get_db),
 ):
     return _get_service(claims, db).get_all_agents()
+
+
+@router.get("/turn-detectors")
+def get_turn_detectors(claims: JWTClaims = Depends(require_org_member)):
+    return list_turn_detectors()
 
 
 @router.post("/create_agent", status_code=status.HTTP_201_CREATED)

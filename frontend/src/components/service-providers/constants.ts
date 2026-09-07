@@ -7,6 +7,11 @@ export const PROVIDERS_PAGE_SIZE = 15;
 export const SERVICES_PAGE_SIZE = 15;
 export const MODELS_PAGE_SIZE = 10;
 
+// Masked placeholder for the models table's API-key column when a key exists.
+// The raw secret is never sent to the client, so this is a fixed mask, not a
+// hint of the real value.
+export const MASKED_API_KEY = '••••••••';
+
 export const PROVIDER_TYPE_TABS = [
   { key: 'all', label: 'All', icon: createElement(Layers, { className: 'size-3.5' }) },
   { key: 'llm', label: 'LLM', icon: createElement(BrainCircuit, { className: 'size-3.5' }) },

@@ -1,13 +1,17 @@
 import { pagedListRequest } from '@/services/listHelpers';
 import type {
+  CloudProvider,
+  CloudProviderUpsertPayload,
   ModelProvider,
   ModelProviderUpsertPayload,
+  ModelRow,
   ProviderCatalogItem,
   ProviderModel,
   ProviderUsage,
   Service,
   ServiceUpsertPayload,
 } from '@/types/service';
+import type { ListFilterParam } from '@/types/facetedList';
 import axios from '@/utils/axios';
 
 // ─── aggregated usage list (cards) ─────────────────────────────────────────
@@ -33,6 +37,27 @@ export async function listServices(params: ListServicesParams = {}): Promise<Lis
     if (v !== undefined && v !== null && v !== '') body[k] = v;
   }
   return pagedListRequest<ProviderUsage>('/services/list', body);
+}
+
+// ─── flat models list (all providers) ──────────────────────────────────────
+export interface ListAllModelsParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  sort_by?: string;
+  sort_order?: 'asc' | 'desc';
+  filters?: ListFilterParam[];
+}
+
+/** One row per model across every provider, with the org's API-key presence. */
+export async function listAllModels(
+  params: ListAllModelsParams = {},
+): Promise<{ rows: ModelRow[]; total: number; page: number; page_size: number }> {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  }
+  return pagedListRequest<ModelRow>('/services/models/list', body);
 }
 
 // ─── CRUD on individual ApiKey rows ────────────────────────────────────────
@@ -153,6 +178,8 @@ export interface ModelUpsertPayload {
   name: string;
   display_name?: string;
   kind: 'llm' | 'stt' | 'tts';
+  // The cloud provider hosting this model. `null` clears the link on update.
+  cloud_provider_id?: string | null;
   description?: string;
   base_url?: string;
   is_active?: boolean;
@@ -231,4 +258,49 @@ export async function updateModelProvider(
 
 export async function deleteModelProvider(providerId: string): Promise<void> {
   await axios.delete(`/services/providers/delete_provider/${providerId}`);
+}
+
+// ─── cloud provider CRUD (admin) ───────────────────────────────────────────
+// The cloud-provider catalog is global — writes are admin-gated on the backend.
+
+export interface ListCloudProvidersParams {
+  page?: number;
+  page_size?: number;
+  search?: string;
+  sort_by?: string;
+  is_active?: boolean;
+}
+
+export async function listCloudProviders(
+  params: ListCloudProvidersParams = {},
+): Promise<{ rows: CloudProvider[]; total: number; page: number; page_size: number }> {
+  const body: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(params)) {
+    if (v !== undefined && v !== null && v !== '') body[k] = v;
+  }
+  return pagedListRequest<CloudProvider>('/cloud-providers/list', body);
+}
+
+export async function createCloudProvider(
+  payload: CloudProviderUpsertPayload,
+): Promise<CloudProvider> {
+  const { data } = await axios.post<CloudProvider>('/cloud-providers/create', payload);
+  return data;
+}
+
+export async function getCloudProvider(cloudProviderId: string): Promise<CloudProvider> {
+  const { data } = await axios.get<CloudProvider>(`/cloud-providers/${cloudProviderId}`);
+  return data;
+}
+
+export async function updateCloudProvider(
+  cloudProviderId: string,
+  payload: Partial<CloudProviderUpsertPayload>,
+): Promise<CloudProvider> {
+  const { data } = await axios.put<CloudProvider>(`/cloud-providers/${cloudProviderId}`, payload);
+  return data;
+}
+
+export async function deleteCloudProvider(cloudProviderId: string): Promise<void> {
+  await axios.delete(`/cloud-providers/${cloudProviderId}`);
 }

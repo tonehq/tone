@@ -17493,6 +17493,46 @@
         }
       ],
       "status": "active"
+    },
+    {
+      "name": "kyutai",
+      "provider_type": "stt",
+      "display_name": "Kyutai STT (Self-hosted)",
+      "description": "Kyutai STT 1B streaming ASR on a self-hosted server",
+      "api_key_env": "KYUTAI_API_KEY",
+      "status": "active",
+      "models": [
+        {
+          "name": "kyutai/stt-1b-en_fr",
+          "base_url": "ws://staging-stt-kyutai-service.staging.svc.cluster.local/ws/asr",
+          "meta_data": {
+            "model": "kyutai/stt-1b-en_fr"
+          },
+          "meta_data_schema": [
+            {
+              "name": "sample_rate",
+              "data_type": "integer",
+              "type": "input number",
+              "format": "integer",
+              "validator": {
+                "min": 8000,
+                "max": 48000
+              },
+              "required": 0,
+              "description": "Audio sample rate in Hz"
+            },
+            {
+              "name": "base_url",
+              "data_type": "string",
+              "type": "input text",
+              "format": "string",
+              "validator": null,
+              "required": 0,
+              "description": "WebSocket URL of the self-hosted Kyutai ASR server"
+            }
+          ]
+        }
+      ]
     }
   ],
   "tts_providers": [

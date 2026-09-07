@@ -241,6 +241,14 @@ def _coerce_nvidia_endpointing(key: str, value):
         return None
 
 
+_WS_ASR_SELF_HOSTED_STT = {
+    "nvidia_websocket": "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr",
+    "voxtral": "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr",
+    "gemma": "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr",
+    "kyutai": "ws://staging-stt-kyutai-service.staging.svc.cluster.local/ws/asr",
+}
+
+
 def build_llm(spec: dict) -> Optional[Any]:
     """Build an LLM service instance from a resolved spec dict.
 
@@ -495,26 +503,6 @@ def build_stt(spec: dict) -> Optional[Any]:
                 **mistral_kwargs,
                 **_url_kwargs(metadata),
             )
-        if provider_name == "voxtral":
-            # Self-hosted Voxtral via the custom transformers server, which speaks
-            # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
-            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
-            from core.logging import get_trace_id
-            ws_url = metadata.get("base_url") or "ws://staging-stt-voxtral-service.staging.svc.cluster.local/ws/asr"
-            ws_kwargs = {}
-            if metadata.get("sample_rate") is not None:
-                ws_kwargs["sample_rate"] = metadata["sample_rate"]
-            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
-        if provider_name == "gemma":
-            # Self-hosted Gemma 4 E2B ASR via the custom transformers server, which speaks
-            # the same /ws/asr protocol as nemotron — so we reuse NvidiaWebSocketService.
-            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
-            from core.logging import get_trace_id
-            ws_url = metadata.get("base_url") or "ws://staging-stt-gemma-service.staging.svc.cluster.local/ws/asr"
-            ws_kwargs = {}
-            if metadata.get("sample_rate") is not None:
-                ws_kwargs["sample_rate"] = metadata["sample_rate"]
-            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
         if provider_name == "nemotron-asr-self-hosted":
             # Self-hosted Nemotron ASR on a Riva NIM — pipecat's first-party Riva
             # gRPC client. Local deployments take a bare host:port, no SSL, no key.
@@ -554,6 +542,14 @@ def build_stt(spec: dict) -> Optional[Any]:
             if model:
                 parakeet_kwargs["model"] = model
             return ParakeetSTTService(url=parakeet_url, trace_id=get_trace_id(), **parakeet_kwargs)
+        if provider_name in _WS_ASR_SELF_HOSTED_STT:
+            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
+            from core.logging import get_trace_id
+            ws_url = metadata.get("base_url") or _WS_ASR_SELF_HOSTED_STT[provider_name]
+            ws_asr_kwargs = {}
+            if metadata.get("sample_rate") is not None:
+                ws_asr_kwargs["sample_rate"] = metadata["sample_rate"]
+            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_asr_kwargs)
         if provider_name == "granite":
             from core.services.pipeline.granite_stt_service import GraniteWebSocketSTTService
             from core.logging import get_trace_id
@@ -641,14 +637,6 @@ def build_stt(spec: dict) -> Optional[Any]:
         if provider_name == "nvidia_sage":
             from pipecat.services.stt_service import WebsocketSTTService
             return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
-        if provider_name == "nvidia_websocket":
-            from pipecat.services.nvidia.websocket_stt import NvidiaWebSocketService
-            from core.logging import get_trace_id
-            ws_url = metadata.get("base_url") or "ws://staging-stt-nemotron-service.staging.svc.cluster.local/ws/asr"
-            ws_kwargs = {}
-            if metadata.get("sample_rate") is not None:
-                ws_kwargs["sample_rate"] = metadata["sample_rate"]
-            return NvidiaWebSocketService(url=ws_url, trace_id=get_trace_id(), **ws_kwargs)
         if provider_name == "sarvam":
             from pipecat.services.sarvam.stt import SarvamSTTService
             return SarvamSTTService(

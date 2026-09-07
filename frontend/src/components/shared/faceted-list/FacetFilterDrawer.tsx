@@ -79,6 +79,7 @@ const FacetFilterDrawer: React.FC<FacetFilterDrawerProps> = ({
             field={s.field}
             label={s.label}
             titleCase={s.titleCase}
+            formatValue={s.formatValue}
             values={facets[s.field] ?? []}
             selected={draft[s.field] ?? []}
             loading={facetsLoading}

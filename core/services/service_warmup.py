@@ -9,6 +9,12 @@ from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnal
 from pipecat.audio.vad.silero import SileroVADAnalyzer
 from pipecat.audio.vad.vad_analyzer import VADParams
 
+from core.config import settings
+from core.processors.livekit_turn_detector_turn_stop import (
+    LiveKitTurnDetectorModel,
+    LiveKitTurnDetectorParams,
+)
+
 _silero_vad_analyzer: Optional[Any] = None
 _silero_vad_analyzer_phone: Optional[Any] = None
 _smart_turn_analyzer: Optional[Any] = None
@@ -118,6 +124,15 @@ def _preload_smart_turn() -> Optional[Any]:
         return None
 
 
+def _preload_turn_detectors() -> None:
+    slugs = {s.strip() for s in (settings.TURN_DETECTION_PRELOAD or "").split(",") if s.strip()}
+    if "livekit" in slugs:
+        try:
+            LiveKitTurnDetectorModel.load(LiveKitTurnDetectorParams())
+        except Exception:
+            logger.exception("[warmup] LiveKit turn detector preload failed")
+
+
 def _probe_rnnoise() -> bool:
     global _rnnoise_available
     try:
@@ -151,6 +166,10 @@ def warm_up_services() -> None:
     t = time.monotonic()
     _preload_smart_turn()
     logger.info(f"[warmup] Smart Turn ONNX preloaded (+{time.monotonic() - t:.3f}s)")
+
+    t = time.monotonic()
+    _preload_turn_detectors()
+    logger.info(f"[warmup] turn detectors preloaded (+{time.monotonic() - t:.3f}s)")
 
     t = time.monotonic()
     if _probe_rnnoise():

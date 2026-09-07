@@ -36,7 +36,7 @@ function formatDateTime(iso: string | null): string {
 }
 
 interface ScheduledCallsPageProps {
-  /** When set, scopes the list + locks the create modal to this agent (Agent → Schedule tab). */
+  /** When set, scopes the list + locks the create modal to this agent (Agent → Outbound Calls tab). */
   agentId?: string;
 }
 
@@ -186,7 +186,7 @@ export default function ScheduledCallsPage({ agentId }: ScheduledCallsPageProps 
         <span className="font-medium tabular-nums">{(value as string) ?? '—'}</span>
       ),
     },
-    // The Agent column is redundant inside a single agent's Schedule tab, so it's dropped
+    // The Agent column is redundant inside a single agent's Outbound Calls tab, so it's dropped
     // when the view is agent-scoped (see `visibleColumns` below).
     {
       key: 'agent_name',
@@ -247,16 +247,17 @@ export default function ScheduledCallsPage({ agentId }: ScheduledCallsPageProps 
 
   const selectedCount = selectedIds.size;
 
-  // Agent-scoped view (agent Schedule tab) hides the repeating Agent column.
+  // Agent-scoped view (agent Outbound Calls tab) hides the repeating Agent column.
   const visibleColumns = agentId ? columns.filter((c) => c.key !== 'agent_name') : columns;
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-6">
       <div className="flex items-center justify-between">
         <div className="space-y-1">
-          <h1 className="text-xl font-semibold tracking-tight">Scheduled Calls</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Outbound Calls</h1>
           <p className="text-sm text-muted-foreground">
-            Outbound calls queued to dial at a future time. Connected calls appear in Call History.
+            Place outbound calls now or schedule them for later. Connected calls appear in Call
+            History.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -265,7 +266,7 @@ export default function ScheduledCallsPage({ agentId }: ScheduledCallsPageProps 
             icon={<PhoneOutgoing className="size-4" />}
             onClick={() => setCreateOpen(true)}
           >
-            Schedule Call
+            New Outbound Call
           </CustomButton>
         </div>
       </div>
@@ -299,13 +300,13 @@ export default function ScheduledCallsPage({ agentId }: ScheduledCallsPageProps 
           <div className="flex flex-col items-center gap-3 py-12 text-center">
             <PhoneOutgoing className="size-8 text-muted-foreground/60" aria-hidden />
             <div>
-              <p className="font-medium">No scheduled calls</p>
+              <p className="font-medium">No outbound calls yet</p>
               <p className="text-sm text-muted-foreground">
-                Queue a call to dial at a future time.
+                Place a call now or schedule one for later.
               </p>
             </div>
             <CustomButton type="primary" onClick={() => setCreateOpen(true)}>
-              Schedule Call
+              New Outbound Call
             </CustomButton>
           </div>
         }
