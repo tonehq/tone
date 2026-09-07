@@ -90,6 +90,19 @@ class AgentLlmEvalFolderNotDeletableError(AgentLlmEvalError):
     has a valid ``folder_id`` to write."""
 
 
+class AgentLlmEvalVersionNotFoundError(AgentLlmEvalError):
+    """Requested scenario-version row does not exist for the caller's
+    (agent, org) scope. The route maps it to a stable ``VERSION_NOT_FOUND``
+    code the FE can react to."""
+
+
+class AgentLlmEvalVersionHasRunsError(AgentLlmEvalError):
+    """Attempted to overwrite a version that has already been run (has
+    ``agent_llm_eval_runs`` / results). Overwrite is blocked once a version
+    is scored — create a new version instead. The route maps it to 409 with
+    a ``VERSION_HAS_RUNS`` code."""
+
+
 class CallTranscriptEvalError(EvalError):
     """Base class for typed post-call transcript eval errors — separates the
     Level-3 (real-call) harness from the RAG and agent-LLM flows so callers

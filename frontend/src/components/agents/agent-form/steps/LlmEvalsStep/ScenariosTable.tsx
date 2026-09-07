@@ -1,10 +1,12 @@
-import { Pencil, Play, Trash2, Wrench } from 'lucide-react';
+import { CheckCheck, Pencil, Play, Trash2, Wrench, XCircle } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { CustomButton } from '@/components/shared';
 import { useIndeterminateCheckbox } from '@/hooks/useIndeterminateCheckbox';
 import type { AgentLlmEvalScenario } from '@/types/agentLlmEval';
 import { cn } from '@/utils/cn';
+
+import { APPROVAL_STATUS_STYLES } from './constants';
 
 // NOTE: kept as a hand-rolled ``<table>`` (not migrated to the shared
 // ``CustomTable``). The cross-page persistent bulk selection, the
@@ -21,6 +23,10 @@ export default function ScenariosTable({
   selectedIds,
   onToggleRow,
   onToggleAll,
+  onApprove,
+  onReject,
+  approvingId,
+  rejectingId,
 }: {
   scenarios: AgentLlmEvalScenario[];
   isLoading: boolean;
@@ -38,7 +44,15 @@ export default function ScenariosTable({
   selectedIds: Set<string>;
   onToggleRow: (id: string) => void;
   onToggleAll: () => void;
+  // Version review (optional — only wired when a version is selected). When
+  // provided, each row shows an approval badge; pending rows get an Approve
+  // icon and every row gets a Reject icon (reject deletes the scenario).
+  onApprove?: (s: AgentLlmEvalScenario) => void;
+  onReject?: (s: AgentLlmEvalScenario) => void;
+  approvingId?: string | null;
+  rejectingId?: string | null;
 }) {
+  const reviewable = Boolean(onApprove || onReject);
   const currentPageIds = useMemo(() => scenarios.map((s) => s.id), [scenarios]);
   const currentPageSelectedCount = useMemo(
     () => currentPageIds.filter((id) => selectedIds.has(id)).length,
@@ -86,7 +100,8 @@ export default function ScenariosTable({
                 sliver (which caused tag chips to wrap vertically). */}
             <th className="w-[220px] px-3 py-2 text-left">Tags</th>
             <th className="w-[100px] px-3 py-2 text-left">Source</th>
-            <th className="w-[110px] px-3 py-2" />
+            {reviewable && <th className="w-[100px] px-3 py-2 text-left">Status</th>}
+            <th className="w-[150px] px-3 py-2" />
           </tr>
         </thead>
         <tbody>
@@ -147,8 +162,46 @@ export default function ScenariosTable({
                   {s.source}
                 </span>
               </td>
+              {reviewable && (
+                <td className="px-3 py-2 align-top">
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      APPROVAL_STATUS_STYLES[s.approval_status]?.className,
+                    )}
+                  >
+                    {APPROVAL_STATUS_STYLES[s.approval_status]?.label ?? s.approval_status}
+                  </span>
+                </td>
+              )}
               <td className="px-3 py-2 align-top">
                 <div className="flex items-center justify-end gap-1">
+                  {reviewable && onApprove && s.approval_status === 'pending' && (
+                    <CustomButton
+                      type="text"
+                      size="icon-xs"
+                      onClick={() => onApprove(s)}
+                      disabled={approvingId === s.id}
+                      className="rounded p-1 text-muted-foreground hover:bg-emerald-500/10 hover:text-emerald-600"
+                      aria-label={`Approve ${s.scenario_key}`}
+                      title="Approve this scenario"
+                    >
+                      <CheckCheck className="size-4" />
+                    </CustomButton>
+                  )}
+                  {reviewable && onReject && (
+                    <CustomButton
+                      type="text"
+                      size="icon-xs"
+                      onClick={() => onReject(s)}
+                      disabled={rejectingId === s.id}
+                      className="rounded p-1 text-muted-foreground hover:bg-destructive/10 hover:text-destructive"
+                      aria-label={`Reject ${s.scenario_key}`}
+                      title="Reject (delete) this scenario"
+                    >
+                      <XCircle className="size-4" />
+                    </CustomButton>
+                  )}
                   <CustomButton
                     type="text"
                     size="icon-xs"

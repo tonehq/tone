@@ -71,14 +71,19 @@ class ScenarioInput:
     threshold_override: Optional[float] = None
     scenario_ord: Optional[int] = None
     generation_metadata: Optional[dict] = None
-    # First-class folder FK. When ``None``, the service resolves the
-    # agent's ``Default`` folder. Callers with an explicit user-picked
-    # folder pass ``folder_id`` directly.
+    # Parent folder NODE id (``folder_id`` name kept for API/back-compat; it
+    # maps to ``AgentLlmEvalScenario.parent_id``). When ``None``, the service
+    # resolves the agent's ``Default`` folder. Callers with an explicit
+    # user-picked folder pass ``folder_id`` directly.
     folder_id: Optional[UUID] = None
     # CSV / importer path: the raw folder NAME from the source file.
     # When set (and ``folder_id`` is None), the service resolves-or-creates
     # the folder by name in the same transaction.
     folder_name: Optional[str] = None
+    # Version this scenario belongs to (generation path). ``None`` = manual /
+    # version-less. Reviewed generation sets ``approval_status='pending'``.
+    version_id: Optional[UUID] = None
+    approval_status: Optional[str] = None
     # v2 forward-compat — accepted here so the same payload can be POSTed
     # by a future tool-scoring UI without touching this DTO. Both stay
     # ``None`` for every v1 scenario.
@@ -167,23 +172,27 @@ class AgentLlmScenarioService(BaseService):
         tags: Optional[Sequence[str]] = None,
         folder_id: Optional[UUID] = None,
         source: Optional[str] = None,
+        version_id: Optional[UUID] = None,
+        approval_status: Optional[str] = None,
         sort_by: Optional[str] = "created_at",
         sort_order: str = "desc",
         page_no: int = 1,
         page_size: int = 50,
     ) -> tuple[list[AgentLlmEvalScenario], int]:
-        """Paginated list of scenarios for one agent, with optional search /
-        tag filter / folder filter / source filter / whitelisted sort.
-        Reuses ``apply_search_sort_pagination`` so search / sort /
-        pagination semantics match every other ``POST /…/list`` endpoint.
+        """Paginated list of scenario nodes for one agent, with optional
+        search / tag filter / folder filter / source filter / version filter /
+        approval filter / whitelisted sort. Reuses
+        ``apply_search_sort_pagination`` so semantics match every other
+        ``POST /…/list`` endpoint.
 
-        ``folder_id`` is an exact-match filter; ``None`` skips the filter
-        entirely.
+        ``folder_id`` / ``version_id`` are exact-match filters; ``None`` skips
+        the filter entirely. Folder NODES are never returned (this lists evals).
         """
         q = (
             self.query(AgentLlmEvalScenario)
-            .options(joinedload(AgentLlmEvalScenario.folder_ref))
+            .options(joinedload(AgentLlmEvalScenario.parent_ref))
             .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
         )
 
         # Tag filter — JSONB ``?|`` (has-any-of-these-keys) so a scenario
@@ -194,7 +203,13 @@ class AgentLlmScenarioService(BaseService):
             q = q.filter(AgentLlmEvalScenario.tags.op("?|")(_jsonb_text_array(clean_tags)))
 
         if folder_id is not None:
-            q = q.filter(AgentLlmEvalScenario.folder_id == folder_id)
+            q = q.filter(AgentLlmEvalScenario.parent_id == folder_id)
+
+        if version_id is not None:
+            q = q.filter(AgentLlmEvalScenario.version_id == version_id)
+
+        if approval_status is not None:
+            q = q.filter(AgentLlmEvalScenario.approval_status == approval_status)
 
         # Source filter — reject unknown values loudly instead of silently
         # skipping the filter. Router-level Pydantic pattern already
@@ -246,21 +261,35 @@ class AgentLlmScenarioService(BaseService):
         tags: Optional[Sequence[str]] = None,
         folder_id: Optional[UUID] = None,
         folder_ids: Optional[Sequence[UUID]] = None,
+        version_id: Optional[UUID] = None,
     ) -> list[AgentLlmEvalScenario]:
         """Every scenario the run should score, ordered by ``scenario_ord``.
 
-        Filters when ``scenario_ids`` / ``tags`` / ``folder_id`` /
-        ``folder_ids`` is provided; otherwise returns every scenario for
-        the agent.
+        Only ``node_type='scenario'`` nodes are ever returned — folder nodes
+        must never be scored.
 
-        ``folder_ids`` (plural, multi-select) takes precedence over
-        ``folder_id`` (singular) when both are provided.
+        Version scoping: when ``version_id`` is provided the run scores only
+        that version's ``approval_status='approved'`` scenarios; when omitted,
+        it scores the agent's version-less scenarios (``version_id IS NULL`` —
+        pre-existing / manual, always approved), preserving legacy behavior.
+
+        Filters when ``scenario_ids`` / ``tags`` / ``folder_id`` /
+        ``folder_ids`` is provided. ``folder_ids`` (plural) takes precedence
+        over ``folder_id`` (singular) when both are provided.
         """
         q = (
             self.query(AgentLlmEvalScenario)
-            .options(joinedload(AgentLlmEvalScenario.folder_ref))
+            .options(joinedload(AgentLlmEvalScenario.parent_ref))
             .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
         )
+        if version_id is not None:
+            q = q.filter(
+                AgentLlmEvalScenario.version_id == version_id,
+                AgentLlmEvalScenario.approval_status == "approved",
+            )
+        else:
+            q = q.filter(AgentLlmEvalScenario.version_id.is_(None))
         if scenario_ids:
             q = q.filter(AgentLlmEvalScenario.id.in_(list(scenario_ids)))
         clean_tags = [t.strip() for t in (tags or []) if isinstance(t, str) and t.strip()]
@@ -275,9 +304,9 @@ class AgentLlmScenarioService(BaseService):
             cleaned_ids = [f for f in folder_ids if f is not None]
             if not cleaned_ids:
                 return []
-            q = q.filter(AgentLlmEvalScenario.folder_id.in_(cleaned_ids))
+            q = q.filter(AgentLlmEvalScenario.parent_id.in_(cleaned_ids))
         elif folder_id is not None:
-            q = q.filter(AgentLlmEvalScenario.folder_id == folder_id)
+            q = q.filter(AgentLlmEvalScenario.parent_id == folder_id)
         rows = (
             q.order_by(
                 AgentLlmEvalScenario.scenario_ord.asc(),
@@ -346,14 +375,24 @@ class AgentLlmScenarioService(BaseService):
                 f"Duplicate scenario_key(s) in payload: {sorted(duplicates)}"
             )
 
-        existing_keys = set(
-            k
-            for (k,) in self.query(AgentLlmEvalScenario)
-            .with_entities(AgentLlmEvalScenario.scenario_key)
+        # scenario_key uniqueness is scoped per (agent, version_id) — the same
+        # key may recur across versions. Compare (key, version_id) pairs.
+        payload_pairs = {
+            ((p.scenario_key or "").strip(), p.version_id) for p in payloads
+        }
+        existing_pairs = set(
+            (k, v)
+            for (k, v) in self.query(AgentLlmEvalScenario)
+            .with_entities(
+                AgentLlmEvalScenario.scenario_key,
+                AgentLlmEvalScenario.version_id,
+            )
             .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
             .filter(AgentLlmEvalScenario.scenario_key.in_(sorted(seen)))
             .all()
         )
+        existing_keys = {k for (k, v) in existing_pairs if (k, v) in payload_pairs}
         if existing_keys:
             raise AgentLlmScenarioKeyConflictError(
                 f"scenario_key(s) already exist for this agent: {sorted(existing_keys)}"
@@ -404,6 +443,10 @@ class AgentLlmScenarioService(BaseService):
             row = AgentLlmEvalScenario(
                 organization_id=self.org_id,
                 agent_id=agent_id,
+                node_type="scenario",
+                parent_id=folder_id,
+                version_id=payload.version_id,
+                approval_status=payload.approval_status or "approved",
                 scenario_key=payload.scenario_key.strip(),
                 scenario_ord=(
                     payload.scenario_ord
@@ -415,7 +458,6 @@ class AgentLlmScenarioService(BaseService):
                 persona_criteria=_clean_optional_text(payload.persona_criteria),
                 instruction_criteria=_clean_optional_text(payload.instruction_criteria),
                 tags=_clean_string_list(payload.tags),
-                folder_id=folder_id,
                 metrics_override=_clean_string_list(payload.metrics_override),
                 threshold_override=payload.threshold_override,
                 source=source,
@@ -439,6 +481,7 @@ class AgentLlmScenarioService(BaseService):
                 k
                 for (k,) in self.db.query(AgentLlmEvalScenario.scenario_key)
                 .filter(AgentLlmEvalScenario.agent_id == agent_id)
+                .filter(AgentLlmEvalScenario.node_type == "scenario")
                 .filter(AgentLlmEvalScenario.scenario_key.in_(sorted(seen)))
                 .all()
             )
@@ -451,7 +494,7 @@ class AgentLlmScenarioService(BaseService):
             ) from exc
 
         for row in created:
-            # ``folder_ref`` will load lazily on first access in ``to_dict``.
+            # ``parent_ref`` will load lazily on first access in ``to_dict``.
             self.db.refresh(row)
         return created
 
@@ -475,10 +518,17 @@ class AgentLlmScenarioService(BaseService):
             if not new_key:
                 raise EvalConfigurationError("scenario_key must be non-empty")
             if new_key != row.scenario_key:
+                version_filter = (
+                    AgentLlmEvalScenario.version_id == row.version_id
+                    if row.version_id is not None
+                    else AgentLlmEvalScenario.version_id.is_(None)
+                )
                 clash = (
                     self.query(AgentLlmEvalScenario)
                     .filter(AgentLlmEvalScenario.agent_id == agent_id)
+                    .filter(AgentLlmEvalScenario.node_type == "scenario")
                     .filter(AgentLlmEvalScenario.scenario_key == new_key)
+                    .filter(version_filter)
                     .filter(AgentLlmEvalScenario.id != scenario_id)
                     .first()
                 )
@@ -503,12 +553,12 @@ class AgentLlmScenarioService(BaseService):
         if patch.tags is not None:
             row.tags = _clean_string_list(patch.tags)
         if patch.folder_id is not None:
-            # Validate the folder belongs to this (agent, org).
+            # Validate the folder node belongs to this (agent, org), then move.
             folder_svc = AgentLlmEvalFolderService(
                 self.db, user_id=self.user_id, org_id=self.org_id
             )
             folder_svc.get_folder(agent_id, patch.folder_id)
-            row.folder_id = patch.folder_id
+            row.parent_id = patch.folder_id
         if patch.metrics_override is not None:
             row.metrics_override = _clean_string_list(patch.metrics_override)
         if patch.threshold_override is not None:
@@ -612,6 +662,8 @@ class AgentLlmScenarioService(BaseService):
         dry_run: bool = True,
         options: Optional[dict] = None,
         folder_id: Optional[UUID] = None,
+        version_id: Optional[UUID] = None,
+        approval_status: Optional[str] = None,
     ) -> "GeneratedBatch":
         """Ask the given generator strategy for ``count`` scenarios.
 
@@ -654,7 +706,15 @@ class AgentLlmScenarioService(BaseService):
                 ),
             )
 
-        payloads = [_generated_to_input(g, folder_id=folder_id) for g in generated]
+        payloads = [
+            _generated_to_input(
+                g,
+                folder_id=folder_id,
+                version_id=version_id,
+                approval_status=approval_status,
+            )
+            for g in generated
+        ]
         persisted = self.create_scenarios_bulk(
             agent_id, payloads, source="generated"
         )
@@ -719,12 +779,12 @@ def scenario_row_to_llm_scenario(row: AgentLlmEvalScenario) -> Any:
 
     folder_name: Optional[str] = None
     try:
-        folder_row = row.folder_ref
-        if folder_row is not None:
-            folder_name = folder_row.name
+        parent_row = row.parent_ref
+        if parent_row is not None:
+            folder_name = parent_row.name
     except Exception:  # noqa: BLE001 — detached / expired instance
         logger.debug(
-            "[agent-llm-eval] scenario folder_ref unavailable (detached instance)"
+            "[agent-llm-eval] scenario parent_ref unavailable (detached instance)"
         )
         folder_name = None
 
@@ -762,12 +822,18 @@ class GeneratedBatch:
 # ── Private helpers ─────────────────────────────────────────────────────
 
 
-_SCENARIO_KEY_CONSTRAINT = "uq_agent_llm_eval_scenarios_agent_key"
+# Partial unique indexes enforcing scenario_key uniqueness (version-less and
+# versioned). Kept in sync with the model / migration so IntegrityError
+# translation can't drift from the actual DB indexes.
+_SCENARIO_KEY_CONSTRAINTS = (
+    "uq_agent_llm_eval_scenarios_versionless",
+    "uq_agent_llm_eval_scenarios_versioned",
+)
 
 
 def _is_scenario_key_conflict(exc: IntegrityError) -> bool:
-    """True when the given ``IntegrityError`` was raised by the UNIQUE
-    constraint on ``(agent_id, scenario_key)``. Any other integrity
+    """True when the given ``IntegrityError`` was raised by a scenario_key
+    partial unique index (version-less or versioned). Any other integrity
     violation (FK, CHECK, NOT NULL) is a different bug that should NOT be
     hidden behind a "scenario_key exists" message. Inspection uses the
     Postgres psycopg diagnostic where available and falls back to a
@@ -777,8 +843,8 @@ def _is_scenario_key_conflict(exc: IntegrityError) -> bool:
     diag = getattr(orig, "diag", None)
     constraint_name = getattr(diag, "constraint_name", None)
     if constraint_name:
-        return constraint_name == _SCENARIO_KEY_CONSTRAINT
-    return _SCENARIO_KEY_CONSTRAINT in str(exc)
+        return constraint_name in _SCENARIO_KEY_CONSTRAINTS
+    return any(name in str(exc) for name in _SCENARIO_KEY_CONSTRAINTS)
 
 
 def _jsonb_text_array(values: Sequence[str]):
@@ -881,14 +947,22 @@ def _csv_row_to_input(row: dict) -> ScenarioInput:
     )
 
 
-def _generated_to_input(g: Any, *, folder_id: Optional[UUID] = None) -> ScenarioInput:
+def _generated_to_input(
+    g: Any,
+    *,
+    folder_id: Optional[UUID] = None,
+    version_id: Optional[UUID] = None,
+    approval_status: Optional[str] = None,
+) -> ScenarioInput:
     """Convert a ``GeneratedScenario`` into a ``ScenarioInput`` for persist.
     Kept loose (``g: Any``) so this file never imports the generator package
     at module load — the generator, if any, is imported lazily inside
     ``generate_scenarios``.
 
     ``folder_id`` is stamped from the caller (the "Generate into folder X"
-    picker); generators never invent a folder themselves.
+    picker); generators never invent a folder themselves. ``version_id`` /
+    ``approval_status`` carry the reviewed-generation context (a draft version
+    whose scenarios are saved as ``pending``).
     """
     return ScenarioInput(
         scenario_key=g.scenario_key,
@@ -898,6 +972,8 @@ def _generated_to_input(g: Any, *, folder_id: Optional[UUID] = None) -> Scenario
         instruction_criteria=getattr(g, "instruction_criteria", None),
         tags=list(getattr(g, "tags", None) or []) or None,
         folder_id=folder_id,
+        version_id=version_id,
+        approval_status=approval_status,
         generation_metadata=getattr(g, "generation_metadata", None),
         # Forward tool-aware fields when the generator populated them
         # (Phase 2). ``None`` for text-only scenarios — persistence stores

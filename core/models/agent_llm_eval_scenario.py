@@ -1,7 +1,17 @@
 from typing import Optional
 
 from loguru import logger
-from sqlalchemy import Column, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import (
+    CheckConstraint,
+    Column,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    text,
+)
 from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import relationship
 
@@ -9,41 +19,76 @@ from core.models.base import OrgScopedModel
 
 
 class AgentLlmEvalScenario(OrgScopedModel):
-    """One reusable Level-2 (agent-LLM) eval test case attached to an agent.
+    """A node in an agent's LLM-eval tree — either a ``folder`` or a
+    ``scenario`` (Level-2 agent-LLM eval test case), discriminated by
+    ``node_type`` and nested via the self-referential ``parent_id``
+    (adjacency list). Folders were previously a separate
+    ``agent_llm_eval_folders`` table; they now live here as ``node_type='folder'``
+    rows so the folder tree and the scenarios it holds share one table.
 
-    Persists what today lives only in the ``evals/fixtures/agent_llm_scenarios.py``
-    dataclass list. ``AgentLlmEvalService.run_eval_for_agent`` loads rows here,
-    converts each into the in-memory ``LLMScenario`` used by the existing
-    ``run_eval`` codepath, and never mutates the row — running an eval does
-    NOT edit scenarios (scenarios are the input, results are the output).
+    ``AgentLlmEvalService.run_eval_for_agent`` loads ``node_type='scenario'``
+    rows, converts each into the in-memory ``LLMScenario`` used by the existing
+    ``run_eval`` codepath, and never mutates the row — running an eval does NOT
+    edit scenarios (scenarios are the input, results are the output).
 
-    Hard-delete, not soft-delete: scenarios are user-authored inputs, not
-    audit-critical historical rows. Removing one just means "stop scoring
-    this case"; the historical ``agent_llm_eval_results`` rows keep their
-    own snapshotted ``prompt`` / ``expected_answer`` so past runs remain
-    fully explainable even after their source scenario is gone.
+    Scenarios may belong to a **version** (``version_id`` → ``agent_llm_eval_scenario_versions``):
+    auto-generated scenarios are saved as ``approval_status='pending'`` under a
+    draft version for review; approve keeps them (``approved``), reject deletes
+    the row. Pre-existing / manual scenarios carry ``version_id=NULL`` and are
+    always ``approved`` (no backfill).
 
-    The v2 forward-compat columns (``expected_tools`` / ``tool_config``) sit
-    here alongside the mirror columns on ``agent_llm_eval_results`` so a
-    future tool-scoring runner can persist expected vs. actual traces without
-    needing another migration.
+    Hard-delete, not soft-delete: nodes are user-authored inputs. Deleting a
+    folder cascades (``parent_id`` self-FK) to its children; the historical
+    ``agent_llm_eval_results`` rows keep their own snapshotted
+    ``prompt`` / ``expected_answer`` / ``folder`` so past runs remain
+    explainable after their source scenario is gone.
     """
 
     __tablename__ = "agent_llm_eval_scenarios"
     __table_args__ = (
-        UniqueConstraint(
-            "agent_id",
-            "scenario_key",
-            name="uq_agent_llm_eval_scenarios_agent_key",
+        # A scenario node must have a prompt; a folder node need not.
+        CheckConstraint(
+            "node_type = 'folder' OR prompt IS NOT NULL",
+            name="ck_agent_llm_eval_scenarios_prompt_required",
         ),
         Index(
             "ix_agent_llm_eval_scenarios_agent_ord",
             "agent_id",
             "scenario_ord",
         ),
+        Index("ix_agent_llm_eval_scenarios_parent", "parent_id"),
+        Index("ix_agent_llm_eval_scenarios_version_id", "version_id"),
+        # PG14-safe uniqueness (no NULLS NOT DISTINCT): split into partial
+        # indexes whose predicates keep NULLs out of the indexed columns.
         Index(
-            "ix_agent_llm_eval_scenarios_folder_id",
-            "folder_id",
+            "uq_agent_llm_eval_scenarios_folder_root",
+            "agent_id",
+            "name",
+            unique=True,
+            postgresql_where=text("node_type = 'folder' AND parent_id IS NULL"),
+        ),
+        Index(
+            "uq_agent_llm_eval_scenarios_folder_child",
+            "agent_id",
+            "parent_id",
+            "name",
+            unique=True,
+            postgresql_where=text("node_type = 'folder' AND parent_id IS NOT NULL"),
+        ),
+        Index(
+            "uq_agent_llm_eval_scenarios_versionless",
+            "agent_id",
+            "scenario_key",
+            unique=True,
+            postgresql_where=text("node_type = 'scenario' AND version_id IS NULL"),
+        ),
+        Index(
+            "uq_agent_llm_eval_scenarios_versioned",
+            "agent_id",
+            "version_id",
+            "scenario_key",
+            unique=True,
+            postgresql_where=text("node_type = 'scenario' AND version_id IS NOT NULL"),
         ),
     )
 
@@ -53,13 +98,45 @@ class AgentLlmEvalScenario(OrgScopedModel):
         nullable=False,
     )
 
+    # 'scenario' (an eval test case) | 'folder' (a tree container node).
+    node_type = Column(
+        String(16), nullable=False, default="scenario", server_default="scenario"
+    )
+
+    # Adjacency-list parent. NULL = top level. For a scenario node this is its
+    # containing folder node; for a folder node its parent folder (or NULL).
+    parent_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_llm_eval_scenarios.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    # Folder display name (folder nodes only). Scenario nodes use scenario_key.
+    name = Column(String(120), nullable=True)
+
+    # Version this scenario belongs to (scenario nodes only). NULL = manual /
+    # pre-existing (no version). Deleting the version cascades to its scenarios.
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_llm_eval_scenario_versions.id", ondelete="CASCADE"),
+        nullable=True,
+    )
+
+    # Review state for generated scenarios: 'pending' (awaiting approve/reject)
+    # | 'approved' (counts for runs). Reject deletes the row, so 'rejected' is
+    # never stored. Pre-existing / manual scenarios default to 'approved'.
+    approval_status = Column(
+        String(16), nullable=False, default="approved", server_default="approved"
+    )
+
     # Stable per-agent slug — the join key that also lands on every
     # ``agent_llm_eval_results.scenario_key`` so a scenario's result history
-    # survives an id change (e.g. re-import from CSV).
-    scenario_key = Column(String(120), nullable=False)
+    # survives an id change (e.g. re-import from CSV). NULL for folder nodes.
+    scenario_key = Column(String(120), nullable=True)
     scenario_ord = Column(Integer, nullable=False, default=0)
 
-    prompt = Column(Text, nullable=False)
+    # Nullable so folder nodes need no prompt (guarded by the CHECK above).
+    prompt = Column(Text, nullable=True)
     expected_answer = Column(Text, nullable=True)
     # GEval free-text rubrics. Empty → the corresponding metric is skipped
     # for this scenario even if globally enabled.
@@ -68,27 +145,21 @@ class AgentLlmEvalScenario(OrgScopedModel):
 
     tags = Column(JSONB, nullable=True)
 
-    # FK to first-class folder row. Every scenario always belongs to a real
-    # folder — the agent's ``Default`` folder is seeded on agent-create so
-    # callers that omit ``folder_id`` land here. Deleting a folder cascades
-    # to every scenario inside it (matches the "delete folder = delete its
-    # contents" UX).
-    folder_id = Column(
-        UUID(as_uuid=True),
-        ForeignKey("agent_llm_eval_folders.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    # Read-only relationship — surfaces the folder NAME to ``to_dict`` and
-    # to the eval runner without a manual query. Preferred over caching
-    # the name on an unmapped instance attribute (which silently
-    # disappears after ``expire_on_commit`` fires). List queries in the
-    # scenario service pair this with ``joinedload`` to avoid N+1.
-    folder_ref = relationship(
-        "AgentLlmEvalFolder",
-        foreign_keys=[folder_id],
+    # Read-only self-referential relationship — surfaces the parent folder
+    # NAME to ``to_dict`` and the eval runner without a manual query. List
+    # queries in the scenario service pair this with ``joinedload`` to avoid N+1.
+    parent_ref = relationship(
+        "AgentLlmEvalScenario",
+        remote_side="AgentLlmEvalScenario.id",
+        foreign_keys=[parent_id],
         lazy="select",
         viewonly=True,
+    )
+
+    version_ref = relationship(
+        "AgentLlmEvalScenarioVersion",
+        foreign_keys=[version_id],
+        back_populates="scenarios",
     )
 
     # Per-scenario overrides — NULL means "use the org's ``agent_llm.*``
@@ -108,24 +179,29 @@ class AgentLlmEvalScenario(OrgScopedModel):
     tool_config = Column(JSONB, nullable=True)
 
     def to_dict(self) -> dict:
-        # ``folder`` is the display name from the joined folder row. Falls
-        # back to None if the relationship was never loaded (e.g. detached
-        # instance from a foreign session) rather than firing a lazy
-        # query on a possibly-closed session.
+        # ``folder``/``folder_id`` are derived from the parent folder node for
+        # FE back-compat (the FE still keys off folder_id + folder name). Falls
+        # back to None if the parent relationship was never loaded (e.g. a
+        # detached instance) rather than firing a lazy query on a closed session.
         folder_name: Optional[str] = None
         try:
-            folder_row = self.folder_ref
-            if folder_row is not None:
-                folder_name = folder_row.name
+            parent_row = self.parent_ref
+            if parent_row is not None:
+                folder_name = parent_row.name
         except Exception:  # noqa: BLE001 — detached / expired instance
             logger.debug(
-                "[agent-llm-eval] scenario folder_ref unavailable (detached instance)"
+                "[agent-llm-eval] scenario parent_ref unavailable (detached instance)"
             )
             folder_name = None
         return {
             "id": str(self.id),
             "organization_id": str(self.organization_id),
             "agent_id": str(self.agent_id),
+            "node_type": self.node_type,
+            "parent_id": str(self.parent_id) if self.parent_id else None,
+            "name": self.name,
+            "version_id": str(self.version_id) if self.version_id else None,
+            "approval_status": self.approval_status,
             "scenario_key": self.scenario_key,
             "scenario_ord": self.scenario_ord,
             "prompt": self.prompt,
@@ -133,7 +209,8 @@ class AgentLlmEvalScenario(OrgScopedModel):
             "persona_criteria": self.persona_criteria,
             "instruction_criteria": self.instruction_criteria,
             "tags": self.tags,
-            "folder_id": str(self.folder_id) if self.folder_id else None,
+            # Back-compat aliases: folder_id == parent folder node id.
+            "folder_id": str(self.parent_id) if self.parent_id else None,
             "folder": folder_name,
             "metrics_override": self.metrics_override,
             "threshold_override": self.threshold_override,

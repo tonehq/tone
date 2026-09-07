@@ -84,6 +84,8 @@ class AgentLlmRunSummary:
     # single-value GROUP BY.
     llm_model: Optional[str] = None
     llm_provider: Optional[str] = None
+    # The version this run scored (None for version-less / legacy runs).
+    version_id: Optional[UUID] = None
     summary: dict = field(default_factory=dict)
     # Number of scenarios the run will score, stamped at ``begin_pending_run``
     # (known before the worker even picks up the job). Lets the UI render
@@ -142,6 +144,7 @@ class AgentLlmEvalService:
         judge_model: Optional[str] = None,
         run_id: Optional[UUID] = None,
         organization_id: Optional[UUID] = None,
+        version_id: Optional[UUID] = None,
     ) -> AgentLlmRunSummary:
         """Execute every ``LLMScenario`` against the agent's LLM. Persists
         one ``agent_llm_eval_results`` row per scenario tagged with the same
@@ -301,6 +304,7 @@ class AgentLlmEvalService:
                 started_at=started_at,
                 completed_at=completed_at,
                 scored_rows=scored_rows,
+                version_id=version_id,
             )
             run_summary.status = "completed"
             run_summary.completed_at = completed_at
@@ -330,6 +334,7 @@ class AgentLlmEvalService:
                 scored_rows=scored_rows,
                 judge_model=judge_model,
                 error=humanize_provider_error(e),
+                version_id=version_id,
             )
 
         return run_summary
@@ -345,6 +350,7 @@ class AgentLlmEvalService:
         tags: Optional[List[str]] = None,
         folder_id: Optional[UUID] = None,
         folder_ids: Optional[List[UUID]] = None,
+        version_id: Optional[UUID] = None,
         run_id: Optional[UUID] = None,
         organization_id: Optional[UUID] = None,
     ) -> AgentLlmRunSummary:
@@ -390,10 +396,14 @@ class AgentLlmEvalService:
             tags=tags,
             folder_id=folder_id,
             folder_ids=folder_ids,
+            version_id=version_id,
         )
         if not rows:
             raise AgentLlmEvalConfigError(
-                f"No scenarios found for agent {agent_id} — create scenarios "
+                f"No approved scenarios found for agent {agent_id} — create and "
+                "approve scenarios under the LLM Evals tab before running an eval."
+                if version_id is not None
+                else f"No scenarios found for agent {agent_id} — create scenarios "
                 "under the LLM Evals tab before running an eval."
             )
         llm_scenarios = [scenario_row_to_llm_scenario(r) for r in rows]
@@ -413,6 +423,7 @@ class AgentLlmEvalService:
             judge_model=judge_model,
             run_id=run_id,
             organization_id=organization_id,
+            version_id=version_id,
         )
 
     # ── Run lifecycle (agent_llm_eval_runs) ─────────────────────────────
@@ -435,6 +446,7 @@ class AgentLlmEvalService:
         judge_engine: Optional[str],
         total_scenarios: int,
         filter_snapshot: Optional[dict] = None,
+        version_id: Optional[UUID] = None,
     ) -> AgentLlmEvalRun:
         """Insert a ``pending`` run row synchronously (called by the router
         BEFORE enqueueing the Procrastinate job) so the UI can render the
@@ -476,6 +488,7 @@ class AgentLlmEvalService:
                 judge_engine=judge_engine,
                 total_scenarios=int(total_scenarios or 0),
                 filter_snapshot=filter_snapshot,
+                version_id=version_id,
             )
             db.add(run)
             try:
@@ -693,6 +706,7 @@ class AgentLlmEvalService:
         *,
         agent_id: UUID,
         organization_id: UUID,
+        version_id: Optional[UUID] = None,
         limit: Optional[int] = None,
         page_no: Optional[int] = None,
         page_size: Optional[int] = None,
@@ -726,6 +740,11 @@ class AgentLlmEvalService:
                 AgentLlmEvalRun.agent_id == agent_id,
                 AgentLlmEvalRun.organization_id == organization_id,
             )
+        )
+        if version_id is not None:
+            base = base.filter(AgentLlmEvalRun.version_id == version_id)
+        base = (
+            base
             .order_by(
                 func.coalesce(
                     AgentLlmEvalRun.started_at, AgentLlmEvalRun.created_at
@@ -1020,6 +1039,7 @@ class AgentLlmEvalService:
         started_at: datetime,
         completed_at: datetime,
         scored_rows: List[dict],
+        version_id: Optional[UUID] = None,
     ) -> None:
         """Bulk-insert every scored scenario on a brand-new session so we
         never inherit a broken pool connection from the LLM-loop session."""
@@ -1038,6 +1058,7 @@ class AgentLlmEvalService:
                     "agent_config_id": agent_config.agent_config_id,
                     "run_id": run_id,
                     "run_number": run_number,
+                    "version_id": version_id,
                     "triggered_by": triggered_by,
                     "scenario_key": scenario.name,
                     "scenario_tags": list(scenario.tags) if scenario.tags else None,
@@ -1100,6 +1121,7 @@ class AgentLlmEvalService:
         scored_rows: List[dict],
         judge_model: str,
         error: str,
+        version_id: Optional[UUID] = None,
     ) -> None:
         """Persist whatever we DID score before the crash, then stamp
         placeholder failed rows for the rest so the batch has one row per
@@ -1136,6 +1158,7 @@ class AgentLlmEvalService:
                 started_at=run_summary.started_at or completed_at,
                 completed_at=completed_at,
                 scored_rows=scored_rows,
+                version_id=version_id,
             )
         except Exception:
             logger.exception(
@@ -1284,6 +1307,7 @@ def _row_to_run_summary(row) -> AgentLlmRunSummary:
         judge_model=row.judge_model,
         llm_model=getattr(row, "llm_model", None),
         llm_provider=getattr(row, "llm_provider", None),
+        version_id=getattr(row, "version_id", None),
         status=status,
         error=None,
         started_at=row.started_at,
@@ -1390,6 +1414,7 @@ def _run_and_stats_to_summary(
         judge_model=run.judge_model,
         llm_model=run.llm_model,
         llm_provider=run.llm_provider,
+        version_id=getattr(run, "version_id", None),
         status=run.status,
         error=run.error,
         started_at=run.started_at,

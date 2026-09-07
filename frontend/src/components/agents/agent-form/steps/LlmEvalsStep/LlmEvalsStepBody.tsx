@@ -15,7 +15,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import SectionCard from '@/components/agents/agent-form/SectionCard';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
-import { CustomButton, CustomTab, SearchBar } from '@/components/shared';
+import { CustomButton, CustomTab, SearchBar, SelectInput } from '@/components/shared';
 import type { TabItem } from '@/components/shared';
 import {
   DropdownMenu,
@@ -24,13 +24,18 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  useApproveAgentLlmEvalScenario,
+  useApproveAllAgentLlmEvalScenarios,
   useAgentLlmEvalFolders,
   useAgentLlmEvalRuns,
   useAgentLlmEvalScenarios,
+  useAgentLlmEvalVersions,
   useCreateAgentLlmEvalFolder,
   useDeleteAgentLlmEvalFolder,
   useDeleteAgentLlmEvalScenario,
   useDeleteAgentLlmEvalScenariosBulk,
+  useRejectAgentLlmEvalScenario,
+  useRejectAllAgentLlmEvalScenarios,
   useRenameAgentLlmEvalFolder,
   useTriggerAgentLlmEvalRun,
   useUploadAgentLlmEvalScenariosCsv,
@@ -39,10 +44,12 @@ import type { AgentLlmEvalScenario, AgentLlmEvalScenarioSource } from '@/types/a
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
+import AgentEvalVersionBar from './AgentEvalVersionBar';
 import AgentLlmEvalResultsDrawer from './AgentLlmEvalResultsDrawer';
 import FolderBreadcrumb from './FolderBreadcrumb';
 import FolderDeleteImpact from './FolderDeleteImpact';
 import FoldersView from './FoldersView';
+import { VERSION_FILTER_ALL_VALUE, versionLabel } from './constants';
 import GenerateScenariosModal from './GenerateScenariosModal';
 import { downloadSampleCsv } from './helpers';
 import LlmEvalsPagination from './LlmEvalsPagination';
@@ -102,22 +109,53 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [filterSource, setFilterSource] = useState<AgentLlmEvalScenarioSource | null>(null);
   useEffect(() => {
     setPage(1);
-  }, [selectedFolder, search, filterSource]);
+  }, [selectedFolder, search, filterSource, selectedVersionId]);
   // Wipe bulk-selection whenever the user changes context (folder or
   // filters). Keeping a stale selection alive across contexts would let
   // users delete rows they can't currently see — surprising and unsafe.
   useEffect(() => {
     setSelectedScenarioIds(new Set());
-  }, [selectedFolder, search, filterSource]);
+  }, [selectedFolder, search, filterSource, selectedVersionId]);
 
   // Pagination for the Runs tab. Kept as separate state from the scenarios
   // pager so switching folders doesn't reset the runs page (and vice-versa).
   const [runsPage, setRunsPage] = useState(1);
   const [runsPageSize, setRunsPageSize] = useState(10);
 
+  // Selected version for the Manage-Evals tab. ``null`` = no version selected
+  // (shows every scenario incl. version-less/manual). Auto-selects the newest
+  // version once versions load.
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  // Version filter for the Results tab (``VERSION_FILTER_ALL_VALUE`` = all).
+  const [resultsVersionFilter, setResultsVersionFilter] =
+    useState<string>(VERSION_FILTER_ALL_VALUE);
+  // Per-row review in-flight ids + reject confirmations.
+  const [pendingRejectScenario, setPendingRejectScenario] = useState<AgentLlmEvalScenario | null>(
+    null,
+  );
+  const [pendingRejectAll, setPendingRejectAll] = useState(false);
+
+  const versionsQuery = useAgentLlmEvalVersions(agentId);
+  const versions = versionsQuery.data?.items ?? [];
+  const selectedVersion = versions.find((v) => v.id === selectedVersionId) ?? null;
+
+  // Auto-select the newest version when the list loads (or re-resolve if the
+  // selected version was deleted). Never overrides an explicit user pick that
+  // still exists.
+  useEffect(() => {
+    if (versions.length === 0) {
+      if (selectedVersionId !== null) setSelectedVersionId(null);
+      return;
+    }
+    if (!selectedVersionId || !versions.some((v) => v.id === selectedVersionId)) {
+      setSelectedVersionId(versions[0].id);
+    }
+  }, [versions, selectedVersionId]);
+
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
     search: search || undefined,
     folder_id: selectedFolder ?? undefined,
+    version_id: selectedVersionId ?? undefined,
     // Send the source filter only when set — omitting it entirely so the
     // backend takes its "no filter" fast path and the query key stays
     // compact.
@@ -129,7 +167,13 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const runsQuery = useAgentLlmEvalRuns(agentId, {
     page_no: runsPage,
     page_size: runsPageSize,
+    version_id:
+      resultsVersionFilter === VERSION_FILTER_ALL_VALUE ? undefined : resultsVersionFilter,
   });
+  const approveScenario = useApproveAgentLlmEvalScenario(agentId);
+  const rejectScenario = useRejectAgentLlmEvalScenario(agentId);
+  const approveAll = useApproveAllAgentLlmEvalScenarios(agentId);
+  const rejectAll = useRejectAllAgentLlmEvalScenarios(agentId);
   const uploadCsv = useUploadAgentLlmEvalScenariosCsv(agentId);
   const deleteScenario = useDeleteAgentLlmEvalScenario(agentId);
   const deleteScenariosBulk = useDeleteAgentLlmEvalScenariosBulk(agentId);
@@ -168,7 +212,10 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // instead. The two never mix in one request.
   const runFolder = async (folderId: string) => {
     try {
-      await triggerRun.mutateAsync({ folder_id: folderId });
+      await triggerRun.mutateAsync({
+        folder_id: folderId,
+        version_id: selectedVersionId ?? undefined,
+      });
       showToast.success(
         'Evaluation started',
         'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
@@ -186,7 +233,10 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // learn one mental model regardless of which surface started the run.
   const runScenario = async (scenario: AgentLlmEvalScenario) => {
     try {
-      await triggerRun.mutateAsync({ scenario_ids: [scenario.id] });
+      await triggerRun.mutateAsync({
+        scenario_ids: [scenario.id],
+        version_id: selectedVersionId ?? undefined,
+      });
       showToast.success(
         'Evaluation started',
         `“${scenario.scenario_key}” is running now. Open the Runs tab in a moment to see the result.`,
@@ -333,6 +383,50 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     }
   };
 
+  const handleApproveScenario = async (scenario: AgentLlmEvalScenario) => {
+    try {
+      await approveScenario.mutateAsync(scenario.id);
+      showToast.success('Scenario approved');
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const confirmRejectScenario = async () => {
+    if (!pendingRejectScenario) return;
+    try {
+      await rejectScenario.mutateAsync(pendingRejectScenario.id);
+      showToast.success('Scenario rejected');
+      setPendingRejectScenario(null);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleApproveAll = async () => {
+    if (!selectedVersionId) return;
+    try {
+      const result = await approveAll.mutateAsync(selectedVersionId);
+      showToast.success(
+        `${result.approved} scenario${result.approved === 1 ? '' : 's'} approved`,
+        'This version is now finalized.',
+      );
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const confirmRejectAll = async () => {
+    if (!selectedVersionId) return;
+    try {
+      const result = await rejectAll.mutateAsync(selectedVersionId);
+      showToast.success(`${result.rejected} scenario${result.rejected === 1 ? '' : 's'} rejected`);
+      setPendingRejectAll(false);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
   // Hoisted multi-line handlers (repo rule: no multi-line inline JSX arrows).
   const handleCsvInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
@@ -374,6 +468,14 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
 
   const handleCloseDeleteFolder = () => {
     if (!deleteFolder.isPending) setPendingDeleteFolderId(null);
+  };
+
+  const handleCloseRejectScenario = () => {
+    if (!rejectScenario.isPending) setPendingRejectScenario(null);
+  };
+
+  const handleCloseRejectAll = () => {
+    if (!rejectAll.isPending) setPendingRejectAll(false);
   };
 
   const inFolderView = selectedFolder !== null;
@@ -454,6 +556,16 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       action={actionButtons}
       bodyClassName="mt-2"
     >
+      <AgentEvalVersionBar
+        versions={versions}
+        selectedVersion={selectedVersion}
+        onSelectVersion={setSelectedVersionId}
+        onOpenGenerate={() => setOpenGenerate(true)}
+        onApproveAll={handleApproveAll}
+        onRejectAll={() => setPendingRejectAll(true)}
+        approvingAll={approveAll.isPending}
+        rejectingAll={rejectAll.isPending}
+      />
       {inFolderView ? (
         <>
           <FolderBreadcrumb
@@ -516,6 +628,10 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
             selectedIds={selectedScenarioIds}
             onToggleRow={toggleScenarioSelection}
             onToggleAll={togglePageSelection}
+            onApprove={selectedVersion ? handleApproveScenario : undefined}
+            onReject={selectedVersion ? setPendingRejectScenario : undefined}
+            approvingId={approveScenario.isPending ? (approveScenario.variables ?? null) : null}
+            rejectingId={rejectScenario.isPending ? (rejectScenario.variables ?? null) : null}
           />
           <LlmEvalsPagination
             page={page}
@@ -551,9 +667,24 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       title="Run history"
       description="Every eval batch for this agent, newest first. Click any row to inspect scored scenarios."
       action={
-        <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-          {runsTotal} run{runsTotal === 1 ? '' : 's'}
-        </span>
+        <div className="flex items-center gap-3">
+          {versions.length > 0 && (
+            <div className="min-w-[220px]">
+              <SelectInput
+                name="results-version-filter"
+                value={resultsVersionFilter}
+                onValueChange={(v) => v && setResultsVersionFilter(v)}
+                options={[
+                  { value: VERSION_FILTER_ALL_VALUE, label: 'All versions' },
+                  ...versions.map((v) => ({ value: v.id, label: versionLabel(v) })),
+                ]}
+              />
+            </div>
+          )}
+          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
+            {runsTotal} run{runsTotal === 1 ? '' : 's'}
+          </span>
+        </div>
       }
     >
       <RunsTable
@@ -576,7 +707,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const tabItems: TabItem[] = [
     {
       key: 'folders',
-      label: 'Folders',
+      label: 'Manage Evals',
       icon: <FolderIcon className="size-4" />,
       children: <div className="pt-4">{foldersPanel}</div>,
     },
@@ -584,7 +715,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       key: 'runs',
       label: (
         <span className="inline-flex items-center gap-2">
-          Runs
+          Results
           {runsTotal > 0 && (
             <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
               {runsTotal}
@@ -620,6 +751,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         scenarios={scenarios}
         folders={folders}
         defaultFolderId={selectedFolder}
+        versionId={selectedVersionId}
       />
       <GenerateScenariosModal
         open={openGenerate}
@@ -627,6 +759,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         agentId={agentId}
         folderOptions={folders}
         defaultFolderId={selectedFolder}
+        versions={versions}
       />
       <NewFolderModal
         open={openNewFolder}
@@ -670,6 +803,39 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
           </p>
         }
         loading={deleteScenariosBulk.isPending}
+      />
+      <ConfirmDeleteModal
+        open={!!pendingRejectScenario}
+        onClose={handleCloseRejectScenario}
+        onConfirm={confirmRejectScenario}
+        title="Reject scenario"
+        description="Rejecting deletes this scenario — it won’t be stored or scored. This can’t be undone."
+        impact={
+          pendingRejectScenario ? (
+            <p className="text-sm text-foreground">
+              You’re about to reject{' '}
+              <span className="font-medium">{pendingRejectScenario.scenario_key}</span>.
+            </p>
+          ) : null
+        }
+        loading={rejectScenario.isPending}
+      />
+      <ConfirmDeleteModal
+        open={pendingRejectAll}
+        onClose={handleCloseRejectAll}
+        onConfirm={confirmRejectAll}
+        title="Reject all pending scenarios"
+        description="Rejecting deletes every pending scenario in this version — approved scenarios are kept. This can’t be undone."
+        impact={
+          selectedVersion ? (
+            <p className="text-sm text-foreground">
+              You’re about to reject{' '}
+              <span className="font-medium">{selectedVersion.counts.pending}</span> pending scenario
+              {selectedVersion.counts.pending === 1 ? '' : 's'}.
+            </p>
+          ) : null
+        }
+        loading={rejectAll.isPending}
       />
       <ConfirmDeleteModal
         open={!!pendingDeleteFolderId}
