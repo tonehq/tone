@@ -12,6 +12,8 @@ source (server-accepted vs client-dialed) and the serializer; everything downstr
 place that assembles the outbound media transport.
 """
 
+from pipecat.audio.mixers.base_audio_mixer import BaseAudioMixer
+from pipecat.frames.frames import MixerControlFrame
 from pipecat.transports.base_transport import BaseTransport
 from pipecat.transports.websocket.client import (WebsocketClientParams,
                                                  WebsocketClientTransport)
@@ -24,6 +26,23 @@ from core.serializers.raw_pcm import RawPCMSerializer
 # but degrades audio enough that Deepgram transcribes NOTHING. The bridge also declares
 # this rate in the /ws/test URL so the two sides can never disagree.
 BRIDGE_SAMPLE_RATE = 24000
+
+
+class _ContinuousSilenceMixer(BaseAudioMixer):
+    """Pass-through mixer: selects pipecat's ``with_mixer`` path so the bridge streams
+    continuous silence while idle, keeping the remote STT's endpointing alive."""
+
+    async def start(self, sample_rate: int) -> None:
+        return
+
+    async def stop(self) -> None:
+        return
+
+    async def process_frame(self, frame: MixerControlFrame) -> None:
+        return
+
+    async def mix(self, audio: bytes) -> bytes:
+        return audio
 
 
 def build_ws_bridge_transport(
@@ -40,6 +59,7 @@ def build_ws_bridge_transport(
         audio_in_sample_rate=sample_rate,
         audio_out_sample_rate=sample_rate,
         add_wav_header=False,
+        audio_out_mixer=_ContinuousSilenceMixer(),
         serializer=RawPCMSerializer(sample_rate=sample_rate, num_channels=1),
     )
     return WebsocketClientTransport(uri=remote_uri, params=params)
