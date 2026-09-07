@@ -4,7 +4,7 @@ import pytest
 
 from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.services.ingestion_run_service import IngestionRunService
-from core.services.rag.errors import EmbeddingCompatibilityError
+from core.services.rag.errors import EmbeddingCompatibilityError, VectorStoreUnavailableError
 from core.services.rag.types import VectorRecord
 from core.services.rag.vector_stores.chunk_rows import chunk_rows_query, insert_chunk_rows
 from core.services.upload_service import UploadService
@@ -73,6 +73,16 @@ def test_purge_deletes_remote_vectors_with_caller_session():
     get_store.return_value.delete.assert_called_once_with(
         filters={"ingestion_run_id": "r1", "organization_id": "o1"}
     )
+
+
+def test_purge_skips_runs_whose_store_is_not_configured():
+    db = mock.MagicMock()
+    configured = mock.MagicMock()
+    with mock.patch("core.services.ingestion_run_service.get_vector_store") as get_store:
+        get_store.side_effect = [VectorStoreUnavailableError("no credentials"), configured]
+        IngestionRunService.purge_remote_vectors(db, [_run("turbopuffer"), _run("turbopuffer")])
+    assert get_store.call_count == 2
+    configured.delete.assert_called_once()
 
 
 def test_delete_run_purges_before_deleting():
