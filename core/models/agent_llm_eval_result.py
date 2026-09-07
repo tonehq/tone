@@ -57,6 +57,15 @@ class AgentLlmEvalResult(OrgScopedModel):
     )
     run_id = Column(UUID(as_uuid=True), nullable=False)
     run_number = Column(Integer, nullable=False)
+    # Snapshot of the version this result was scored under (NULL for
+    # version-less / legacy runs). SET NULL on version delete so history
+    # survives even after the source version is removed.
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_llm_eval_scenario_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     triggered_by = Column(String(32), nullable=False)  # 'cli' for MVP
 
     scenario_key = Column(String(120), nullable=False)

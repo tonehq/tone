@@ -495,6 +495,7 @@ def run_agent_llm_eval(
     run_id: Optional[str] = None,
     folder_id: Optional[str] = None,
     folder_ids: Optional[list[str]] = None,
+    version_id: Optional[str] = None,
 ) -> None:
     """Run one Level-2 (agent-LLM) eval batch asynchronously.
 
@@ -581,6 +582,7 @@ def run_agent_llm_eval(
                     folder_ids=(
                         [_UUID(f) for f in folder_ids] if folder_ids else None
                     ),
+                    version_id=_UUID(version_id) if version_id else None,
                     run_id=parsed_run_id,
                 )
             except Exception as scoring_error:  # noqa: BLE001
@@ -667,6 +669,7 @@ async def enqueue_agent_llm_eval(
     tags: Optional[list[str]] = None,
     folder_id=None,
     folder_ids: Optional[list] = None,
+    version_id=None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -678,6 +681,7 @@ async def enqueue_agent_llm_eval(
             tags=list(tags) if tags else None,
             folder_id=str(folder_id) if folder_id else None,
             folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
+            version_id=str(version_id) if version_id else None,
             judge_model=judge_model,
             run_id=str(run_id) if run_id else None,
         )
@@ -691,6 +695,7 @@ def enqueue_agent_llm_eval_sync(
     tags: Optional[list[str]] = None,
     folder_id=None,
     folder_ids: Optional[list] = None,
+    version_id=None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -712,6 +717,7 @@ def enqueue_agent_llm_eval_sync(
         tags=list(tags) if tags else None,
         folder_id=str(folder_id) if folder_id else None,
         folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
+        version_id=str(version_id) if version_id else None,
         judge_model=judge_model,
         run_id=str(run_id) if run_id else None,
     )
