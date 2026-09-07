@@ -42,6 +42,7 @@ from core.services.ingestion_errors import (
 from core.services.rag import run_scope
 from core.services.rag.component_registry import ensure_rag_component
 from core.services.rag.embedder_factory import EMBEDDERS
+from core.services.rag.errors import VectorStoreUnavailableError
 from core.services.rag.factory import DB_BACKED_STORES, VECTOR_STORES, get_vector_store
 from core.services.rag.parser_factory import PARSERS
 from core.services.rag.tokeniser_factory import TOKENISERS
@@ -1143,8 +1144,15 @@ class IngestionRunService:
         for run in runs:
             if run.vector_store in DB_BACKED_STORES:
                 continue
-            store = get_vector_store(run.vector_store, session=db, **(run.vector_store_ref or {}))
-            store.delete(filters={"ingestion_run_id": run.id, "organization_id": run.organization_id})
+            try:
+                store = get_vector_store(run.vector_store, session=db, **(run.vector_store_ref or {}))
+                store.delete(filters={"ingestion_run_id": run.id, "organization_id": run.organization_id})
+            except VectorStoreUnavailableError as exc:
+                logger.warning(
+                    "[ingestion] remote vector purge skipped run={} store={}: {}",
+                    run.id, run.vector_store, exc,
+                )
+                continue
             logger.info(
                 "[ingestion] purged remote vectors run={} store={}", run.id, run.vector_store
             )
