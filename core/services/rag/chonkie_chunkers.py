@@ -11,15 +11,18 @@ Chonkie's ``Chunk`` objects carry ``text``, ``start_index``, ``end_index``,
 Tone's :class:`~core.services.rag.types.Chunk`; token counts are informational
 (the RAG embedder re-tokenises downstream).
 
-Chonkie itself is imported softly: if the package fails to install, the module
-still loads and the four ``Chunker`` classes still exist so
-``tokeniser_factory``'s ``TOKENISERS`` registry can be built (which in turn
-keeps every non-chonkie tokeniser — docling_hybrid, recursive_char, token_aware
-— fully functional). Attempting to actually instantiate a ``Chonkie*Chunker``
+Chonkie itself is imported lazily (on first chunker construction, not at module
+top): importing this module — which happens at API-pod startup via
+``tokeniser_factory`` — must NOT pull chonkie and its heavy transitive deps
+(nltk, scikit-learn, torch) into API pods that never chunk. The module still
+loads and all four ``Chunker`` classes still exist so ``tokeniser_factory``'s
+``TOKENISERS`` registry can be built (keeping every non-chonkie tokeniser —
+docling_hybrid, recursive_char, token_aware — fully functional) even when
+chonkie isn't installed. Attempting to actually instantiate a ``Chonkie*Chunker``
 without the package raises a clear :class:`RuntimeError` at ``__init__`` time.
-The embedding-based variants additionally defer construction of the
-underlying chonkie chunker to first ``chunk()`` call so a first-time HuggingFace
-model download can't block worker startup or non-semantic tokeniser use.
+The embedding-based variants additionally defer construction of the underlying
+chonkie chunker to the first ``chunk()`` call so a first-time HuggingFace model
+download can't block worker startup or non-semantic tokeniser use.
 """
 
 from __future__ import annotations
@@ -31,22 +34,6 @@ from loguru import logger
 from core.services.rag.chunkers import Chunker
 from core.services.rag.types import Chunk, Document
 
-try:
-    from chonkie import RecursiveChunker as _ChonkieRecursive
-except ImportError:  # pragma: no cover — chonkie is in requirements.txt
-    _ChonkieRecursive = None
-
-try:
-    from chonkie import SentenceChunker as _ChonkieSentence
-except ImportError:  # pragma: no cover
-    _ChonkieSentence = None
-
-try:
-    from chonkie import SemanticChunker as _ChonkieSemantic
-except ImportError:  # pragma: no cover — chonkie[semantic] extras
-    _ChonkieSemantic = None
-
-
 class _ChonkieDependencyError(RuntimeError):
     """Raised when a chonkie chunker is instantiated but the ``chonkie``
     package (or the relevant extras) is not installed. Kept as a distinct
@@ -54,14 +41,41 @@ class _ChonkieDependencyError(RuntimeError):
     failures."""
 
 
-def _require(dep: Any, dep_label: str) -> Any:
-    if dep is None:
+# Resolved chonkie chunker classes are cached here after the first successful
+# import; ``_CHONKIE_MISSING`` marks a class chonkie couldn't provide so a
+# failed import isn't retried on every construction.
+_CHONKIE_MISSING = object()
+_CHONKIE_CACHE: dict = {}
+
+
+def _load_chonkie(class_name: str, dep_label: str) -> Any:
+    """Import a chonkie chunker class on first use and return it.
+
+    chonkie is imported lazily (NOT at module top) so importing this module —
+    which happens at API-pod startup via ``tokeniser_factory`` — does not pull
+    chonkie and its heavy transitive deps (nltk, scikit-learn, torch) into API
+    pods that never chunk. Only the ingestion worker, which actually constructs
+    a chonkie chunker, pays that import cost.
+
+    Raises :class:`_ChonkieDependencyError` if chonkie (or the relevant extras)
+    is not installed — preserving the previous fail-fast behaviour.
+    """
+    cached = _CHONKIE_CACHE.get(class_name)
+    if cached is None:
+        try:
+            import chonkie
+
+            cached = getattr(chonkie, class_name)
+        except Exception:  # ImportError, or missing attr on a partial install
+            cached = _CHONKIE_MISSING
+        _CHONKIE_CACHE[class_name] = cached
+    if cached is _CHONKIE_MISSING:
         raise _ChonkieDependencyError(
             f"{dep_label} is not available. Install `chonkie` (and the "
             "`chonkie[semantic]` extras for the semantic/SDPM variants) to "
             "use this tokeniser."
         )
-    return dep
+    return cached
 
 
 def _to_tone_chunks(raw_chunks) -> List[Chunk]:
@@ -100,11 +114,11 @@ class ChonkieRecursiveChunker(Chunker):
         tokenizer: str = "character",
         min_characters_per_chunk: int = 24,
     ):
-        _require(_ChonkieRecursive, "chonkie RecursiveChunker")
+        recursive_cls = _load_chonkie("RecursiveChunker", "chonkie RecursiveChunker")
         self.chunk_size = chunk_size
         self.tokenizer = tokenizer
         self.min_characters_per_chunk = min_characters_per_chunk
-        self._chunker = _ChonkieRecursive(
+        self._chunker = recursive_cls(
             tokenizer=tokenizer,
             chunk_size=chunk_size,
             min_characters_per_chunk=min_characters_per_chunk,
@@ -148,7 +162,7 @@ class ChonkieSentenceChunker(Chunker):
         min_sentences_per_chunk: int = 1,
         min_characters_per_sentence: int = 12,
     ):
-        _require(_ChonkieSentence, "chonkie SentenceChunker")
+        sentence_cls = _load_chonkie("SentenceChunker", "chonkie SentenceChunker")
         # Chonkie's SentenceChunker raises ValueError deep inside the SDK
         # when overlap >= size; catch it early with a clearer message so a
         # bad tokeniser_config fails fast with a message the user can act on.
@@ -162,7 +176,7 @@ class ChonkieSentenceChunker(Chunker):
         self.tokenizer = tokenizer
         self.min_sentences_per_chunk = min_sentences_per_chunk
         self.min_characters_per_sentence = min_characters_per_sentence
-        self._chunker = _ChonkieSentence(
+        self._chunker = sentence_cls(
             tokenizer=tokenizer,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
@@ -231,7 +245,12 @@ class ChonkieSemanticChunker(Chunker):
         min_characters_per_sentence: int = 24,
         skip_window: int = 0,
     ):
-        _require(_ChonkieSemantic, "chonkie SemanticChunker (chonkie[semantic] extras)")
+        # Fail fast if the semantic extras aren't installed (matches previous
+        # behaviour); the actual chunker is still built lazily in _get_chunker
+        # so a first-time model download can't block worker startup.
+        _load_chonkie(
+            "SemanticChunker", "chonkie SemanticChunker (chonkie[semantic] extras)"
+        )
         self.chunk_size = chunk_size
         self.embedding_model = embedding_model
         self.threshold = threshold
@@ -243,7 +262,10 @@ class ChonkieSemanticChunker(Chunker):
 
     def _get_chunker(self) -> Any:
         if self._chunker is None:
-            self._chunker = _ChonkieSemantic(
+            semantic_cls = _load_chonkie(
+                "SemanticChunker", "chonkie SemanticChunker (chonkie[semantic] extras)"
+            )
+            self._chunker = semantic_cls(
                 **{k: getattr(self, k) for k in self._CHONKIE_KWARGS}
             )
         return self._chunker

@@ -3,9 +3,6 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List
 
-from docling.chunking import HybridChunker
-from docling_core.transforms.chunker.tokenizer.huggingface import HuggingFaceTokenizer
-from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from loguru import logger
 
@@ -90,6 +87,14 @@ class DoclingHybridChunker(Chunker):
         self._fallback = None
 
     def _resolve_tokenizer(self):
+        # docling_core tokenizers are imported lazily (only when a docling
+        # hybrid chunk is actually resolved) so importing this module at
+        # API-pod startup via tokeniser_factory doesn't pull the docling stack.
+        from docling_core.transforms.chunker.tokenizer.huggingface import (
+            HuggingFaceTokenizer,
+        )
+        from docling_core.transforms.chunker.tokenizer.openai import OpenAITokenizer
+
         try:
             import tiktoken
 
@@ -118,6 +123,9 @@ class DoclingHybridChunker(Chunker):
 
     def _get_chunker(self):
         if self._chunker is None:
+            # Lazy docling import — see _resolve_tokenizer note above.
+            from docling.chunking import HybridChunker
+
             self._chunker = HybridChunker(tokenizer=self._resolve_tokenizer())
         return self._chunker
 
