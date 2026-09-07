@@ -17,6 +17,11 @@ export interface FacetSectionConfig {
   label: string;
   /** Title-case the values for display (e.g. `in_progress` → `In Progress`). */
   titleCase?: boolean;
+  /**
+   * Custom display formatter for facet values (e.g. `llm` → `LLM`). Takes
+   * precedence over `titleCase`. Applied in the token bar chips and the drawer.
+   */
+  formatValue?: (value: string) => string;
 }
 
 /** Generic `{field, operator, value}` filter sent to a list/facets endpoint. */
@@ -83,6 +88,7 @@ export interface FacetOptionListProps {
   field: string;
   label: string;
   titleCase?: boolean;
+  formatValue?: (value: string) => string;
   values: FacetValue[];
   selected: string[];
   loading: boolean;
@@ -102,6 +108,7 @@ export interface FacetSectionProps {
   field: string;
   label: string;
   titleCase?: boolean;
+  formatValue?: (value: string) => string;
   values: FacetValue[];
   selected: string[];
   loading: boolean;
