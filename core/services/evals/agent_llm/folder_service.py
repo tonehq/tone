@@ -1,31 +1,34 @@
-"""``AgentLlmEvalFolderService`` — single source of truth for CRUD on
-``agent_llm_eval_folders``.
+"""``AgentLlmEvalFolderService`` — single source of truth for CRUD on folder
+nodes.
 
-Folders are first-class rows so they survive after their last scenario is
-deleted (Drive/Notion/Finder mental model) and rename is a single-row
-UPDATE. Deleting a folder cascades to every scenario inside it via the
-``ON DELETE CASCADE`` FK on ``agent_llm_eval_scenarios.folder_id``.
+Folders are ``node_type='folder'`` rows in ``agent_llm_eval_scenarios`` (an
+adjacency tree keyed by ``parent_id``); they previously lived in a separate
+``agent_llm_eval_folders`` table. They survive after their last scenario is
+deleted (Drive/Notion/Finder mental model) and rename is a single-row UPDATE.
+Deleting a folder node cascades to its children (scenarios AND sub-folders)
+via the ``ON DELETE CASCADE`` self-FK on ``agent_llm_eval_scenarios.parent_id``.
 
 Every agent always has at least one folder (a seeded ``Default`` on
-agent-create) so ``create_scenario`` always has a valid ``folder_id`` to
-write. The service refuses to delete the last folder so this invariant
-holds at runtime too.
+agent-create) so ``create_scenario`` always has a valid parent to write. The
+service refuses to delete the last top-level folder so this invariant holds.
 
 Errors are TYPED — the router maps them to HTTP codes, never the service.
 """
 
 from __future__ import annotations
 
+import uuid as _uuid
 from dataclasses import dataclass
 from typing import Optional
 from uuid import UUID
 
 from loguru import logger
-from sqlalchemy import func
+from sqlalchemy import func, text
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import aliased
 
 from core.models.agent import Agent
-from core.models.agent_llm_eval_folder import AgentLlmEvalFolder
 from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario
 from core.services.base import BaseService
 from core.services.evals.errors import (
@@ -38,10 +41,11 @@ from core.services.evals.errors import (
 
 DEFAULT_FOLDER_NAME = "Default"
 
-# Constraint name from the model — kept in one place so IntegrityError
-# translation can't drift from the actual DB constraint if the model is
-# renamed.
-_FOLDER_NAME_CONSTRAINT = "uq_agent_llm_eval_folders_agent_name"
+# Partial-index names for folder-name uniqueness (root vs child). Kept in one
+# place so IntegrityError translation can't drift from the actual DB indexes.
+_FOLDER_ROOT_CONSTRAINT = "uq_agent_llm_eval_scenarios_folder_root"
+_FOLDER_CHILD_CONSTRAINT = "uq_agent_llm_eval_scenarios_folder_child"
+_FOLDER_ROOT_WHERE = "node_type = 'folder' AND parent_id IS NULL"
 
 
 @dataclass
@@ -54,6 +58,7 @@ class FolderRow:
     agent_id: UUID
     name: str
     description: Optional[str]
+    parent_id: Optional[UUID]
     count: int
     created_at: Optional[str]
     updated_at: Optional[str]
@@ -64,6 +69,7 @@ class FolderRow:
             "agent_id": str(self.agent_id),
             "name": self.name,
             "description": self.description,
+            "parent_id": str(self.parent_id) if self.parent_id else None,
             "count": int(self.count),
             "created_at": self.created_at,
             "updated_at": self.updated_at,
@@ -71,49 +77,53 @@ class FolderRow:
 
 
 class AgentLlmEvalFolderService(BaseService):
-    """Manages ``agent_llm_eval_folders`` rows.
+    """Manages ``node_type='folder'`` rows in ``agent_llm_eval_scenarios``.
 
     Instantiated per request/task with the caller's org context via
-    ``BaseService``. Every read uses ``self.query(AgentLlmEvalFolder)`` so
+    ``BaseService``. Every read uses ``self.query(AgentLlmEvalScenario)`` so
     cross-tenant folder access is impossible.
     """
 
     # ── Read ────────────────────────────────────────────────────────────
 
     def list_folders(self, agent_id: UUID) -> list[FolderRow]:
-        """Every folder for one agent plus its scenario count.
+        """Every folder node for one agent plus its direct scenario count.
 
         Single JOIN + GROUP BY so N folders cost 1 query. Ordered by
         (created_at ASC, name ASC) so the seeded ``Default`` folder lands
-        first for newly-created agents.
+        first for newly-created agents. ``parent_id`` is surfaced so the FE
+        can nest the tree client-side.
         """
+        child = aliased(AgentLlmEvalScenario)
         rows = (
-            self.query(AgentLlmEvalFolder)
+            self.query(AgentLlmEvalScenario)
             .with_entities(
-                AgentLlmEvalFolder.id,
-                AgentLlmEvalFolder.agent_id,
-                AgentLlmEvalFolder.name,
-                AgentLlmEvalFolder.description,
-                AgentLlmEvalFolder.created_at,
-                AgentLlmEvalFolder.updated_at,
-                func.count(AgentLlmEvalScenario.id).label("count"),
+                AgentLlmEvalScenario.id,
+                AgentLlmEvalScenario.agent_id,
+                AgentLlmEvalScenario.name,
+                AgentLlmEvalScenario.parent_id,
+                AgentLlmEvalScenario.created_at,
+                AgentLlmEvalScenario.updated_at,
+                func.count(child.id).label("count"),
             )
             .outerjoin(
-                AgentLlmEvalScenario,
-                AgentLlmEvalScenario.folder_id == AgentLlmEvalFolder.id,
+                child,
+                (child.parent_id == AgentLlmEvalScenario.id)
+                & (child.node_type == "scenario"),
             )
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
             .group_by(
-                AgentLlmEvalFolder.id,
-                AgentLlmEvalFolder.agent_id,
-                AgentLlmEvalFolder.name,
-                AgentLlmEvalFolder.description,
-                AgentLlmEvalFolder.created_at,
-                AgentLlmEvalFolder.updated_at,
+                AgentLlmEvalScenario.id,
+                AgentLlmEvalScenario.agent_id,
+                AgentLlmEvalScenario.name,
+                AgentLlmEvalScenario.parent_id,
+                AgentLlmEvalScenario.created_at,
+                AgentLlmEvalScenario.updated_at,
             )
             .order_by(
-                AgentLlmEvalFolder.created_at.asc(),
-                AgentLlmEvalFolder.name.asc(),
+                AgentLlmEvalScenario.created_at.asc(),
+                AgentLlmEvalScenario.name.asc(),
             )
             .all()
         )
@@ -122,7 +132,8 @@ class AgentLlmEvalFolderService(BaseService):
                 id=r.id,
                 agent_id=r.agent_id,
                 name=r.name,
-                description=r.description,
+                description=None,
+                parent_id=r.parent_id,
                 count=int(r.count or 0),
                 created_at=r.created_at.isoformat() if r.created_at else None,
                 updated_at=r.updated_at.isoformat() if r.updated_at else None,
@@ -130,30 +141,31 @@ class AgentLlmEvalFolderService(BaseService):
             for r in rows
         ]
 
-    def get_folder(self, agent_id: UUID, folder_id: UUID) -> AgentLlmEvalFolder:
-        """Fetch one folder, org- + agent-scoped. Raises
+    def get_folder(self, agent_id: UUID, folder_id: UUID) -> AgentLlmEvalScenario:
+        """Fetch one folder node, org- + agent-scoped. Raises
         ``AgentLlmEvalFolderNotFoundError`` when the id is missing OR belongs
         to another agent in the same org."""
         return self._require_folder(agent_id, folder_id)
 
     def count_folders(self, agent_id: UUID) -> int:
-        """Number of folders for one agent — used by ``delete_folder`` to
-        enforce the "at least one folder" invariant."""
+        """Number of folder nodes for one agent — used by ``delete_folder``
+        to enforce the "at least one folder" invariant."""
         return int(
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
             .count()
         )
 
     def scenario_count(self, agent_id: UUID, folder_id: UUID) -> int:
-        """Number of scenarios in one folder (org-scoped via ``BaseService``).
-        Lets the rename route echo the ``count`` field the FE type expects
-        without a raw ``db.query`` in the router — matches the count
-        ``list_folders`` / create already surface."""
+        """Number of scenarios directly in one folder (org-scoped via
+        ``BaseService``). Lets the rename route echo the ``count`` field the
+        FE type expects without a raw ``db.query`` in the router."""
         return int(
             self.query(AgentLlmEvalScenario)
             .filter(AgentLlmEvalScenario.agent_id == agent_id)
-            .filter(AgentLlmEvalScenario.folder_id == folder_id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
+            .filter(AgentLlmEvalScenario.parent_id == folder_id)
             .count()
         )
 
@@ -164,26 +176,23 @@ class AgentLlmEvalFolderService(BaseService):
         agent_id: UUID,
         name: str,
         *,
-        description: Optional[str] = None,
+        description: Optional[str] = None,  # accepted for API compat; not persisted
         commit: bool = True,
-    ) -> AgentLlmEvalFolder:
-        """Idempotent by ``(agent_id, name)``. Used by the agent-create
-        hook, the seed script, and the CSV importer.
+    ) -> AgentLlmEvalScenario:
+        """Idempotent by top-level ``(agent_id, name)``. Used by the
+        agent-create hook, the seed script, and the CSV importer.
 
         Trims the name; empty / whitespace-only raises
-        ``EvalConfigurationError``. Does not touch ``description`` on an
-        existing folder — used only when a fresh row is inserted.
+        ``EvalConfigurationError``.
 
-        ``commit=False`` is for nested use — an outer service that is
-        itself building a transaction (e.g. agent-create seeding its
-        Default folder, or bulk-create resolving CSV folder names) passes
-        ``False`` so this helper only flushes, and the outer commit/
-        rollback stays atomic. Public routes leave the default so the
-        write is committed inline.
+        ``commit=False`` is for nested use — an outer service building its own
+        transaction (agent-create seeding its Default folder, or bulk-create
+        resolving CSV folder names) passes ``False`` so this helper only
+        flushes and the outer commit/rollback stays atomic.
 
-        Race-safe: uses Postgres ``INSERT ... ON CONFLICT DO NOTHING``
-        so a concurrent insert of the same ``(agent_id, name)`` doesn't
-        taint the transaction with an IntegrityError. The final SELECT
+        Race-safe: Postgres ``INSERT ... ON CONFLICT DO NOTHING`` on the
+        partial root-folder index, so a concurrent insert of the same
+        ``(agent_id, name)`` doesn't taint the transaction. The final SELECT
         returns whichever row won the race.
         """
         cleaned_name = _clean_folder_name(name)
@@ -192,31 +201,25 @@ class AgentLlmEvalFolderService(BaseService):
 
         self._assert_agent_in_org(agent_id)
 
-        existing = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
-            .filter(AgentLlmEvalFolder.name == cleaned_name)
-            .first()
-        )
+        existing = self._find_root_folder(agent_id, cleaned_name)
         if existing is not None:
             return existing
 
-        import uuid as _uuid
-
-        from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-        new_id = _uuid.uuid4()
         stmt = (
-            pg_insert(AgentLlmEvalFolder)
+            pg_insert(AgentLlmEvalScenario)
             .values(
-                id=new_id,
+                id=_uuid.uuid4(),
                 organization_id=self.org_id,
                 agent_id=agent_id,
+                node_type="folder",
                 name=cleaned_name,
-                description=_clean_optional_text(description),
+                parent_id=None,
+                approval_status="approved",
+                scenario_ord=0,
             )
             .on_conflict_do_nothing(
                 index_elements=["agent_id", "name"],
+                index_where=text(_FOLDER_ROOT_WHERE),
             )
         )
         self.db.execute(stmt)
@@ -225,19 +228,8 @@ class AgentLlmEvalFolderService(BaseService):
         else:
             self.db.flush()
 
-        # Reload the row (either the one we just inserted, or the winner
-        # of a concurrent race — always visible after our own commit /
-        # after the winning txn's commit, whichever came first).
-        row = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
-            .filter(AgentLlmEvalFolder.name == cleaned_name)
-            .first()
-        )
+        row = self._find_root_folder(agent_id, cleaned_name)
         if row is None:
-            # Should be impossible — ON CONFLICT DO NOTHING succeeded and
-            # a row with (agent_id, name) must exist. Surface as a
-            # conflict so the caller can retry rather than crash.
             raise AgentLlmEvalFolderNameConflictError(
                 f"folder {cleaned_name!r} could not be resolved for agent {agent_id}"
             )
@@ -252,14 +244,12 @@ class AgentLlmEvalFolderService(BaseService):
         agent_id: UUID,
         name: str,
         *,
-        description: Optional[str] = None,
+        description: Optional[str] = None,  # accepted for API compat; not persisted
         commit: bool = True,
-    ) -> AgentLlmEvalFolder:
-        """Explicit user-driven create. Raises
-        ``AgentLlmEvalFolderNameConflictError`` on unique-constraint hit —
-        callers that want idempotence should use ``get_or_create_folder``.
-
-        ``commit`` — see :meth:`get_or_create_folder`.
+    ) -> AgentLlmEvalScenario:
+        """Explicit user-driven create of a top-level folder node. Raises
+        ``AgentLlmEvalFolderNameConflictError`` on unique-index hit — callers
+        that want idempotence should use ``get_or_create_folder``.
         """
         cleaned_name = _clean_folder_name(name)
         if not cleaned_name:
@@ -267,22 +257,19 @@ class AgentLlmEvalFolderService(BaseService):
 
         self._assert_agent_in_org(agent_id)
 
-        clash = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
-            .filter(AgentLlmEvalFolder.name == cleaned_name)
-            .first()
-        )
-        if clash is not None:
+        if self._find_root_folder(agent_id, cleaned_name) is not None:
             raise AgentLlmEvalFolderNameConflictError(
                 f"folder {cleaned_name!r} already exists for agent {agent_id}"
             )
 
-        row = AgentLlmEvalFolder(
+        row = AgentLlmEvalScenario(
             organization_id=self.org_id,
             agent_id=agent_id,
+            node_type="folder",
             name=cleaned_name,
-            description=_clean_optional_text(description),
+            parent_id=None,
+            approval_status="approved",
+            scenario_ord=0,
         )
         self.db.add(row)
         try:
@@ -308,10 +295,9 @@ class AgentLlmEvalFolderService(BaseService):
         agent_id: UUID,
         folder_id: UUID,
         new_name: str,
-    ) -> AgentLlmEvalFolder:
-        """Single-row UPDATE. Snapshot rows on ``agent_llm_eval_results``
-        keep the OLD name so history renders as it did at scoring time.
-        """
+    ) -> AgentLlmEvalScenario:
+        """Single-row UPDATE. Snapshot rows on ``agent_llm_eval_results`` keep
+        the OLD name so history renders as it did at scoring time."""
         cleaned = _clean_folder_name(new_name)
         if not cleaned:
             raise EvalConfigurationError("new_name must be non-empty")
@@ -321,10 +307,12 @@ class AgentLlmEvalFolderService(BaseService):
             return row
 
         clash = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
-            .filter(AgentLlmEvalFolder.name == cleaned)
-            .filter(AgentLlmEvalFolder.id != folder_id)
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
+            .filter(AgentLlmEvalScenario.name == cleaned)
+            .filter(AgentLlmEvalScenario.parent_id.is_(row.parent_id))
+            .filter(AgentLlmEvalScenario.id != folder_id)
             .first()
         )
         if clash is not None:
@@ -351,29 +339,23 @@ class AgentLlmEvalFolderService(BaseService):
         return row
 
     def delete_folder(self, agent_id: UUID, folder_id: UUID) -> dict:
-        """Delete the folder row — the DB CASCADE deletes every scenario
-        inside it. Past run results (``agent_llm_eval_results``) keep their
-        snapshotted folder-name text column, so history remains readable.
+        """Delete the folder node — the DB CASCADE (self-FK ``parent_id``)
+        deletes every child scenario AND sub-folder. Past run results
+        (``agent_llm_eval_results``) keep their snapshotted folder-name text
+        column, so history remains readable.
 
-        Refuses to delete the LAST remaining folder for an agent — every
-        agent must always have at least one folder so ``create_scenario``
-        has a valid ``folder_id`` to write.
-
-        Concurrency: two simultaneous delete requests on an agent with
-        exactly 2 folders would each see count=2 and both delete without
-        a lock — dropping the agent to zero folders. We take a row-level
-        ``SELECT ... FOR UPDATE`` on every folder for this agent, which
-        serialises concurrent deletes on the same agent.
+        Refuses to delete the LAST remaining folder for an agent. Concurrency:
+        a row-level ``SELECT ... FOR UPDATE`` on every folder node for this
+        agent serialises concurrent deletes so we can't drop to zero folders.
         """
         from core.models.agent_llm_eval_result import AgentLlmEvalResult
 
         row = self._require_folder(agent_id, folder_id)
 
-        # Row-lock every folder row for this agent — concurrent deletes
-        # now queue behind us instead of check-then-act racing.
         locked = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
             .with_for_update()
             .all()
         )
@@ -387,11 +369,10 @@ class AgentLlmEvalFolderService(BaseService):
         scenarios_deleted = (
             self.query(AgentLlmEvalScenario)
             .filter(AgentLlmEvalScenario.agent_id == agent_id)
-            .filter(AgentLlmEvalScenario.folder_id == folder_id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
+            .filter(AgentLlmEvalScenario.parent_id == folder_id)
             .count()
         )
-        # Count past-run rows tagged with this folder's NAME (snapshot) so
-        # the FE toast can quote how many historical rows keep the label.
         results_preserved = (
             self.query(AgentLlmEvalResult)
             .filter(AgentLlmEvalResult.agent_id == agent_id)
@@ -414,13 +395,26 @@ class AgentLlmEvalFolderService(BaseService):
 
     # ── Internals ───────────────────────────────────────────────────────
 
+    def _find_root_folder(
+        self, agent_id: UUID, name: str
+    ) -> Optional[AgentLlmEvalScenario]:
+        return (
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
+            .filter(AgentLlmEvalScenario.parent_id.is_(None))
+            .filter(AgentLlmEvalScenario.name == name)
+            .first()
+        )
+
     def _require_folder(
         self, agent_id: UUID, folder_id: UUID
-    ) -> AgentLlmEvalFolder:
+    ) -> AgentLlmEvalScenario:
         row = (
-            self.query(AgentLlmEvalFolder)
-            .filter(AgentLlmEvalFolder.id == folder_id)
-            .filter(AgentLlmEvalFolder.agent_id == agent_id)
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.id == folder_id)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.node_type == "folder")
             .first()
         )
         if row is None:
@@ -430,31 +424,34 @@ class AgentLlmEvalFolderService(BaseService):
         return row
 
     def _assert_agent_in_org(self, agent_id: UUID) -> None:
-        """Cross-tenant leak guard for non-router callers (workers, CLIs,
-        seed scripts) whose ``TenantContext`` might not match the target
-        agent. Router paths already run ``_ensure_agent_in_org`` so this
-        is redundant there — but calling it in the service closes the
-        hole for every entry point uniformly.
-
-        Uses ``self.db`` (not ``self.query``) to bypass org scoping so
-        we can compare the AGENT's org to OUR context and raise on
-        mismatch instead of silently returning None."""
-        agent_org = (
-            self.db.query(Agent.organization_id)
-            .filter(Agent.id == agent_id)
-            .scalar()
+        """Cross-tenant leak guard for non-router callers (workers, CLIs, seed
+        scripts) whose ``TenantContext`` might not match the target agent."""
+        assert_agent_in_org(
+            self.db,
+            agent_id=agent_id,
+            org_id=self.org_id,
+            error_cls=EvalConfigurationError,
         )
-        if agent_org is None:
-            raise EvalConfigurationError(
-                f"Agent {agent_id} not found — cannot write folder"
-            )
-        if self.org_id is not None and str(agent_org) != str(self.org_id):
-            raise EvalConfigurationError(
-                f"Agent {agent_id} does not belong to organization {self.org_id}"
-            )
 
 
 # ── Helpers ──────────────────────────────────────────────────────────
+
+
+def assert_agent_in_org(db, *, agent_id: UUID, org_id, error_cls) -> None:
+    """Cross-tenant leak guard shared by the agent-LLM eval services (folder /
+    scenario / version). Compares the AGENT's org to the caller's context and
+    raises ``error_cls`` on a missing agent or org mismatch. Uses the raw
+    session (not org-scoped ``query``) so it can detect the mismatch instead
+    of silently returning ``None``."""
+    agent_org = (
+        db.query(Agent.organization_id).filter(Agent.id == agent_id).scalar()
+    )
+    if agent_org is None:
+        raise error_cls(f"Agent {agent_id} not found — cannot resolve organization")
+    if org_id is not None and str(agent_org) != str(org_id):
+        raise error_cls(
+            f"Agent {agent_id} does not belong to organization {org_id}"
+        )
 
 
 def _clean_folder_name(value: object) -> str:
@@ -464,33 +461,23 @@ def _clean_folder_name(value: object) -> str:
     return trimmed[:120]
 
 
-def _clean_optional_text(value: object) -> Optional[str]:
-    if value is None or not isinstance(value, str):
-        return None
-    trimmed = value.strip()
-    return trimmed or None
-
-
 def _is_folder_name_conflict(exc: IntegrityError) -> bool:
-    """True when the given ``IntegrityError`` was raised by the UNIQUE
-    constraint on ``(agent_id, name)``. Any other integrity violation is a
+    """True when the ``IntegrityError`` was raised by a folder-name partial
+    unique index (root or child). Any other integrity violation is a
     different bug that should NOT be hidden behind a "folder exists" message.
 
-    Priority: (1) exact constraint name from psycopg diag; (2) unique-
-    violation pgcode 23505 AND constraint name substring — the pgcode gate
-    prevents an FK / NOT-NULL violation whose message coincidentally
-    mentions the constraint name from being misclassified as a name
-    conflict (would surface as 409 to the user and mask a real 5xx).
-    """
+    Priority: (1) exact index name from psycopg diag; (2) unique-violation
+    pgcode 23505 AND an index-name substring."""
     orig = getattr(exc, "orig", None)
     diag = getattr(orig, "diag", None)
     constraint_name = getattr(diag, "constraint_name", None)
+    folder_constraints = {_FOLDER_ROOT_CONSTRAINT, _FOLDER_CHILD_CONSTRAINT}
     if constraint_name is not None:
-        return constraint_name == _FOLDER_NAME_CONSTRAINT
+        return constraint_name in folder_constraints
     pgcode = getattr(orig, "pgcode", None)
     if pgcode != "23505":  # unique_violation
         return False
-    return _FOLDER_NAME_CONSTRAINT in str(exc)
+    return any(name in str(exc) for name in folder_constraints)
 
 
 __all__ = [
