@@ -34,10 +34,27 @@ _DEEPEVAL_SUMMARY_METRICS: tuple[str, ...] = (
     "hallucination",
 )
 
-# Legacy summary keys derived from the mapped columns — the per-scorecard
-# aggregation loop skips these names so it can't overwrite them with a
-# semantically different value pulled from the DeepEval scorecard.
+# Metric names the summary-average loop skips: ``correctness`` (excluded from
+# the averaged set, matching the DB roll-up) plus ``groundedness``/``relevance``
+# (legacy aliases that are never scorecard keys — the real keys are
+# ``faithfulness``/``answer_relevancy``).
 _LEGACY_AVG_KEYS: frozenset[str] = frozenset({"correctness", "groundedness", "relevance"})
+
+# The three legacy metric names → their DeepEval ``metric_scores`` key. The
+# scalar ``correctness``/``groundedness``/``relevance`` columns were dropped, so
+# these values now come from the JSONB scorecard (the single source of truth).
+_LEGACY_METRIC_SOURCE: dict[str, str] = {
+    "correctness": "correctness",
+    "groundedness": "faithfulness",
+    "relevance": "answer_relevancy",
+}
+
+
+def _legacy_score(judge: dict, legacy_name: str) -> float:
+    """One legacy metric value pulled from a scored row's ``metric_scores``
+    (0.0 when the metric wasn't scored)."""
+    entry = (judge.get("metric_scores") or {}).get(_LEGACY_METRIC_SOURCE[legacy_name])
+    return _safe_score(entry.get("score")) if isinstance(entry, dict) else 0.0
 
 # Metrics where a HIGHER score is WORSE (DeepEval's hallucination fraction).
 # Regression semantics for these are inverted: a positive delta (more
@@ -52,16 +69,14 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
     CLI used to read off ``result.summary``.
 
     Averages ``avg_<metric>`` are emitted for every DeepEval metric that
-    appears in at least one row's ``judge.metric_scores``; legacy
-    ``avg_correctness``/``avg_groundedness``/``avg_relevance`` keep working
-    off the mapped columns so pre-DeepEval consumers see no change.
+    appears in at least one row's ``judge.metric_scores`` — the same set the
+    DB roll-up (``_row_to_run_summary``) produces, so both summary builders
+    stay consistent. (The legacy scalar averages were dropped alongside the
+    ``eval_results`` scalar columns; metrics live only in ``metric_scores``.)
     """
     total = len(rows)
     counts = {"PASS": 0, "PARTIAL": 0, "FAIL": 0}
     hit_count = 0
-    corr_sum = 0.0
-    gnd_sum = 0.0
-    rel_sum = 0.0
     latency_sum = 0
     by_category: dict = {}
     # Per-DeepEval-metric aggregates. Denominator is per-metric so a metric
@@ -76,17 +91,13 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
         counts[v] = counts.get(v, 0) + 1
         if r.get("retrieval_hit"):
             hit_count += 1
-        corr_sum += float(judge.get("correctness", 0) or 0)
-        gnd_sum += float(judge.get("groundedness", 0) or 0)
-        rel_sum += float(judge.get("relevance", 0) or 0)
         latency_sum += int(r.get("latency_ms", 0) or 0)
         for name, entry in (judge.get("metric_scores") or {}).items():
             if not isinstance(entry, dict):
                 continue
-            # Skip names that would clobber the mapped-column averages
-            # computed above — ``avg_correctness`` etc. must stay derived
-            # from the same source as their ``EvalResult`` column to keep
-            # trends comparable across engine flips.
+            # ``correctness`` is intentionally excluded from the summary
+            # averages (same as the DB roll-up, which only averages the
+            # ``_DEEPEVAL_SUMMARY_METRICS`` set).
             if name in _LEGACY_AVG_KEYS:
                 continue
             score = entry.get("score")
@@ -112,9 +123,6 @@ def _summarize_scored_rows(rows: List[dict]) -> dict:
         "partial_rate": (counts["PARTIAL"] / total) if total else 0.0,
         "fail_rate": (counts["FAIL"] / total) if total else 0.0,
         "retrieval_hit_rate": (hit_count / total) if total else 0.0,
-        "avg_correctness": (corr_sum / total) if total else 0.0,
-        "avg_groundedness": (gnd_sum / total) if total else 0.0,
-        "avg_relevance": (rel_sum / total) if total else 0.0,
         "total_questions": total,
         "duration_ms": latency_sum,
         "by_category": by_category,
@@ -157,9 +165,9 @@ def _diff_scored_rows(
         c_v = c["judge"]["verdict"]
         b_hit = bool(b.get("retrieval_hit"))
         c_hit = bool(c.get("retrieval_hit"))
-        d_corr = c["judge"]["correctness"] - b["judge"]["correctness"]
-        d_gnd = c["judge"]["groundedness"] - b["judge"]["groundedness"]
-        d_rel = c["judge"]["relevance"] - b["judge"]["relevance"]
+        d_corr = _legacy_score(c["judge"], "correctness") - _legacy_score(b["judge"], "correctness")
+        d_gnd = _legacy_score(c["judge"], "groundedness") - _legacy_score(b["judge"], "groundedness")
+        d_rel = _legacy_score(c["judge"], "relevance") - _legacy_score(b["judge"], "relevance")
 
         # Per-DeepEval-metric deltas from the JSONB scorecard. Only emitted
         # when BOTH runs actually scored the metric — comparing a real

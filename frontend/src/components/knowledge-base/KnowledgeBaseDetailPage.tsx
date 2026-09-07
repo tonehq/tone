@@ -2,9 +2,17 @@
 
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, ClipboardCheck, FileText, ListChecks, Settings2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  BarChart3,
+  ClipboardCheck,
+  FileText,
+  ListChecks,
+  Settings2,
+} from 'lucide-react';
 import Link from 'next/link';
 
+import EvalResultsTab from '@/components/knowledge-base/EvalResultsTab';
 import IngestionConfigsTab from '@/components/knowledge-base/IngestionConfigsTab';
 import IngestionRunsTab from '@/components/knowledge-base/IngestionRunsTab';
 import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
@@ -76,6 +84,12 @@ export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetai
         label: 'Manage evals',
         icon: <ClipboardCheck className="size-4" />,
         children: <ManageEvalsTab uploadId={uploadId} />,
+      },
+      {
+        key: 'eval-results',
+        label: 'Eval results',
+        icon: <BarChart3 className="size-4" />,
+        children: <EvalResultsTab uploadId={uploadId} />,
       },
       {
         key: 'ingestion-configs',

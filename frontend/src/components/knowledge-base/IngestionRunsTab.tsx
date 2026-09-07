@@ -5,8 +5,6 @@ import { CheckCircle2, Clock, Copy, Loader2, Play, Plus, Trash2, XCircle } from 
 
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import { CustomButton, CustomTable, CustomTooltip } from '@/components/shared';
-import EvalResultsDrawer from '@/components/knowledge-base/EvalResultsDrawer';
-import EvalsCell from '@/components/knowledge-base/EvalsCell';
 import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDrawer';
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
@@ -89,25 +87,19 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   // Single-flight so a user doesn't stampede the eval queue by mashing buttons.
   const [runningEvalId, setRunningEvalId] = useState<string | null>(null);
 
-  const [drawerRun, setDrawerRun] = useState<IngestionRun | null>(null);
   const [chunksDrawerRun, setChunksDrawerRun] = useState<IngestionRun | null>(null);
   const [newRunOpen, setNewRunOpen] = useState(false);
 
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
 
-  // Batch-fetch the latest eval-batch summary for every visible ingestion run
-  // so the "Evals" column paints in one query instead of N. Memo the derived
-  // map so its identity is stable across renders — otherwise the {} fallback
-  // on the loading tick invalidates the columns useMemo on every render.
+  // Batch-fetch the in-flight eval state for every visible ingestion run in one
+  // query so the per-row "Run evals" button reflects queued/running batches
+  // (results themselves live in the dedicated Eval results tab).
   const visibleRunIds = useMemo(() => runs.map((r) => r.id), [runs]);
   const { data: evalSummariesResp } = useEvalSummariesByIngestion(uploadId, visibleRunIds);
-  const evalSummariesByIngestion = useMemo(
-    () => evalSummariesResp?.items ?? {},
-    [evalSummariesResp],
-  );
   // Ingestion runs whose eval batch is queued/running (no score row yet). The
-  // hook polls while this is non-empty; the "Evals" cell shows a spinner.
+  // hook polls while this is non-empty; the "Run evals" button shows a spinner.
   const inFlightEvalRunIds = useMemo(
     () => new Set(evalSummariesResp?.in_flight_ingestion_run_ids ?? []),
     [evalSummariesResp],
@@ -301,19 +293,6 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         ),
       },
       {
-        key: 'evals',
-        title: 'Evals',
-        align: 'center',
-        width: 'w-[110px]',
-        render: (_v, r) => (
-          <EvalsCell
-            summary={evalSummariesByIngestion[r.id]}
-            isInFlight={inFlightEvalRunIds.has(r.id)}
-            onView={() => setDrawerRun(r)}
-          />
-        ),
-      },
-      {
         key: 'completed_at',
         title: 'Completed',
         dataIndex: 'completed_at',
@@ -454,13 +433,7 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
         },
       },
     ],
-    [
-      resolvedActiveRunId,
-      activatingId,
-      runningEvalId,
-      evalSummariesByIngestion,
-      inFlightEvalRunIds,
-    ],
+    [resolvedActiveRunId, activatingId, runningEvalId, inFlightEvalRunIds],
   );
 
   return (
@@ -528,13 +501,6 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
           }
         />
       </div>
-
-      <EvalResultsDrawer
-        open={drawerRun !== null}
-        onClose={() => setDrawerRun(null)}
-        uploadId={uploadId}
-        ingestionRun={drawerRun}
-      />
 
       <IngestionChunksDrawer
         open={chunksDrawerRun !== null}

@@ -40,13 +40,24 @@ class QuestionGeneratorService:
         api_key: str,
         model: str,
         max_chars: int,
+        custom_instructions: Optional[str] = None,
     ) -> dict:
         """Call the LLM; return ``{"generated_by_model": ..., "questions": [...]}``.
+
+        ``custom_instructions`` (optional) is the user's free-text guidance for
+        this version — appended to the base prompt so the generated questions
+        follow it (e.g. "focus on refund & cancellation policies").
 
         Raises ``EvalGenerationError`` on network / parse / empty-response failures."""
         clipped = _clip_document(document_text, max_chars)
         template = self._loader.load(self._prompt_name)
         prompt = render_prompt(template, DOCUMENT_TEXT=clipped)
+        if custom_instructions and custom_instructions.strip():
+            prompt = (
+                f"{prompt}\n\n"
+                "## Additional user instructions (follow these when creating questions)\n"
+                f"{custom_instructions.strip()}"
+            )
 
         logger.info(
             "[eval] question_gen calling model={} chars={} clipped={}",
