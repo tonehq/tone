@@ -348,10 +348,10 @@ export default function NewOutboundCallModal({
         } else {
           showToast.success(
             res?.mode === 'bulk' ? `${res.count} calls queued` : 'Call scheduled',
-            'Track them on the agent’s Schedule tab.',
+            'Track them on the agent’s Outbound Calls tab.',
           );
         }
-        // Honor the caller's contract: when onScheduled is provided (the agent Schedule tab),
+        // Honor the caller's contract: when onScheduled is provided (the agent Outbound Calls tab),
         // refresh in place and STAY on the page — for every mode, immediate included. Only when
         // it's omitted (standalone use) do we navigate to Call History.
         if (onScheduled) {
@@ -561,7 +561,7 @@ export default function NewOutboundCallModal({
               />
               <p className="text-xs text-muted-foreground">
                 {numberCount > 0
-                  ? `${numberCount} number${numberCount > 1 ? 's' : ''} — E.164 format (e.g. +14155550123). Multiple comma- or line-separated numbers are queued and shown on Scheduled Calls.`
+                  ? `${numberCount} number${numberCount > 1 ? 's' : ''} — E.164 format (e.g. +14155550123). Multiple comma- or line-separated numbers are queued and shown on Outbound Calls.`
                   : 'Enter E.164 numbers (e.g. +14155550123), separated by commas or new lines, or upload a CSV/Excel file.'}
               </p>
             </>
