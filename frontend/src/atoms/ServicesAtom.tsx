@@ -1,9 +1,11 @@
 import { atom } from 'jotai';
 
 import {
+  createCloudProvider,
   createModelProvider,
   createProviderModel,
   createService,
+  deleteCloudProvider,
   deleteModelProvider,
   deleteProviderModel,
   deleteProviderServices,
@@ -12,6 +14,7 @@ import {
   listProviderKeys,
   listProviderModels,
   listServices,
+  updateCloudProvider,
   updateModelProvider,
   updateProviderModel,
   updateService,
@@ -21,6 +24,8 @@ import {
   type ModelUpsertPayload,
 } from '@/services/servicesService';
 import type {
+  CloudProvider,
+  CloudProviderUpsertPayload,
   ModelProvider,
   ModelProviderUpsertPayload,
   ProviderModel,
@@ -240,6 +245,28 @@ export const deleteModelProviderAtom = atom(
   null,
   async (_get, _set, providerId: string): Promise<void> => {
     await deleteModelProvider(providerId);
+  },
+);
+
+// ─── cloud provider CRUD atoms (admin) ─────────────────────────────────────
+// The cloud-provider catalog is global; the backend gates writes on admin/owner.
+
+export const upsertCloudProviderAtom = atom(
+  null,
+  async (
+    _get,
+    _set,
+    args: { cloudProviderId?: string; values: CloudProviderUpsertPayload },
+  ): Promise<CloudProvider> => {
+    if (args.cloudProviderId) return updateCloudProvider(args.cloudProviderId, args.values);
+    return createCloudProvider(args.values);
+  },
+);
+
+export const deleteCloudProviderAtom = atom(
+  null,
+  async (_get, _set, cloudProviderId: string): Promise<void> => {
+    await deleteCloudProvider(cloudProviderId);
   },
 );
 
