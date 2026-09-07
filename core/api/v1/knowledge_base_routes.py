@@ -49,7 +49,10 @@ from core.services.ingestion_errors import (
     UnknownRagComponentError,
     is_unique_violation,
 )
-from core.services.ingestion_queue import enqueue_eval_for_ingestion_run
+from core.services.ingestion_queue import (
+    enqueue_eval_for_ingestion_run,
+    enqueue_eval_version_generation,
+)
 from core.services.ingestion_run_service import IngestionRunService
 from core.services.rag.embedder_factory import EMBEDDERS
 from core.services.rag.factory import VECTOR_STORES
@@ -108,10 +111,30 @@ class ManualQuestionIn(BaseModel):
 
 
 class AddManualQuestionsRequest(BaseModel):
-    """Body for ``POST /{upload_id}/evals/manual`` — appends questions to the
-    upload's eval set without wiping existing rows."""
+    """Body for ``POST /{upload_id}/evals/manual`` — appends questions into the
+    given version. Manual questions are ``approved`` (the user authored them)."""
 
     questions: List[ManualQuestionIn] = Field(..., min_length=1, max_length=200)
+    eval_version_id: UUID
+
+
+class GenerateEvalVersionRequest(BaseModel):
+    """Body for ``POST /{upload_id}/eval-versions/generate`` — generate an LLM
+    eval set into a NEW version, or OVERWRITE an existing (un-run) one.
+    ``instructions`` is the user's optional custom generation prompt."""
+
+    mode: str = Field(default="new", pattern="^(new|overwrite)$")
+    version_id: Optional[UUID] = None
+    instructions: Optional[str] = Field(default=None, max_length=8000)
+    ingestion_run_id: Optional[UUID] = None
+
+
+class ListEvalRunsRequest(BaseModel):
+    """Body for ``POST /{upload_id}/eval-runs/list`` — the Eval-results tab's
+    filters. Both optional; omit to list every batch for the upload."""
+
+    ingestion_run_id: Optional[UUID] = None
+    eval_version_id: Optional[UUID] = None
 
 
 class UpdateQuestionRequest(BaseModel):
@@ -136,6 +159,9 @@ class TriggerEvalRunRequest(BaseModel):
     need arises."""
 
     ingestion_run_id: Optional[UUID] = None
+    # Which eval version to score. When omitted, the auto path picks the latest
+    # version that has approved questions.
+    eval_version_id: Optional[UUID] = None
 
 # Knowledge-base documents are ``Upload`` rows scoped to the kb_document purpose.
 KB_FACET_FIELDS = ["status"]
@@ -203,6 +229,7 @@ def _eval_run_summary_to_dict(s: EvalRunSummary) -> dict:
         "started_at": s.started_at.isoformat() if s.started_at else None,
         "completed_at": s.completed_at.isoformat() if s.completed_at else None,
         "summary": s.summary or {},
+        "eval_version_id": str(s.eval_version_id) if s.eval_version_id else None,
     }
 
 
@@ -835,31 +862,6 @@ def build_knowledge_base_router(
             "in_flight_ingestion_run_ids": in_flight,
         }
 
-    @router.get("/{upload_id}/runs/{ingestion_run_id}/eval-runs")
-    def list_eval_runs_for_ingestion(
-        upload_id: str,
-        ingestion_run_id: str,
-        claims=Depends(auth_dependency),
-        db: Session = Depends(get_db),
-    ):
-        """Every eval batch that scored one ingestion run, newest first — the
-        drawer's run-picker reads from this."""
-        org_id = resolve_org_id(claims)
-        upload = _resolve_upload(db, org_id, upload_id)
-        try:
-            iid = UUID(ingestion_run_id)
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid ingestion_run_id"
-            )
-        summaries = EvalService().list_runs_for_ingestion(
-            db,
-            org_id=org_id,
-            upload_id=upload.id,
-            ingestion_run_id=iid,
-        )
-        return {"items": [_eval_run_summary_to_dict(s) for s in summaries]}
-
     @router.get("/{upload_id}/eval-runs/{run_id}")
     def get_eval_run_detail(
         upload_id: str,
@@ -904,12 +906,14 @@ def build_knowledge_base_router(
             "id": str(row.id),
             "upload_id": str(row.upload_id),
             "knowledge_base_id": str(row.knowledge_base_id),
+            "eval_version_id": str(row.eval_version_id) if row.eval_version_id else None,
             "external_id": row.external_id,
             "question_ord": row.question_ord,
             "question": row.question,
             "expected_answer": row.expected_answer,
             "expected_source_snippet": row.expected_source_snippet,
             "category": row.category,
+            "approval_status": row.approval_status,
             "generated_by_model": row.generated_by_model,
             "generation_prompt_hash": row.generation_prompt_hash,
             "created_at": row.created_at.isoformat() if row.created_at else None,
@@ -924,21 +928,177 @@ def build_knowledge_base_router(
             "question_count": s.question_count,
             "generated_by_model": s.generated_by_model,
             "generation_prompt_hash": s.generation_prompt_hash,
+            "eval_version_id": str(s.eval_version_id) if s.eval_version_id else None,
         }
 
     @router.get("/{upload_id}/evals/questions")
     def list_eval_questions(
         upload_id: str,
+        version_id: Optional[str] = None,
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
-        """Return every eval question for one upload (ordered by
-        ``question_ord``). Powers the manual-authoring modal so the user can
-        see, edit, and delete existing questions alongside adding new ones."""
+        """Return eval questions for one upload (ordered by ``question_ord``),
+        optionally scoped to one version via ``?version_id=``. Powers the manage
+        evals tab so the user can review/approve/reject a version's questions."""
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
-        rows = EvalService().list_questions(db, upload_id=upload.id, org_id=org_id)
+        version_uuid: Optional[UUID] = None
+        if version_id:
+            try:
+                version_uuid = UUID(version_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid version_id"
+                )
+        rows = EvalService().list_questions(
+            db, upload_id=upload.id, org_id=org_id, eval_version_id=version_uuid
+        )
         return {"items": [_eval_question_to_payload(r) for r in rows]}
+
+    # ── Eval versions (generate / review / approve) ────────────────────
+
+    @router.get("/{upload_id}/eval-versions")
+    def list_eval_versions(
+        upload_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Every version for the upload (newest first) with approval counts and
+        a ``has_results`` flag. Drives the Manage-evals version selector and the
+        Eval-results version filter."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        return {"items": EvalService().list_versions(db, upload_id=upload.id, org_id=org_id)}
+
+    @router.post(
+        "/{upload_id}/eval-versions/generate",
+        status_code=status.HTTP_202_ACCEPTED,
+    )
+    async def generate_eval_version_route(
+        upload_id: str,
+        body: GenerateEvalVersionRequest = Body(...),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Enqueue on-demand LLM generation of an eval version (new or
+        overwrite). Returns immediately; the ``eval`` worker generates the
+        questions (status generating→draft) and the UI polls the version list.
+        Overwrite of a run version is refused (in the worker) — the UI already
+        disables it."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        if body.mode == "overwrite" and body.version_id is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="version_id is required when mode='overwrite'.",
+            )
+        try:
+            job_id = await enqueue_eval_version_generation(
+                upload_id=upload.id,
+                org_id=org_id,
+                mode=body.mode,
+                version_id=body.version_id,
+                instructions=body.instructions or "",
+                ingestion_run_id=body.ingestion_run_id,
+            )
+        except Exception as exc:
+            logger.exception(
+                "[eval] version generation enqueue failed upload={} mode={}",
+                upload.id, body.mode,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to enqueue eval generation. Please try again later.",
+            ) from exc
+        return {"upload_id": str(upload.id), "job_id": job_id, "status": "queued"}
+
+    @router.post("/{upload_id}/eval-versions/{version_id}/approve-all")
+    def approve_all_eval_questions(
+        upload_id: str,
+        version_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Approve every question in a version (marks the version finalized)."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            vid = UUID(version_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid version_id"
+            )
+        try:
+            n = EvalService().approve_all(db, version_id=vid, org_id=org_id)
+        except EvalNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        return {"approved": n}
+
+    @router.post("/{upload_id}/eval-versions/{version_id}/reject-all")
+    def reject_all_eval_questions(
+        upload_id: str,
+        version_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Reject (delete) every question in a version. Rejected questions are
+        not stored."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            vid = UUID(version_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid version_id"
+            )
+        try:
+            n = EvalService().reject_all(db, version_id=vid, org_id=org_id)
+        except EvalNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        return {"rejected": n}
+
+    @router.post("/{upload_id}/evals/questions/{question_id}/approve")
+    def approve_eval_question(
+        upload_id: str,
+        question_id: str,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Approve one question — it joins the final set scored on run."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            qid = UUID(question_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid question_id"
+            )
+        try:
+            row = EvalService().approve_question(db, question_id=qid, org_id=org_id)
+        except EvalNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        return _eval_question_to_payload(row)
+
+    @router.post("/{upload_id}/eval-runs/list")
+    def list_eval_runs_filtered(
+        upload_id: str,
+        body: ListEvalRunsRequest = Body(default_factory=ListEvalRunsRequest),
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Eval batches for the upload, optionally filtered by ingestion run
+        and/or eval version — the Eval-results tab's two filters."""
+        org_id = resolve_org_id(claims)
+        upload = _resolve_upload(db, org_id, upload_id)
+        summaries = EvalService().list_runs_filtered(
+            db,
+            org_id=org_id,
+            upload_id=upload.id,
+            ingestion_run_id=body.ingestion_run_id,
+            eval_version_id=body.eval_version_id,
+        )
+        return {"items": [_eval_run_summary_to_dict(s) for s in summaries]}
 
     @router.post(
         "/{upload_id}/evals/manual",
@@ -963,6 +1123,7 @@ def build_knowledge_base_router(
                 upload_id=upload.id,
                 org_id=org_id,
                 questions=payload,
+                version_id=body.eval_version_id,
             )
         except EvalNotFoundError as e:
             raise HTTPException(
@@ -981,16 +1142,21 @@ def build_knowledge_base_router(
     async def upload_eval_questions_csv(
         upload_id: str,
         file: UploadFile = File(...),
+        eval_version_id: str = Form(...),
         claims=Depends(auth_dependency),
         db: Session = Depends(get_db),
     ):
-        """Append eval questions parsed from an uploaded CSV. Same semantics as
-        ``POST /evals/manual`` — never wipes existing rows and stamps
-        ``generated_by_model='manual'``. Row validation (non-empty fields,
-        external_id collisions, KB exists) is enforced by the service so this
-        route stays a thin adapter."""
+        """Append eval questions parsed from an uploaded CSV into the given
+        version. Row validation (non-empty fields, external_id collisions, KB
+        exists) is enforced by the service so this route stays a thin adapter."""
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
+        try:
+            version_uuid = UUID(eval_version_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid eval_version_id"
+            )
         try:
             raw = await file.read()
         finally:
@@ -1006,6 +1172,7 @@ def build_knowledge_base_router(
                 upload_id=upload.id,
                 org_id=org_id,
                 csv_bytes=raw,
+                version_id=version_uuid,
             )
         except EvalNotFoundError as e:
             raise HTTPException(
@@ -1115,14 +1282,31 @@ def build_knowledge_base_router(
         org_id = resolve_org_id(claims)
         upload = _resolve_upload(db, org_id, upload_id)
 
-        summary = EvalService().get_eval_by_upload(
-            db, upload_id=upload.id, org_id=org_id
-        )
-        if summary is None or summary.question_count == 0:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="No eval questions exist for this upload — add or generate questions first.",
+        # A run scores only the APPROVED questions of the chosen version, so the
+        # guard is version-scoped when a version is given (an upload-level count
+        # would pass even if the selected version has nothing approved).
+        eval_service = EvalService()
+        if body.eval_version_id is not None:
+            version_questions = eval_service.list_questions(
+                db,
+                upload_id=upload.id,
+                org_id=org_id,
+                eval_version_id=body.eval_version_id,
             )
+            if not any(q.approval_status == "approved" for q in version_questions):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="This version has no approved questions — approve questions before running.",
+                )
+        else:
+            summary = eval_service.get_eval_by_upload(
+                db, upload_id=upload.id, org_id=org_id
+            )
+            if summary is None or summary.question_count == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="No eval questions exist for this upload — add or generate questions first.",
+                )
 
         try:
             run = IngestionRunService.resolve_eval_target_run(
@@ -1139,7 +1323,11 @@ def build_knowledge_base_router(
             _raise_http_for_ingestion_error(exc)
 
         try:
-            job_id = await enqueue_eval_for_ingestion_run(run.id, triggered_by="manual")
+            job_id = await enqueue_eval_for_ingestion_run(
+                run.id,
+                triggered_by="manual",
+                eval_version_id=body.eval_version_id,
+            )
         except Exception as exc:
             # Full traceback is captured by logger.exception; the frontend
             # gets a generic message — never leak the raw exception str

@@ -14,6 +14,13 @@ class Model(TimestampModel):
     )
 
     provider_id = Column(UUID(as_uuid=True), ForeignKey("model_providers.id", ondelete="CASCADE"), nullable=False)
+    # Optional link to the cloud provider hosting this model. Nullable/additive —
+    # nothing reads it yet, so existing behavior is unaffected.
+    cloud_provider_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("cloud_providers.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     kind = Column(String(10), nullable=False)  # llm | stt | tts | embedding
     name = Column(String(120), nullable=False)
     display_name = Column(String(100), nullable=True)
@@ -25,6 +32,7 @@ class Model(TimestampModel):
 
     # relationships
     provider = relationship("ModelProvider", backref="models", lazy="select")
+    cloud_provider = relationship("CloudProvider", backref="models", lazy="select")
     voices = relationship("ModelVoice", back_populates="model", cascade="all, delete-orphan")
     languages = relationship("ModelLanguage", back_populates="model", cascade="all, delete-orphan")
 
@@ -32,6 +40,7 @@ class Model(TimestampModel):
         return {
             "id": str(self.id),
             "provider_id": str(self.provider_id) if self.provider_id else None,
+            "cloud_provider_id": str(self.cloud_provider_id) if self.cloud_provider_id else None,
             "kind": self.kind,
             "name": self.name,
             "display_name": self.display_name,
