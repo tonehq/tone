@@ -1664,9 +1664,6 @@ class EvalService:
                     "retrieval_hit": bool(scored.get("retrieval_hit")),
                     "retrieved_chunks": scored.get("retrieved_chunks"),
                     "verdict": judge.get("verdict"),
-                    "correctness": _to_float(judge.get("correctness")),
-                    "groundedness": _to_float(judge.get("groundedness")),
-                    "relevance": _to_float(judge.get("relevance")),
                     "judge_reasoning": judge.get("reasoning"),
                     "metric_scores": judge.get("metric_scores"),
                     "latency_ms": scored.get("latency_ms"),
@@ -1758,15 +1755,6 @@ def _question_to_dto(row: Eval) -> dict:
     }
 
 
-def _to_float(v: Any) -> Optional[float]:
-    if v is None:
-        return None
-    try:
-        return float(v)
-    except (TypeError, ValueError):
-        return None
-
-
 def _build_context(chunks: Iterable[dict]) -> str:
     parts = [f"[chunk {i}] {c.get('text', '')}" for i, c in enumerate(chunks, 1)]
     return "\n\n".join(parts) if parts else "(no chunks retrieved)"
@@ -1830,9 +1818,6 @@ def _run_grouped_query(
             func.sum(case((EvalResult.verdict == "FAIL", 1), else_=0)).label("fail_count"),
             func.sum(case((EvalResult.retrieval_hit.is_(True), 1), else_=0)).label("hit_count"),
             func.sum(case((EvalResult.status == "failed", 1), else_=0)).label("failed_status_count"),
-            func.coalesce(func.avg(EvalResult.correctness), 0.0).label("avg_correctness"),
-            func.coalesce(func.avg(EvalResult.groundedness), 0.0).label("avg_groundedness"),
-            func.coalesce(func.avg(EvalResult.relevance), 0.0).label("avg_relevance"),
             func.coalesce(func.sum(EvalResult.latency_ms), 0).label("duration_ms"),
             *metric_avg_cols,
         )
@@ -1884,9 +1869,6 @@ def _row_to_run_summary(row) -> EvalRunSummary:
         "partial_rate": (partials / total) if total else 0.0,
         "fail_rate": (fails / total) if total else 0.0,
         "retrieval_hit_rate": (hits / total) if total else 0.0,
-        "avg_correctness": float(row.avg_correctness or 0.0),
-        "avg_groundedness": float(row.avg_groundedness or 0.0),
-        "avg_relevance": float(row.avg_relevance or 0.0),
         "total_questions": total,
         "duration_ms": int(row.duration_ms or 0),
     }
@@ -1926,9 +1908,6 @@ def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
         "actual_answer": result.actual_answer or "",
         "judge": {
             "verdict": result.verdict or "FAIL",
-            "correctness": float(result.correctness or 0.0),
-            "groundedness": float(result.groundedness or 0.0),
-            "relevance": float(result.relevance or 0.0),
             "reasoning": result.judge_reasoning,
             "metric_scores": result.metric_scores or {},
         },

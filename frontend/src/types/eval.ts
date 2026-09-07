@@ -47,9 +47,6 @@ export interface EvalRunSummaryTotals {
   partial_rate: number;
   fail_rate: number;
   retrieval_hit_rate: number;
-  avg_correctness: number;
-  avg_groundedness: number;
-  avg_relevance: number;
   total_questions: number;
   duration_ms: number;
 }
@@ -89,9 +86,6 @@ export interface EvalMetricScore {
 
 export interface EvalJudgeResult {
   verdict: EvalVerdict;
-  correctness: number;
-  groundedness: number;
-  relevance: number;
   reasoning: string | null;
   // Full DeepEval scorecard — one entry per enabled metric. Empty for
   // legacy-judge rows. Keys drive the per-metric columns in the results table.

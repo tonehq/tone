@@ -1,6 +1,7 @@
 # Global Catalog (no organization_id)
 from core.models.organization import Organization
 from core.models.model_provider import ModelProvider
+from core.models.cloud_provider import CloudProvider
 from core.models.model import Model
 from core.models.model_voice import ModelVoice
 from core.models.model_language import ModelLanguage

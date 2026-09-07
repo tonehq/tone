@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import MetricScoreCell from '@/components/knowledge-base/MetricScoreCell';
 import TruncatedCell from '@/components/knowledge-base/TruncatedCell';
@@ -10,10 +10,26 @@ import { CustomTable } from '@/components/shared';
 import type { CustomTableColumn } from '@/types/components';
 import type { EvalScoredQuestion } from '@/types/eval';
 
+const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
 // One row per scored question. Metric columns are derived dynamically from the
 // `metric_scores` keys present across the batch, so the table always matches
-// exactly which DeepEval metrics were run.
+// exactly which DeepEval metrics were run. Paginated client-side (the batch
+// detail is already loaded in full).
 export default function EvalResultsTable({ questions }: { questions: EvalScoredQuestion[] }) {
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  // Reset to the first page when the batch changes.
+  useEffect(() => {
+    setPage(1);
+  }, [questions]);
+
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return questions.slice(start, start + pageSize);
+  }, [questions, page, pageSize]);
+
   const metricNames = useMemo(() => {
     const names = new Set<string>();
     for (const q of questions) {
@@ -62,26 +78,24 @@ export default function EvalResultsTable({ questions }: { questions: EvalScoredQ
         ),
       },
       ...metricColumns,
-      {
-        key: 'latency_ms',
-        title: 'Latency',
-        align: 'right',
-        width: 'w-[90px]',
-        render: (_v, r) => (
-          <span className="text-sm tabular-nums text-muted-foreground">
-            {r.latency_ms != null ? `${r.latency_ms}ms` : '—'}
-          </span>
-        ),
-      },
     ];
   }, [metricNames]);
 
   return (
     <CustomTable
       columns={columns}
-      dataSource={questions}
+      dataSource={pageRows}
       rowKey="eval_id"
-      pagination={false}
+      pagination={{
+        current: page,
+        pageSize,
+        total: questions.length,
+        pageSizeOptions: PAGE_SIZE_OPTIONS,
+        onChange: (p, size) => {
+          setPage(p);
+          setPageSize(size);
+        },
+      }}
       emptyState={
         <div className="py-10 text-center text-sm text-muted-foreground">
           No scored questions in this batch.

@@ -3,6 +3,7 @@
 import { useId, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
+import { RUN_LEVEL_CHUNK_META_KEYS } from '@/components/knowledge-base/knowledgeBaseConstants';
 import { CustomButton } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
 import type { IngestionRunChunk } from '@/types/ingestionRun';
@@ -11,9 +12,13 @@ export default function ChunkCard({ chunk }: { chunk: IngestionRunChunk }) {
   const [expanded, setExpanded] = useState(false);
   const panelId = useId();
 
+  // Only chunk-specific metadata — run-level keys (parser, embedder, …) are the
+  // same on every chunk and already shown once in the recipe box up top.
   const metaEntries = useMemo(() => {
     if (!chunk.chunk_metadata || typeof chunk.chunk_metadata !== 'object') return [];
-    return Object.entries(chunk.chunk_metadata).filter(([, v]) => v !== null && v !== undefined);
+    return Object.entries(chunk.chunk_metadata).filter(
+      ([k, v]) => v !== null && v !== undefined && !RUN_LEVEL_CHUNK_META_KEYS.has(k),
+    );
   }, [chunk.chunk_metadata]);
 
   const charCount = chunk.chunk_text?.length ?? 0;

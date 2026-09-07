@@ -4,7 +4,6 @@ from sqlalchemy import (
     Boolean,
     Column,
     DateTime,
-    Float,
     ForeignKey,
     Index,
     Integer,
@@ -70,9 +69,6 @@ class EvalResult(OrgScopedModel):
     retrieval_hit = Column(Boolean, nullable=False, default=False)
     retrieved_chunks = Column(JSONB, nullable=True)
     verdict = Column(String(16), nullable=True)
-    correctness = Column(Float, nullable=True)
-    groundedness = Column(Float, nullable=True)
-    relevance = Column(Float, nullable=True)
     judge_reasoning = Column(Text, nullable=True)
     # Full per-metric scorecard from the DeepEval judge (one entry per enabled
     # metric: {"score", "verdict", "reason"}). NULL for legacy-judge rows.
@@ -107,9 +103,6 @@ class EvalResult(OrgScopedModel):
             "retrieval_hit": self.retrieval_hit,
             "retrieved_chunks": self.retrieved_chunks,
             "verdict": self.verdict,
-            "correctness": self.correctness,
-            "groundedness": self.groundedness,
-            "relevance": self.relevance,
             "judge_reasoning": self.judge_reasoning,
             "metric_scores": self.metric_scores or {},
             "latency_ms": self.latency_ms,
