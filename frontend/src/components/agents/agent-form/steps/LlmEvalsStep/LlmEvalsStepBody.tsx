@@ -107,6 +107,11 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // via ``ListScenariosRequest.source`` (exact-match enum). ``null`` is
   // omitted from the request so the "no filter" path is used.
   const [filterSource, setFilterSource] = useState<AgentLlmEvalScenarioSource | null>(null);
+  // Selected version for the Manage-Evals tab. ``null`` = no version selected
+  // (shows every scenario incl. version-less/manual). Declared here — above the
+  // reset effects — so their dependency arrays can reference it without a
+  // temporal-dead-zone error. Auto-selected to the newest version below.
+  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   useEffect(() => {
     setPage(1);
   }, [selectedFolder, search, filterSource, selectedVersionId]);
@@ -122,10 +127,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [runsPage, setRunsPage] = useState(1);
   const [runsPageSize, setRunsPageSize] = useState(10);
 
-  // Selected version for the Manage-Evals tab. ``null`` = no version selected
-  // (shows every scenario incl. version-less/manual). Auto-selects the newest
-  // version once versions load.
-  const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
   // Version filter for the Results tab (``VERSION_FILTER_ALL_VALUE`` = all).
   const [resultsVersionFilter, setResultsVersionFilter] =
     useState<string>(VERSION_FILTER_ALL_VALUE);
