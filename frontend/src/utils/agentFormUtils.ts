@@ -31,10 +31,8 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
       speed: DEFAULT_VOICE_SPEED,
     },
     stt_settings: {},
-    conversation_settings: {
-      max_duration_seconds: DEFAULT_MAX_DURATION,
-      turn_detection: { provider: DEFAULT_TURN_DETECTOR },
-    },
+    conversation_settings: { max_duration_seconds: DEFAULT_MAX_DURATION },
+    turn_settings: { turn_detection: { provider: DEFAULT_TURN_DETECTOR }, vad: {} },
   },
   tool_ids: [],
   mcp_server_ids: [],
@@ -80,9 +78,10 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
       llm_settings: cfg.llm_settings ?? {},
       voice_settings: cfg.voice_settings ?? base.config.voice_settings,
       stt_settings: cfg.stt_settings ?? {},
-      conversation_settings: {
-        ...base.config.conversation_settings,
-        ...(cfg.conversation_settings ?? {}),
+      conversation_settings: cfg.conversation_settings ?? base.config.conversation_settings,
+      turn_settings: {
+        turn_detection: cfg.turn_settings?.turn_detection ?? { provider: DEFAULT_TURN_DETECTOR },
+        vad: cfg.turn_settings?.vad ?? {},
       },
     },
     tool_ids: (detail.tools ?? []).map((t) => t.id),

@@ -1,5 +1,27 @@
 from typing import Any
 
+_COERCERS = {
+    "float": float,
+    "integer": lambda v: int(float(v)),
+    "int": lambda v: int(float(v)),
+    "boolean": lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("true", "1", "yes"),
+}
+
+
+def coerce_settings(schema: list[dict], settings: dict) -> dict:
+    resolved = {}
+    for field in schema:
+        name = field["name"]
+        value = settings.get(name)
+        if value is None or value == "":
+            value = field.get("default")
+        if value is not None:
+            coerce = _COERCERS.get(field.get("data_type"))
+            if coerce:
+                value = coerce(value)
+        resolved[name] = value
+    return resolved
+
 
 class MetaDataSchemaValidator:
     """Validates user-entered values against provider meta_data_schema constraints.
