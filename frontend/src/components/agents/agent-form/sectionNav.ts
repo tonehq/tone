@@ -51,7 +51,7 @@ export const AGENT_SECTIONS: AgentSection[] = [
   { key: 'llm-evals', label: 'LLM Evals', icon: Gauge },
   { key: 'channels', label: 'Channels', icon: Radio },
   { key: 'contacts', label: 'Contacts', icon: Users },
-  { key: 'schedule', label: 'Schedule', icon: CalendarClock },
+  { key: 'schedule', label: 'Outbound Calls', icon: CalendarClock },
   { key: 'call-history', label: 'Call History', icon: Clock },
 ];
 
