@@ -1,20 +1,21 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { FileUp, Loader2, Play, Plus, Sparkles } from 'lucide-react';
 
+import AddEvalQuestionModal from '@/components/knowledge-base/AddEvalQuestionModal';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
 import EvalQuestionRow from '@/components/knowledge-base/EvalQuestionRow';
+import EvalReviewToolbar from '@/components/knowledge-base/EvalReviewToolbar';
 import EvalVersionBar from '@/components/knowledge-base/EvalVersionBar';
 import GenerateEvalModal from '@/components/knowledge-base/GenerateEvalModal';
-import { EMPTY_DRAFT, type DraftQuestion } from '@/components/knowledge-base/evalsConstants';
+import ImportEvalCsvModal from '@/components/knowledge-base/ImportEvalCsvModal';
 import {
-  CustomButton,
-  CustomTooltip,
-  SelectInput,
-  TextAreaField,
-  TextInput,
-} from '@/components/shared';
+  EMPTY_DRAFT,
+  type DraftQuestion,
+  type EvalStatusFilter,
+} from '@/components/knowledge-base/evalsConstants';
+import { CustomButton, CustomTooltip, SelectInput } from '@/components/shared';
 import {
   useAddManualEvalQuestions,
   useApproveAllEvalQuestions,
@@ -75,9 +76,30 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const runMutation = useTriggerEvalRun(uploadId);
   const uploadCsvMutation = useUploadEvalQuestionsCsv(uploadId);
 
-  const csvInputRef = useRef<HTMLInputElement | null>(null);
-  const [csvFile, setCsvFile] = useState<File | null>(null);
   const [generateOpen, setGenerateOpen] = useState(false);
+  const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
+
+  // Which questions to show. Default to Pending when a version has unreviewed
+  // questions so the reviewer lands on their queue; reset only when the
+  // selected version changes (not on every count update, so a user's manual
+  // filter choice isn't clobbered mid-review).
+  const [statusFilter, setStatusFilter] = useState<EvalStatusFilter>('all');
+  useEffect(() => {
+    const v = versions.find((x) => x.id === selectedVersionId);
+    if (!v) return;
+    setStatusFilter(v.counts.pending > 0 ? 'pending' : 'all');
+  }, [selectedVersionId]);
+
+  const counts = useMemo(() => {
+    const approved = questions.filter((q) => q.approval_status === 'approved').length;
+    return { total: questions.length, approved, pending: questions.length - approved };
+  }, [questions]);
+
+  const filteredQuestions = useMemo(() => {
+    if (statusFilter === 'all') return questions;
+    return questions.filter((q) => q.approval_status === statusFilter);
+  }, [questions, statusFilter]);
 
   const { data: runsResp } = useIngestionRuns(uploadId, {
     status_filter: ['ready'],
@@ -108,21 +130,15 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     [readyRuns],
   );
 
-  const [draft, setDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
+  // Inline edit state for a question row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
   const [deleteConfirmRow, setDeleteConfirmRow] = useState<EvalQuestion | null>(null);
 
-  const canAddDraft =
-    !!selectedVersionId &&
-    draft.question.trim().length > 0 &&
-    draft.expected_answer.trim().length > 0;
   const canSaveEdit =
     editDraft.question.trim().length > 0 && editDraft.expected_answer.trim().length > 0;
-
-  const approvedCount = selectedVersion?.counts.approved ?? 0;
 
   const handleGenerate = async (payload: GenerateEvalVersionPayload) => {
     try {
@@ -137,8 +153,8 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     }
   };
 
-  const handleAdd = async () => {
-    if (!canAddDraft || !selectedVersionId) return;
+  const handleAddSubmit = async (draft: DraftQuestion) => {
+    if (!selectedVersionId) return;
     const payload: ManualQuestionInput = {
       question: draft.question.trim(),
       expected_answer: draft.expected_answer.trim(),
@@ -148,7 +164,21 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     try {
       await addMutation.mutateAsync({ versionId: selectedVersionId, questions: [payload] });
       showToast.success('Question added', 'Your Q&A pair has been saved.');
-      setDraft(EMPTY_DRAFT);
+      setAddOpen(false);
+    } catch (error) {
+      handleApiError(error);
+    }
+  };
+
+  const handleCsvUpload = async (file: File) => {
+    if (!selectedVersionId) return;
+    try {
+      const summary = await uploadCsvMutation.mutateAsync({ versionId: selectedVersionId, file });
+      showToast.success(
+        'Questions imported',
+        `Added ${summary.question_count} question(s) from ${file.name}.`,
+      );
+      setImportOpen(false);
     } catch (error) {
       handleApiError(error);
     }
@@ -239,28 +269,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     }
   };
 
-  const resetCsvInput = () => {
-    setCsvFile(null);
-    if (csvInputRef.current) csvInputRef.current.value = '';
-  };
-
-  const handleCsvUpload = async () => {
-    if (!csvFile || !selectedVersionId || uploadCsvMutation.isPending) return;
-    try {
-      const summary = await uploadCsvMutation.mutateAsync({
-        versionId: selectedVersionId,
-        file: csvFile,
-      });
-      showToast.success(
-        'Questions imported',
-        `Added ${summary.question_count} question(s) from ${csvFile.name}.`,
-      );
-      resetCsvInput();
-    } catch (error) {
-      handleApiError(error);
-    }
-  };
-
   const handleRunEval = async () => {
     if (!selectedVersionId) return;
     try {
@@ -277,9 +285,11 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     }
   };
 
+  const hasVersion = !!selectedVersionId;
   const hasReadyRuns = readyRuns.length > 0;
+  const isGenerating = selectedVersion?.status === 'generating';
   const runDisabled =
-    approvedCount === 0 || runMutation.isPending || !hasReadyRuns || !selectedVersionId;
+    counts.approved === 0 || runMutation.isPending || !hasReadyRuns || !hasVersion;
   const runButton = (
     <CustomButton
       type="primary"
@@ -293,12 +303,12 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   );
 
   return (
-    <div className="flex flex-col gap-6 py-4">
+    <div className="flex flex-col gap-5 py-4">
       <div>
         <h2 className="text-lg font-semibold text-foreground">Manage evals</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          Generate an eval version, review each question, approve the good ones (reject deletes),
-          then run the approved set against a ready ingestion recipe.
+          Generate a version, review each question and approve the good ones (reject deletes), then
+          run the approved set against a ready ingestion recipe.
         </p>
       </div>
 
@@ -307,10 +317,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         selectedVersion={selectedVersion}
         onSelectVersion={setSelectedVersionId}
         onOpenGenerate={() => setGenerateOpen(true)}
-        onApproveAll={handleApproveAll}
-        onRejectAll={handleRejectAll}
-        approvingAll={approveAllMutation.isPending}
-        rejectingAll={rejectAllMutation.isPending}
       />
 
       {versionsLoading ? (
@@ -330,11 +336,80 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         </div>
       ) : (
         <>
-          {/* Run toolbar */}
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
-            <p className="text-sm font-medium text-foreground">
-              {selectedVersion?.counts.total ?? 0} question(s) · {approvedCount} approved
-            </p>
+          {/* Review: status filter + bulk approve/reject, right above the list. */}
+          <section className="flex flex-col gap-3">
+            <EvalReviewToolbar
+              counts={counts}
+              activeFilter={statusFilter}
+              onFilterChange={setStatusFilter}
+              onApproveAll={handleApproveAll}
+              onRejectAll={handleRejectAll}
+              approvingAll={approveAllMutation.isPending}
+              rejectingAll={rejectAllMutation.isPending}
+            />
+
+            {questionsLoading ? (
+              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Loading questions…
+              </div>
+            ) : isGenerating ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-8 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" />
+                Generating questions…
+              </div>
+            ) : questions.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+                No questions in this version. Add one or generate a new version.
+              </div>
+            ) : filteredQuestions.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
+                No {statusFilter} questions.
+              </div>
+            ) : (
+              <ul className="flex flex-col gap-2">
+                {filteredQuestions.map((row) => (
+                  <EvalQuestionRow
+                    key={row.id}
+                    row={row}
+                    isEditing={editingId === row.id}
+                    editDraft={editDraft}
+                    setEditDraft={setEditDraft}
+                    canSaveEdit={canSaveEdit}
+                    savingEdit={updateMutation.isPending}
+                    isDeleting={deletingId === row.id}
+                    isApproving={approvingId === row.id}
+                    onStartEdit={startEdit}
+                    onCancelEdit={cancelEdit}
+                    onSaveEdit={handleSaveEdit}
+                    onApprove={handleApprove}
+                    onRequestDelete={requestDelete}
+                  />
+                ))}
+              </ul>
+            )}
+
+            {/* Secondary: adding questions is not the main task — keep in modals. */}
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomButton type="default" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1 size-4" />
+                Add question
+              </CustomButton>
+              <CustomButton type="default" size="sm" onClick={() => setImportOpen(true)}>
+                <FileUp className="mr-1 size-4" />
+                Import CSV
+              </CustomButton>
+            </div>
+          </section>
+
+          {/* Final step: run the approved questions. */}
+          <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
+            <div>
+              <p className="text-sm font-medium text-foreground">Run eval</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Scores the {counts.approved} approved question(s) against the selected recipe.
+              </p>
+            </div>
             <div className="flex flex-wrap items-center justify-end gap-2">
               {hasReadyRuns && (
                 <div className="flex items-center gap-2">
@@ -356,7 +431,7 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
                   </div>
                 </div>
               )}
-              {runDisabled && approvedCount === 0 ? (
+              {counts.approved === 0 ? (
                 <CustomTooltip content="Approve at least one question to run">
                   <span>{runButton}</span>
                 </CustomTooltip>
@@ -368,141 +443,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
                 runButton
               )}
             </div>
-          </div>
-
-          {/* CSV import */}
-          <section className="rounded-lg border border-border/60 bg-muted/30 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <FileUp className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Import from CSV</h3>
-            </div>
-            <p className="mb-3 text-xs text-muted-foreground">
-              Required columns: <span className="font-mono">question</span>,{' '}
-              <span className="font-mono">expected_answer</span>. Optional:{' '}
-              <span className="font-mono">expected_source_snippet</span>,{' '}
-              <span className="font-mono">category</span>,{' '}
-              <span className="font-mono">external_id</span>. Rows are appended to the selected
-              version.
-            </p>
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-              <input
-                ref={csvInputRef}
-                type="file"
-                accept=".csv,text/csv"
-                onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
-                className="block w-full cursor-pointer text-xs text-muted-foreground file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-primary/10 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-primary hover:file:bg-primary/20"
-                disabled={uploadCsvMutation.isPending || !selectedVersionId}
-              />
-              <CustomButton
-                type="primary"
-                size="sm"
-                onClick={handleCsvUpload}
-                disabled={!csvFile || !selectedVersionId || uploadCsvMutation.isPending}
-                loading={uploadCsvMutation.isPending}
-              >
-                Upload
-              </CustomButton>
-            </div>
-          </section>
-
-          {/* Add form */}
-          <section className="rounded-lg border border-border/60 bg-muted/30 p-4">
-            <div className="mb-3 flex items-center gap-2">
-              <Plus className="size-4 text-primary" />
-              <h3 className="text-sm font-semibold text-foreground">Add a question</h3>
-            </div>
-            <div className="flex flex-col gap-3">
-              <TextAreaField
-                name="draft-question"
-                label="Question"
-                placeholder="e.g. What time is checkout?"
-                value={draft.question}
-                onChange={(e) => setDraft((d) => ({ ...d, question: e.target.value }))}
-                isRequired
-                rows={2}
-              />
-              <TextAreaField
-                name="draft-expected-answer"
-                label="Expected answer"
-                placeholder="e.g. Checkout is at 11:00 AM."
-                value={draft.expected_answer}
-                onChange={(e) => setDraft((d) => ({ ...d, expected_answer: e.target.value }))}
-                isRequired
-                rows={2}
-              />
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <TextInput
-                  name="draft-category"
-                  label="Category (optional)"
-                  placeholder="e.g. policy, pricing"
-                  value={draft.category}
-                  onChange={(e) => setDraft((d) => ({ ...d, category: e.target.value }))}
-                />
-                <TextInput
-                  name="draft-snippet"
-                  label="Expected source snippet (optional)"
-                  placeholder="Verbatim phrase from the KB doc"
-                  value={draft.expected_source_snippet}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, expected_source_snippet: e.target.value }))
-                  }
-                />
-              </div>
-              <div className="flex justify-end">
-                <CustomButton
-                  type="primary"
-                  onClick={handleAdd}
-                  disabled={!canAddDraft || addMutation.isPending}
-                  loading={addMutation.isPending}
-                >
-                  Add question
-                </CustomButton>
-              </div>
-            </div>
-          </section>
-
-          {/* Questions */}
-          <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-foreground">Questions</h3>
-            </div>
-
-            {questionsLoading ? (
-              <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Loading questions…
-              </div>
-            ) : selectedVersion?.status === 'generating' ? (
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-dashed border-border/60 py-8 text-sm text-muted-foreground">
-                <Loader2 className="size-4 animate-spin" />
-                Generating questions…
-              </div>
-            ) : questions.length === 0 ? (
-              <div className="rounded-lg border border-dashed border-border/60 py-8 text-center text-sm text-muted-foreground">
-                No questions in this version. Add one above or generate a new version.
-              </div>
-            ) : (
-              <ul className="flex flex-col gap-2">
-                {questions.map((row) => (
-                  <EvalQuestionRow
-                    key={row.id}
-                    row={row}
-                    isEditing={editingId === row.id}
-                    editDraft={editDraft}
-                    setEditDraft={setEditDraft}
-                    canSaveEdit={canSaveEdit}
-                    savingEdit={updateMutation.isPending}
-                    isDeleting={deletingId === row.id}
-                    isApproving={approvingId === row.id}
-                    onStartEdit={startEdit}
-                    onCancelEdit={cancelEdit}
-                    onSaveEdit={handleSaveEdit}
-                    onApprove={handleApprove}
-                    onRequestDelete={requestDelete}
-                  />
-                ))}
-              </ul>
-            )}
           </section>
         </>
       )}
@@ -513,6 +453,20 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         versions={versions}
         generating={generateMutation.isPending}
         onGenerate={handleGenerate}
+      />
+
+      <AddEvalQuestionModal
+        open={addOpen}
+        saving={addMutation.isPending}
+        onClose={() => setAddOpen(false)}
+        onSubmit={handleAddSubmit}
+      />
+
+      <ImportEvalCsvModal
+        open={importOpen}
+        uploading={uploadCsvMutation.isPending}
+        onClose={() => setImportOpen(false)}
+        onUpload={handleCsvUpload}
       />
 
       <ConfirmDeleteModal
