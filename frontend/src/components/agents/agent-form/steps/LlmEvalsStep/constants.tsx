@@ -2,8 +2,10 @@ import { CheckCircle2, Clock, Loader2, MinusCircle, XCircle } from 'lucide-react
 import type { ReactNode } from 'react';
 
 import type {
+  AgentLlmEvalApprovalStatus,
   AgentLlmEvalBatchStatus,
   AgentLlmEvalScenarioSource,
+  AgentLlmEvalScenarioVersion,
   AgentLlmEvalVerdict,
 } from '@/types/agentLlmEval';
 
@@ -173,3 +175,28 @@ export const getRunEvalScopeOptions = (scenarioCount: number) => [
 // mirroring the bound here saves a round-trip on a mistyped input.
 export const GENERATE_DEFAULT_COUNT = 10;
 export const GENERATE_MAX_COUNT = 50;
+
+// ── Versions + approval ─────────────────────────────────────────────────
+
+// Sentinel for the "All versions" option in the Results version filter.
+export const VERSION_FILTER_ALL_VALUE = '__all__';
+
+// Human label for a version option — "v3 · draft · 5/8 approved".
+export const versionLabel = (v: AgentLlmEvalScenarioVersion): string =>
+  `v${v.version_number} · ${v.status} · ${v.counts.approved}/${v.counts.total} approved`;
+
+// Approval-state chip styles for a scenario row.
+export const APPROVAL_STATUS_STYLES: Record<
+  AgentLlmEvalApprovalStatus,
+  { label: string; className: string }
+> = {
+  pending: {
+    label: 'Pending',
+    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
+  },
+  approved: {
+    label: 'Approved',
+    className:
+      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
+  },
+};

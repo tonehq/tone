@@ -38,6 +38,10 @@ from sqlalchemy import func  # noqa: E402
 from core.database.session import get_db_context  # noqa: E402
 from core.models.agent import Agent  # noqa: E402
 from core.models.agent_llm_eval_scenario import AgentLlmEvalScenario  # noqa: E402
+from core.services.evals.agent_llm.folder_service import (  # noqa: E402
+    DEFAULT_FOLDER_NAME,
+    AgentLlmEvalFolderService,
+)
 from evals.fixtures.agent_llm_scenarios import LLMScenario, SCENARIOS  # noqa: E402
 
 
@@ -62,15 +66,27 @@ def _upsert_scenario(db, agent: Agent, scenario: LLMScenario) -> str:
     existing = (
         db.query(AgentLlmEvalScenario)
         .filter(AgentLlmEvalScenario.agent_id == agent.id)
+        .filter(AgentLlmEvalScenario.node_type == "scenario")
         .filter(AgentLlmEvalScenario.scenario_key == scenario.name)
         .first()
     )
     if existing is not None:
         return "skipped"
 
+    # Every scenario node needs a parent folder node — resolve the agent's
+    # ``Default`` folder (created if absent) so the fixture row is a valid
+    # tree node. ``commit=False`` — the caller's outer commit finalizes both.
+    folder_svc = AgentLlmEvalFolderService(db, org_id=agent.organization_id)
+    default_folder = folder_svc.get_or_create_folder(
+        agent.id, DEFAULT_FOLDER_NAME, commit=False
+    )
+
     row = AgentLlmEvalScenario(
         organization_id=agent.organization_id,
         agent_id=agent.id,
+        node_type="scenario",
+        parent_id=default_folder.id,
+        approval_status="approved",
         scenario_key=scenario.name,
         scenario_ord=0,
         prompt=scenario.prompt,

@@ -52,6 +52,15 @@ class AgentLlmEvalRun(OrgScopedModel):
         index=True,
     )
     run_number = Column(Integer, nullable=False)
+    # The version this run scored (NULL for version-less / legacy runs). A run
+    # is tied to one version and scores only its approved scenarios. SET NULL
+    # on version delete so run history survives.
+    version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("agent_llm_eval_scenario_versions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     triggered_by = Column(String(32), nullable=False)  # 'ui' | 'cli' | 'api'
 
     # Lifecycle state. Terminal states are ``completed`` and ``failed``.

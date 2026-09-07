@@ -87,6 +87,15 @@ class LlmGenerator(ScenarioGenerator):
         # the strategy contract lets us return fewer, never more.
         capped = max(1, min(int(count or 0), _MAX_COUNT))
 
+        # Optional user-supplied generation prompt — steers/supplements the
+        # agent's own system prompt for THIS generation only. ``None`` keeps
+        # the output byte-identical to the no-custom-prompt path.
+        custom_prompt = None
+        if options:
+            raw_prompt = options.get("generation_prompt")
+            if isinstance(raw_prompt, str) and raw_prompt.strip():
+                custom_prompt = raw_prompt.strip()
+
         agent_config = self._load_agent_config(db, agent_id)
         judge_model = self._resolve_judge_model(db, agent_config.organization_id)
         judge_key = self._resolve_judge_key(agent_config, judge_model)
@@ -97,6 +106,7 @@ class LlmGenerator(ScenarioGenerator):
             judge_model=judge_model,
             judge_key=judge_key,
             count=capped,
+            custom_prompt=custom_prompt,
         )
         latency_ms = int((time.monotonic() - t0) * 1000)
 
@@ -166,6 +176,7 @@ class LlmGenerator(ScenarioGenerator):
         judge_model: str,
         judge_key: str,
         count: int,
+        custom_prompt: Optional[str] = None,
     ) -> str:
         """Invoke the judge model with a fixed meta-prompt. Wraps SDK errors
         in ``AgentLlmEvalConfigError`` (with the full traceback logged) so
@@ -197,6 +208,11 @@ class LlmGenerator(ScenarioGenerator):
             mcp_servers=getattr(agent_config, "mcp_server_summaries", None) or [],
             count=count,
         )
+        if custom_prompt:
+            user = (
+                f"{user}\n\nCUSTOM INSTRUCTIONS (prioritize these when choosing "
+                f"what to test):\n{custom_prompt}"
+            )
         messages = [
             {"role": "system", "content": system},
             {"role": "user", "content": user},

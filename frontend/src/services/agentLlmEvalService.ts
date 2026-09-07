@@ -13,13 +13,14 @@ import type {
   CreateFolderResponse,
   DeleteFolderPayload,
   DeleteFolderResponse,
-  GenerateScenariosPayload,
-  GenerateScenariosResponse,
+  GenerateVersionPayload,
+  GenerateVersionResponse,
   ListFoldersResponse,
   ListRunsRequest,
   ListRunsResponse,
   ListScenariosRequest,
   ListScenariosResponse,
+  ListVersionsResponse,
   RenameFolderPayload,
   RenameFolderResponse,
   ScenarioInput,
@@ -109,13 +110,64 @@ export const deleteAgentLlmEvalScenario = async (
   return res.data;
 };
 
-export const generateAgentLlmEvalScenarios = async (
+// ── Versions (generate / review / approve) ────────────────────────────────
+
+export const listAgentLlmEvalVersions = async (
   agentId: string,
-  payload: GenerateScenariosPayload = {},
-): Promise<GenerateScenariosResponse> => {
-  const res = await axiosInstance.post<GenerateScenariosResponse>(
-    `${base(agentId)}/scenarios/generate`,
+): Promise<ListVersionsResponse> => {
+  const res = await axiosInstance.post<ListVersionsResponse>(
+    `${base(agentId)}/versions/list`,
+  );
+  return res.data;
+};
+
+export const generateAgentLlmEvalVersion = async (
+  agentId: string,
+  payload: GenerateVersionPayload,
+): Promise<GenerateVersionResponse> => {
+  const res = await axiosInstance.post<GenerateVersionResponse>(
+    `${base(agentId)}/versions/generate`,
     payload,
+  );
+  return res.data;
+};
+
+export const approveAllAgentLlmEvalScenarios = async (
+  agentId: string,
+  versionId: string,
+): Promise<{ approved: number }> => {
+  const res = await axiosInstance.post<{ approved: number }>(
+    `${base(agentId)}/versions/${versionId}/approve-all`,
+  );
+  return res.data;
+};
+
+export const rejectAllAgentLlmEvalScenarios = async (
+  agentId: string,
+  versionId: string,
+): Promise<{ rejected: number }> => {
+  const res = await axiosInstance.post<{ rejected: number }>(
+    `${base(agentId)}/versions/${versionId}/reject-all`,
+  );
+  return res.data;
+};
+
+export const approveAgentLlmEvalScenario = async (
+  agentId: string,
+  scenarioId: string,
+): Promise<AgentLlmEvalScenario> => {
+  const res = await axiosInstance.post<AgentLlmEvalScenario>(
+    `${base(agentId)}/scenarios/${scenarioId}/approve`,
+  );
+  return res.data;
+};
+
+export const rejectAgentLlmEvalScenario = async (
+  agentId: string,
+  scenarioId: string,
+): Promise<{ deleted: string }> => {
+  const res = await axiosInstance.post<{ deleted: string }>(
+    `${base(agentId)}/scenarios/${scenarioId}/reject`,
   );
   return res.data;
 };
