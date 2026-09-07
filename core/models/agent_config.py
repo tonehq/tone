@@ -52,6 +52,7 @@ class AgentConfig(OrgScopedModel):
     voice_settings = Column(JSONB, nullable=True)
     stt_settings = Column(JSONB, nullable=True)
     conversation_settings = Column(JSONB, nullable=True)
+    turn_settings = Column(JSONB, nullable=True)
     created_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     deleted_at = Column(DateTime(timezone=True), nullable=True)
 
@@ -75,6 +76,7 @@ class AgentConfig(OrgScopedModel):
             "voice_settings": self.voice_settings,
             "stt_settings": self.stt_settings,
             "conversation_settings": self.conversation_settings,
+            "turn_settings": self.turn_settings,
             "created_by_user_id": str(self.created_by_user_id) if self.created_by_user_id else None,
             "deleted_at": self.deleted_at.isoformat() if self.deleted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,

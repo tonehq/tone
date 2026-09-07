@@ -22,6 +22,7 @@ from core.services.pipeline.turn_detection import (
     TurnDetectionContext,
     build_user_turn_stop_strategies,
 )
+from core.services.pipeline.turn_settings import TURN_DETECTION_KEY, VAD_KEY, resolve_vad
 
 def _llm_safe_schema(node, mutations=None):
     """Coerce a JSON-schema node so every current LLM provider accepts it.
@@ -585,10 +586,10 @@ class PipecatPipelineBuilder(PipelineBuilder):
         else:
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
-            _vad_stop_secs = 0.2
-            _vad_speaking_max_secs = 8.0
+            turn_settings = params.turn_settings or {}
+            vad = resolve_vad(turn_settings.get(VAD_KEY))
             stop_strategies, turn_detector = _build_turn_detection(
-                params.turn_detection,
+                turn_settings.get(TURN_DETECTION_KEY),
                 context,
                 ((params.stt or {}).get("metadata") or {}).get("language"),
             )
@@ -596,7 +597,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 context,
                 user_params=LLMUserAggregatorParams(
                     vad_analyzer=SileroVADAnalyzer(
-                        params=VADParams(stop_secs=_vad_stop_secs),
+                        params=VADParams(
+                            confidence=vad["confidence"],
+                            start_secs=vad["start_secs"],
+                            stop_secs=vad["stop_secs"],
+                            min_volume=vad["min_volume"],
+                        ),
                     ),
                     user_turn_strategies=UserTurnStrategies(stop=stop_strategies),
                 ),
@@ -631,19 +637,14 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # DuplicateTranscriptionFilter drops repeated final transcripts that
             # would otherwise trigger a duplicate LLM response (the turn-stop race).
             vad_timeout = VADSpeakingTimeoutProcessor(
-                max_duration_secs=_vad_speaking_max_secs,
+                max_duration_secs=vad["speaking_max_secs"],
             )
             duplicate_filter = DuplicateTranscriptionFilter()
 
-            logger.bind(
-                turn_detector=turn_detector.slug,
-                vad_stop_secs=_vad_stop_secs,
-                vad_speaking_max_secs=_vad_speaking_max_secs,
-            ).info(
-                "[pipeline-builder] turn detection params provider={} vad(stop_secs={}, speaking_max_secs={})",
+            logger.bind(turn_detector=turn_detector.slug, vad_settings=vad).info(
+                "[pipeline-builder] turn detection params provider={} vad={}",
                 turn_detector.slug,
-                _vad_stop_secs,
-                _vad_speaking_max_secs,
+                vad,
             )
 
             # STTLatencyTap derives STT TTFB from the wall-clock gap between

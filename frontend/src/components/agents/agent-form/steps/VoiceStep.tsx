@@ -25,7 +25,7 @@ import {
   useTtsModels,
   useTtsProviders,
   useTtsVoices,
-  useTurnDetectors,
+  useTurnSettingsOptions,
 } from '@/lib/api/voiceCatalog';
 import type { TtsVoice } from '@/services/ttsService';
 import type { AgentFormState } from '@/types/agent';
@@ -72,7 +72,7 @@ export default function VoiceStep() {
   const turnDetectorId =
     (useWatch({
       control,
-      name: 'config.conversation_settings.turn_detection.provider' as never,
+      name: 'config.turn_settings.turn_detection.provider' as never,
     }) as string | null | undefined) ?? DEFAULT_TURN_DETECTOR;
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
@@ -91,9 +91,16 @@ export default function VoiceStep() {
   const voicesQuery = useTtsVoices(providerId, language, ttsModelId);
   const ttsModelsQuery = useTtsModels(providerId);
   const sttModelsQuery = useSttModels(sttProviderId ?? '');
-  const turnDetectorsQuery = useTurnDetectors();
+  const turnSettingsQuery = useTurnSettingsOptions();
 
-  const turnDetectors = useMemo(() => turnDetectorsQuery.data ?? [], [turnDetectorsQuery.data]);
+  const turnDetectors = useMemo(
+    () => turnSettingsQuery.data?.turn_detectors ?? [],
+    [turnSettingsQuery.data],
+  );
+  const vadSchema = useMemo(
+    () => turnSettingsQuery.data?.vad_schema ?? [],
+    [turnSettingsQuery.data],
+  );
   const sttProviders = useMemo(() => sttProvidersQuery.data ?? [], [sttProvidersQuery.data]);
   const languages = useMemo(() => languagesQuery.data ?? [], [languagesQuery.data]);
   const providers = useMemo(() => providersQuery.data ?? [], [providersQuery.data]);
@@ -107,10 +114,10 @@ export default function VoiceStep() {
   const loadingVoices = voicesQuery.isLoading;
   const loadingTtsModels = ttsModelsQuery.isLoading;
   const loadingSttModels = sttModelsQuery.isLoading;
-  const loadingTurnDetectors = turnDetectorsQuery.isLoading;
+  const loadingTurnDetectors = turnSettingsQuery.isLoading;
 
   // Preserve the old `.catch(handleApiError)` toast on any catalog failure.
-  useQueryErrorToast(turnDetectorsQuery.error);
+  useQueryErrorToast(turnSettingsQuery.error);
   useQueryErrorToast(sttProvidersQuery.error);
   useQueryErrorToast(languagesQuery.error);
   useQueryErrorToast(providersQuery.error);
@@ -252,7 +259,7 @@ export default function VoiceStep() {
 
   const setTurnDetector = (v: string) => {
     setValue(
-      'config.conversation_settings.turn_detection' as never,
+      'config.turn_settings.turn_detection' as never,
       { provider: v || DEFAULT_TURN_DETECTOR } as never,
       { shouldDirty: true },
     );
@@ -557,7 +564,7 @@ export default function VoiceStep() {
         description="How the agent decides the caller has finished speaking."
       >
         <SelectInput
-          name="config.conversation_settings.turn_detection.provider"
+          name="config.turn_settings.turn_detection.provider"
           label="Model"
           options={turnDetectorOptions}
           loading={loadingTurnDetectors}
@@ -569,9 +576,21 @@ export default function VoiceStep() {
         {turnDetectorSchema.length > 0 && (
           <DynamicProviderFields
             fields={turnDetectorSchema}
-            basePath="config.conversation_settings.turn_detection"
+            basePath="config.turn_settings.turn_detection"
             exclude={['provider']}
           />
+        )}
+        {vadSchema.length > 0 && (
+          <div className="flex flex-col gap-3 border-t border-border/50 pt-4">
+            <div className="flex flex-col gap-0.5">
+              <p className="text-sm font-medium text-foreground">Voice activity detection</p>
+              <p className="text-[11px] text-muted-foreground">
+                Silero VAD thresholds that decide when the caller starts and stops speaking. Leave
+                blank to keep the defaults.
+              </p>
+            </div>
+            <DynamicProviderFields fields={vadSchema} basePath="config.turn_settings.vad" />
+          </div>
         )}
       </SectionCard>
     </div>

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Tuple, Type
 
-from core.services.meta_data_schema_validator import MetaDataSchemaValidator
+from core.services.meta_data_schema_validator import MetaDataSchemaValidator, coerce_settings
 from core.services.pipeline.turn_detection.base import TurnDetectionContext, TurnDetector
 from core.services.pipeline.turn_detection.livekit import LiveKitTurnDetector
 from core.services.pipeline.turn_detection.smart_turn import SmartTurnDetector
@@ -13,28 +13,6 @@ TURN_DETECTORS: Dict[str, Type[TurnDetector]] = {
 DEFAULT_TURN_DETECTOR = SmartTurnDetector.slug
 
 PROVIDER_KEY = "provider"
-
-_COERCERS = {
-    "float": float,
-    "integer": lambda v: int(float(v)),
-    "int": lambda v: int(float(v)),
-    "boolean": lambda v: v if isinstance(v, bool) else str(v).strip().lower() in ("true", "1", "yes"),
-}
-
-
-def _resolve_settings(schema: List[dict], raw: dict) -> dict:
-    resolved = {}
-    for field in schema:
-        name = field["name"]
-        value = raw.get(name)
-        if value is None or value == "":
-            value = field.get("default")
-        if value is not None:
-            coerce = _COERCERS.get(field.get("data_type"))
-            if coerce:
-                value = coerce(value)
-        resolved[name] = value
-    return resolved
 
 
 def _detector_class(raw: Optional[dict]) -> Type[TurnDetector]:
@@ -49,7 +27,7 @@ def _detector_class(raw: Optional[dict]) -> Type[TurnDetector]:
 
 def get_turn_detector(raw: Optional[dict]) -> TurnDetector:
     cls = _detector_class(raw)
-    return cls(_resolve_settings(cls.schema, raw or {}))
+    return cls(coerce_settings(cls.schema, raw or {}))
 
 
 def build_user_turn_stop_strategies(
