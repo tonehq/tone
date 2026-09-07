@@ -299,7 +299,11 @@ _EVAL_TRIGGERS = {"auto", "manual", "cli"}
 
 @app.task(name="eval_ingestion_run", queue="eval", pass_context=True)
 @_with_job_logging
-def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> None:
+def eval_ingestion_run(
+    ingestion_run_id: str,
+    triggered_by: str = "auto",
+    eval_version_id: str = "",
+) -> None:
     """Run the RAG eval for a completed ingestion pipeline run.
 
     ``triggered_by`` is stamped on every ``eval_results`` row this task
@@ -359,25 +363,32 @@ def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> Non
                 )
                 return
             svc = EvalService()
+            # A specific version (manual run against a chosen version) is scored
+            # directly; otherwise the auto path resolves/generates the set.
+            if eval_version_id:
+                target_version_id = _UUID(eval_version_id)
+            else:
+                logger.info(
+                    "[eval] resolving question set ingestion_run={} upload={} org={}",
+                    ingestion_run_id, run.upload_id, run.organization_id,
+                )
+                eval_set = svc.get_or_generate_eval(
+                    db,
+                    upload_id=run.upload_id,
+                    org_id=run.organization_id,
+                    ingestion_run_id=run.id,
+                )
+                target_version_id = eval_set.eval_version_id
             logger.info(
-                "[eval] resolving question set ingestion_run={} upload={} org={}",
-                ingestion_run_id, run.upload_id, run.organization_id,
-            )
-            eval_set = svc.get_or_generate_eval(
-                db,
-                upload_id=run.upload_id,
-                org_id=run.organization_id,
-                ingestion_run_id=run.id,
-            )
-            logger.info(
-                "[eval] running eval ingestion_run={} upload={} questions={} triggered_by={}",
-                ingestion_run_id, run.upload_id, eval_set.question_count, triggered_by,
+                "[eval] running eval ingestion_run={} upload={} version={} triggered_by={}",
+                ingestion_run_id, run.upload_id, target_version_id, triggered_by,
             )
             svc.run_eval(
                 db,
                 upload_id=run.upload_id,
                 ingestion_run_id=run.id,
                 triggered_by=triggered_by,
+                eval_version_id=target_version_id,
             )
         logger.info(
             "[eval] worker task done ingestion_run={}", ingestion_run_id,
@@ -390,12 +401,79 @@ def eval_ingestion_run(ingestion_run_id: str, triggered_by: str = "auto") -> Non
 
 
 async def enqueue_eval_for_ingestion_run(
-    ingestion_run_id, triggered_by: str = "auto",
+    ingestion_run_id, triggered_by: str = "auto", eval_version_id=None,
 ) -> int:
     async with app.open_async():
         return await eval_ingestion_run.defer_async(
             ingestion_run_id=str(ingestion_run_id),
             triggered_by=triggered_by,
+            eval_version_id=str(eval_version_id) if eval_version_id else "",
+        )
+
+
+@app.task(name="generate_eval_version", queue="eval", pass_context=True)
+@_with_job_logging
+def generate_eval_version(
+    upload_id: str,
+    org_id: str,
+    mode: str = "new",
+    version_id: str = "",
+    instructions: str = "",
+    ingestion_run_id: str = "",
+) -> None:
+    """On-demand LLM eval-question generation into a VERSION (the reviewed
+    flow). Runs on the ``eval`` queue so the single LLM call doesn't block the
+    HTTP request. ``EvalService.generate_version`` creates/resets the version
+    row (``status='generating'``) up-front and commits it before the LLM call,
+    so the UI's poll sees it immediately, then fills it (questions ``pending``)
+    and flips it to ``draft``.
+
+    Failures are logged with a full traceback but NEVER re-raised — a bad
+    generation must not crash the worker; the version simply stays empty and the
+    user can retry."""
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.eval_service import EvalService
+
+    try:
+        with get_db_context() as db:
+            EvalService().generate_version(
+                db,
+                upload_id=_UUID(upload_id),
+                org_id=_UUID(org_id),
+                mode=mode,
+                version_id=_UUID(version_id) if version_id else None,
+                instructions=instructions or None,
+                ingestion_run_id=_UUID(ingestion_run_id) if ingestion_run_id else None,
+                approval_status="pending",
+                source="generated",
+            )
+        logger.info("[eval] version generation done upload={} mode={}", upload_id, mode)
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[eval] version generation failed upload={} mode={} version_id={} (swallowed)",
+            upload_id, mode, version_id,
+        )
+
+
+async def enqueue_eval_version_generation(
+    *,
+    upload_id,
+    org_id,
+    mode: str = "new",
+    version_id=None,
+    instructions: str = "",
+    ingestion_run_id=None,
+) -> int:
+    async with app.open_async():
+        return await generate_eval_version.defer_async(
+            upload_id=str(upload_id),
+            org_id=str(org_id),
+            mode=mode,
+            version_id=str(version_id) if version_id else "",
+            instructions=instructions or "",
+            ingestion_run_id=str(ingestion_run_id) if ingestion_run_id else "",
         )
 
 

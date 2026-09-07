@@ -37,6 +37,7 @@ class EvalResult(OrgScopedModel):
         Index("ix_eval_results_ingestion_run_number", "ingestion_run_id", "run_number"),
         Index("ix_eval_results_ingestion_run_verdict", "ingestion_run_id", "verdict"),
         Index("ix_eval_results_eval_run_desc", "eval_id", "run_number"),
+        Index("ix_eval_results_version_id", "eval_version_id"),
     )
 
     eval_id = Column(
@@ -44,6 +45,14 @@ class EvalResult(OrgScopedModel):
         ForeignKey("evals.id", ondelete="CASCADE"),
         nullable=False,
         index=True,
+    )
+    # Which eval version this batch scored — stamped at run time so the results
+    # page can filter/compare by version. SET NULL keeps a result row if its
+    # version is ever removed. Nullable during the expand→backfill window.
+    eval_version_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("eval_versions.id", ondelete="SET NULL"),
+        nullable=True,
     )
     ingestion_run_id = Column(
         UUID(as_uuid=True),
@@ -85,6 +94,7 @@ class EvalResult(OrgScopedModel):
             "id": str(self.id),
             "organization_id": str(self.organization_id),
             "eval_id": str(self.eval_id),
+            "eval_version_id": str(self.eval_version_id) if self.eval_version_id else None,
             "ingestion_run_id": str(self.ingestion_run_id) if self.ingestion_run_id else None,
             "run_id": str(self.run_id),
             "run_number": self.run_number,
