@@ -111,6 +111,14 @@ def upgrade() -> None:
     # Folder nodes carry no prompt / scenario_key.
     op.alter_column(_SCENARIOS, "prompt", existing_type=sa.Text(), nullable=True)
     op.alter_column(_SCENARIOS, "scenario_key", existing_type=sa.String(length=120), nullable=True)
+    # Drop the NOT NULL on the (soon-to-be-removed) folder_id BEFORE the folder
+    # data-move inserts folder nodes with a NULL folder_id — otherwise the
+    # still-present NOT NULL constraint rejects them. The column itself is
+    # dropped in step 5.
+    if _has_column(_SCENARIOS, "folder_id"):
+        op.alter_column(
+            _SCENARIOS, "folder_id", existing_type=postgresql.UUID(as_uuid=True), nullable=True
+        )
 
     # 3. FKs (self-referential parent + version).
     if not _has_foreign_key(_SCENARIOS, "fk_agent_llm_eval_scenarios_parent"):
