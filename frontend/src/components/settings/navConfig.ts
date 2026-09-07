@@ -2,6 +2,7 @@ import {
   Building2,
   Cable,
   ClipboardCheck,
+  Cloud,
   KeyRound,
   LayoutGrid,
   Plug,
@@ -76,6 +77,12 @@ export const SETTINGS_NAV_GROUPS: SettingsNavGroup[] = [
         href: '/settings/model-providers',
         icon: Plug,
         description: 'Configure LLM, speech-to-text, and text-to-speech provider keys.',
+      },
+      {
+        label: 'Cloud Providers',
+        href: '/settings/cloud-providers',
+        icon: Cloud,
+        description: 'Manage the clouds that host your models (AWS, Azure, and more).',
       },
       {
         label: 'Integrations',

@@ -38,7 +38,7 @@ if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, agent_llm_evals, agent_profile_variables,
-        benchmarks, mcp_servers, services, tools, dashboard,
+        benchmarks, mcp_servers, services, cloud_providers, tools, dashboard,
         call_logs, call_metrics, call_transcript_evals, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
@@ -188,6 +188,7 @@ if ee_enabled:
         from ee.api.v1 import mcp_servers as ee_mcp_servers
         from ee.api.v1 import app_integrations as ee_app_integrations
         from ee.api.v1 import services as ee_services
+        from ee.api.v1 import cloud_providers as ee_cloud_providers
         from ee.api.v1 import tools as ee_tools
         from ee.api.v1 import dashboard as ee_dashboard
         from ee.api.v1 import call_logs as ee_call_logs
@@ -223,6 +224,7 @@ if ee_enabled:
         api_v1.include_router(ee_mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(ee_app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(ee_services.router, prefix="/services", tags=["services"])
+        api_v1.include_router(ee_cloud_providers.router, prefix="/cloud-providers", tags=["cloud-providers"])
         api_v1.include_router(ee_tools.router, prefix="/tool", tags=["tool"])
         api_v1.include_router(ee_dashboard.router, prefix="/dashboard", tags=["dashboard"])
         api_v1.include_router(ee_call_logs.router, prefix="/call-log", tags=["call-log"])
@@ -281,6 +283,7 @@ else:
         api_v1.include_router(mcp_servers.router, prefix="/mcp-server", tags=["mcp-server"])
         api_v1.include_router(app_integrations.router, prefix="/app-integration", tags=["app-integration"])
         api_v1.include_router(services.router, prefix="/services", tags=["services"])
+        api_v1.include_router(cloud_providers.router, prefix="/cloud-providers", tags=["cloud-providers"])
         api_v1.include_router(tools.router, prefix="/tool", tags=["tool"])
         api_v1.include_router(dashboard.router, prefix="/dashboard", tags=["dashboard"])
         api_v1.include_router(call_logs.router, prefix="/call-log", tags=["call-log"])

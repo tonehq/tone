@@ -21,6 +21,7 @@ import { CustomButton, CustomModal, CustomTable, TokenSearchBar } from '@/compon
 import { Badge } from '@/components/ui/badge';
 import {
   deleteService,
+  listCloudProviders,
   listProviderCatalog,
   listProviderKeyFilterValues,
   listProviderModelFilterValues,
@@ -97,6 +98,9 @@ export default function ServiceProviderDetailPage() {
   const [modelDrawerOpen, setModelDrawerOpen] = useState(false);
   const [editingModel, setEditingModel] = useState<ProviderModel | null>(null);
   const [isSavingModel, setIsSavingModel] = useState(false);
+  const [cloudProviderOptions, setCloudProviderOptions] = useState<
+    { id: string; display_name: string }[]
+  >([]);
   const [modelDeleteTarget, setModelDeleteTarget] = useState<ProviderModel | null>(null);
   const [deletingModel, setDeletingModel] = useState(false);
 
@@ -220,14 +224,25 @@ export default function ServiceProviderDetailPage() {
     }
   };
 
+  const loadCloudProviders = useCallback(async () => {
+    try {
+      const { rows } = await listCloudProviders({ is_active: true, page_size: 100 });
+      setCloudProviderOptions(rows.map((c) => ({ id: c.id, display_name: c.display_name })));
+    } catch (err) {
+      handleApiError(err);
+    }
+  }, []);
+
   const handleAddModel = () => {
     setEditingModel(null);
     setModelDrawerOpen(true);
+    loadCloudProviders();
   };
 
   const handleEditModel = (m: ProviderModel) => {
     setEditingModel(m);
     setModelDrawerOpen(true);
+    loadCloudProviders();
   };
 
   const handleSubmitModel = useCallback(
@@ -808,6 +823,7 @@ export default function ServiceProviderDetailPage() {
         allowedKinds={
           serviceType ? [serviceType] : ((provider?.kinds as ServiceKind[]) ?? undefined)
         }
+        cloudProviders={cloudProviderOptions}
         onClose={() => {
           setModelDrawerOpen(false);
           setEditingModel(null);
