@@ -10,6 +10,7 @@ from sqlalchemy import case, distinct, func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from core.models.api_key import ApiKey
+from core.models.cloud_provider import CloudProvider
 from core.models.model import Model
 from core.models.model_language import ModelLanguage
 from core.models.model_provider import ModelProvider
@@ -92,6 +93,7 @@ def _model_to_dict(m: Model) -> dict:
         "name": m.name,
         "display_name": m.display_name,
         "kind": m.kind,
+        "cloud_provider_id": str(m.cloud_provider_id) if m.cloud_provider_id else None,
         "description": m.description,
         "base_url": m.base_url,
         "is_active": bool(m.is_active),
@@ -1161,6 +1163,24 @@ class ModelProviderService(BaseService):
 
     # ─── model CRUD ────────────────────────────────────────────────────────
 
+    def _resolve_cloud_provider_id(self, value: Any) -> UUID | None:
+        """Validate an optional cloud_provider_id: empty/None → None; otherwise
+        parse the UUID and confirm the cloud provider exists (404 if not) so a
+        bad reference is a clean error, not a 500 FK violation."""
+        if value in (None, ""):
+            return None
+        cp_uuid = _parse_uuid(value, field="cloud provider id")
+        exists = (
+            self.db.query(CloudProvider.id)
+            .filter(CloudProvider.id == cp_uuid)
+            .first()
+        )
+        if not exists:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="Cloud provider not found"
+            )
+        return cp_uuid
+
     def create_provider_model(self, provider_id: str, body: dict) -> dict:
         prov_uuid = _parse_uuid(provider_id, field="provider id")
         self._provider_or_404(prov_uuid)
@@ -1188,6 +1208,9 @@ class ModelProviderService(BaseService):
             name=name,
             display_name=_optional_str(body, "display_name"),
             kind=kind,
+            cloud_provider_id=self._resolve_cloud_provider_id(
+                body.get("cloud_provider_id")
+            ),
             description=_optional_str(body, "description"),
             base_url=_optional_str(body, "base_url"),
             meta_data=_optional_json(body, "meta_data", expect=dict),
@@ -1235,6 +1258,10 @@ class ModelProviderService(BaseService):
         if "kind" in body:
             record.kind = (
                 _validate_model_kind(body.get("kind"), required=False) or record.kind
+            )
+        if "cloud_provider_id" in body:
+            record.cloud_provider_id = self._resolve_cloud_provider_id(
+                body.get("cloud_provider_id")
             )
         if "description" in body:
             record.description = _optional_str(body, "description")

@@ -11,7 +11,11 @@ import {
   upsertProviderModelAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
-import { getModelProvider, listProviderCatalog } from '@/services/servicesService';
+import {
+  getModelProvider,
+  listCloudProviders,
+  listProviderCatalog,
+} from '@/services/servicesService';
 import type { ModelUpsertPayload } from '@/services/servicesService';
 import type {
   ModelProvider,
@@ -64,6 +68,19 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
   );
   const [savingNewModel, setSavingNewModel] = useState(false);
 
+  // Cloud providers for the model form's "Cloud provider" select (both flows).
+  const [cloudProviderOptions, setCloudProviderOptions] = useState<
+    { id: string; display_name: string }[]
+  >([]);
+  const loadCloudProviders = useCallback(async () => {
+    try {
+      const { rows } = await listCloudProviders({ is_active: true, page_size: 100 });
+      setCloudProviderOptions(rows.map((c) => ({ id: c.id, display_name: c.display_name })));
+    } catch (err) {
+      handleApiError(err);
+    }
+  }, []);
+
   // Provider editor
   const [providerEditOpen, setProviderEditOpen] = useState(false);
   const [editingProvider, setEditingProvider] = useState<ModelProvider | null>(null);
@@ -88,9 +105,10 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
       setModelProviderId(m.provider.id);
       setEditingModel(m);
       setModelEditOpen(true);
+      loadCloudProviders();
       closeDetail();
     },
-    [closeDetail],
+    [closeDetail, loadCloudProviders],
   );
 
   const submitModel = useCallback(
@@ -113,13 +131,14 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
 
   const openAddModel = useCallback(async () => {
     setAddModelOpen(true);
+    loadCloudProviders();
     try {
       const providers = await listProviderCatalog();
       setProviderOptions(providers.map((p) => ({ id: p.id, display_name: p.display_name })));
     } catch (err) {
       handleApiError(err);
     }
-  }, []);
+  }, [loadCloudProviders]);
 
   const submitNewModel = useCallback(
     async (payload: ModelUpsertPayload, _id?: string, providerId?: string) => {
@@ -289,6 +308,7 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
     // model creator
     addModelOpen,
     providerOptions,
+    cloudProviderOptions,
     savingNewModel,
     openAddModel,
     closeAddModel: useCallback(() => setAddModelOpen(false), []),

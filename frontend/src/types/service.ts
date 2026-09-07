@@ -102,6 +102,33 @@ export interface ModelProviderUpsertPayload {
 }
 
 /**
+ * Global CloudProvider row — the cloud/host a model runs on (e.g. OpenAI cloud,
+ * AWS, Azure). Structurally mirrors ModelProvider. Admin-managed catalog.
+ */
+export interface CloudProvider {
+  id: string;
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  website_url: string | null;
+  is_active: boolean;
+  meta_data_schema: Record<string, unknown> | null;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+export interface CloudProviderUpsertPayload {
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description?: string;
+  website_url?: string;
+  is_active?: boolean;
+  meta_data_schema?: Record<string, unknown> | null;
+}
+
+/**
  * API-key status for a flattened model row. Presence only — the raw secret is
  * never sent to the client. `present` drives the masked-dots vs `-` column;
  * the metadata feeds the row-detail drawer.
@@ -125,6 +152,7 @@ export interface ModelRow {
   name: string;
   display_name: string | null;
   kind: ServiceKind;
+  cloud_provider_id: string | null;
   description: string | null;
   base_url: string | null;
   is_active: boolean;
@@ -142,6 +170,7 @@ export interface ProviderModel {
   name: string;
   display_name: string | null;
   kind: ServiceKind;
+  cloud_provider_id: string | null;
   description: string | null;
   base_url: string | null;
   is_active: boolean;

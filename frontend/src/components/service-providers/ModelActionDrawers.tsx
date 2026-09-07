@@ -21,6 +21,7 @@ const ModelActionDrawers = ({ actions }: ModelActionDrawersProps) => (
       open={actions.addModelOpen}
       editing={null}
       providers={actions.providerOptions}
+      cloudProviders={actions.cloudProviderOptions}
       onClose={actions.closeAddModel}
       onSubmit={actions.submitNewModel}
       isPending={actions.savingNewModel}
@@ -29,6 +30,7 @@ const ModelActionDrawers = ({ actions }: ModelActionDrawersProps) => (
     <ModelFormDrawer
       open={actions.modelEditOpen}
       editing={actions.editingModel}
+      cloudProviders={actions.cloudProviderOptions}
       onClose={actions.closeModelEdit}
       onSubmit={actions.submitModel}
       isPending={actions.savingModel}
