@@ -293,6 +293,7 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const runButton = (
     <CustomButton
       type="primary"
+      size="sm"
       onClick={handleRunEval}
       loading={runMutation.isPending}
       disabled={runDisabled}
@@ -336,6 +337,46 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
         </div>
       ) : (
         <>
+          {/* Actions: add / import + run — kept at the top so they're reachable
+              without scrolling past the whole question list. */}
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <CustomButton type="default" size="sm" onClick={() => setAddOpen(true)}>
+                <Plus className="mr-1 size-4" />
+                Add question
+              </CustomButton>
+              <CustomButton type="default" size="sm" onClick={() => setImportOpen(true)}>
+                <FileUp className="mr-1 size-4" />
+                Import CSV
+              </CustomButton>
+            </div>
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {hasReadyRuns && (
+                <div className="min-w-[200px] sm:min-w-[240px]">
+                  <SelectInput
+                    name="eval-ingestion-run"
+                    value={selectedRunId ?? undefined}
+                    onValueChange={(v) => setSelectedRunId(v || null)}
+                    options={runOptions}
+                    placeholder="Ingest recipe"
+                    disabled={runMutation.isPending}
+                  />
+                </div>
+              )}
+              {counts.approved === 0 ? (
+                <CustomTooltip content="Approve at least one question to run">
+                  <span>{runButton}</span>
+                </CustomTooltip>
+              ) : !hasReadyRuns ? (
+                <CustomTooltip content="No ready ingestion runs to evaluate against">
+                  <span>{runButton}</span>
+                </CustomTooltip>
+              ) : (
+                runButton
+              )}
+            </div>
+          </div>
+
           {/* Review: status filter + bulk approve/reject, right above the list. */}
           <section className="flex flex-col gap-3">
             <EvalReviewToolbar
@@ -388,61 +429,6 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
                 ))}
               </ul>
             )}
-
-            {/* Secondary: adding questions is not the main task — keep in modals. */}
-            <div className="flex flex-wrap items-center gap-2">
-              <CustomButton type="default" size="sm" onClick={() => setAddOpen(true)}>
-                <Plus className="mr-1 size-4" />
-                Add question
-              </CustomButton>
-              <CustomButton type="default" size="sm" onClick={() => setImportOpen(true)}>
-                <FileUp className="mr-1 size-4" />
-                Import CSV
-              </CustomButton>
-            </div>
-          </section>
-
-          {/* Final step: run the approved questions. */}
-          <section className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/30 px-4 py-3">
-            <div>
-              <p className="text-sm font-medium text-foreground">Run eval</p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                Scores the {counts.approved} approved question(s) against the selected recipe.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center justify-end gap-2">
-              {hasReadyRuns && (
-                <div className="flex items-center gap-2">
-                  <label
-                    htmlFor="eval-ingestion-run"
-                    className="shrink-0 text-[11px] uppercase tracking-wide text-muted-foreground"
-                  >
-                    Ingest recipe
-                  </label>
-                  <div className="min-w-[220px] sm:min-w-[260px]">
-                    <SelectInput
-                      name="eval-ingestion-run"
-                      value={selectedRunId ?? undefined}
-                      onValueChange={(v) => setSelectedRunId(v || null)}
-                      options={runOptions}
-                      placeholder="Select an ingestion run"
-                      disabled={runMutation.isPending}
-                    />
-                  </div>
-                </div>
-              )}
-              {counts.approved === 0 ? (
-                <CustomTooltip content="Approve at least one question to run">
-                  <span>{runButton}</span>
-                </CustomTooltip>
-              ) : !hasReadyRuns ? (
-                <CustomTooltip content="No ready ingestion runs to evaluate against">
-                  <span>{runButton}</span>
-                </CustomTooltip>
-              ) : (
-                runButton
-              )}
-            </div>
           </section>
         </>
       )}
