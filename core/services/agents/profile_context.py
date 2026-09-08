@@ -84,11 +84,22 @@ def load_profile_crm_plan(
         )
         if not fill_plan:
             return ProfileCrmPlan()
+        # Resolve the CRM slug (hubspot/salesforce/zoho_crm) so the async enrich
+        # step can pick the per-CRM preset without a second DB hit. None = a
+        # custom MCP → generic single-phone-argument flow.
+        crm_slug = None
+        if config.mcp_server_id:
+            from core.services.mcp_server_service import McpServerService
+
+            crm_slug = McpServerService(db, org_id=org_id).get_integration_slug(
+                config.mcp_server_id
+            )
         return ProfileCrmPlan(
             enabled=True,
             mcp_server_id=config.mcp_server_id,
             lookup_tool_name=config.lookup_tool_name,
             phone_argument=config.phone_argument,
+            crm_slug=crm_slug,
             fill_plan=fill_plan,
         )
     except Exception:  # noqa: BLE001 — resolver must never break a call

@@ -157,7 +157,7 @@ export default function ProfileVariableModal({
           control={control}
           label="CRM field (optional)"
           placeholder="e.g. properties.firstname"
-          helperText="When Value is empty and CRM enrichment is on, fill this variable from this field of the caller's CRM record. Dot-paths supported."
+          helperText="When Value is empty and CRM enrichment is on, fill this variable from this field of the caller's CRM record (relative to the record — e.g. properties.firstname for HubSpot, FirstName for Salesforce, First_Name for Zoho). Dot-paths supported."
           disabled={submitting}
         />
       </form>

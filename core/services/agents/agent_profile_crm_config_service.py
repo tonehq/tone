@@ -43,21 +43,28 @@ class AgentProfileCrmConfigService(BaseService):
     ) -> AgentProfileCrmConfig:
         """Create or update the agent's CRM-lookup config.
 
-        When ``is_enabled`` is true the config must be usable, so
-        ``mcp_server_id`` (attached to this agent) + ``lookup_tool_name`` +
-        ``phone_argument`` are required. A disabled config may be saved partial
-        (draft) so the user can fill it in over multiple edits.
+        When ``is_enabled`` is true the config must be usable: ``mcp_server_id``
+        (attached to this agent) is always required. ``lookup_tool_name`` +
+        ``phone_argument`` are required only for a **custom** MCP — a known CRM
+        (HubSpot/Salesforce/Zoho) supplies both via its per-CRM preset. A
+        disabled config may be saved partial (draft).
         """
         clean_tool = _validate_len(lookup_tool_name, MAX_TOOL_NAME_LEN, "Lookup tool name")
         clean_arg = _validate_len(phone_argument, MAX_PHONE_ARG_LEN, "Phone argument")
 
         if is_enabled:
-            if not mcp_server_id or not clean_tool or not clean_arg:
+            if not mcp_server_id:
                 raise ProfileCrmConfigInvalidError(
-                    "To enable CRM enrichment, choose a CRM server, a lookup tool, "
-                    "and the phone argument."
+                    "To enable CRM enrichment, choose a CRM server."
                 )
             self._ensure_server_attached(agent_id, mcp_server_id)
+            if not self._server_has_preset(mcp_server_id) and (
+                not clean_tool or not clean_arg
+            ):
+                raise ProfileCrmConfigInvalidError(
+                    "To enable CRM enrichment for this server, choose a lookup tool "
+                    "and the phone argument."
+                )
         elif mcp_server_id:
             self._ensure_server_attached(agent_id, mcp_server_id)
 
@@ -91,6 +98,17 @@ class AgentProfileCrmConfigService(BaseService):
 
     def config_response(self, row: Optional[AgentProfileCrmConfig]) -> Optional[dict]:
         return row.to_dict() if row is not None else None
+
+    def _server_has_preset(self, mcp_server_id: UUID) -> bool:
+        """True when the server maps to a known CRM (HubSpot/Salesforce/Zoho)
+        that has a built-in lookup preset — so tool/arg aren't required."""
+        from core.services.agents.crm_lookup_presets import has_crm_lookup_preset
+        from core.services.mcp_server_service import McpServerService
+
+        slug = McpServerService(self.db, org_id=self.org_id).get_integration_slug(
+            mcp_server_id
+        )
+        return has_crm_lookup_preset(slug)
 
     def _ensure_server_attached(self, agent_id: UUID, mcp_server_id: UUID) -> None:
         """The chosen CRM must be an MCP server attached to this agent's
