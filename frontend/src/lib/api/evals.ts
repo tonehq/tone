@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
@@ -43,6 +44,15 @@ export function useEvalSummariesByIngestion(uploadId: string | null, ingestionRu
     refetchInterval: (query) =>
       (query.state.data?.in_flight_ingestion_run_ids?.length ?? 0) > 0 ? 4_000 : false,
   });
+}
+
+// Ingestion-run ids whose eval batch is queued/running (no score row yet), as a
+// Set for O(1) membership. The one place the in-flight signal is derived so the
+// Ingestion-Runs table, Manage-evals Run button, and Results-tab poll all read
+// it the same way (and share the underlying poll).
+export function useInFlightEvalRunIds(uploadId: string | null, ingestionRunIds: string[]) {
+  const { data } = useEvalSummariesByIngestion(uploadId, ingestionRunIds);
+  return useMemo(() => new Set(data?.in_flight_ingestion_run_ids ?? []), [data]);
 }
 
 // Batch detail — summary + per-question rows for one batch.
@@ -103,15 +113,19 @@ export function useRejectAllEvalQuestions(uploadId: string) {
 }
 
 // Eval batches for the results tab, filtered by ingestion run and/or version.
+// Pass pollWhileInFlight=true (a batch is queued/running) to refetch every 5s so
+// the finished batch surfaces without a manual refresh.
 export function useEvalRunsFiltered(
   uploadId: string | null,
   filters: { ingestion_run_id?: string | null; eval_version_id?: string | null },
+  pollWhileInFlight = false,
 ) {
   return useQuery({
     queryKey: [EVAL_QUERY_KEY, 'runs-filtered', uploadId, filters],
     queryFn: () => listEvalRunsFiltered(uploadId as string, filters),
     enabled: !!uploadId,
     staleTime: 15_000,
+    refetchInterval: pollWhileInFlight ? 5_000 : false,
   });
 }
 

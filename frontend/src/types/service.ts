@@ -7,6 +7,15 @@ export interface ServiceProviderRef {
   description?: string | null;
 }
 
+// Lightweight cloud-provider ref embedded on a model row (the hosting cloud's
+// name, resolved server-side) — mirrors ServiceProviderRef.
+export interface CloudProviderRef {
+  id: string;
+  slug: string;
+  display_name: string;
+  description?: string | null;
+}
+
 /** A single per-org ApiKey row (used on the detail page's API keys panel + drawer). */
 export interface Service {
   id: string;
@@ -159,6 +168,7 @@ export interface ModelRow {
   meta_data: Record<string, unknown> | null;
   meta_data_schema: import('@/types/provider').MetaDataSchemaField[] | null;
   provider: ServiceProviderRef;
+  cloud_provider: CloudProviderRef | null;
   api_key: ModelApiKeyStatus | null;
   created_at: number;
   updated_at: number;

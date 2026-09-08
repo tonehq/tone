@@ -163,3 +163,6 @@ files/
 
 # Rendered k8s manifests (build artifact of build/kubernetes/render.sh)
 build/kubernetes/.rendered/
+
+# Per-call memray memory profiles (MEMRAY_PROFILE_DIR)
+memray_profiles/

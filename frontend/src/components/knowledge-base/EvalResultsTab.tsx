@@ -6,7 +6,12 @@ import EvalResultsTable from '@/components/knowledge-base/EvalResultsTable';
 import SummaryStrip from '@/components/knowledge-base/SummaryStrip';
 import { versionLabel } from '@/components/knowledge-base/evalsConstants';
 import { SelectInput } from '@/components/shared';
-import { useEvalRunDetail, useEvalRunsFiltered, useEvalVersions } from '@/lib/api/evals';
+import {
+  useEvalRunDetail,
+  useEvalRunsFiltered,
+  useInFlightEvalRunIds,
+  useEvalVersions,
+} from '@/lib/api/evals';
 import { useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type { EvalRunSummaryTotals } from '@/types/eval';
 import { formatDate } from '@/utils/date';
@@ -42,7 +47,12 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
     [versionFilter, ingestionFilter],
   );
 
-  const batchesQuery = useEvalRunsFiltered(uploadId, filters);
+  // While any visible ingestion run has a queued/running eval batch, poll the
+  // batches list so a just-finished run appears without a manual refresh.
+  const readyRunIds = useMemo(() => readyRuns.map((r) => r.id), [readyRuns]);
+  const inFlightRunIds = useInFlightEvalRunIds(uploadId, readyRunIds);
+
+  const batchesQuery = useEvalRunsFiltered(uploadId, filters, inFlightRunIds.size > 0);
   const batches = useMemo(() => batchesQuery.data ?? [], [batchesQuery.data]);
 
   const [selectedRunId, setSelectedRunId] = useState<string | null>(null);

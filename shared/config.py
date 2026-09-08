@@ -223,6 +223,13 @@ class Settings:
         # LLM/STT/TTS pipeline and takes no auth, so it is OFF by default and should
         # stay off in production — enable only in dev/staging for agent testing.
         self.ENABLE_WS_TEST_ENDPOINT: bool = _bool_env(get_secret("ENABLE_WS_TEST_ENDPOINT"))
+        # Per-call memory profiling with memray. OFF by default — it adds overhead,
+        # so enable only in dev/staging when investigating memory. When on, each call
+        # writes <MEMRAY_PROFILE_DIR>/call_<trace_id>.bin; view a flame graph with
+        # `python -m memray flamegraph <file>`. Empty MEMRAY_PROFILE_DIR → "memray_profiles".
+        # Both stay OFF MANDATORY_KEYS (empty = disabled / default dir).
+        self.MEMRAY_PROFILING_ENABLED: bool = _bool_env(get_secret("MEMRAY_PROFILING_ENABLED"))
+        self.MEMRAY_PROFILE_DIR: str = get_secret("MEMRAY_PROFILE_DIR") or "memray_profiles"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE")
