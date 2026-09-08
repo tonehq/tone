@@ -672,6 +672,23 @@ class McpServerService(BaseService):
             )
         return mcp_server
 
+    def get_integration_slug(self, mcp_server_id) -> Optional[str]:
+        """The ``app_integrations.slug`` this MCP server maps to (e.g.
+        ``hubspot`` / ``salesforce`` / ``zoho_crm``), or ``None`` for a custom
+        server with no linked integration. The ONE place a server → CRM slug is
+        resolved (reused by the profile-CRM plan loader + config validation)."""
+        from core.models.app_integration import AppIntegration
+
+        mcp_server = self.get_mcp_server(mcp_server_id)
+        if not mcp_server.app_integration_id:
+            return None
+        integration = (
+            self.query(AppIntegration)
+            .filter(AppIntegration.id == mcp_server.app_integration_id)
+            .first()
+        )
+        return integration.slug if integration else None
+
     def delete_mcp_server(self, mcp_server_id) -> Dict[str, str]:
         mcp_server = self.get_mcp_server(mcp_server_id)
         self.db.delete(mcp_server)

@@ -43,3 +43,34 @@ Fill empty profile variables from a connected CRM MCP at call start, on the **pr
 - [ ] Mapping + confirmed lookup tool persist per agent and drive enrichment.
 - [ ] Enrichment errors logged with traceback; CRM token never logged.
 - [ ] Logic in a service, reuses MCP/profile helpers; safe migration; tests added; lint + typecheck pass.
+
+---
+
+## Addendum — Per-CRM lookup presets (HubSpot / Salesforce / Zoho)
+
+**Added 2026-09-08.** Extends this task: the three app-integrated CRMs each expose a differently-shaped
+lookup, so auto-suggesting a single `phone_argument` is not enough for two of them. When the user selects
+one of these three CRM servers, the correct tool **and** the correctly-structured phone request must
+auto-fill; any other/custom MCP keeps the existing generic pick-tool + phone-argument flow.
+
+### Requirements (addendum)
+- Detect which of the three CRMs a selected MCP server is, via its `app_integration.slug`
+  (`hubspot` / `salesforce` / `zoho_crm`).
+- Per-CRM preset = the lookup tool + how the caller phone is placed into the request:
+  - **zoho_crm** → tool `Search Records`, plain arg `phone` (module `Contacts`).
+  - **hubspot** → tool `hubspot-search-objects`, filter object
+    `{object_type:"contacts", filters:[{propertyName:"phone", operator:"EQ", value:<phone>}]}`.
+  - **salesforce** → tool `Query`, SOQL string `SELECT ... FROM Contact WHERE Phone = '<phone>'`.
+- The three tool names/shapes are the current official values; the actual tool list is still discovered
+  live, so a preset only PRE-FILLS (the user can still change it).
+- Any non-preset CRM → unchanged generic flow (pick tool from discovered list + choose phone argument).
+- Must not affect existing functionality: the generic path, the single-phone-argument model, and every
+  already-working (non-preset) MCP stay exactly as they are.
+
+### Acceptance Criteria (addendum)
+- [ ] Selecting a HubSpot / Salesforce / Zoho CRM server auto-fills the correct tool + request shape.
+- [ ] At call time the caller phone is placed into the correct shape per CRM (plain / filter / SOQL) and
+      the record is fetched + mapped to variables.
+- [ ] A custom/other MCP behaves exactly as before (generic flow untouched).
+- [ ] No regression to the existing crm_field / config / enrichment behavior; tests added for each preset
+      builder.

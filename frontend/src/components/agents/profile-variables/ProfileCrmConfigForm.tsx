@@ -1,21 +1,23 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 import CheckboxField from '@/components/shared/CheckboxField';
 import CustomButton from '@/components/shared/CustomButton';
 import SelectInput from '@/components/shared/SelectInput';
+import { getCrmLookupPreset } from '@/constants/crmLookupPresets';
 import {
   useAgentProfileCrmConfig,
   useUpsertAgentProfileCrmConfig,
 } from '@/lib/api/agentProfileCrmConfig';
+import { useAppIntegrations } from '@/lib/api/appIntegrations';
 import { discoverMcpTools, getMcpServersByAgent } from '@/services/mcpServerService';
 import type { SelectOption } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
-/** Best-guess the contact-lookup tool from a server's tool names. */
+/** Best-guess the contact-lookup tool from a server's tool names (generic MCPs). */
 function suggestTool(names: string[]): string | undefined {
   const match = names.find((n) =>
     /(search|find|lookup|get|query).*(contact|person|customer|lead)|(contact|person|customer|lead)/i.test(
@@ -25,18 +27,18 @@ function suggestTool(names: string[]): string | undefined {
   return match ?? names[0];
 }
 
-/** Best-guess which tool argument carries the phone number. */
+/** Best-guess which tool argument carries the phone number (generic MCPs). */
 function suggestArg(args: string[]): string | undefined {
   return args.find((a) => /phone|mobile|tel|number|msisdn/i.test(a)) ?? args[0];
 }
 
 /**
  * Per-agent CRM lookup settings for filling EMPTY profile variables at call
- * start. Only meaningful once the agent exists (edit mode), so the drawer
- * renders it only when `agentId` is present. The chosen server, tool, and
- * phone argument are auto-suggested from the server's discovered tools and the
- * user confirms. Save enforcement (all fields required when enabled) is done
- * server-side; the error surfaces via `handleApiError`.
+ * start (edit mode only). For the three app-integrated CRMs (HubSpot /
+ * Salesforce / Zoho) the lookup tool + phone request auto-fill from a preset
+ * (see `@/constants/crmLookupPresets`); any other MCP keeps the generic
+ * pick-tool + phone-argument flow. Server-side validation is the source of
+ * truth; errors surface via `handleApiError`.
  */
 export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
   const { data: config, isLoading: configLoading } = useAgentProfileCrmConfig(agentId);
@@ -47,6 +49,7 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
     queryFn: () => getMcpServersByAgent(agentId),
     staleTime: 60_000,
   });
+  const { data: integrations = [] } = useAppIntegrations({ page_size: 200 });
 
   const [enabled, setEnabled] = useState(false);
   const [serverId, setServerId] = useState('');
@@ -64,6 +67,17 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
     setSeeded(true);
   }, [seeded, configLoading, config]);
 
+  // Which app-integrated CRM (if any) the selected server maps to → its preset.
+  const slugById = useMemo(
+    () => Object.fromEntries(integrations.map((i) => [i.id, i.slug])),
+    [integrations],
+  );
+  const selectedServer = servers.find((s) => s.id === serverId);
+  const selectedSlug = selectedServer?.app_integration_id
+    ? slugById[selectedServer.app_integration_id]
+    : undefined;
+  const preset = getCrmLookupPreset(selectedSlug);
+
   const {
     data: toolsResp,
     isLoading: toolsLoading,
@@ -79,24 +93,38 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
   const selectedTool = tools.find((t) => t.name === toolName);
 
   const serverOptions: SelectOption[] = servers.map((s) => ({ value: s.id, label: s.name }));
-  const toolOptions: SelectOption[] = tools.map((t) => ({ value: t.name, label: t.name }));
+  // Ensure a preset's tool is selectable even if discovery hasn't surfaced that
+  // exact name (the tool stays editable per the design).
+  const toolOptions: SelectOption[] = useMemo(() => {
+    const opts = tools.map((t) => ({ value: t.name, label: t.name }));
+    if (preset && !opts.some((o) => o.value === preset.toolName)) {
+      return [{ value: preset.toolName, label: preset.toolName }, ...opts];
+    }
+    return opts;
+  }, [tools, preset]);
   const argOptions: SelectOption[] = selectedTool
     ? Object.keys(selectedTool.parameters ?? {}).map((k) => ({ value: k, label: k }))
     : [];
 
-  // Auto-suggest the lookup tool once the server's tools arrive.
+  // Preset CRM → pre-fill the tool. Generic MCP → regex-suggest the tool.
   useEffect(() => {
-    if (!tools.length || toolName) return;
+    if (toolName) return;
+    if (preset) {
+      setToolName(preset.toolName);
+      return;
+    }
+    if (!tools.length) return;
     const s = suggestTool(tools.map((t) => t.name));
     if (s) setToolName(s);
-  }, [tools, toolName]);
+  }, [preset, tools, toolName]);
 
-  // Auto-suggest the phone argument once a tool is selected.
+  // Generic MCP only → suggest the phone argument (preset CRMs handle phone via
+  // the preset, no per-arg pick).
   useEffect(() => {
-    if (!selectedTool || phoneArg) return;
+    if (preset || !selectedTool || phoneArg) return;
     const s = suggestArg(Object.keys(selectedTool.parameters ?? {}));
     if (s) setPhoneArg(s);
-  }, [selectedTool, phoneArg]);
+  }, [preset, selectedTool, phoneArg]);
 
   const onServerChange = (v: string) => {
     setServerId(v);
@@ -108,11 +136,18 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
     setPhoneArg('');
   };
   const save = async () => {
+    // For a preset CRM the phone is placed by the backend preset; store the
+    // single-arg name for Zoho, nothing for filter/SOQL CRMs.
+    const savedPhoneArg = preset
+      ? preset.phonePlacement === 'single-arg'
+        ? (preset.phoneArg ?? null)
+        : null
+      : phoneArg || null;
     try {
       await upsert.mutateAsync({
         mcp_server_id: serverId || null,
         lookup_tool_name: toolName || null,
-        phone_argument: phoneArg || null,
+        phone_argument: savedPhoneArg,
         is_enabled: enabled,
       });
       showToast.success('CRM lookup settings saved.');
@@ -120,6 +155,12 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
       handleApiError(err);
     }
   };
+
+  const presetPhoneNote = preset
+    ? preset.phonePlacement === 'single-arg'
+      ? `Phone is sent automatically as the "${preset.phoneArg}" argument for this CRM.`
+      : 'Phone is sent automatically in this CRM’s required request shape.'
+    : null;
 
   return (
     <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
@@ -167,21 +208,27 @@ export default function ProfileCrmConfigForm({ agentId }: { agentId: string }) {
             disabled={!serverId || upsert.isPending}
             error={toolsError}
             helperText={
-              toolsError
-                ? "Couldn't load this server's tools — check its connection."
-                : 'Auto-suggested from the server; change if needed.'
+              preset
+                ? 'Auto-selected for this CRM; change only if your server differs.'
+                : toolsError
+                  ? "Couldn't load this server's tools — check its connection."
+                  : 'Auto-suggested from the server; change if needed.'
             }
           />
-          <SelectInput
-            name="crm_phone_arg"
-            label="Phone argument"
-            placeholder="Which tool input receives the phone"
-            options={argOptions}
-            value={phoneArg}
-            onValueChange={setPhoneArg}
-            disabled={!selectedTool || upsert.isPending}
-            helperText="The caller's phone number is passed to the tool as this argument."
-          />
+          {preset ? (
+            <p className="text-xs text-muted-foreground">{presetPhoneNote}</p>
+          ) : (
+            <SelectInput
+              name="crm_phone_arg"
+              label="Phone argument"
+              placeholder="Which tool input receives the phone"
+              options={argOptions}
+              value={phoneArg}
+              onValueChange={setPhoneArg}
+              disabled={!selectedTool || upsert.isPending}
+              helperText="The caller's phone number is passed to the tool as this argument."
+            />
+          )}
         </>
       )}
 
