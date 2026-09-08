@@ -19,42 +19,6 @@ from core.services.call_termination.default import LogOnlyTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
 
-# ---- fakes for aiohttp (Telnyx) -------------------------------------------------
-
-class _FakeResp:
-    def __init__(self, status, json_data=None, text_data=""):
-        self.status = status
-        self._json = json_data if json_data is not None else {}
-        self._text = text_data
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    async def json(self):
-        return self._json
-
-    async def text(self):
-        return self._text
-
-
-class _FakeSession:
-    def __init__(self, resp):
-        self._resp = resp
-        self.posted = []
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *a):
-        return False
-
-    def post(self, url, headers=None):
-        self.posted.append((url, headers))
-        return self._resp
-
 
 class _FakeTerminator(CallTerminator):
     def __init__(self, result=True, raises=None):
@@ -109,48 +73,22 @@ class TestTwilioTerminator:
 # ---- Telnyx terminator ----------------------------------------------------------
 
 class TestTelnyxTerminator:
-    def _patch_key(self, monkeypatch, key="key-123"):
-        monkeypatch.setattr(telnyx_mod, "get_telnyx_api_key", lambda org_id=None: key)
-
-    def test_hangup_200_uses_call_control_endpoint(self, monkeypatch):
-        self._patch_key(monkeypatch)
-        session = _FakeSession(_FakeResp(200))
-        monkeypatch.setattr(telnyx_mod.aiohttp, "ClientSession", lambda: session)
-        ok = asyncio.run(TelnyxTerminator().hangup({"call_control_id": "cc-1"}, "org-1"))
+    def test_delegates_to_texml_engine_with_call_id(self, monkeypatch):
+        # Telnyx over TeXML: hang up via the TeXML engine using the TeXML CallSid,
+        # NOT the Call-Control API (which 422s on a TeXML SID).
+        engine = MagicMock()
+        engine.end_call.return_value = True
+        monkeypatch.setattr(telnyx_mod, "get_call_engine", lambda provider, org_id=None: engine)
+        ok = asyncio.run(TelnyxTerminator().hangup({"call_id": "v3:abc"}, "org-1"))
         assert ok is True
-        url, headers = session.posted[0]
-        assert url == "https://api.telnyx.com/v2/calls/cc-1/actions/hangup"
-        assert headers["Authorization"] == "Bearer key-123"
+        engine.end_call.assert_called_once_with("v3:abc")
 
-    def test_already_ended_422_is_success(self, monkeypatch):
-        self._patch_key(monkeypatch)
-        resp = _FakeResp(422, json_data={"errors": [{"code": "90018"}]})
-        monkeypatch.setattr(telnyx_mod.aiohttp, "ClientSession", lambda: _FakeSession(resp))
-        ok = asyncio.run(TelnyxTerminator().hangup({"call_control_id": "cc-1"}, "org-1"))
-        assert ok is True
-
-    def test_other_error_is_failure(self, monkeypatch):
-        self._patch_key(monkeypatch)
-        resp = _FakeResp(500, text_data="boom")
-        monkeypatch.setattr(telnyx_mod.aiohttp, "ClientSession", lambda: _FakeSession(resp))
-        ok = asyncio.run(TelnyxTerminator().hangup({"call_control_id": "cc-1"}, "org-1"))
-        assert ok is False
-
-    def test_skips_when_no_call_control_id(self, monkeypatch):
-        self._patch_key(monkeypatch)
-        called = {"n": 0}
-        monkeypatch.setattr(telnyx_mod.aiohttp, "ClientSession", lambda: called.__setitem__("n", 1))
+    def test_skips_when_no_call_id(self, monkeypatch):
+        engine = MagicMock()
+        monkeypatch.setattr(telnyx_mod, "get_call_engine", lambda provider, org_id=None: engine)
         ok = asyncio.run(TelnyxTerminator().hangup({}, "org-1"))
         assert ok is False
-        assert called["n"] == 0
-
-    def test_skips_when_no_api_key(self, monkeypatch):
-        self._patch_key(monkeypatch, key="")
-        called = {"n": 0}
-        monkeypatch.setattr(telnyx_mod.aiohttp, "ClientSession", lambda: called.__setitem__("n", 1))
-        ok = asyncio.run(TelnyxTerminator().hangup({"call_control_id": "cc-1"}, "org-1"))
-        assert ok is False
-        assert called["n"] == 0
+        engine.end_call.assert_not_called()
 
 
 # ---- terminate_call orchestration ----------------------------------------------

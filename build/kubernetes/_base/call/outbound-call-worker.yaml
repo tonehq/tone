@@ -68,6 +68,13 @@ spec:
         - name: ${RESOURCE_PREFIX}outbound-call-worker
           image: ${IMAGE_REPO}:${IMAGE_TAG}
           imagePullPolicy: Always
+          # Lets `memray attach <pid>` hook a live call subprocess for in-call,
+          # code-level memory debugging (memray attach needs ptrace + gdb in the
+          # image). Rendered for the staging-family envs only; prod deploys from a
+          # separate path (kubernetes/main) and is unaffected.
+          securityContext:
+            capabilities:
+              add: ["SYS_PTRACE"]
           command:
             - uvicorn
             - "main:app"

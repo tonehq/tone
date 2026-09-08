@@ -13,7 +13,7 @@ from loguru import logger
 from twilio.base.exceptions import TwilioRestException
 from twilio.rest import Client
 
-from core.services.call_engines.base import CallEngine, CallInfo
+from core.services.call_engines.base import TERMINAL_CALL_STATUSES, CallEngine, CallInfo
 from core.services.transport.telephony_credentials import get_twilio_credentials
 
 # Twilio's REST default is 60s; we bound ringing tighter so no-answer resolves sooner.
@@ -22,13 +22,6 @@ DEFAULT_RING_TIMEOUT = 45
 # Twilio only lets StatusCallbackEvent subscribe to these four; terminal outcomes
 # (busy/no-answer/failed/canceled) arrive as CallStatus values inside "completed".
 STATUS_CALLBACK_EVENTS = ["initiated", "ringing", "answered", "completed"]
-
-# A call in any of these states is already over — hanging it up again is a no-op
-# success, not a failure (e.g. the media serializer already dropped it). These are
-# Twilio's RAW CallStatus strings (note "no-answer" with a hyphen); do NOT merge
-# with outbound_call_service._TERMINAL, which holds the repo's INTERNAL statuses
-# ("no_answer" with an underscore) — different value spaces.
-_TERMINAL_CALL_STATUSES = {"completed", "canceled", "failed", "busy", "no-answer"}
 
 
 class TwilioCallEngine(CallEngine):
@@ -130,7 +123,7 @@ class TwilioCallEngine(CallEngine):
             except Exception:
                 logger.exception("[outbound] end_call failed sid={}", call_id)
                 return False
-            if status in _TERMINAL_CALL_STATUSES:
+            if status in TERMINAL_CALL_STATUSES:
                 logger.debug("[outbound] end_call: call already {} sid={}", status, call_id)
                 return True
             logger.exception("[outbound] end_call failed sid={} status={}", call_id, status)

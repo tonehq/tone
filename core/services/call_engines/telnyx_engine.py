@@ -5,7 +5,7 @@ from xml.sax.saxutils import escape as _xml_escape
 import requests
 from loguru import logger
 
-from core.services.call_engines.base import CallEngine, CallInfo
+from core.services.call_engines.base import TERMINAL_CALL_STATUSES, CallEngine, CallInfo
 from core.services.transport.telephony_credentials import get_telnyx_credentials
 
 TEXML_BASE_URL = "https://api.telnyx.com/v2/texml"
@@ -119,7 +119,18 @@ class TelnyxCallEngine(CallEngine):
             logger.info("[outbound] end_call hung up sid={}", call_id)
             return True
         except Exception:
-            logger.exception("[outbound] end_call failed sid={}", call_id)
+            # The call may already be in a terminal state (e.g. the caller hung
+            # up first). Treat an already-ended call as success, not a failure —
+            # reuse get_call_status to confirm before deciding.
+            try:
+                status = self.get_call_status(call_id).get("status")
+            except Exception:
+                logger.exception("[outbound] end_call failed sid={}", call_id)
+                return False
+            if status in TERMINAL_CALL_STATUSES:
+                logger.debug("[outbound] end_call: call already {} sid={}", status, call_id)
+                return True
+            logger.exception("[outbound] end_call failed sid={} status={}", call_id, status)
             return False
 
     def get_call_status(self, call_id: str) -> Dict[str, Any]:
