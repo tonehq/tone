@@ -23,6 +23,10 @@ DEFAULT_RING_TIMEOUT = 45
 # (busy/no-answer/failed/canceled) arrive as CallStatus values inside "completed".
 STATUS_CALLBACK_EVENTS = ["initiated", "ringing", "answered", "completed"]
 
+# A call in any of these states is already over — hanging it up again is a no-op
+# success, not a failure (e.g. the media serializer already dropped it).
+_TERMINAL_CALL_STATUSES = {"completed", "canceled", "failed", "busy", "no-answer"}
+
 
 class TwilioCallEngine(CallEngine):
     def __init__(self, org_id=None):
@@ -108,12 +112,25 @@ class TwilioCallEngine(CallEngine):
         return CallInfo(call_id=call.sid, session_id=str(session), status=status, provider="twilio")
 
     def end_call(self, call_id: str) -> bool:
+        client = self._get_client()
         try:
-            self._get_client().calls(call_id).update(status="completed")
+            client.calls(call_id).update(status="completed")
             logger.info("[outbound] end_call hung up sid={}", call_id)
             return True
         except TwilioRestException:
-            logger.exception("[outbound] end_call failed sid={}", call_id)
+            # The call may already be in a terminal state — e.g. the media
+            # serializer's auto_hang_up already dropped it, and this call is the
+            # backstop. That is a no-op success, not a failure. Confirm via a
+            # status fetch before deciding.
+            try:
+                status = client.calls(call_id).fetch().status
+            except Exception:
+                logger.exception("[outbound] end_call failed sid={}", call_id)
+                return False
+            if status in _TERMINAL_CALL_STATUSES:
+                logger.debug("[outbound] end_call: call already {} sid={}", status, call_id)
+                return True
+            logger.exception("[outbound] end_call failed sid={} status={}", call_id, status)
             return False
         except Exception:
             # Best-effort hangup — never raise out of end_call, but capture why.
