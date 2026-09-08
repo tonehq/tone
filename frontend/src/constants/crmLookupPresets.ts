@@ -20,10 +20,14 @@ export interface CrmLookupPreset {
 
 export type CrmPresetSlug = 'hubspot' | 'salesforce' | 'zoho_crm';
 
+// Tool names kept in sync with the backend presets
+// (core/services/agents/crm_lookup_presets/). The backend resolves the real
+// tool name against the server's discovered tools at call time, so these are
+// the pre-fill / display values.
 export const CRM_LOOKUP_PRESETS: Record<CrmPresetSlug, CrmLookupPreset> = {
-  zoho_crm: { toolName: 'Search Records', phonePlacement: 'single-arg', phoneArg: 'phone' },
+  zoho_crm: { toolName: 'search_records', phonePlacement: 'single-arg', phoneArg: 'phone' },
   hubspot: { toolName: 'hubspot-search-objects', phonePlacement: 'filter' },
-  salesforce: { toolName: 'Query', phonePlacement: 'soql' },
+  salesforce: { toolName: 'run_soql_query', phonePlacement: 'soql' },
 };
 
 export function getCrmLookupPreset(slug: string | null | undefined): CrmLookupPreset | undefined {

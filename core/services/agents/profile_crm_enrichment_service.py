@@ -68,20 +68,31 @@ class ProfileCrmEnrichmentService:
         from core.services.mcp_server_service import McpServerService
         from core.services.agents.agent_profile_variable_service import PROFILE_PREFIX
 
-        # A known CRM → its preset supplies the tool, the structured phone
-        # request, and the response wrapper key. Otherwise the generic flow:
-        # the stored tool + a plain {phone_argument: phone}.
+        # A known CRM → its preset supplies the structured phone request and the
+        # response wrapper key; the tool name is resolved against the server's
+        # real tools (below). Otherwise the generic flow: the stored tool + a
+        # plain {phone_argument: phone}.
         preset = get_crm_lookup_preset(plan.crm_slug)
-        tool_name = plan.lookup_tool_name or (preset.default_tool_name if preset else None)
         arguments = (
             preset.build_arguments("phone", caller_phone)
             if preset
             else {plan.phone_argument: caller_phone}
         )
         record_prefix = preset.record_path if preset else ""
+        tool_name = plan.lookup_tool_name  # reassigned below once the DB is open
 
         try:
             with get_db_context() as db:
+                # Preset CRM: resolve against the server's discovered tools —
+                # the stored name is tried first but validated, so a stale saved
+                # name can't bypass resolution. Generic MCP: use the stored tool
+                # as-is (the user picked it from the real discovered list).
+                if preset:
+                    tool_name = resolve_preset_tool_name(
+                        db, org_id, plan.mcp_server_id, preset, stored=plan.lookup_tool_name
+                    )
+                else:
+                    tool_name = plan.lookup_tool_name
                 record = await McpServerService(db, org_id=org_id).call_tool(
                     plan.mcp_server_id, tool_name, arguments
                 )
@@ -105,6 +116,36 @@ class ProfileCrmEnrichmentService:
             if value is not None:
                 filled[f"{PROFILE_PREFIX}{key}"] = value
         return filled
+
+
+def resolve_preset_tool_name(db, org_id, mcp_server_id, preset, stored=None) -> str:
+    """The tool name to call for a preset CRM — the server's ACTUAL tool name
+    when a candidate matches its discovered tools, else the best-guess default.
+
+    Resolving against the live tool list (instead of trusting a hardcoded name)
+    is what makes the presets robust across CRM server variants — the same tool
+    can be exposed as ``run_soql_query`` on one Salesforce server and ``query``
+    on another. A ``stored`` name (the agent's saved config value) is tried
+    FIRST but STILL validated against the discovered tools — so a stale/wrong
+    saved name (e.g. an old preset default) can't bypass resolution. Never
+    raises: on any error it falls back to the first candidate."""
+    candidates = preset.candidates()
+    # Stored value first (validated, not blindly trusted), then preset candidates.
+    ordered = tuple(c for c in ((stored,) + tuple(candidates)) if c)
+    try:
+        from core.services.mcp_server_service import McpServerService
+
+        actual = McpServerService(db, org_id=org_id).resolve_tool_name(
+            mcp_server_id, ordered
+        )
+        if actual:
+            return actual
+    except Exception:  # noqa: BLE001 — resolution is best-effort
+        logger.exception(
+            "[profile-crm] tool-name resolution failed crm={} — using default",
+            getattr(preset, "slug", None),
+        )
+    return candidates[0]
 
 
 def _first_record(record: Any) -> Any:

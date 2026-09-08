@@ -10,6 +10,7 @@ class HubSpotCrmLookupPreset(CrmLookupPreset):
 
     slug = "hubspot"
     default_tool_name = "hubspot-search-objects"
+    tool_name_candidates = ("hubspot-search-objects", "crm_search_objects", "search_objects")
     record_path = "results"
 
     def build_arguments(self, field: str, value: str) -> dict:
