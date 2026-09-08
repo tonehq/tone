@@ -481,6 +481,47 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 "[pipeline-builder] registered built-in end_call tool agent={}", agent.id
             )
 
+        # Mid-call CRM lookup tool (Layer 2) — registered ONLY when the agent has
+        # CRM enrichment enabled on a preset CRM (HubSpot/Salesforce/Zoho). Resolved
+        # with a short build-time DB read, mirroring register_mcp_tools.
+        find_customer_registered = False
+        if llm and agent:
+            from core.database.session import get_db_context
+            from core.services.agents.profile_context import resolve_crm_lookup_binding
+
+            with get_db_context() as _db:
+                _crm_binding = resolve_crm_lookup_binding(
+                    _db, getattr(agent, "organization_id", None), agent.id
+                )
+            if _crm_binding:
+                from core.services.pipeline.tools.find_customer_tool import (
+                    FIND_CUSTOMER_TOOL_NAME, create_find_customer_handler,
+                )
+
+                _mcp_server_id, _crm_slug = _crm_binding
+                try:
+                    llm.register_function(
+                        FIND_CUSTOMER_TOOL_NAME,
+                        create_find_customer_handler(
+                            org_id=getattr(agent, "organization_id", None),
+                            mcp_server_id=_mcp_server_id,
+                            crm_slug=_crm_slug,
+                            tool_call_entries=tool_call_entries,
+                            tool_request_ts=tool_request_ts,
+                            current_turn=current_turn,
+                        ),
+                    )
+                except Exception:
+                    logger.bind(agent_id=agent.id, tool_name=FIND_CUSTOMER_TOOL_NAME).exception(
+                        "[pipeline-builder] find_customer tool registration failed agent={}",
+                        agent.id,
+                    )
+                    raise
+                find_customer_registered = True
+                logger.bind(agent_id=agent.id).info(
+                    "[pipeline-builder] registered built-in find_customer tool agent={}", agent.id
+                )
+
         # Combine doc tools, custom tools, MCP tools, and built-in tools into one ToolsSchema
         all_tool_schemas = []
         if doc_tools:
@@ -491,6 +532,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
             all_tool_schemas.extend(mcp_tools_schema.standard_tools)
         if end_call_registered:
             all_tool_schemas.append(END_CALL_TOOL_SCHEMA)
+        if find_customer_registered:
+            from core.services.pipeline.tools.find_customer_tool import (
+                FIND_CUSTOMER_TOOL_SCHEMA,
+            )
+
+            all_tool_schemas.append(FIND_CUSTOMER_TOOL_SCHEMA)
 
         doc_count = len(doc_tools.standard_tools) if doc_tools else 0
         custom_count = len(custom_tools_schema.standard_tools) if custom_tools_schema else 0
@@ -557,6 +604,12 @@ class PipecatPipelineBuilder(PipelineBuilder):
                 "[pipeline-builder] end_call instructions injected messages {}->{} chars_delta={}",
                 _msgs_before, len(messages), _chars_after - _chars_before,
             )
+
+        if find_customer_registered:
+            from core.services.pipeline.tools.find_customer_tool import (
+                prepend_find_customer_instructions,
+            )
+            messages = prepend_find_customer_instructions(messages)
 
         if is_s2s:
             # S2S pipeline: audio goes through the LLM directly (no separate STT/TTS).

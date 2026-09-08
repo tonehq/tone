@@ -15,6 +15,10 @@ enrichment loop never changes (strategy pattern — mirrors
 from abc import ABC, abstractmethod
 from typing import ClassVar
 
+# Lookup fields a preset can search by. Layer 1 (call-start pre-fill) always uses
+# "phone"; Layer 2 (mid-call find_customer tool) also uses "email" / "name".
+LOOKUP_FIELDS = ("phone", "email", "name")
+
 
 class CrmLookupPreset(ABC):
     #: ``app_integrations.slug`` this preset applies to (e.g. ``"hubspot"``).
@@ -27,6 +31,10 @@ class CrmLookupPreset(ABC):
     record_path: ClassVar[str] = ""
 
     @abstractmethod
-    def build_arguments(self, phone: str) -> dict:
-        """Shape the caller's phone number into this tool's argument dict."""
+    def build_arguments(self, field: str, value: str) -> dict:
+        """Shape a lookup ``value`` into this tool's argument dict.
+
+        ``field`` is one of :data:`LOOKUP_FIELDS` (``phone`` / ``email`` /
+        ``name``). Implementations raise ``ValueError`` for an unsupported field.
+        """
         ...
