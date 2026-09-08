@@ -64,19 +64,15 @@ class TwilioTransport(TelephonyProvider):
     transport_type = "twilio"
 
     def create_serializer(self, call_data: dict):
-        # Reuse credentials cached by AgentRunnerService if available
-        twilio_creds = call_data.get("_twilio_creds") or get_twilio_credentials(org_id=call_data.get("_org_id"))
+        # The provider-agnostic terminator (core/services/call_termination) owns
+        # the REST hangup for Twilio using the correct per-call org credentials.
+        # Disable the serializer's built-in auto_hang_up so it doesn't ALSO fire
+        # an EndFrame hangup — that path looks up creds with no org (org_id=None)
+        # and 401s on every call. With auto_hang_up off the serializer needs no
+        # credentials, so we don't fetch them here (single source of truth).
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],
             call_sid=call_data["call_id"],
-            account_sid=twilio_creds.get("account_sid", ""),
-            auth_token=twilio_creds.get("auth_token", ""),
-            # The provider-agnostic terminator (core/services/call_termination)
-            # owns the REST hangup for Twilio using the correct per-call org
-            # credentials. Disable the serializer's built-in auto_hang_up so it
-            # doesn't ALSO fire an EndFrame hangup — that path looks up creds
-            # with no org (org_id=None) and 401s on every call. Single source of
-            # truth, no duplicate/failing API call.
             params=TwilioFrameSerializer.InputParams(auto_hang_up=False),
         )
 

@@ -193,7 +193,8 @@ END_CALL_TOOL_SCHEMA = FunctionSchema(
     name=END_CALL_TOOL_NAME,
     description=(
         "End the current voice call. This tool is governed by a MANDATORY "
-        "two-step confirmation. NEVER call it in one turn.\n"
+        "two-step confirmation. NEVER call it in one turn UNLESS the user "
+        "directly asks to end (see the Step 1 exception below).\n"
         "Step 1: When the user only HINTS they want to end (says goodbye, "
         "'I'm done', 'that's all') OR when the task feels complete, do NOT "
         "call this tool. Instead, ask 'Can I end the call now?' (or similar) "
