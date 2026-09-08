@@ -661,6 +661,56 @@ def run_agent_llm_eval(
     )
 
 
+@app.task(name="generate_agent_llm_eval_version", queue="agent_eval", pass_context=True)
+@_with_job_logging
+def generate_agent_llm_eval_version(
+    version_id: str,
+    org_id: str,
+    count: int = 10,
+    parent_id: Optional[str] = None,
+) -> None:
+    """Generate agent-LLM eval scenarios into a version asynchronously.
+
+    Runs on the SAME ``agent_eval`` queue as ``run_agent_llm_eval`` (workers
+    already consume it — no deploy change). The route created the version row in
+    ``status='generating'`` before defer; this worker produces the scenarios and
+    flips it to ``draft`` — or ``failed`` with a user-safe reason.
+
+    ``run_generation`` persists a generation failure itself (rollback → mark
+    ``failed``, keeping any prior drafts) and does NOT re-raise, so a bad LLM
+    response never crash-loops the job. Only an unexpected failure AROUND it
+    (DB connect, etc.) escapes here and is re-raised so Procrastinate retries.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.agent_llm.version_service import (
+        AgentLlmEvalVersionService,
+    )
+
+    logger.info(
+        "[agent-llm-eval] worker picked generate job version_id={} count={} parent_id={}",
+        version_id, count, parent_id or "-",
+    )
+    try:
+        with get_db_context() as db:
+            svc = AgentLlmEvalVersionService(db, org_id=_UUID(org_id))
+            svc.run_generation(
+                _UUID(version_id),
+                count=count,
+                parent_id=_UUID(parent_id) if parent_id else None,
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[agent-llm-eval] generate task failure version_id={} (re-raising for retry)",
+            version_id,
+        )
+        raise
+    logger.info(
+        "[agent-llm-eval] worker generate task done version_id={}", version_id
+    )
+
+
 async def enqueue_agent_llm_eval(
     agent_id,
     *,
@@ -720,6 +770,27 @@ def enqueue_agent_llm_eval_sync(
         version_id=str(version_id) if version_id else None,
         judge_model=judge_model,
         run_id=str(run_id) if run_id else None,
+    )
+
+
+def enqueue_generate_agent_llm_eval_version_sync(
+    version_id,
+    org_id,
+    *,
+    count: int = 10,
+    parent_id=None,
+) -> int:
+    """Defer a background agent-LLM scenario generation for the ``def`` route
+    (which runs in the FastAPI threadpool and cannot ``await``). Same one-shot
+    ``SyncPsycopgConnector`` ephemeral-app pattern as
+    :func:`enqueue_agent_llm_eval_sync`."""
+    return _defer_via_ephemeral_app(
+        task_name="generate_agent_llm_eval_version",
+        queue="agent_eval",
+        version_id=str(version_id),
+        org_id=str(org_id),
+        count=count,
+        parent_id=str(parent_id) if parent_id else None,
     )
 
 

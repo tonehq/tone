@@ -112,7 +112,8 @@ export default function AgentEvalResultsTab({ agentId }: { agentId: string }) {
         </div>
       ) : runs.length === 0 ? (
         <div className={HINT_CLASS}>
-          No completed eval runs yet. Run an eval from the Manage Evals tab to see scored results here.
+          No completed eval runs yet. Run an eval from the Manage Evals tab to see scored results
+          here.
         </div>
       ) : detailQuery.isLoading ? (
         <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground">
@@ -121,9 +122,7 @@ export default function AgentEvalResultsTab({ agentId }: { agentId: string }) {
         </div>
       ) : (
         <>
-          {hasTotals && (
-            <AgentEvalSummaryStrip summary={totals as AgentLlmEvalRunSummaryTotals} />
-          )}
+          {hasTotals && <AgentEvalSummaryStrip summary={totals as AgentLlmEvalRunSummaryTotals} />}
           <AgentEvalResultsTable scenarios={scenarios} />
         </>
       )}

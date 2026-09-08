@@ -7,6 +7,7 @@ import { CustomButton, CustomTooltip, SelectInput } from '@/components/shared';
 import type { AgentLlmEvalScenarioVersion } from '@/types/agentLlmEval';
 
 import { versionLabel } from './constants';
+import VersionStatusChip from './VersionStatusChip';
 
 interface AgentEvalVersionBarProps {
   versions: AgentLlmEvalScenarioVersion[];
@@ -40,7 +41,10 @@ export default function AgentEvalVersionBar({
   const total = selectedVersion?.counts.total ?? 0;
   const pending = selectedVersion?.counts.pending ?? 0;
   const busy = approvingAll || rejectingAll;
-  const bulkDisabled = !selectedVersion || total === 0 || busy;
+  // While a version is generating its scenarios are in flux — block bulk
+  // approve/reject on it (the backend also refuses a concurrent regenerate).
+  const isGenerating = selectedVersion?.status === 'generating';
+  const bulkDisabled = !selectedVersion || total === 0 || busy || isGenerating;
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/95 px-4 py-3">
@@ -61,6 +65,10 @@ export default function AgentEvalVersionBar({
             <span className="text-sm text-muted-foreground">No versions yet</span>
           )}
         </div>
+        {selectedVersion && <VersionStatusChip status={selectedVersion.status} />}
+        {selectedVersion?.status === 'failed' && selectedVersion.generation_error && (
+          <span className="text-xs text-destructive">{selectedVersion.generation_error}</span>
+        )}
       </div>
 
       <div className="flex items-center gap-2">

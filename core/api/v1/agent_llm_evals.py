@@ -30,12 +30,16 @@ from core.services.evals.agent_llm.scenario_service import (
     ScenarioPatch,
 )
 from core.services.evals.agent_llm.service import AgentLlmEvalService
-from core.services.evals.agent_llm.version_service import AgentLlmEvalVersionService
+from core.services.evals.agent_llm.version_service import (
+    GENERATION_FAILED_MESSAGE,
+    AgentLlmEvalVersionService,
+)
 from core.services.evals.errors import (
     AgentLlmEvalConfigError,
     AgentLlmEvalFolderNameConflictError,
     AgentLlmEvalFolderNotDeletableError,
     AgentLlmEvalFolderNotFoundError,
+    AgentLlmEvalVersionGeneratingError,
     AgentLlmEvalVersionHasRunsError,
     AgentLlmEvalVersionNotFoundError,
     AgentLlmScenarioKeyConflictError,
@@ -43,7 +47,10 @@ from core.services.evals.errors import (
     EvalConfigurationError,
     EvalGenerationError,
 )
-from core.services.ingestion_queue import enqueue_agent_llm_eval_sync
+from core.services.ingestion_queue import (
+    enqueue_agent_llm_eval_sync,
+    enqueue_generate_agent_llm_eval_version_sync,
+)
 from shared.config import settings
 
 router = APIRouter()
@@ -335,6 +342,11 @@ def _handle_scenario_error(exc: Exception) -> HTTPException:
         return HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "VERSION_HAS_RUNS", "message": str(exc)},
+        )
+    if isinstance(exc, AgentLlmEvalVersionGeneratingError):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "VERSION_GENERATING", "message": str(exc)},
         )
     if isinstance(exc, AgentLlmEvalConfigError):
         return HTTPException(
@@ -669,7 +681,7 @@ def list_llm_eval_versions(
 
 @router.post(
     "/agents/{agent_id}/llm-evals/versions/generate",
-    status_code=status.HTTP_201_CREATED,
+    status_code=status.HTTP_202_ACCEPTED,
 )
 def generate_llm_eval_version(
     agent_id: UUID,
@@ -677,9 +689,15 @@ def generate_llm_eval_version(
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
-    """Synchronously generate scenarios into a NEW or OVERWRITTEN version.
-    Scenarios are saved as ``pending`` for approve/reject. Overwrite of an
-    already-run version is refused (409)."""
+    """Enqueue a background scenario generation into a NEW or OVERWRITTEN
+    version and return immediately (202).
+
+    The version row is created SYNCHRONOUSLY in ``status='generating'`` so the
+    FE shows a live "Generating…" indicator the moment this returns; the
+    ``agent_eval`` worker produces the scenarios (saved ``pending`` for
+    approve/reject) and flips the version to ``draft`` — or ``failed`` with a
+    user-safe reason. Overwrite of an already-run version is refused (409), as
+    is regenerating a version whose generation is still in flight (409)."""
     org_id = _resolve_org_id(claims)
     _ensure_agent_in_org(db, org_id, agent_id)
     if body.mode == "overwrite" and body.version_id is None:
@@ -691,27 +709,56 @@ def generate_llm_eval_version(
             },
         )
     svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    # 1. Reserve the version row SYNCHRONOUSLY (status='generating') so the FE's
+    # versions poll shows the indicator the moment the invalidator fires.
     try:
-        result = svc.generate(
+        version = svc.begin_generation(
             agent_id,
             mode=body.mode,
             version_id=body.version_id,
-            parent_id=body.parent_id,
             generation_prompt=body.generation_prompt,
-            count=body.count,
         )
     except (
         AgentLlmEvalVersionNotFoundError,
         AgentLlmEvalVersionHasRunsError,
+        AgentLlmEvalVersionGeneratingError,
         AgentLlmEvalConfigError,
-        AgentLlmScenarioKeyConflictError,
         EvalGenerationError,
         EvalConfigurationError,
     ) as e:
         raise _handle_scenario_error(e) from e
+
+    # 2. Enqueue the Procrastinate job. On enqueue failure, flip the reserved
+    # row to 'failed' so the UI shows the failure instead of a version stuck in
+    # 'generating' forever.
+    try:
+        job_id = enqueue_generate_agent_llm_eval_version_sync(
+            version.id,
+            org_id,
+            count=body.count,
+            parent_id=body.parent_id,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception(
+            "[agent-llm-eval] generate enqueue failed agent={} org={} version_id={}",
+            agent_id, org_id, version.id,
+        )
+        try:
+            svc.fail_generation(version.id, GENERATION_FAILED_MESSAGE)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "[agent-llm-eval] generate fail-flip cleanup failed version_id={}",
+                version.id,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "ENQUEUE_FAILED", "message": str(e)},
+        ) from e
+
     return {
-        "version": result.version.to_dict(),
-        "scenarios": [s.to_dict() for s in result.scenarios],
+        "job_id": job_id,
+        "version_id": str(version.id),
+        "status": "generating",
     }
 
 
