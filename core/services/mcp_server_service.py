@@ -672,6 +672,35 @@ class McpServerService(BaseService):
             )
         return mcp_server
 
+    def resolve_tool_name(self, mcp_server_id, candidates) -> Optional[str]:
+        """Match a preset's tool-name ``candidates`` against the server's
+        DISCOVERED tools (persisted in ``tools`` by ``_sync_mcp_tools``) and
+        return the server's ACTUAL tool name.
+
+        Matching is normalized (case- and separator-insensitive) so a candidate
+        like ``run_soql_query`` matches a discovered ``Run SOQL Query`` /
+        ``runSoqlQuery``. Candidates are tried in priority order. Returns
+        ``None`` when the server has no discovered tools yet or none match — the
+        caller then falls back to the first candidate. This is what stops a
+        wrong hardcoded guess from hard-failing every CRM."""
+
+        def _norm(s: str) -> str:
+            return "".join(ch for ch in (s or "").lower() if ch.isalnum())
+
+        rows = (
+            self.query(Tool)
+            .filter(Tool.mcp_server_id == mcp_server_id, Tool.tool_type == "mcp")
+            .all()
+        )
+        if not rows:
+            return None
+        by_norm = {_norm(r.name): r.name for r in rows if r.name}
+        for cand in candidates:
+            actual = by_norm.get(_norm(cand))
+            if actual:
+                return actual
+        return None
+
     def get_integration_slug(self, mcp_server_id) -> Optional[str]:
         """The ``app_integrations.slug`` this MCP server maps to (e.g.
         ``hubspot`` / ``salesforce`` / ``zoho_crm``), or ``None`` for a custom

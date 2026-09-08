@@ -121,12 +121,20 @@ def create_find_customer_handler(
                 result_text = "Could not run the lookup — need a phone, email, or name."
             else:
                 from core.database.session import get_db_context
+                from core.services.agents.profile_crm_enrichment_service import (
+                    resolve_preset_tool_name,
+                )
                 from core.services.mcp_server_service import McpServerService
 
                 lookup_args = preset.build_arguments(field, value)
                 with get_db_context() as db:
+                    # Resolve the real tool name against the server's discovered
+                    # tools (falls back to the preset's best guess).
+                    tool_name = resolve_preset_tool_name(
+                        db, org_id, mcp_server_id, preset
+                    )
                     raw = await McpServerService(db, org_id=org_id).call_tool(
-                        mcp_server_id, preset.default_tool_name, lookup_args
+                        mcp_server_id, tool_name, lookup_args
                     )
                 record = extract_record(raw, preset.record_path)
                 if record:

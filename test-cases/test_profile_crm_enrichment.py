@@ -27,6 +27,7 @@ from core.services.agents.profile_crm_enrichment_service import (
     _first_record,
     _resolve_path,
     extract_record,
+    resolve_preset_tool_name,
 )
 from core.services.mcp_server_service import parse_tool_result
 
@@ -260,7 +261,7 @@ class TestLoadProfileCrmPlan:
 class TestCrmLookupPresets:
     def test_zoho_fields(self):
         p = get_crm_lookup_preset("zoho_crm")
-        assert p.default_tool_name == "Search Records"
+        assert p.default_tool_name == "search_records"
         assert p.record_path == "data"
         assert p.build_arguments("phone", "+1555") == {"phone": "+1555", "module": "Contacts"}
         assert p.build_arguments("email", "a@x.com") == {"email": "a@x.com", "module": "Contacts"}
@@ -289,7 +290,7 @@ class TestCrmLookupPresets:
 
     def test_salesforce_fields_and_soql_escaping(self):
         p = get_crm_lookup_preset("salesforce")
-        assert p.default_tool_name == "Query"
+        assert p.default_tool_name == "run_soql_query"
         assert p.record_path == "records"
         phone_soql = p.build_arguments("phone", "+1 (443) 443-9905")["query"]
         assert "FROM Contact" in phone_soql
@@ -351,6 +352,66 @@ class TestResolveCrmLookupBinding:
     def test_no_config_returns_none(self, monkeypatch):
         _patch_binding(monkeypatch, None, "hubspot")
         assert resolve_crm_lookup_binding(None, "org", "agent") is None
+
+
+class TestResolvePresetToolName:
+    """The self-heal: the real tool name is discovered, not blindly hardcoded."""
+
+    def _patch_resolver(self, monkeypatch, returns=None, raises=False, echo_first=False):
+        class _FakeMcp:
+            def __init__(self, db, org_id=None, **kwargs):
+                pass
+
+            def resolve_tool_name(self, mcp_server_id, candidates):
+                if raises:
+                    raise RuntimeError("db down")
+                if echo_first:
+                    # Simulate "every candidate is a real discovered tool" so we
+                    # can assert candidate ORDER (stored tried first).
+                    return candidates[0] if candidates else None
+                return returns
+
+        monkeypatch.setattr(
+            "core.services.mcp_server_service.McpServerService", _FakeMcp
+        )
+
+    def test_uses_discovered_actual_name(self, monkeypatch):
+        # server exposes the SOQL tool under a different-but-matching name
+        self._patch_resolver(monkeypatch, returns="runSoqlQuery")
+        preset = get_crm_lookup_preset("salesforce")
+        assert resolve_preset_tool_name(None, "org", "srv", preset) == "runSoqlQuery"
+
+    def test_no_match_falls_back_to_default(self, monkeypatch):
+        self._patch_resolver(monkeypatch, returns=None)
+        preset = get_crm_lookup_preset("salesforce")
+        assert resolve_preset_tool_name(None, "org", "srv", preset) == "run_soql_query"
+
+    def test_error_falls_back_to_default(self, monkeypatch):
+        self._patch_resolver(monkeypatch, raises=True)
+        preset = get_crm_lookup_preset("hubspot")
+        assert (
+            resolve_preset_tool_name(None, "org", "srv", preset)
+            == "hubspot-search-objects"
+        )
+
+    def test_stale_stored_name_does_not_bypass_resolution(self, monkeypatch):
+        # The regression: a saved "Query" is NOT a real tool → must NOT be used;
+        # resolution falls back to the corrected default, not the stale value.
+        self._patch_resolver(monkeypatch, returns=None)
+        preset = get_crm_lookup_preset("salesforce")
+        assert (
+            resolve_preset_tool_name(None, "org", "srv", preset, stored="Query")
+            == "run_soql_query"
+        )
+
+    def test_valid_stored_name_wins(self, monkeypatch):
+        # A stored name that IS a real discovered tool is tried first and used.
+        self._patch_resolver(monkeypatch, echo_first=True)
+        preset = get_crm_lookup_preset("salesforce")
+        assert (
+            resolve_preset_tool_name(None, "org", "srv", preset, stored="orgs_custom_query")
+            == "orgs_custom_query"
+        )
 
     def test_unknown_and_none_slug(self):
         assert get_crm_lookup_preset("mystery") is None
@@ -425,7 +486,8 @@ class TestEnrichWithPreset:
                 pass
 
             async def call_tool(self, mcp_server_id, tool_name, arguments):
-                assert tool_name == "Query"
+                # preset default (no discovered tools in this fake → fallback)
+                assert tool_name == "run_soql_query"
                 assert "SELECT" in arguments["query"]
                 return {"records": [{"FirstName": "Bob"}]}
 
