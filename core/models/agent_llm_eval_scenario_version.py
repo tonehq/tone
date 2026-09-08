@@ -13,9 +13,10 @@ class AgentLlmEvalScenarioVersion(OrgScopedModel):
     ``node_type='scenario'``) point at a version via ``version_id``; version
     ``version_number`` is numbered per agent (1, 2, 3 …).
 
-    ``status`` lifecycle: ``draft`` (scenarios generated, saved as ``pending``
-    and under review) → ``finalized`` (reviewed / approved). Agent-LLM
-    generation is synchronous, so there is no ``generating`` poll gap.
+    ``status`` lifecycle: ``generating`` (background job producing scenarios)
+    → ``draft`` (scenarios generated, saved as ``pending`` and under review)
+    → ``finalized`` (reviewed / approved). A failed background generation lands
+    on ``failed`` with a user-safe ``generation_error`` so the FE can surface it.
 
     Runs (``agent_llm_eval_runs``) are tied to a version and score only its
     ``approval_status='approved'`` scenarios; deleting a version nulls the
@@ -42,12 +43,14 @@ class AgentLlmEvalScenarioVersion(OrgScopedModel):
     version_number = Column(Integer, nullable=False)
     # 'generated' (LLM) | 'manual' | 'imported'
     source = Column(String(16), nullable=False, default="generated")
-    # 'draft' (under review) | 'finalized' (approved)
+    # 'generating' (bg job) | 'draft' (under review) | 'finalized' (approved) | 'failed'
     status = Column(String(16), nullable=False, default="draft")
     # The user's custom generation prompt for this version (nullable).
     generation_prompt = Column(Text, nullable=True)
     generated_by_model = Column(String(120), nullable=True)
     generation_prompt_hash = Column(String(64), nullable=True)
+    # User-safe reason shown when a background generation fails (status='failed').
+    generation_error = Column(Text, nullable=True)
 
     scenarios = relationship(
         "AgentLlmEvalScenario",
@@ -66,6 +69,7 @@ class AgentLlmEvalScenarioVersion(OrgScopedModel):
             "generation_prompt": self.generation_prompt,
             "generated_by_model": self.generated_by_model,
             "generation_prompt_hash": self.generation_prompt_hash,
+            "generation_error": self.generation_error,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

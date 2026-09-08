@@ -33,10 +33,19 @@ from core.services.evals.agent_llm.folder_service import assert_agent_in_org
 from core.services.evals.agent_llm.scenario_service import AgentLlmScenarioService
 from core.services.evals.errors import (
     AgentLlmEvalConfigError,
+    AgentLlmEvalVersionGeneratingError,
     AgentLlmEvalVersionHasRunsError,
     AgentLlmEvalVersionNotFoundError,
     AgentLlmScenarioNotFoundError,
     EvalGenerationError,
+)
+
+# User-safe reason surfaced on a version when its background generation doesn't
+# complete — never the raw exception (which may leak provider/model internals).
+# One voice for both failure points: the worker (generation raised) and the
+# route (enqueue raised), so the UI reads the same message either way.
+GENERATION_FAILED_MESSAGE = (
+    "We couldn't generate scenarios this time. Please try again in a moment."
 )
 
 
@@ -69,56 +78,181 @@ class AgentLlmEvalVersionService(BaseService):
         generation_prompt: Optional[str] = None,
         count: int = 10,
     ) -> GeneratedVersion:
-        """Generate scenarios into a VERSION (synchronous).
+        """Generate scenarios into a VERSION (synchronous — CLI / tests).
 
-        ``mode='new'`` creates the next version for the agent; ``mode='overwrite'``
-        reuses ``version_id`` (refused once the version has been run). Scenarios
-        are saved as ``approval_status='pending'`` under a ``draft`` version for
-        review. ``generation_prompt`` is the user's custom prompt — stored on
-        the version and fed to the LLM generator.
+        Runs both phases back-to-back so the SAME logic backs the background
+        path: :meth:`begin_generation` creates/reserves the ``generating``
+        version, then :meth:`run_generation` produces the scenarios and flips it
+        to ``draft`` (or ``failed``). ``raise_on_error=True`` here so a sync
+        caller still sees a generation failure (the worker swallows + persists
+        ``failed`` instead). The API route splits the two phases across a
+        Procrastinate boundary rather than calling this.
+        """
+        version = self.begin_generation(
+            agent_id,
+            mode=mode,
+            version_id=version_id,
+            generation_prompt=generation_prompt,
+        )
+        self.run_generation(
+            version.id, count=count, parent_id=parent_id, raise_on_error=True
+        )
+        self.db.refresh(version)
+        scenarios = (
+            self.query(AgentLlmEvalScenario)
+            .filter(AgentLlmEvalScenario.agent_id == agent_id)
+            .filter(AgentLlmEvalScenario.version_id == version.id)
+            .filter(AgentLlmEvalScenario.node_type == "scenario")
+            .order_by(AgentLlmEvalScenario.scenario_ord.asc())
+            .all()
+        )
+        return GeneratedVersion(version=version, scenarios=list(scenarios))
+
+    def begin_generation(
+        self,
+        agent_id: UUID,
+        *,
+        mode: str = "new",
+        version_id: Optional[UUID] = None,
+        generation_prompt: Optional[str] = None,
+    ) -> AgentLlmEvalScenarioVersion:
+        """Phase 1 (synchronous, pre-enqueue): validate + create/reserve the
+        target version in ``status='generating'`` so the FE can show a live
+        "Generating…" indicator the moment the request returns.
+
+        ``mode='new'`` allocates the next version; ``mode='overwrite'`` reuses
+        ``version_id`` — refused once the version has been run (has-runs) or
+        while a generation is already in flight (concurrency). Overwrite KEEPS
+        the existing scenarios; the worker swaps them only once new ones are in
+        hand, so a failed regenerate never loses reviewed drafts. Raises typed
+        errors the route maps to HTTP codes.
         """
         if mode not in {"new", "overwrite"}:
             raise EvalGenerationError(f"mode must be 'new' or 'overwrite'; got {mode!r}")
-
         self._assert_agent_in_org(agent_id)
         cleaned_prompt = (generation_prompt or "").strip() or None
-
-        version = self._resolve_generation_version(
+        return self._resolve_generation_version(
             agent_id,
             mode=mode,
             version_id=version_id,
             generation_prompt=cleaned_prompt,
         )
 
+    def run_generation(
+        self,
+        version_id: UUID,
+        *,
+        count: int = 10,
+        parent_id: Optional[UUID] = None,
+        raise_on_error: bool = False,
+    ) -> None:
+        """Phase 2 (background worker / sync tail): produce scenarios for a
+        ``generating`` version and flip it to ``draft`` — or ``failed`` with a
+        user-safe reason.
+
+        Idempotent for Procrastinate replays: a version no longer ``generating``
+        (a prior attempt already finished) is a no-op. Generation runs IN-MEMORY
+        first (``dry_run=True``); only once the new scenarios are in hand are the
+        old ones deleted and replaced — one ``create_scenarios_bulk`` commit
+        flushes the delete, the inserts, and the version's ``draft`` flip
+        together, so a failure never destroys previously-reviewed drafts.
+        """
+        version = (
+            self.query(AgentLlmEvalScenarioVersion)
+            .filter(AgentLlmEvalScenarioVersion.id == version_id)
+            .first()
+        )
+        if version is None:
+            raise AgentLlmEvalVersionNotFoundError(f"Version {version_id} not found")
+        if version.status != "generating":
+            logger.info(
+                "[agent-llm-eval] skip generation version_id={} status={} "
+                "(not generating — replay no-op)",
+                version_id, version.status,
+            )
+            return
+
+        agent_id = version.agent_id
+        cleaned_prompt = (version.generation_prompt or "").strip() or None
         scenarios_svc = AgentLlmScenarioService(
             self.db, user_id=self.user_id, org_id=self.org_id
         )
-        options = {"generation_prompt": cleaned_prompt} if cleaned_prompt else {}
-        batch = scenarios_svc.generate_scenarios(
-            agent_id,
-            strategy=self._GENERATION_STRATEGY,
-            count=count,
-            dry_run=False,
-            options=options,
-            folder_id=parent_id,
-            version_id=version.id,
-            approval_status="pending",
-        )
+        try:
+            options = {"generation_prompt": cleaned_prompt} if cleaned_prompt else {}
+            batch = scenarios_svc.generate_scenarios(
+                agent_id,
+                strategy=self._GENERATION_STRATEGY,
+                count=count,
+                dry_run=True,
+                options=options,
+            )
+            generated = list(batch.generated)
+            if not generated:
+                raise EvalGenerationError("Generator returned no scenarios")
 
-        # Stamp provenance on the version (hash + model) now that generation
-        # succeeded. ``generated_by_model`` is read off the first persisted
-        # row's generation_metadata when the strategy recorded it.
-        version.generation_prompt_hash = _prompt_hash(cleaned_prompt)
-        version.generated_by_model = _model_from_persisted(batch.persisted)
+            # Atomic swap, all in one transaction: stage the delete of the old
+            # scenarios + the version's ``draft`` flip, insert the new
+            # scenarios, then commit once. The trailing ``commit`` is explicit
+            # so persistence never depends on whether ``persist_generated`` /
+            # ``create_scenarios_bulk`` commits internally — if it already did,
+            # this is a no-op; if it ever stops, the staged delete + flip still
+            # land together here. The pending delete autoflushes ahead of the
+            # bulk-create's key-conflict check, so recurring keys don't clash.
+            self.query(AgentLlmEvalScenario).filter(
+                AgentLlmEvalScenario.agent_id == agent_id,
+                AgentLlmEvalScenario.version_id == version.id,
+                AgentLlmEvalScenario.node_type == "scenario",
+            ).delete(synchronize_session=False)
+            version.status = "draft"
+            version.generation_error = None
+            version.generation_prompt_hash = _prompt_hash(cleaned_prompt)
+            version.generated_by_model = _model_from_persisted(generated)
+            persisted = scenarios_svc.persist_generated(
+                agent_id,
+                generated,
+                folder_id=parent_id,
+                version_id=version.id,
+                approval_status="pending",
+            )
+            self.db.commit()
+            self.db.refresh(version)
+            logger.info(
+                "[agent-llm-eval] generated version agent={} version_id={} "
+                "number={} scenarios={}",
+                agent_id, version.id, version.version_number, len(persisted),
+            )
+        except Exception:
+            logger.exception(
+                "[agent-llm-eval] generation failed agent={} version_id={}",
+                agent_id, version_id,
+            )
+            self.db.rollback()
+            self.fail_generation(version_id, GENERATION_FAILED_MESSAGE)
+            if raise_on_error:
+                raise
+
+    def fail_generation(
+        self, version_id: UUID, error: str
+    ) -> Optional[AgentLlmEvalScenarioVersion]:
+        """Flip a version to ``failed`` with a user-safe reason (never the raw
+        exception). Org-scoped; ``None`` if the row is gone. Used by the worker
+        on a generation failure and by the route when enqueue itself fails, so a
+        version never stays stuck in ``generating``."""
+        version = (
+            self.query(AgentLlmEvalScenarioVersion)
+            .filter(AgentLlmEvalScenarioVersion.id == version_id)
+            .first()
+        )
+        if version is None:
+            return None
+        version.status = "failed"
+        version.generation_error = (error or "").strip()[:500] or None
         self.db.commit()
         self.db.refresh(version)
-
         logger.info(
-            "[agent-llm-eval] generated version agent={} version_id={} number={} "
-            "mode={} scenarios={}",
-            agent_id, version.id, version.version_number, mode, len(batch.persisted),
+            "[agent-llm-eval] version generation failed version_id={}", version_id
         )
-        return GeneratedVersion(version=version, scenarios=list(batch.persisted))
+        return version
 
     # ── Review ──────────────────────────────────────────────────────────
 
@@ -247,31 +381,52 @@ class AgentLlmEvalVersionService(BaseService):
         version_id: Optional[UUID],
         generation_prompt: Optional[str],
     ) -> AgentLlmEvalScenarioVersion:
-        """Create (``new``) or reuse (``overwrite``) the target version.
-        Overwrite is refused once a version has been run; otherwise its pending
-        scenarios are cleared before regeneration."""
+        """Create (``new``) or reserve (``overwrite``) the target version in
+        ``status='generating'``.
+
+        Overwrite is refused once a version has been run (has-runs) or while a
+        generation is already in flight (concurrency). The existing scenarios
+        are PRESERVED — the worker swaps them only once new ones are ready — so
+        a failed regenerate keeps the previously-reviewed drafts intact."""
         if mode == "overwrite":
             if version_id is None:
                 raise EvalGenerationError(
                     "version_id is required when mode='overwrite'"
                 )
             version = self._require_version(agent_id, version_id)
+            if version.status == "generating":
+                raise AgentLlmEvalVersionGeneratingError(
+                    "This version is already generating scenarios — wait for it "
+                    "to finish before regenerating."
+                )
             if self._version_has_runs(agent_id, version_id):
                 raise AgentLlmEvalVersionHasRunsError(
                     "This version has already been run — create a new version "
                     "instead of overwriting it."
                 )
-            # Overwrite replaces the version's entire contents (safe — the
-            # version is guaranteed un-run by the guard above), so stale
-            # approved rows don't survive a regenerate.
-            self.query(AgentLlmEvalScenario).filter(
-                AgentLlmEvalScenario.agent_id == agent_id,
-                AgentLlmEvalScenario.version_id == version_id,
-                AgentLlmEvalScenario.node_type == "scenario",
-            ).delete(synchronize_session=False)
-            version.status = "draft"
-            version.source = "generated"
-            version.generation_prompt = generation_prompt
+            # Atomic flip to 'generating' (the FE also disables the button, but
+            # a double-fire / forged request must not start two jobs on one
+            # version). ``status != 'generating'`` is the guard predicate.
+            flipped = (
+                self.query(AgentLlmEvalScenarioVersion)
+                .filter(AgentLlmEvalScenarioVersion.id == version_id)
+                .filter(AgentLlmEvalScenarioVersion.agent_id == agent_id)
+                .filter(AgentLlmEvalScenarioVersion.status != "generating")
+                .update(
+                    {
+                        AgentLlmEvalScenarioVersion.status: "generating",
+                        AgentLlmEvalScenarioVersion.source: "generated",
+                        AgentLlmEvalScenarioVersion.generation_prompt: generation_prompt,
+                        AgentLlmEvalScenarioVersion.generation_error: None,
+                    },
+                    synchronize_session=False,
+                )
+            )
+            if not flipped:
+                raise AgentLlmEvalVersionGeneratingError(
+                    "This version is already generating scenarios — wait for it "
+                    "to finish before regenerating."
+                )
             self.db.commit()
             self.db.refresh(version)
             return version
@@ -290,7 +445,7 @@ class AgentLlmEvalVersionService(BaseService):
             agent_id=agent_id,
             version_number=next_number,
             source="generated",
-            status="draft",
+            status="generating",
             generation_prompt=generation_prompt,
         )
         self.db.add(version)
@@ -376,4 +531,8 @@ def _model_from_persisted(persisted: list) -> Optional[str]:
     return None
 
 
-__all__ = ["AgentLlmEvalVersionService", "GeneratedVersion"]
+__all__ = [
+    "AgentLlmEvalVersionService",
+    "GeneratedVersion",
+    "GENERATION_FAILED_MESSAGE",
+]

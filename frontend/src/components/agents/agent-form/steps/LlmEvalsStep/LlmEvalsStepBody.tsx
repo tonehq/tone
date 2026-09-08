@@ -4,7 +4,6 @@ import {
   Download,
   Folder as FolderIcon,
   Gauge,
-  History,
   MoreVertical,
   Play,
   Sparkles,
@@ -15,7 +14,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import SectionCard from '@/components/agents/agent-form/SectionCard';
 import ConfirmDeleteModal from '@/components/contacts/shared/ConfirmDeleteModal';
-import { CustomButton, CustomTab, SearchBar, SelectInput } from '@/components/shared';
+import { CustomButton, CustomTab, SearchBar } from '@/components/shared';
 import type { TabItem } from '@/components/shared';
 import {
   DropdownMenu,
@@ -27,7 +26,6 @@ import {
   useApproveAgentLlmEvalScenario,
   useApproveAllAgentLlmEvalScenarios,
   useAgentLlmEvalFolders,
-  useAgentLlmEvalRuns,
   useAgentLlmEvalScenarios,
   useAgentLlmEvalVersions,
   useCreateAgentLlmEvalFolder,
@@ -46,17 +44,14 @@ import { showToast } from '@/utils/toast';
 
 import AgentEvalResultsTab from './AgentEvalResultsTab';
 import AgentEvalVersionBar from './AgentEvalVersionBar';
-import AgentLlmEvalResultsDrawer from './AgentLlmEvalResultsDrawer';
 import FolderBreadcrumb from './FolderBreadcrumb';
 import FolderDeleteImpact from './FolderDeleteImpact';
 import FoldersView from './FoldersView';
-import { VERSION_FILTER_ALL_VALUE, versionLabel } from './constants';
 import GenerateScenariosModal from './GenerateScenariosModal';
 import { downloadSampleCsv } from './helpers';
 import LlmEvalsPagination from './LlmEvalsPagination';
 import NewFolderModal from './NewFolderModal';
 import RunEvalModal from './RunEvalModal';
-import RunsTable from './RunsTable';
 import ScenarioFormModal from './ScenarioFormModal';
 import ScenariosSourceFilter from './ScenariosSourceFilter';
 import ScenariosTable from './ScenariosTable';
@@ -68,7 +63,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [openCreate, setOpenCreate] = useState(false);
   const [openRun, setOpenRun] = useState(false);
   const [openGenerate, setOpenGenerate] = useState(false);
-  const [openRunId, setOpenRunId] = useState<string | null>(null);
   // Delete confirm is routed through the shared ``ConfirmDeleteModal``
   // (Radix-based) so it matches the rest of the app's destructive-action
   // dialogs — instead of a browser-native ``window.confirm``.
@@ -94,8 +88,9 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const [selectedScenarioIds, setSelectedScenarioIds] = useState<Set<string>>(() => new Set());
   const [pendingBulkDelete, setPendingBulkDelete] = useState(false);
   // Sub-tab inside the LLM Evals section — 'folders' (default: scenario
-  // management) vs 'runs' (past run history). Kept as local state; not
-  // URL-synced in v1. Promote to a query param later if deep-links needed.
+  // management) vs 'eval-results' (version + run filtered scored results).
+  // Kept as local state; not URL-synced in v1. Promote to a query param
+  // later if deep-links needed.
   const [activeView, setActiveView] = useState<LlmEvalsView>('folders');
 
   // Pagination for the scenarios list inside a folder. Reset back to page 1
@@ -123,14 +118,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     setSelectedScenarioIds(new Set());
   }, [selectedFolder, search, filterSource, selectedVersionId]);
 
-  // Pagination for the Runs tab. Kept as separate state from the scenarios
-  // pager so switching folders doesn't reset the runs page (and vice-versa).
-  const [runsPage, setRunsPage] = useState(1);
-  const [runsPageSize, setRunsPageSize] = useState(10);
-
-  // Version filter for the Results tab (``VERSION_FILTER_ALL_VALUE`` = all).
-  const [resultsVersionFilter, setResultsVersionFilter] =
-    useState<string>(VERSION_FILTER_ALL_VALUE);
   // Per-row review in-flight ids + reject confirmations.
   const [pendingRejectScenario, setPendingRejectScenario] = useState<AgentLlmEvalScenario | null>(
     null,
@@ -166,12 +153,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     page_size: pageSize,
   });
   const foldersQuery = useAgentLlmEvalFolders(agentId);
-  const runsQuery = useAgentLlmEvalRuns(agentId, {
-    page_no: runsPage,
-    page_size: runsPageSize,
-    version_id:
-      resultsVersionFilter === VERSION_FILTER_ALL_VALUE ? undefined : resultsVersionFilter,
-  });
   const approveScenario = useApproveAgentLlmEvalScenario(agentId);
   const rejectScenario = useRejectAgentLlmEvalScenario(agentId);
   const approveAll = useApproveAllAgentLlmEvalScenarios(agentId);
@@ -185,8 +166,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   const triggerRun = useTriggerAgentLlmEvalRun(agentId);
 
   const scenarios = scenariosQuery.data?.items ?? [];
-  const runs = runsQuery.data?.items ?? [];
-  const runsTotal = runsQuery.data?.total ?? runs.length;
   const scenarioCount = scenariosQuery.data?.total ?? scenarios.length;
   const folders = foldersQuery.data?.items ?? [];
   const totalScenariosAllFolders = folders.reduce((n, f) => n + f.count, 0);
@@ -202,11 +181,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     const maxPage = Math.max(1, Math.ceil(scenarioCount / pageSize));
     if (page > maxPage) setPage(maxPage);
   }, [scenarioCount, pageSize, page, scenariosQuery.data]);
-  useEffect(() => {
-    if (!runsQuery.data) return;
-    const maxRunsPage = Math.max(1, Math.ceil(runsTotal / runsPageSize));
-    if (runsPage > maxRunsPage) setRunsPage(maxRunsPage);
-  }, [runsTotal, runsPageSize, runsPage, runsQuery.data]);
 
   // Quick-run one folder from a card / breadcrumb. Uses the singular
   // ``folder_id`` field intentionally (single-folder path). Multi-folder
@@ -220,7 +194,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       });
       showToast.success(
         'Evaluation started',
-        'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
+        'Your scenarios are running now. Open the Results tab in a moment to see the results.',
       );
     } catch (error) {
       handleApiError(error);
@@ -241,7 +215,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       });
       showToast.success(
         'Evaluation started',
-        `“${scenario.scenario_key}” is running now. Open the Runs tab in a moment to see the result.`,
+        `“${scenario.scenario_key}” is running now. Open the Results tab in a moment to see the result.`,
       );
     } catch (error) {
       handleApiError(error);
@@ -451,11 +425,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     setPage(1);
   };
 
-  const handleRunsPageSizeChange = (size: number) => {
-    setRunsPageSize(size);
-    setRunsPage(1);
-  };
-
   const handleCloseNewFolder = () => {
     if (!createFolder.isPending) setOpenNewFolder(false);
   };
@@ -662,50 +631,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
     </SectionCard>
   );
 
-  const runsPanel = (
-    <SectionCard
-      icon={<History className="size-4" />}
-      iconClassName="bg-sky-500/10 text-sky-700 dark:text-sky-400 ring-sky-500/20"
-      title="Run history"
-      description="Every eval batch for this agent, newest first. Click any row to inspect scored scenarios."
-      action={
-        <div className="flex items-center gap-3">
-          {versions.length > 0 && (
-            <div className="min-w-[220px]">
-              <SelectInput
-                name="results-version-filter"
-                value={resultsVersionFilter}
-                onValueChange={(v) => v && setResultsVersionFilter(v)}
-                options={[
-                  { value: VERSION_FILTER_ALL_VALUE, label: 'All versions' },
-                  ...versions.map((v) => ({ value: v.id, label: versionLabel(v) })),
-                ]}
-              />
-            </div>
-          )}
-          <span className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            {runsTotal} run{runsTotal === 1 ? '' : 's'}
-          </span>
-        </div>
-      }
-    >
-      <RunsTable
-        runs={runs}
-        isLoading={runsQuery.isLoading}
-        onOpen={setOpenRunId}
-        onEmptyCTA={runsTotal === 0 ? () => setActiveView('folders') : undefined}
-        showEmptyState={runsTotal === 0}
-      />
-      <LlmEvalsPagination
-        page={runsPage}
-        pageSize={runsPageSize}
-        total={runsTotal}
-        onPageChange={setRunsPage}
-        onPageSizeChange={handleRunsPageSizeChange}
-      />
-    </SectionCard>
-  );
-
   const tabItems: TabItem[] = [
     {
       key: 'folders',
@@ -714,23 +639,8 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       children: <div className="pt-4">{foldersPanel}</div>,
     },
     {
-      key: 'runs',
-      label: (
-        <span className="inline-flex items-center gap-2">
-          Results
-          {runsTotal > 0 && (
-            <span className="inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-muted px-1.5 py-0.5 text-[10.5px] font-semibold text-muted-foreground">
-              {runsTotal}
-            </span>
-          )}
-        </span>
-      ),
-      icon: <History className="size-4" />,
-      children: <div className="pt-4">{runsPanel}</div>,
-    },
-    {
       key: 'eval-results',
-      label: 'Eval Results',
+      label: 'Results',
       icon: <Gauge className="size-4" />,
       children: (
         <div className="pt-4">
@@ -778,12 +688,6 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         onClose={handleCloseNewFolder}
         onSubmit={submitNewFolder}
         pending={createFolder.isPending}
-      />
-      <AgentLlmEvalResultsDrawer
-        agentId={agentId}
-        runId={openRunId}
-        open={!!openRunId}
-        onClose={() => setOpenRunId(null)}
       />
       <ConfirmDeleteModal
         open={!!pendingDelete}

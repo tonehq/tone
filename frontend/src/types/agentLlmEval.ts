@@ -11,9 +11,11 @@ export type AgentLlmEvalScenarioSource = 'manual' | 'csv' | 'generated' | 'fixtu
 // Review state for generated scenarios: 'pending' (awaiting approve/reject)
 // | 'approved' (counts for runs). Rejected rows are deleted, never stored.
 export type AgentLlmEvalApprovalStatus = 'pending' | 'approved';
-// Version lifecycle. Agent-LLM generation is synchronous, so 'generating' is
-// effectively unused, but kept for forward-compat with the RAG shape.
-export type AgentLlmEvalVersionStatus = 'generating' | 'draft' | 'finalized';
+// Version lifecycle. Auto-generation is a background job: 'generating' while the
+// worker produces scenarios, then 'draft' (under review) → 'finalized', or
+// 'failed' (with a user-safe `generation_error`). The versions list polls while
+// any version is 'generating' (see `useAgentLlmEvalVersions`).
+export type AgentLlmEvalVersionStatus = 'generating' | 'draft' | 'finalized' | 'failed';
 export type AgentLlmEvalVersionSource = 'generated' | 'manual' | 'imported';
 // Tree node discriminator — folders and scenarios share one table.
 export type AgentLlmEvalNodeType = 'folder' | 'scenario';
@@ -98,6 +100,9 @@ export interface AgentLlmEvalScenarioVersion {
   status: AgentLlmEvalVersionStatus;
   generation_prompt: string | null;
   generated_by_model: string | null;
+  // User-safe reason surfaced when `status === 'failed'` (never the raw
+  // backend error). `null` in every other state.
+  generation_error: string | null;
   counts: { total: number; approved: number; pending: number };
   has_results: boolean;
   created_at: string | null;
@@ -361,9 +366,14 @@ export interface GenerateVersionPayload {
   count?: number;
 }
 
+// Generation now runs as a background job — the route returns immediately (202)
+// with the reserved version's id in `status: 'generating'`. The scenarios
+// appear via the versions/scenarios poll + invalidation once the worker flips
+// the version to `draft`.
 export interface GenerateVersionResponse {
-  version: AgentLlmEvalScenarioVersion;
-  scenarios: AgentLlmEvalScenario[];
+  job_id: number;
+  version_id: string;
+  status: Extract<AgentLlmEvalVersionStatus, 'generating'>;
 }
 
 export interface CompareRunsPayload {

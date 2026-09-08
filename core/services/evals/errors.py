@@ -103,6 +103,13 @@ class AgentLlmEvalVersionHasRunsError(AgentLlmEvalError):
     a ``VERSION_HAS_RUNS`` code."""
 
 
+class AgentLlmEvalVersionGeneratingError(AgentLlmEvalError):
+    """Attempted to (re)generate a version whose background generation is
+    still in flight (``status='generating'``). Blocks a second concurrent
+    generate on the same version — the atomic status flip lost the race or the
+    FE double-fired. The route maps it to 409 with a ``VERSION_GENERATING`` code."""
+
+
 class CallTranscriptEvalError(EvalError):
     """Base class for typed post-call transcript eval errors — separates the
     Level-3 (real-call) harness from the RAG and agent-LLM flows so callers
