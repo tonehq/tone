@@ -13,7 +13,10 @@ from core.services.agents.agent_profile_crm_config_service import (
 from core.services.agents.agent_profile_variable_service import (
     AgentProfileVariableService,
 )
-from core.services.agents.profile_context import load_profile_crm_plan
+from core.services.agents.profile_context import (
+    load_profile_crm_plan,
+    resolve_crm_lookup_binding,
+)
 from core.services.agents.crm_lookup_presets import (
     get_crm_lookup_preset,
     has_crm_lookup_preset,
@@ -23,6 +26,7 @@ from core.services.agents.profile_crm_enrichment_service import (
     ProfileCrmPlan,
     _first_record,
     _resolve_path,
+    extract_record,
 )
 from core.services.mcp_server_service import parse_tool_result
 
@@ -89,6 +93,22 @@ class TestFirstRecord:
 
     def test_dict_passthrough(self):
         assert _first_record({"x": 1}) == {"x": 1}
+
+
+class TestExtractRecord:
+    def test_wrapper_descend_first(self):
+        assert extract_record({"results": [{"a": 1}, {"a": 2}]}, "results") == {"a": 1}
+        assert extract_record({"records": [{"b": 2}]}, "records") == {"b": 2}
+        assert extract_record({"data": [{"c": 3}]}, "data") == {"c": 3}
+
+    def test_no_record_path_takes_dict_or_first(self):
+        assert extract_record({"x": 1}, "") == {"x": 1}
+        assert extract_record([{"x": 1}], "") == {"x": 1}
+
+    def test_missing_or_empty_none(self):
+        assert extract_record({"results": []}, "results") is None
+        assert extract_record({"other": [{"a": 1}]}, "results") is None
+        assert extract_record(None, "results") is None
 
 
 class TestProfileCrmPlanActionable:
@@ -238,33 +258,99 @@ class TestLoadProfileCrmPlan:
 
 
 class TestCrmLookupPresets:
-    def test_zoho_plain_phone(self):
+    def test_zoho_fields(self):
         p = get_crm_lookup_preset("zoho_crm")
         assert p.default_tool_name == "Search Records"
         assert p.record_path == "data"
-        assert p.build_arguments("+1555") == {"phone": "+1555", "module": "Contacts"}
+        assert p.build_arguments("phone", "+1555") == {"phone": "+1555", "module": "Contacts"}
+        assert p.build_arguments("email", "a@x.com") == {"email": "a@x.com", "module": "Contacts"}
+        assert p.build_arguments("name", "Ada Lee") == {"word": "Ada Lee", "module": "Contacts"}
 
-    def test_hubspot_filter_uses_contains_token(self):
+    def test_hubspot_fields(self):
         p = get_crm_lookup_preset("hubspot")
         assert p.default_tool_name == "hubspot-search-objects"
         assert p.record_path == "results"
-        args = p.build_arguments("+1 (443) 443-9905")
-        assert args["object_type"] == "contacts"
-        f = args["filters"][0]
-        assert f == {
+        phone_args = p.build_arguments("phone", "+1 (443) 443-9905")
+        assert phone_args["object_type"] == "contacts"
+        assert phone_args["filters"][0] == {
             "propertyName": "phone",
             "operator": "CONTAINS_TOKEN",
             "value": "+1 (443) 443-9905",
         }
+        email_args = p.build_arguments("email", "a@x.com")
+        assert email_args["filters"][0] == {
+            "propertyName": "email",
+            "operator": "EQ",
+            "value": "a@x.com",
+        }
+        # name → full-text query, no filters
+        name_args = p.build_arguments("name", "Ada Lee")
+        assert name_args == {"object_type": "contacts", "query": "Ada Lee"}
 
-    def test_salesforce_soql_strips_to_digits(self):
+    def test_salesforce_fields_and_soql_escaping(self):
         p = get_crm_lookup_preset("salesforce")
         assert p.default_tool_name == "Query"
         assert p.record_path == "records"
-        soql = p.build_arguments("+1 (443) 443-9905")["query"]
-        assert "FROM Contact" in soql
-        assert "14434439905" in soql  # non-digits stripped
-        assert "LIMIT 1" in soql
+        phone_soql = p.build_arguments("phone", "+1 (443) 443-9905")["query"]
+        assert "FROM Contact" in phone_soql
+        assert "14434439905" in phone_soql  # non-digits stripped
+        assert "LIMIT 1" in phone_soql
+        assert p.build_arguments("email", "a@x.com")["query"].count("Email = 'a@x.com'") == 1
+        # single quote in a spoken name is escaped, not left to break the literal
+        esc = p.build_arguments("name", "O'Brien")["query"]
+        assert "O\\'Brien" in esc
+
+    def test_unsupported_field_raises(self):
+        import pytest
+
+        with pytest.raises(ValueError):
+            get_crm_lookup_preset("zoho_crm").build_arguments("ssn", "x")
+
+
+class _Config:
+    def __init__(self, is_enabled=True, mcp_server_id="srv"):
+        self.is_enabled = is_enabled
+        self.mcp_server_id = mcp_server_id
+
+
+def _patch_binding(monkeypatch, config, slug):
+    class _FakeConfigSvc:
+        def __init__(self, db, org_id=None, **kwargs):
+            pass
+
+        def get_config(self, agent_id):
+            return config
+
+    class _FakeMcp:
+        def __init__(self, db, org_id=None, **kwargs):
+            pass
+
+        def get_integration_slug(self, mcp_server_id):
+            return slug
+
+    monkeypatch.setattr(
+        "core.services.agents.agent_profile_crm_config_service.AgentProfileCrmConfigService",
+        _FakeConfigSvc,
+    )
+    monkeypatch.setattr("core.services.mcp_server_service.McpServerService", _FakeMcp)
+
+
+class TestResolveCrmLookupBinding:
+    def test_enabled_preset_returns_binding(self, monkeypatch):
+        _patch_binding(monkeypatch, _Config(), "hubspot")
+        assert resolve_crm_lookup_binding(None, "org", "agent") == ("srv", "hubspot")
+
+    def test_disabled_returns_none(self, monkeypatch):
+        _patch_binding(monkeypatch, _Config(is_enabled=False), "hubspot")
+        assert resolve_crm_lookup_binding(None, "org", "agent") is None
+
+    def test_non_preset_slug_returns_none(self, monkeypatch):
+        _patch_binding(monkeypatch, _Config(), "some_custom_crm")
+        assert resolve_crm_lookup_binding(None, "org", "agent") is None
+
+    def test_no_config_returns_none(self, monkeypatch):
+        _patch_binding(monkeypatch, None, "hubspot")
+        assert resolve_crm_lookup_binding(None, "org", "agent") is None
 
     def test_unknown_and_none_slug(self):
         assert get_crm_lookup_preset("mystery") is None
