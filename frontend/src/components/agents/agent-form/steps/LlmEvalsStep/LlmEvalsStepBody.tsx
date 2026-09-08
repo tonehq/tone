@@ -44,6 +44,7 @@ import type { AgentLlmEvalScenario, AgentLlmEvalScenarioSource } from '@/types/a
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
+import AgentEvalResultsTab from './AgentEvalResultsTab';
 import AgentEvalVersionBar from './AgentEvalVersionBar';
 import AgentLlmEvalResultsDrawer from './AgentLlmEvalResultsDrawer';
 import FolderBreadcrumb from './FolderBreadcrumb';
@@ -726,6 +727,16 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       ),
       icon: <History className="size-4" />,
       children: <div className="pt-4">{runsPanel}</div>,
+    },
+    {
+      key: 'eval-results',
+      label: 'Eval Results',
+      icon: <Gauge className="size-4" />,
+      children: (
+        <div className="pt-4">
+          <AgentEvalResultsTab agentId={agentId} />
+        </div>
+      ),
     },
   ];
 
