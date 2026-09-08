@@ -146,6 +146,7 @@ def ingest_upload(
     from core.database.session import get_db_context
     from core.services.document_processing_service import DocumentProcessingService
     from core.services.ingestion_run_service import IngestionRunService
+    from core.utils.memray_profiler import profile_ingestion_memory
 
     run_uuid = UUID(ingestion_run_id)
     try:
@@ -160,11 +161,14 @@ def ingest_upload(
             "[ingestion] processing upload {} (run={}, reprocess={})",
             upload_id, ingestion_run_id, delete_existing,
         )
-        DocumentProcessingService().process_upload(
-            UUID(upload_id), UUID(org_id),
-            ingestion_run_id=run_uuid,
-            delete_existing=delete_existing,
-        )
+        # Scope a memray capture (when enabled) to exactly this run — one file per
+        # run id. No-op when MEMRAY_INGESTION_PROFILING_ENABLED is off.
+        with profile_ingestion_memory(ingestion_run_id):
+            DocumentProcessingService().process_upload(
+                UUID(upload_id), UUID(org_id),
+                ingestion_run_id=run_uuid,
+                delete_existing=delete_existing,
+            )
         logger.info(
             "[ingestion] worker task done upload={} run={}",
             upload_id, ingestion_run_id,
