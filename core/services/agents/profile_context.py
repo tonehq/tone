@@ -107,3 +107,45 @@ def load_profile_crm_plan(
             "[profile-crm] plan load failed org={} agent={}", org_id, agent_id
         )
         return ProfileCrmPlan()
+
+
+def resolve_crm_lookup_binding(
+    db: Session,
+    org_id: Optional[Union[str, UUID]],
+    agent_id: Optional[Union[str, UUID]],
+) -> Optional[tuple]:
+    """``(mcp_server_id, crm_slug)`` for the mid-call ``find_customer`` tool, or
+    ``None``.
+
+    Non-``None`` only when the agent's CRM enrichment is **enabled**, points at
+    an ``mcp_server_id``, and that server maps to a **preset** CRM
+    (HubSpot/Salesforce/Zoho). Reuses the same config service + slug helper +
+    preset registry as Layer 1 — one source of truth. Returns ``None`` on
+    anything else (disabled, custom MCP, or error) so the builder simply doesn't
+    register the tool.
+    """
+    if not agent_id or not org_id:
+        return None
+    try:
+        from core.services.agents.agent_profile_crm_config_service import (
+            AgentProfileCrmConfigService,
+        )
+        from core.services.agents.crm_lookup_presets import has_crm_lookup_preset
+        from core.services.mcp_server_service import McpServerService
+
+        config = AgentProfileCrmConfigService(db, org_id=org_id).get_config(agent_id)
+        if config is None or not config.is_enabled or not config.mcp_server_id:
+            return None
+        slug = McpServerService(db, org_id=org_id).get_integration_slug(
+            config.mcp_server_id
+        )
+        if not has_crm_lookup_preset(slug):
+            return None
+        return (config.mcp_server_id, slug)
+    except Exception:  # noqa: BLE001 — never break the build
+        logger.exception(
+            "[profile-crm] find_customer binding resolve failed org={} agent={}",
+            org_id,
+            agent_id,
+        )
+        return None

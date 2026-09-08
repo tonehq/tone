@@ -74,7 +74,7 @@ class ProfileCrmEnrichmentService:
         preset = get_crm_lookup_preset(plan.crm_slug)
         tool_name = plan.lookup_tool_name or (preset.default_tool_name if preset else None)
         arguments = (
-            preset.build_arguments(caller_phone)
+            preset.build_arguments("phone", caller_phone)
             if preset
             else {plan.phone_argument: caller_phone}
         )
@@ -115,6 +115,38 @@ def _first_record(record: Any) -> Any:
     return record
 
 
+# Sentinel distinguishing "path segment absent" from a legit ``None`` value.
+_MISSING = object()
+
+
+def _descend(data: Any, path: str) -> Any:
+    """Walk a dot-path, taking the first element whenever a segment lands on a
+    list. Returns the node at ``path``, or ``_MISSING`` if any segment is
+    absent. Shared by ``extract_record`` and ``_resolve_path``."""
+    cur: Any = data
+    for seg in path.split("."):
+        if isinstance(cur, list):
+            cur = cur[0] if cur else None
+        if not isinstance(cur, dict) or seg not in cur:
+            return _MISSING
+        cur = cur[seg]
+    return cur
+
+
+def extract_record(raw: Any, record_path: str) -> Optional[dict]:
+    """Return the first matched record dict from a CRM tool response.
+
+    Descends the preset's ``record_path`` wrapper (e.g. ``results``/``records``/
+    ``data``) when present, taking the first element if it lands on a list.
+    Returns ``None`` when there is no usable record. Shared by the mid-call
+    ``find_customer`` tool (Layer 2)."""
+    node = _descend(raw, record_path) if record_path else raw
+    if node is _MISSING:
+        return None
+    node = _first_record(node)
+    return node if isinstance(node, dict) else None
+
+
 def _resolve_path(data: Any, path: str) -> Optional[str]:
     """Resolve a dot-path (e.g. ``properties.firstname``) to a scalar string.
 
@@ -123,15 +155,10 @@ def _resolve_path(data: Any, path: str) -> Optional[str]:
     a non-scalar, so an unresolved mapping falls back to default/blank rather
     than injecting ``"{...}"`` into the prompt.
     """
-    cur: Any = data
-    for seg in path.split("."):
-        if isinstance(cur, list):
-            cur = cur[0] if cur else None
-        if not isinstance(cur, dict) or seg not in cur:
-            return None
-        cur = cur[seg]
-    if isinstance(cur, list):
-        cur = cur[0] if cur else None
-    if cur is None or isinstance(cur, (dict, list)):
+    node = _descend(data, path)
+    if node is _MISSING:
         return None
-    return str(cur)
+    node = _first_record(node)
+    if node is None or isinstance(node, (dict, list)):
+        return None
+    return str(node)

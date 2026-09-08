@@ -74,3 +74,45 @@ auto-fill; any other/custom MCP keeps the existing generic pick-tool + phone-arg
 - [ ] A custom/other MCP behaves exactly as before (generic flow untouched).
 - [ ] No regression to the existing crm_field / config / enrichment behavior; tests added for each preset
       builder.
+
+---
+
+## Addendum 2 — Mid-call CRM lookup tool (Layer 2)
+
+**Added 2026-09-08.** Layer 1 (call-start phone auto-fill) can miss — the caller rings from a
+different number, or the business wants to look up by email/name. Layer 2 gives the agent a
+**reusable mid-call lookup tool** it can call during the conversation, by **phone / email / name**,
+using the SAME per-CRM presets.
+
+### Requirements (addendum 2)
+- Expose ONE tool to the LLM (e.g. `find_customer`) that takes `{ field: phone|email|name, value }`
+  and looks the caller up in the agent's configured CRM, returning the matched record's fields.
+- Reuse the per-CRM presets, **generalized** to `build_arguments(field, value)`:
+  - **zoho_crm** `Search Records`: phone→`{phone}`, email→`{email}`, name→`{word}` (module Contacts).
+  - **hubspot** `hubspot-search-objects`: phone→filter `phone CONTAINS_TOKEN`, email→filter `email EQ`,
+    name→`{query}` (full-text).
+  - **salesforce** `Query` SOQL: phone→`Phone LIKE '%digits%'`, email→`Email = '..'`, name→`Name LIKE '%..%'`.
+- The LLM decides WHEN to call it — driven by **prompt guidance**: we inject a sensible default
+  instruction ("if you don't know the caller, ask for their email or name and use find_customer"),
+  and the agent builder can customize/override it in their own prompt.
+- Only registered when the agent has CRM enrichment configured for a preset CRM; custom/other MCP
+  behavior unchanged.
+- Must not affect Layer 1: the call-start phone auto-fill, presets, config, and generic flow stay as-is.
+- Field value the caller provides is a lookup key, NOT identity proof (verification = future Layer 3).
+
+### Implementation Details (addendum 2)
+- Generalize `CrmLookupPreset.build_arguments(phone)` → `build_arguments(field, value)` (field enum
+  phone|email|name); Layer-1 enrich calls it with `field="phone"`. Keep `record_path` for response.
+- Register the tool in the pipeline where MCP/custom tools are registered
+  (`core/services/pipeline/builder/…` + `core/services/mcp_tool_service.py` area) so it joins the LLM's
+  function set; the handler runs the preset build → `McpServerService.call_tool` → parse → return fields.
+- Prompt guidance: a default snippet appended to the system prompt when the tool is active (one shared
+  place, not per-agent copy); agent builder prompt can override.
+- Reuse `get_crm_lookup_preset`, `McpServerService.call_tool`, `parse_tool_result`, `_resolve_path`.
+
+### Acceptance Criteria (addendum 2)
+- [ ] Agent can call `find_customer` mid-call by phone / email / name; the correct per-CRM request is built.
+- [ ] Returned record fields are usable by the agent (same parsing/`record_path` as Layer 1).
+- [ ] Tool is only offered when a preset CRM is configured; custom/other MCP unaffected.
+- [ ] Default prompt guidance present; agent-builder prompt can override.
+- [ ] No regression to Layer 1; tests added for `build_arguments(field, value)` across the 3 CRMs + the tool handler.
