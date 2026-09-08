@@ -44,6 +44,7 @@ import { showToast } from '@/utils/toast';
 
 import AgentEvalResultsTab from './AgentEvalResultsTab';
 import AgentEvalVersionBar from './AgentEvalVersionBar';
+import EvalRunningIndicator from './EvalRunningIndicator';
 import FolderBreadcrumb from './FolderBreadcrumb';
 import FolderDeleteImpact from './FolderDeleteImpact';
 import FoldersView from './FoldersView';
@@ -537,6 +538,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         approvingAll={approveAll.isPending}
         rejectingAll={rejectAll.isPending}
       />
+      <EvalRunningIndicator agentId={agentId} />
       {inFolderView ? (
         <>
           <FolderBreadcrumb
@@ -682,6 +684,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         folderOptions={folders}
         defaultFolderId={selectedFolder}
         versions={versions}
+        onGenerated={setSelectedVersionId}
       />
       <NewFolderModal
         open={openNewFolder}
