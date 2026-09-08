@@ -147,6 +147,10 @@ class PipecatPipelineRunner(PipelineRunner):
         # back to "client_disconnect" only if nothing else has set it yet.
         # Persisted onto metadata_ by CallLogService.complete_call.
         end_reason_holder: dict = {"reason": None, "detail": None}
+        # Idempotency guard for the authoritative provider hangup. The teardown
+        # `finally` calls terminate_call once; the holder makes a second call
+        # (from any future end path) a no-op.
+        termination_state: dict = {"done": False}
         # The DB row's calls.id, populated once _create_call_log_in_thread
         # returns. Threaded through the builder to the tool handler and the
         # keyword detector so their structured log lines carry the id — makes
@@ -673,6 +677,27 @@ class PipecatPipelineRunner(PipelineRunner):
                         "[runner] fail_call failed for call_log_id={}", _fail_call_id
                     )
             raise
+        finally:
+            # Authoritative, provider-agnostic hangup — drop the phone leg even
+            # when the serializer's auto_hang_up didn't fire (End/Cancel frame
+            # lost during teardown) or the provider has no serializer hangup.
+            # Skipped when the caller hung up first (client_disconnect): the leg
+            # is already down, so a REST hangup would be a pointless call. This
+            # runs on the graceful-end and pipeline-error paths; terminate_call
+            # never raises, so it cannot mask the exception being propagated.
+            if end_reason_holder.get("reason") != REASON_CLIENT_DISCONNECT:
+                # Local import: the pipeline package eager-imports this runner, so a
+                # module-level import of call_termination (which imports
+                # pipeline.call_end_events) would be a circular import.
+                from core.services.call_termination import terminate_call
+
+                await terminate_call(
+                    transport_type=transport_type,
+                    call_data=call_data,
+                    org_id=getattr(agent, "organization_id", None),
+                    reason=end_reason_holder.get("reason"),
+                    state=termination_state,
+                )
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
