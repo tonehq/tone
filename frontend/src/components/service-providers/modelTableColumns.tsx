@@ -9,10 +9,19 @@ export function getModelColumns(): CustomTableColumn<ModelRow>[] {
   return [
     {
       key: 'provider',
-      title: 'Provider',
+      title: 'Model Provider',
       render: (_v, m) => (
         <span className="truncate text-sm font-medium text-foreground">
           {m.provider?.display_name ?? '-'}
+        </span>
+      ),
+    },
+    {
+      key: 'cloud_provider',
+      title: 'Cloud Provider',
+      render: (_v, m) => (
+        <span className="truncate text-sm text-muted-foreground">
+          {m.cloud_provider?.display_name ?? '-'}
         </span>
       ),
     },
