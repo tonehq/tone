@@ -32,7 +32,7 @@ from core.services.pipeline.tool_call_timing import (
     ToolCallTimer,
     finalize_and_record,
 )
-
+from core.utils.llm_context import flatten_message_content
 
 # Regex describing the phrasings the LLM uses to ask "may I end the call?".
 # Matches the assistant text that precedes the user's confirmation reply.
@@ -76,7 +76,9 @@ _USER_END_REQUEST_PATTERN = re.compile(
 )
 
 
-def _confirmation_valid(transcript_entries: Optional[list]) -> bool:
+def _confirmation_valid(
+    transcript_entries: Optional[list], live_user_text: Optional[str] = None
+) -> bool:
     """Return True iff the end_call attempt is authorized.
 
     Two paths are accepted:
@@ -95,23 +97,40 @@ def _confirmation_valid(transcript_entries: Optional[list]) -> bool:
     ``transcript_entries`` is the runner-owned list populated by the
     aggregator handlers; ``None`` (unwired) falls back to allowing the call
     to end so a mis-wired build cannot deadlock all calls.
+
+    ``live_user_text`` closes a transcript-timing race: pipecat pushes the
+    user's just-spoken turn into the LLM context (and dispatches this tool)
+    *before* ``on_user_turn_stopped`` appends it to ``transcript_entries``, so
+    the trailing user turn can be missing here. When the caller reads the most
+    recent user message straight from the LLM context and passes it in, we use
+    that as the latest user turn (with the trailing assistant turns from the
+    transcript as the standard-path ask). When it is ``None`` the behavior is
+    identical to the transcript-only logic.
     """
     if transcript_entries is None:
         return True  # Backward-compat: unwired transcript → skip the check.
-    if not transcript_entries:
+
+    # Treat a live user turn as the most-recent entry so the single algorithm
+    # below covers both the wired-transcript and the race (transcript not yet
+    # appended) cases without branching.
+    entries = transcript_entries
+    if live_user_text is not None and live_user_text.strip():
+        entries = [*transcript_entries, {"role": "user", "text": live_user_text}]
+
+    if not entries:
         return False
 
     # Walk backwards for the most recent user turn.
     last_user_idx = None
-    for i in range(len(transcript_entries) - 1, -1, -1):
-        if transcript_entries[i].get("role") == "user":
+    for i in range(len(entries) - 1, -1, -1):
+        if entries[i].get("role") == "user":
             last_user_idx = i
             break
     if last_user_idx is None:
         return False  # No user turn yet — nothing could have been confirmed.
 
     # Express path: user's own short direct end request.
-    last_user_text = transcript_entries[last_user_idx].get("text", "") or ""
+    last_user_text = entries[last_user_idx].get("text", "") or ""
     if (
         len(last_user_text.split()) <= _USER_END_REQUEST_MAX_WORDS
         and _USER_END_REQUEST_PATTERN.search(last_user_text)
@@ -119,15 +138,44 @@ def _confirmation_valid(transcript_entries: Optional[list]) -> bool:
         return True
 
     # Standard path: immediately-preceding contiguous assistant turns must
-    # include a confirmation ask. (LLM may stream multiple assistant
-    # messages in a single turn; scan all of them.)
+    # include a confirmation ask. (LLM may stream multiple assistant messages
+    # in a single turn; scan all of them.)
     for i in range(last_user_idx - 1, -1, -1):
-        entry = transcript_entries[i]
+        entry = entries[i]
         if entry.get("role") != "assistant":
             break
         if _CONFIRMATION_ASK_PATTERN.search(entry.get("text", "") or ""):
             return True
     return False
+
+
+def _extract_live_user_text(params: FunctionCallParams) -> Optional[str]:
+    """Best-effort: the latest user message from the LLM context.
+
+    The aggregator adds the user turn to the context BEFORE dispatching this
+    tool, so this is race-free (unlike the runner-owned ``transcript_entries``,
+    which is appended only after dispatch). Returns ``None`` on any shape
+    mismatch so ``_confirmation_valid`` falls back to the transcript.
+    """
+    try:
+        context = getattr(params, "context", None)
+        if context is None:
+            return None
+        get_messages = getattr(context, "get_messages", None)
+        messages = get_messages() if callable(get_messages) else getattr(context, "messages", None)
+        if not messages:
+            return None
+        for msg in reversed(list(messages)):
+            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
+            if role != "user":
+                continue
+            content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
+            return flatten_message_content(content) or None
+        return None
+    except Exception:
+        # Never let context introspection break end_call — fall back to transcript.
+        logger.debug("[end-call-tool] could not read live user text from context", exc_info=True)
+        return None
 
 
 _BLOCKED_LLM_MESSAGE = (
@@ -145,11 +193,15 @@ END_CALL_TOOL_SCHEMA = FunctionSchema(
     name=END_CALL_TOOL_NAME,
     description=(
         "End the current voice call. This tool is governed by a MANDATORY "
-        "two-step confirmation. NEVER call it in one turn.\n"
-        "Step 1: When the user hints they want to end (says goodbye, 'I'm "
-        "done', 'that's all', asks to hang up) OR when the task feels "
-        "complete, do NOT call this tool. Instead, ask 'Can I end the call "
-        "now?' (or similar) and wait for the user's reply.\n"
+        "two-step confirmation. NEVER call it in one turn UNLESS the user "
+        "directly asks to end (see the Step 1 exception below).\n"
+        "Step 1: When the user only HINTS they want to end (says goodbye, "
+        "'I'm done', 'that's all') OR when the task feels complete, do NOT "
+        "call this tool. Instead, ask 'Can I end the call now?' (or similar) "
+        "and wait for the user's reply. EXCEPTION: if the user DIRECTLY asks "
+        "to end ('end the call', 'hang up', 'can you end the call'), do not "
+        "ask again — say a one-sentence farewell and call this tool right "
+        "away.\n"
         "Step 2: Only if the user's next message clearly confirms (e.g. "
         "'yes', 'sure', 'go ahead', 'please do', 'goodbye', 'yep'), speak "
         "a one-sentence farewell and THEN call this tool. If the user says "
@@ -202,13 +254,17 @@ END_CALL_SYSTEM_PROMPT = (
     "all\", \"nothing else\", \"I'm good\", \"that's it\") should you move "
     "on to Step 1 below.\n"
     "\n"
-    "**Express end path — when the user directly asks to hang up.**\n"
+    "**Express end path — when the user directly asks to end (this takes "
+    "PRECEDENCE over Step 1).**\n"
     "If the user's own message clearly and directly asks you to end the "
-    "call (says \"hang up\", \"end the call\", \"end it now\", \"disconnect\", "
-    "\"cut the call\", \"just hang up\", or similar in a short direct "
-    "message), SKIP the two-step confirmation below. The user has already "
-    "given a direct instruction — asking \"Can I end the call?\" would be "
-    "unnecessary and feel tone-deaf. Instead:\n"
+    "call — whether phrased as a command (\"hang up\", \"end the call\", "
+    "\"end it now\", \"disconnect\", \"cut the call\", \"just hang up\") or "
+    "as a direct request or question (\"can you end the call\", \"please end "
+    "the call\", \"please hang up\", \"could you hang up\") — in a short "
+    "direct message, SKIP the two-step confirmation below. A direct end "
+    "request is NEVER a reason to ask \"Can I end the call?\": the user has "
+    "already told you to end, so asking would be tone-deaf and just repeat "
+    "them. Instead:\n"
     "1. Say a brief thank-you farewell in ONE sentence (e.g. \"Thank you "
     "for calling — have a great day!\", \"Thanks, take care!\", \"Alright, "
     "thanks for reaching out — goodbye!\").\n"
@@ -222,9 +278,11 @@ END_CALL_SYSTEM_PROMPT = (
     "**Step 1 — Ask for confirmation.**\n"
     "When ANY of the following happen, do NOT call `end_call`. Instead, ask "
     "the user for permission to end and WAIT for their reply:\n"
-    "- The user says a farewell word (\"bye\", \"goodbye\", \"have a good "
-    "day\", \"talk to you later\", \"I'll let you go\", \"that's all\", "
-    "\"hang up\", \"end the call\").\n"
+    "- The user says a soft farewell or hint (\"bye\", \"goodbye\", \"have a "
+    "good day\", \"talk to you later\", \"I'll let you go\", \"that's all\", "
+    "\"I'm done\"). NOTE: a DIRECT end command like \"end the call\" or "
+    "\"hang up\" is NOT a Step 1 hint — it uses the Express end path above "
+    "(end right away, do not ask).\n"
     "- The user has confirmed (in the completion step above) that they need "
     "nothing else.\n"
     "\n"
@@ -236,10 +294,15 @@ END_CALL_SYSTEM_PROMPT = (
     "\n"
     "**Step 2 — End only after explicit confirmation.**\n"
     "Look ONLY at the user's reply to your Step 1 question:\n"
-    "- If the reply clearly confirms (\"yes\", \"sure\", \"please\", \"go "
-    "ahead\", \"goodbye\", \"okay\", \"yep\", \"that's fine\"): speak a "
-    "one-sentence farewell (e.g. \"Alright, have a great day!\") and THEN "
-    "call `end_call`. Do not generate any further text after the tool call.\n"
+    "- If the reply is ANY affirmative (\"yes\", \"yeah\", \"yep\", \"sure\", "
+    "\"okay\", \"ok\", \"please\", \"please do\", \"go ahead\", \"you can\", "
+    "\"that's fine\", \"goodbye\", a nod word): this IS a valid call-end "
+    "confirmation because it directly answers your \"Can I end the call?\" "
+    "question. You MUST speak a one-sentence farewell (e.g. \"Alright, have a "
+    "great day!\") and THEN call `end_call`. Do NOT re-classify a bare "
+    "\"yes\"/\"sure\"/\"okay\" here as a mere task confirmation, and do NOT "
+    "ask again — just end. Do not generate any further text after the tool "
+    "call.\n"
     "- If the reply is anything else — a new question, \"no\", \"wait\", "
     "changing their mind, adding information, uncertainty, silence — do NOT "
     "call `end_call`. Continue the conversation normally.\n"
@@ -263,15 +326,16 @@ END_CALL_SYSTEM_PROMPT = (
     "that too. After that, do NOT keep asking. Continue naturally and let "
     "the user tell you if they need more. Asking \"anything else?\" over "
     "and over turns the call into an awkward loop.\n"
-    "- **Task confirmations are NOT call-end confirmations.** Whatever your "
-    "domain (booking, ordering, scheduling, support, sales, information "
-    "lookup, form filling, etc.), the user will often say things like "
-    "\"confirm\", \"go ahead\", \"proceed\", \"that's correct\", \"looks "
-    "good\", \"sounds right\", \"yes\", \"okay\" to move the task forward. "
-    "These words refer to the TASK, not the CALL. Never treat them as "
-    "permission to end the call. Only accept them as call-end confirmation "
-    "if they are a DIRECT reply to your \"Can I end the call?\" question "
-    "and there is no other pending topic between the two.\n"
+    "- **Distinguish task confirmations from call-end confirmations by WHAT "
+    "you last asked.** The user will often say \"confirm\", \"go ahead\", "
+    "\"proceed\", \"that's correct\", \"yes\", \"okay\" to move a TASK forward "
+    "(booking, ordering, scheduling, etc.) — when your last question was about "
+    "the task, those move the task forward and are NOT permission to end. "
+    "BUT when your last question was \"Can I end the call?\" (Step 1), that "
+    "SAME \"yes\"/\"yeah\"/\"sure\"/\"okay\" IS the call-end confirmation — "
+    "end the call per Step 2. The words are identical; the meaning comes from "
+    "the question you just asked. If you just asked to end the call, treat a "
+    "short affirmative as YES, end it.\n"
     "\n"
     "If you are ever unsure whether the user really wants to end, DO NOT "
     "call `end_call`. Keep the conversation going — but do NOT re-ask the "
@@ -364,7 +428,10 @@ def create_end_call_handler(
         # Confirmation guard — enforce the two-step flow. If the LLM skipped
         # the ask/reply step, refuse and instruct it to try again. Do NOT
         # mark ``state["fired"]`` so a later, valid attempt can still succeed.
-        if not _confirmation_valid(transcript_entries):
+        # Pass the live user text from the LLM context so a transcript-append
+        # race can't hide the user's just-spoken confirmation.
+        live_user_text = _extract_live_user_text(params)
+        if not _confirmation_valid(transcript_entries, live_user_text=live_user_text):
             logger.bind(
                 tool_name=END_CALL_TOOL_NAME,
                 tool_type="built_in",

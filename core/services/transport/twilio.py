@@ -64,7 +64,13 @@ class TwilioTransport(TelephonyProvider):
     transport_type = "twilio"
 
     def create_serializer(self, call_data: dict):
-        # Reuse credentials cached by AgentRunnerService if available
+        # Credentials resolve to the call's org via call_data["_org_id"] (set in
+        # TelephonyTransport.build). auto_hang_up stays ON (default) so the
+        # serializer drops the line PROMPTLY while processing the EndFrame — right
+        # after the farewell, before teardown encodes/uploads the recording — so
+        # ending isn't delayed. The call_termination terminator remains a backstop
+        # for the rare case the serializer can't hang up (e.g. creds unavailable
+        # on the plain parse path).
         twilio_creds = call_data.get("_twilio_creds") or get_twilio_credentials(org_id=call_data.get("_org_id"))
         return TwilioFrameSerializer(
             stream_sid=call_data["stream_id"],

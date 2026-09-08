@@ -19,6 +19,7 @@ from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED,
     EVENT_CALL_ENDED_ERROR,
     REASON_CLIENT_DISCONNECT,
+    REASON_LLM_END_CALL,
     log_call_event,
 )
 from core.services.pipeline.runner.base import PipelineRunner
@@ -147,6 +148,10 @@ class PipecatPipelineRunner(PipelineRunner):
         # back to "client_disconnect" only if nothing else has set it yet.
         # Persisted onto metadata_ by CallLogService.complete_call.
         end_reason_holder: dict = {"reason": None, "detail": None}
+        # Idempotency guard for the authoritative provider hangup. The teardown
+        # `finally` calls terminate_call once; the holder makes a second call
+        # (from any future end path) a no-op.
+        termination_state: dict = {"done": False}
         # The DB row's calls.id, populated once _create_call_log_in_thread
         # returns. Threaded through the builder to the tool handler and the
         # keyword detector so their structured log lines carry the id — makes
@@ -281,20 +286,57 @@ class PipecatPipelineRunner(PipelineRunner):
         # a transient DB failure degrades to an empty map instead of failing the call.
         from core.services.pipeline.prompt_variables import build_call_context
 
-        def _load_profile_vars_blocking() -> dict:
-            from core.services.agents.profile_context import load_profile_context
+        def _load_profile_blocking():
+            from core.services.agents.profile_context import (
+                load_profile_context,
+                load_profile_crm_plan,
+            )
+            from core.services.agents.profile_crm_enrichment_service import (
+                ProfileCrmPlan,
+            )
             try:
                 _agent_id = getattr(agent, "id", None)
                 _org_id = getattr(agent, "organization_id", None)
             except Exception:  # noqa: BLE001 — detached ORM instance, etc.
                 logger.exception("[runner] failed to read agent identity for profile vars")
-                return {}
+                return {}, ProfileCrmPlan(), None
             with get_db_context() as _db:
-                return load_profile_context(_db, _org_id, _agent_id)
+                _vars = load_profile_context(_db, _org_id, _agent_id)
+                _plan = load_profile_crm_plan(_db, _org_id, _agent_id)
+            return _vars, _plan, _org_id
 
-        profile_vars = await asyncio.get_event_loop().run_in_executor(
-            None, _load_profile_vars_blocking
+        profile_vars, crm_plan, profile_org_id = await asyncio.get_event_loop().run_in_executor(
+            None, _load_profile_blocking
         )
+
+        # CRM enrichment — fill EMPTY {{profile.<key>}} from the connected CRM at
+        # call start (prompt path). Matched by phone, chosen by direction
+        # (outbound → callee, inbound → caller). Started as a task so it overlaps
+        # the in-flight per-call setup, then awaited with a hard 2s cap. Any
+        # timeout/error degrades to the unenriched map (defaults/blank via
+        # substitute_variables) — enrichment NEVER fails the call.
+        crm_enrich_task = None
+        if crm_plan.is_actionable:
+            from core.services.agents.profile_crm_enrichment_service import (
+                ProfileCrmEnrichmentService,
+            )
+            caller_phone = to_number if direction == "outbound" else from_number
+            crm_enrich_task = asyncio.ensure_future(
+                ProfileCrmEnrichmentService().enrich(
+                    org_id=profile_org_id, plan=crm_plan, caller_phone=caller_phone
+                )
+            )
+
+        if crm_enrich_task is not None:
+            try:
+                enriched = await asyncio.wait_for(crm_enrich_task, timeout=2.0)
+            except Exception:  # noqa: BLE001 — timeout/lookup error → skip enrichment
+                logger.exception("[profile-crm] enrichment skipped (timeout or error)")
+                enriched = {}
+            for _k, _v in (enriched or {}).items():
+                if not (profile_vars.get(_k) or ""):  # never overwrite a set value
+                    profile_vars[_k] = _v
+
         prompt_context = build_call_context(
             agent, call_data, transport_type, profile_variables=profile_vars
         )
@@ -337,7 +379,9 @@ class PipecatPipelineRunner(PipelineRunner):
         # Collect transcripts via Pipecat's built-in aggregator events
         if agent:
             from pipecat.processors.aggregators.llm_response_universal import (
-                AssistantTurnStoppedMessage, UserTurnStoppedMessage)
+                AssistantTurnStoppedMessage,
+                UserTurnStoppedMessage,
+            )
 
             # Log the full user+assistant transcript live at INFO. Previously
             # only the assistant response was logged (via LLMResponseLogger)
@@ -673,6 +717,32 @@ class PipecatPipelineRunner(PipelineRunner):
                         "[runner] fail_call failed for call_log_id={}", _fail_call_id
                     )
             raise
+        finally:
+            # Backstop hangup — only for the paths where the serializer's
+            # auto_hang_up did NOT already drop the leg:
+            #   * client_disconnect — caller hung up; the leg is already down.
+            #   * llm_end_call      — the end_call tool queued an EndFrame, so the
+            #                         serializer hangs up promptly; a second REST
+            #                         call here would just hit an already-ended
+            #                         call (e.g. Telnyx 422 / code 90018).
+            # Both are skipped. The terminator still fires on the remaining paths
+            # (pipeline error/crash, or any end the serializer can't handle), where
+            # it is the only thing that drops the leg. terminate_call never raises,
+            # so it cannot mask an exception being propagated.
+            _end_reason = end_reason_holder.get("reason")
+            if _end_reason not in (REASON_CLIENT_DISCONNECT, REASON_LLM_END_CALL):
+                # Local import: the pipeline package eager-imports this runner, so a
+                # module-level import of call_termination (which imports
+                # pipeline.call_end_events) would be a circular import.
+                from core.services.call_termination import terminate_call
+
+                await terminate_call(
+                    transport_type=transport_type,
+                    call_data=call_data,
+                    org_id=getattr(agent, "organization_id", None),
+                    reason=end_reason_holder.get("reason"),
+                    state=termination_state,
+                )
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
