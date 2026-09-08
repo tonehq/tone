@@ -42,7 +42,10 @@ export default function ModelsTablePage() {
   const [isSaving, setIsSaving] = useState(false);
 
   const closeDetail = useCallback(() => setSelected(null), []);
-  const actions = useModelActions({ refresh: fl.refresh, closeDetail });
+  // Reopen the row-detail drawer — used to return from an edit drawer back to
+  // the detail view the edit was launched from (breadcrumb / cancel / save).
+  const openDetail = useCallback((m: ModelRow) => setSelected(m), []);
+  const actions = useModelActions({ refresh: fl.refresh, closeDetail, openDetail });
 
   const handleCreate = useCallback(
     async (payload: ServiceUpsertPayload) => {

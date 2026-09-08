@@ -39,6 +39,9 @@ interface UseModelActionsArgs {
   refresh: () => void;
   /** Close the row-detail drawer so editor drawers don't stack over it. */
   closeDetail: () => void;
+  /** Reopen the row-detail drawer — returns from an edit drawer to the detail
+   * view it was launched from (breadcrumb / cancel / save). */
+  openDetail: (m: ModelRow) => void;
 }
 
 /**
@@ -47,13 +50,28 @@ interface UseModelActionsArgs {
  * the shared service atoms. Keeps ModelsTablePage thin: the page renders the
  * drawers from this state; all side effects live here.
  */
-export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
+export function useModelActions({ refresh, closeDetail, openDetail }: UseModelActionsArgs) {
   const [, upsertProviderModel] = useAtom(upsertProviderModelAtom);
   const [, deleteProviderModel] = useAtom(deleteProviderModelAtom);
   const [, upsertModelProvider] = useAtom(upsertModelProviderAtom);
   const [, upsertService] = useAtom(upsertServiceAtom);
   const [, deleteService] = useAtom(deleteServiceAtom);
   const [, fetchService] = useAtom(fetchServiceAtom);
+
+  // The row-detail drawer's model that an edit was launched from. Kept so the
+  // edit drawers can navigate back to that detail view (breadcrumb / cancel /
+  // save) instead of stranding the user on the table.
+  const [detailModel, setDetailModel] = useState<ModelRow | null>(null);
+
+  // Return from an edit drawer to the detail view it came from. Pass the
+  // (optionally updated) row so the reopened detail reflects the latest values.
+  const backToDetail = useCallback(
+    (model?: ModelRow) => {
+      const target = model ?? detailModel;
+      if (target) openDetail(target);
+    },
+    [detailModel, openDetail],
+  );
 
   // Model editor
   const [modelEditOpen, setModelEditOpen] = useState(false);
@@ -102,6 +120,7 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
   // ── model ──────────────────────────────────────────────────────────────
   const editModel = useCallback(
     (m: ModelRow) => {
+      setDetailModel(m);
       setModelProviderId(m.provider.id);
       setEditingModel(m);
       setModelEditOpen(true);
@@ -119,6 +138,20 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
         await upsertProviderModel({ providerId: modelProviderId, modelId: id, values: payload });
         showToast.success('Model updated');
         setModelEditOpen(false);
+        // Return to the detail view with the edited values merged in so it
+        // reflects the save without waiting on a re-fetch.
+        if (detailModel) {
+          backToDetail({
+            ...detailModel,
+            name: payload.name,
+            display_name: payload.display_name ?? null,
+            kind: payload.kind,
+            cloud_provider_id: payload.cloud_provider_id ?? null,
+            description: payload.description ?? null,
+            base_url: payload.base_url ?? null,
+            is_active: payload.is_active ?? detailModel.is_active,
+          });
+        }
         refresh();
       } catch (err) {
         handleApiError(err);
@@ -126,7 +159,7 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
         setSavingModel(false);
       }
     },
-    [modelProviderId, upsertProviderModel, refresh],
+    [modelProviderId, upsertProviderModel, refresh, detailModel, backToDetail],
   );
 
   const openAddModel = useCallback(async () => {
@@ -187,6 +220,7 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
   // ── provider ─────────────────────────────────────────────────────────────
   const editProvider = useCallback(
     async (m: ModelRow) => {
+      setDetailModel(m);
       setEditingProvider(null);
       setProviderEditOpen(true);
       setProviderEditLoading(true);
@@ -215,6 +249,16 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
         showToast.success('Provider updated');
         setProviderEditOpen(false);
         setEditingProvider(null);
+        // Return to the detail view with the edited provider name merged in.
+        if (detailModel) {
+          backToDetail({
+            ...detailModel,
+            provider: {
+              ...detailModel.provider,
+              display_name: payload.display_name ?? detailModel.provider.display_name,
+            },
+          });
+        }
         refresh();
       } catch (err) {
         handleApiError(err);
@@ -222,7 +266,7 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
         setSavingProvider(false);
       }
     },
-    [upsertModelProvider, refresh],
+    [upsertModelProvider, refresh, detailModel, backToDetail],
   );
 
   // ── API key ────────────────────────────────────────────────────────────
@@ -299,11 +343,16 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
     editProvider,
     editApiKey,
     deleteApiKey,
+    // the model an edit was launched from (drives the edit-drawer breadcrumb)
+    detailModel,
     // model editor
     modelEditOpen,
     editingModel,
     savingModel,
-    closeModelEdit: useCallback(() => setModelEditOpen(false), []),
+    closeModelEdit: useCallback(() => {
+      setModelEditOpen(false);
+      backToDetail();
+    }, [backToDetail]),
     submitModel,
     // model creator
     addModelOpen,
@@ -318,7 +367,10 @@ export function useModelActions({ refresh, closeDetail }: UseModelActionsArgs) {
     editingProvider,
     providerEditLoading,
     savingProvider,
-    closeProviderEdit: useCallback(() => setProviderEditOpen(false), []),
+    closeProviderEdit: useCallback(() => {
+      setProviderEditOpen(false);
+      backToDetail();
+    }, [backToDetail]),
     submitProvider,
     // api-key editor
     keyEditOpen,

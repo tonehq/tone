@@ -13,6 +13,8 @@ import {
 import type { ModelUpsertPayload } from '@/services/servicesService';
 import type { ProviderModel, ServiceKind } from '@/types/service';
 
+import DrawerBackLink from './DrawerBackLink';
+
 interface ModelFormDrawerProps {
   open: boolean;
   editing: ProviderModel | null;
@@ -28,6 +30,12 @@ interface ModelFormDrawerProps {
   providers?: { id: string; display_name: string }[];
   /** Cloud providers the model can be hosted on (optional select). */
   cloudProviders?: { id: string; display_name: string }[];
+  /** When set, renders a breadcrumb that navigates back to the detail view the
+   * edit was launched from. Omit on the create flow (there's no detail to
+   * return to). */
+  onBack?: () => void;
+  /** Label for the back breadcrumb (usually the model name). */
+  backLabel?: string;
   onClose: () => void;
   /** `providerId` is only set when the provider picker is shown (create flow). */
   onSubmit: (payload: ModelUpsertPayload, id?: string, providerId?: string) => Promise<void>;
@@ -90,6 +98,8 @@ export default function ModelFormDrawer({
   allowedKinds,
   providers,
   cloudProviders,
+  onBack,
+  backLabel,
   onClose,
   onSubmit,
   isPending,
@@ -164,6 +174,7 @@ export default function ModelFormDrawer({
       }
     >
       <div className="flex flex-col gap-4 pt-1">
+        {onBack && <DrawerBackLink onClick={onBack} label={backLabel} />}
         {showProviderSelect && (
           <SelectInput
             name="providerId"
