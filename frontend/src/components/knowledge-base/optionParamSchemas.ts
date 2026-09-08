@@ -337,8 +337,23 @@ export const OPTION_PARAM_SCHEMAS: OptionParamSchemaMap = {
     ],
   },
   vector_store: {
-    // pgvector + memory take no user params — they build off the session /
-    // process. Left empty so the "Configure params" button stays disabled.
+    turbopuffer: [
+      {
+        key: 'namespace_prefix',
+        label: 'Namespace prefix',
+        type: 'string',
+        placeholder: 'tone-kb',
+        helperText: 'Namespaces are created as <prefix>-<organisation id>-<embedding dimensions>.',
+        defaultValue: 'tone-kb',
+      },
+      {
+        key: 'region',
+        label: 'Region',
+        type: 'string',
+        placeholder: 'gcp-us-central1',
+        helperText: 'Overrides TURBOPUFFER_REGION for runs using this recipe.',
+      },
+    ],
   },
 };
 

@@ -416,6 +416,9 @@ class Settings:
         # without a key configured.
         self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY")
 
+        self.TURBOPUFFER_API_KEY: str = get_secret("TURBOPUFFER_API_KEY")
+        self.TURBOPUFFER_REGION: str = get_secret("TURBOPUFFER_REGION")
+
         self.TEN_TURN_DETECTION_BASE_URL: str = get_secret("TEN_TURN_DETECTION_BASE_URL")
         self.TEN_TURN_DETECTION_API_KEY: str = get_secret("TEN_TURN_DETECTION_API_KEY")
         self.TEN_TURN_DETECTION_MODEL: str = get_secret("TEN_TURN_DETECTION_MODEL")
