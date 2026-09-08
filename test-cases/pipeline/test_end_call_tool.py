@@ -54,6 +54,14 @@ from core.services.pipeline.tools.end_call_tool import _confirmation_valid
             "   ",
             True,
         ),
+        # Reported scenario: a direct end request on the FIRST turn (no prior
+        # assistant ask) must be authorized via the express path, so the model
+        # can end immediately instead of asking to confirm.
+        ([{"role": "user", "text": "Can you end the call now?"}], None, True),
+        ([], "Can you end the call now?", True),
+        ([], "please end the call", True),
+        ([], "please hang up", True),
+        ([], "can you end the call", True),
     ],
 )
 def test_confirmation_valid(entries, live, expected):
