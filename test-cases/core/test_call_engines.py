@@ -7,9 +7,14 @@ Twilio SDK is fully mocked — no live API calls.
 from unittest.mock import MagicMock, patch
 
 import pytest
+from twilio.base.exceptions import TwilioRestException
 
-from core.services.call_engines import (CallEngine, TelnyxCallEngine, TwilioCallEngine,
-                                        get_call_engine)
+from core.services.call_engines import (
+    CallEngine,
+    TelnyxCallEngine,
+    TwilioCallEngine,
+    get_call_engine,
+)
 
 
 class TestFactory:
@@ -84,6 +89,26 @@ class TestInitiateAndEnd:
         assert engine.end_call("CA123") is True
         inst.calls.assert_called_with("CA123")
         inst.calls.return_value.update.assert_called_with(status="completed")
+
+    def test_end_call_already_ended_is_success(self, MockClient, _creds):
+        # The media serializer may have already dropped the call; the backstop
+        # terminator's redundant hangup must be a quiet success, not a failure.
+        inst = MockClient.return_value
+        inst.calls.return_value.update.side_effect = TwilioRestException(
+            400, "uri", "call already completed", code=20009
+        )
+        inst.calls.return_value.fetch.return_value.status = "completed"
+        engine = get_call_engine("twilio", org_id="org-1")
+        assert engine.end_call("CA123") is True
+
+    def test_end_call_real_failure_returns_false(self, MockClient, _creds):
+        inst = MockClient.return_value
+        inst.calls.return_value.update.side_effect = TwilioRestException(
+            400, "uri", "boom", code=20001
+        )
+        inst.calls.return_value.fetch.return_value.status = "in-progress"
+        engine = get_call_engine("twilio", org_id="org-1")
+        assert engine.end_call("CA123") is False
 
 
 _TELNYX_CREDS = {"api_key": "KEY", "account_sid": "acct-1", "application_sid": "app-1"}
@@ -395,8 +420,10 @@ class TestWsBridgeTransportBuilder:
 
     def test_builds_ws_client_with_raw_pcm(self):
         from core.serializers.raw_pcm import RawPCMSerializer
-        from core.services.transport.ws_bridge import (BRIDGE_SAMPLE_RATE,
-                                                      build_ws_bridge_transport)
+        from core.services.transport.ws_bridge import (
+            BRIDGE_SAMPLE_RATE,
+            build_ws_bridge_transport,
+        )
 
         t = build_ws_bridge_transport("wss://remote/ws/test?phone_number=1&sample_rate=24000")
         assert type(t).__name__ == "WebsocketClientTransport"

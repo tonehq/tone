@@ -19,7 +19,11 @@ class SalesforceCrmLookupPreset(CrmLookupPreset):
     """
 
     slug = "salesforce"
-    default_tool_name = "Query"
+    # Salesforce's hosted MCP (sobject-reads / sobject-all) names its SOQL tool
+    # ``run_soql_query``; older/other builds may use ``query``. Resolved against
+    # the server's real tools at runtime.
+    default_tool_name = "run_soql_query"
+    tool_name_candidates = ("run_soql_query", "query", "Query", "soql_query")
     record_path = "records"
 
     _SELECT = "SELECT Id, FirstName, LastName, Phone, Email FROM Contact WHERE "

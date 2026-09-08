@@ -62,6 +62,12 @@ from core.services.pipeline.tools.end_call_tool import _confirmation_valid
         ([], "please end the call", True),
         ([], "please hang up", True),
         ([], "can you end the call", True),
+        # Bare affirmatives replying to the agent's "Can I end the call?" ask
+        # must be authorized (guard side of the #5 fix).
+        ([{"role": "assistant", "text": "Can I end the call now?"}], "yeah", True),
+        ([{"role": "assistant", "text": "Can I end the call now?"}], "sure", True),
+        ([{"role": "assistant", "text": "Can I end the call now?"}], "okay", True),
+        ([{"role": "assistant", "text": "Shall I go ahead and end the call?"}], "yep", True),
     ],
 )
 def test_confirmation_valid(entries, live, expected):

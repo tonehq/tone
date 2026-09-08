@@ -19,6 +19,7 @@ from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED,
     EVENT_CALL_ENDED_ERROR,
     REASON_CLIENT_DISCONNECT,
+    REASON_LLM_END_CALL,
     log_call_event,
 )
 from core.services.pipeline.runner.base import PipelineRunner
@@ -290,7 +291,9 @@ class PipecatPipelineRunner(PipelineRunner):
                 load_profile_context,
                 load_profile_crm_plan,
             )
-            from core.services.agents.profile_crm_enrichment_service import ProfileCrmPlan
+            from core.services.agents.profile_crm_enrichment_service import (
+                ProfileCrmPlan,
+            )
             try:
                 _agent_id = getattr(agent, "id", None)
                 _org_id = getattr(agent, "organization_id", None)
@@ -376,7 +379,9 @@ class PipecatPipelineRunner(PipelineRunner):
         # Collect transcripts via Pipecat's built-in aggregator events
         if agent:
             from pipecat.processors.aggregators.llm_response_universal import (
-                AssistantTurnStoppedMessage, UserTurnStoppedMessage)
+                AssistantTurnStoppedMessage,
+                UserTurnStoppedMessage,
+            )
 
             # Log the full user+assistant transcript live at INFO. Previously
             # only the assistant response was logged (via LLMResponseLogger)
@@ -713,14 +718,19 @@ class PipecatPipelineRunner(PipelineRunner):
                     )
             raise
         finally:
-            # Authoritative, provider-agnostic hangup — drop the phone leg even
-            # when the serializer's auto_hang_up didn't fire (End/Cancel frame
-            # lost during teardown) or the provider has no serializer hangup.
-            # Skipped when the caller hung up first (client_disconnect): the leg
-            # is already down, so a REST hangup would be a pointless call. This
-            # runs on the graceful-end and pipeline-error paths; terminate_call
-            # never raises, so it cannot mask the exception being propagated.
-            if end_reason_holder.get("reason") != REASON_CLIENT_DISCONNECT:
+            # Backstop hangup — only for the paths where the serializer's
+            # auto_hang_up did NOT already drop the leg:
+            #   * client_disconnect — caller hung up; the leg is already down.
+            #   * llm_end_call      — the end_call tool queued an EndFrame, so the
+            #                         serializer hangs up promptly; a second REST
+            #                         call here would just hit an already-ended
+            #                         call (e.g. Telnyx 422 / code 90018).
+            # Both are skipped. The terminator still fires on the remaining paths
+            # (pipeline error/crash, or any end the serializer can't handle), where
+            # it is the only thing that drops the leg. terminate_call never raises,
+            # so it cannot mask an exception being propagated.
+            _end_reason = end_reason_holder.get("reason")
+            if _end_reason not in (REASON_CLIENT_DISCONNECT, REASON_LLM_END_CALL):
                 # Local import: the pipeline package eager-imports this runner, so a
                 # module-level import of call_termination (which imports
                 # pipeline.call_end_events) would be a circular import.
