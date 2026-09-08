@@ -233,6 +233,11 @@ class Settings:
         self.MEMRAY_INGESTION_PROFILING_ENABLED: bool = _bool_env(
             get_secret("MEMRAY_INGESTION_PROFILING_ENABLED")
         )
+        # Also capture NATIVE (C/C++) allocations, not just the Python heap. Needed to
+        # attribute native ML/audio memory (docling/transformers/onnxruntime, VAD/turn
+        # models, audio buffers) that heap-only tracking misses — applies to every flow.
+        # Extra overhead + larger files, so it is a separate OFF-by-default knob.
+        self.MEMRAY_NATIVE_TRACES: bool = _bool_env(get_secret("MEMRAY_NATIVE_TRACES"))
         self.MEMRAY_PROFILE_DIR: str = get_secret("MEMRAY_PROFILE_DIR") or "memray_profiles"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX")

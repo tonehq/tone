@@ -13,6 +13,9 @@ graph for a single unit afterward:
 
     python -m memray flamegraph memray_profiles/<prefix>_<ref>.bin
 
+`MEMRAY_NATIVE_TRACES` additionally captures native (C/C++) allocations for every
+flow — needed to attribute ML/audio-library memory the Python heap can't see.
+
 Profiling must NEVER break the wrapped work: every failure path (flag off, memray
 not installed, unwritable dir, a Tracker already active in this process) degrades
 to a silent no-op that still runs the work.
@@ -63,7 +66,7 @@ def _profile_memory(enabled: bool, prefix: str, ref: str):
         return
 
     try:
-        tracker = memray.Tracker(path)
+        tracker = memray.Tracker(path, native_traces=settings.MEMRAY_NATIVE_TRACES)
         # Enter explicitly so a start failure (e.g. another Tracker already active,
         # or the file exists) is handled here and never masks a real error from
         # the wrapped work.
