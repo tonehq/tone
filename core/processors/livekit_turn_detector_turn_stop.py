@@ -17,6 +17,7 @@ from core.processors.text_turn_detection_turn_stop import (
     TextTurnDetectionUserTurnStopStrategy,
     TurnDecision,
 )
+from core.utils.llm_context import flatten_message_content
 
 HF_REPO = "livekit/turn-detector"
 ONNX_FILENAME = "model_q8.onnx"
@@ -166,13 +167,7 @@ class LiveKitTurnDetectorUserTurnStopStrategy(TextTurnDetectionUserTurnStopStrat
         for message in self._context.get_messages():
             if not isinstance(message, dict) or message.get("role") not in ("user", "assistant"):
                 continue
-            content = message.get("content")
-            if isinstance(content, list):
-                content = " ".join(
-                    part.get("text", "")
-                    for part in content
-                    if isinstance(part, dict) and part.get("type") == "text"
-                )
-            if isinstance(content, str) and content.strip():
+            content = flatten_message_content(message.get("content"))
+            if content.strip():
                 history.append({"role": message["role"], "content": content})
         return history
