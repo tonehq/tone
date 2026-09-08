@@ -22,6 +22,8 @@ from uuid import UUID
 
 from loguru import logger
 
+from core.services.agents.crm_lookup_presets import get_crm_lookup_preset
+
 
 @dataclass
 class ProfileCrmPlan:
@@ -31,18 +33,22 @@ class ProfileCrmPlan:
     mcp_server_id: Optional[UUID] = None
     lookup_tool_name: Optional[str] = None
     phone_argument: Optional[str] = None
+    # ``app_integrations.slug`` of the CRM (``hubspot``/``salesforce``/``zoho_crm``),
+    # or None for a custom/other MCP → the generic single-phone-argument flow.
+    crm_slug: Optional[str] = None
     # [(profile_key, crm_field), ...] — only EMPTY, mapped variables.
     fill_plan: list[tuple[str, str]] = field(default_factory=list)
 
     @property
     def is_actionable(self) -> bool:
-        return bool(
-            self.enabled
-            and self.fill_plan
-            and self.mcp_server_id
-            and self.lookup_tool_name
-            and self.phone_argument
-        )
+        if not (self.enabled and self.fill_plan and self.mcp_server_id):
+            return False
+        # A known CRM preset supplies both the tool and the phone shape, so
+        # stored lookup_tool_name / phone_argument are not required for it. Any
+        # other MCP keeps the original requirement (unchanged behavior).
+        if get_crm_lookup_preset(self.crm_slug):
+            return True
+        return bool(self.lookup_tool_name and self.phone_argument)
 
 
 class ProfileCrmEnrichmentService:
@@ -62,19 +68,27 @@ class ProfileCrmEnrichmentService:
         from core.services.mcp_server_service import McpServerService
         from core.services.agents.agent_profile_variable_service import PROFILE_PREFIX
 
+        # A known CRM → its preset supplies the tool, the structured phone
+        # request, and the response wrapper key. Otherwise the generic flow:
+        # the stored tool + a plain {phone_argument: phone}.
+        preset = get_crm_lookup_preset(plan.crm_slug)
+        tool_name = plan.lookup_tool_name or (preset.default_tool_name if preset else None)
+        arguments = (
+            preset.build_arguments(caller_phone)
+            if preset
+            else {plan.phone_argument: caller_phone}
+        )
+        record_prefix = preset.record_path if preset else ""
+
         try:
             with get_db_context() as db:
                 record = await McpServerService(db, org_id=org_id).call_tool(
-                    plan.mcp_server_id,
-                    plan.lookup_tool_name,
-                    {plan.phone_argument: caller_phone},
+                    plan.mcp_server_id, tool_name, arguments
                 )
         except Exception:  # noqa: BLE001 — enrichment must never break a call
             # phone is PII — never logged; the CRM record contents never logged.
             logger.exception(
-                "[profile-crm] CRM lookup failed org={} tool={}",
-                org_id,
-                plan.lookup_tool_name,
+                "[profile-crm] CRM lookup failed org={} tool={}", org_id, tool_name
             )
             return {}
 
@@ -84,7 +98,10 @@ class ProfileCrmEnrichmentService:
 
         filled: dict[str, str] = {}
         for key, crm_field in plan.fill_plan:
-            value = _resolve_path(record, crm_field)
+            # For a preset CRM the record sits under a wrapper (results/records/
+            # data), so crm_field is written relative to the record.
+            path = f"{record_prefix}.{crm_field}" if record_prefix else crm_field
+            value = _resolve_path(record, path)
             if value is not None:
                 filled[f"{PROFILE_PREFIX}{key}"] = value
         return filled

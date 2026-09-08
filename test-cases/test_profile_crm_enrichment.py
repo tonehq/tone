@@ -14,6 +14,10 @@ from core.services.agents.agent_profile_variable_service import (
     AgentProfileVariableService,
 )
 from core.services.agents.profile_context import load_profile_crm_plan
+from core.services.agents.crm_lookup_presets import (
+    get_crm_lookup_preset,
+    has_crm_lookup_preset,
+)
 from core.services.agents.profile_crm_enrichment_service import (
     ProfileCrmEnrichmentService,
     ProfileCrmPlan,
@@ -231,3 +235,125 @@ class TestLoadProfileCrmPlan:
         # the config service import cleanly and the off path is safe.
         assert load_profile_crm_plan(None, None, None).is_actionable is False
         assert AgentProfileCrmConfigService is not None
+
+
+class TestCrmLookupPresets:
+    def test_zoho_plain_phone(self):
+        p = get_crm_lookup_preset("zoho_crm")
+        assert p.default_tool_name == "Search Records"
+        assert p.record_path == "data"
+        assert p.build_arguments("+1555") == {"phone": "+1555", "module": "Contacts"}
+
+    def test_hubspot_filter_uses_contains_token(self):
+        p = get_crm_lookup_preset("hubspot")
+        assert p.default_tool_name == "hubspot-search-objects"
+        assert p.record_path == "results"
+        args = p.build_arguments("+1 (443) 443-9905")
+        assert args["object_type"] == "contacts"
+        f = args["filters"][0]
+        assert f == {
+            "propertyName": "phone",
+            "operator": "CONTAINS_TOKEN",
+            "value": "+1 (443) 443-9905",
+        }
+
+    def test_salesforce_soql_strips_to_digits(self):
+        p = get_crm_lookup_preset("salesforce")
+        assert p.default_tool_name == "Query"
+        assert p.record_path == "records"
+        soql = p.build_arguments("+1 (443) 443-9905")["query"]
+        assert "FROM Contact" in soql
+        assert "14434439905" in soql  # non-digits stripped
+        assert "LIMIT 1" in soql
+
+    def test_unknown_and_none_slug(self):
+        assert get_crm_lookup_preset("mystery") is None
+        assert get_crm_lookup_preset(None) is None
+        assert has_crm_lookup_preset("hubspot") is True
+        assert has_crm_lookup_preset(None) is False
+
+
+def _preset_plan(slug):
+    """Actionable plan for a preset CRM — no tool/phone_argument stored (the
+    preset supplies them)."""
+    return ProfileCrmPlan(
+        enabled=True,
+        mcp_server_id="srv",
+        crm_slug=slug,
+        fill_plan=[("username", "properties.firstname"), ("age", "properties.age")],
+    )
+
+
+class TestPresetActionable:
+    def test_preset_needs_no_tool_or_phone_arg(self):
+        assert _preset_plan("hubspot").is_actionable is True
+
+    def test_generic_still_requires_tool_and_arg(self):
+        assert ProfileCrmPlan(
+            enabled=True, mcp_server_id="srv", fill_plan=[("a", "b")]
+        ).is_actionable is False
+
+
+class TestEnrichWithPreset:
+    def test_hubspot_wrapper_and_args(self, monkeypatch):
+        captured = {}
+
+        @contextmanager
+        def _fake_ctx():
+            yield None
+
+        monkeypatch.setattr("core.database.session.get_db_context", _fake_ctx)
+
+        class _FakeMcp:
+            def __init__(self, db, org_id=None, **kwargs):
+                pass
+
+            async def call_tool(self, mcp_server_id, tool_name, arguments):
+                captured["tool"] = tool_name
+                captured["args"] = arguments
+                # HubSpot wraps matches under "results".
+                return {"results": [{"properties": {"firstname": "Ada", "age": 36}}]}
+
+        monkeypatch.setattr("core.services.mcp_server_service.McpServerService", _FakeMcp)
+
+        out = asyncio.run(
+            ProfileCrmEnrichmentService().enrich(
+                org_id="org", plan=_preset_plan("hubspot"), caller_phone="+1555"
+            )
+        )
+        # preset tool + structured filter used
+        assert captured["tool"] == "hubspot-search-objects"
+        assert captured["args"]["filters"][0]["operator"] == "CONTAINS_TOKEN"
+        # crm_field resolved RELATIVE to the record (record_path "results" stripped)
+        assert out == {"profile.username": "Ada", "profile.age": "36"}
+
+    def test_salesforce_records_wrapper(self, monkeypatch):
+        @contextmanager
+        def _fake_ctx():
+            yield None
+
+        monkeypatch.setattr("core.database.session.get_db_context", _fake_ctx)
+
+        class _FakeMcp:
+            def __init__(self, db, org_id=None, **kwargs):
+                pass
+
+            async def call_tool(self, mcp_server_id, tool_name, arguments):
+                assert tool_name == "Query"
+                assert "SELECT" in arguments["query"]
+                return {"records": [{"FirstName": "Bob"}]}
+
+        monkeypatch.setattr("core.services.mcp_server_service.McpServerService", _FakeMcp)
+
+        plan = ProfileCrmPlan(
+            enabled=True,
+            mcp_server_id="srv",
+            crm_slug="salesforce",
+            fill_plan=[("username", "FirstName")],
+        )
+        out = asyncio.run(
+            ProfileCrmEnrichmentService().enrich(
+                org_id="org", plan=plan, caller_phone="+1555"
+            )
+        )
+        assert out == {"profile.username": "Bob"}
