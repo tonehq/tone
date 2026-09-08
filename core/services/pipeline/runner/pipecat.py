@@ -281,20 +281,55 @@ class PipecatPipelineRunner(PipelineRunner):
         # a transient DB failure degrades to an empty map instead of failing the call.
         from core.services.pipeline.prompt_variables import build_call_context
 
-        def _load_profile_vars_blocking() -> dict:
-            from core.services.agents.profile_context import load_profile_context
+        def _load_profile_blocking():
+            from core.services.agents.profile_context import (
+                load_profile_context,
+                load_profile_crm_plan,
+            )
+            from core.services.agents.profile_crm_enrichment_service import ProfileCrmPlan
             try:
                 _agent_id = getattr(agent, "id", None)
                 _org_id = getattr(agent, "organization_id", None)
             except Exception:  # noqa: BLE001 — detached ORM instance, etc.
                 logger.exception("[runner] failed to read agent identity for profile vars")
-                return {}
+                return {}, ProfileCrmPlan(), None
             with get_db_context() as _db:
-                return load_profile_context(_db, _org_id, _agent_id)
+                _vars = load_profile_context(_db, _org_id, _agent_id)
+                _plan = load_profile_crm_plan(_db, _org_id, _agent_id)
+            return _vars, _plan, _org_id
 
-        profile_vars = await asyncio.get_event_loop().run_in_executor(
-            None, _load_profile_vars_blocking
+        profile_vars, crm_plan, profile_org_id = await asyncio.get_event_loop().run_in_executor(
+            None, _load_profile_blocking
         )
+
+        # CRM enrichment — fill EMPTY {{profile.<key>}} from the connected CRM at
+        # call start (prompt path). Matched by phone, chosen by direction
+        # (outbound → callee, inbound → caller). Started as a task so it overlaps
+        # the in-flight per-call setup, then awaited with a hard 2s cap. Any
+        # timeout/error degrades to the unenriched map (defaults/blank via
+        # substitute_variables) — enrichment NEVER fails the call.
+        crm_enrich_task = None
+        if crm_plan.is_actionable:
+            from core.services.agents.profile_crm_enrichment_service import (
+                ProfileCrmEnrichmentService,
+            )
+            caller_phone = to_number if direction == "outbound" else from_number
+            crm_enrich_task = asyncio.ensure_future(
+                ProfileCrmEnrichmentService().enrich(
+                    org_id=profile_org_id, plan=crm_plan, caller_phone=caller_phone
+                )
+            )
+
+        if crm_enrich_task is not None:
+            try:
+                enriched = await asyncio.wait_for(crm_enrich_task, timeout=2.0)
+            except Exception:  # noqa: BLE001 — timeout/lookup error → skip enrichment
+                logger.exception("[profile-crm] enrichment skipped (timeout or error)")
+                enriched = {}
+            for _k, _v in (enriched or {}).items():
+                if not (profile_vars.get(_k) or ""):  # never overwrite a set value
+                    profile_vars[_k] = _v
+
         prompt_context = build_call_context(
             agent, call_data, transport_type, profile_variables=profile_vars
         )
