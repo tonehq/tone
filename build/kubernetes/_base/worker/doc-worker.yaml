@@ -36,6 +36,10 @@ spec:
             - worker
             - "--name=$(POD_NAME)"
             - "--queues=ingestion,eval,agent_eval,call_transcript_eval"
+            # Keep at 1 while memray profiling (MEMRAY_INGESTION_PROFILING_ENABLED):
+            # memray allows only one Tracker per process, so concurrency >1 would
+            # run 2+ ingestion jobs in one process and profile only one of them.
+            # Scale throughput by adding pods (KEDA), not by raising this.
             - "--concurrency=1"
             - "--no-listen-notify"
             - "--fetch-job-polling-interval=5"

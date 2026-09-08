@@ -19,17 +19,7 @@ export default function EvalRunningIndicator({ agentId }: { agentId: string }) {
   );
   if (active.length === 0) return null;
 
-  const run = active[0];
-  let label: string;
-  if (active.length > 1) {
-    label = `${active.length} evaluations running…`;
-  } else if (run.status === 'pending') {
-    label = 'Evaluation queued…';
-  } else if (run.total_scenarios > 0) {
-    label = `Evaluation running… ${run.scored_count}/${run.total_scenarios} scored`;
-  } else {
-    label = 'Evaluation running…';
-  }
+  const label = active.length > 1 ? 'Evaluations running…' : 'Evaluation running…';
 
   return (
     <StatusPill
