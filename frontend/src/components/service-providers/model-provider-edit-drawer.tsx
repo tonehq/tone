@@ -13,12 +13,19 @@ import {
 import type { ModelProvider, ModelProviderUpsertPayload } from '@/types/service';
 import { handleApiError } from '@/utils/helpers';
 
+import DrawerBackLink from './DrawerBackLink';
+
 interface ModelProviderEditDrawerProps {
   open: boolean;
   editing: ModelProvider | null;
   /** When true, render an in-drawer spinner instead of the form. Used so the
    * drawer can pop open immediately while the parent fetches the record. */
   loading?: boolean;
+  /** When set, renders a breadcrumb that navigates back to the detail view the
+   * edit was launched from. */
+  onBack?: () => void;
+  /** Label for the back breadcrumb (usually the model name). */
+  backLabel?: string;
   onClose: () => void;
   onSubmit: (providerId: string, payload: Partial<ModelProviderUpsertPayload>) => Promise<void>;
   isPending: boolean;
@@ -66,6 +73,8 @@ export default function ModelProviderEditDrawer({
   open,
   editing,
   loading = false,
+  onBack,
+  backLabel,
   onClose,
   onSubmit,
   isPending,
@@ -125,6 +134,11 @@ export default function ModelProviderEditDrawer({
         </div>
       }
     >
+      {onBack && (
+        <div className="mb-2">
+          <DrawerBackLink onClick={onBack} label={backLabel} />
+        </div>
+      )}
       {loading && !editing ? (
         <AppLoader className="min-h-0 flex-1 py-16" />
       ) : (

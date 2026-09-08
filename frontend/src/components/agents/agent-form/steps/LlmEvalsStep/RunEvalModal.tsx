@@ -109,7 +109,7 @@ export default function RunEvalModal({
       });
       showToast.success(
         'Evaluation started',
-        'Your scenarios are running now. Open the Runs tab in a moment to see the results.',
+        'Your scenarios are running now — you’ll see the progress here and on the Results tab.',
       );
       onClose();
     } catch (error) {
@@ -122,7 +122,7 @@ export default function RunEvalModal({
       open={open}
       onClose={onClose}
       title="Run LLM eval"
-      description="Enqueues an async job. Refresh in a few seconds to see the run."
+      description="Enqueues an async job — you’ll see it running on the Manage Evals and Results tabs."
       width="max-w-lg"
       footer={
         <div className="flex justify-end gap-2">

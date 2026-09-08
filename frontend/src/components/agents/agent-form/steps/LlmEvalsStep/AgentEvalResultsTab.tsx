@@ -14,6 +14,7 @@ import { formatDate } from '@/utils/date';
 
 import AgentEvalResultsTable from './AgentEvalResultsTable';
 import AgentEvalSummaryStrip from './AgentEvalSummaryStrip';
+import EvalRunningIndicator from './EvalRunningIndicator';
 import { versionLabel } from './constants';
 
 const ALL = '__all__';
@@ -81,6 +82,7 @@ export default function AgentEvalResultsTab({ agentId }: { agentId: string }) {
 
   return (
     <div className="flex flex-col gap-4">
+      <EvalRunningIndicator agentId={agentId} />
       {/* Filters: version + run. */}
       <div className="flex flex-wrap items-center gap-3">
         <div className="min-w-[220px] sm:min-w-[260px]">

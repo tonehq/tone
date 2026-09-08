@@ -31,6 +31,7 @@ export default function GenerateScenariosModal({
   folderOptions,
   defaultFolderId,
   versions,
+  onGenerated,
 }: {
   open: boolean;
   onClose: () => void;
@@ -38,6 +39,9 @@ export default function GenerateScenariosModal({
   folderOptions: AgentLlmEvalFolder[];
   defaultFolderId: string | null;
   versions: AgentLlmEvalScenarioVersion[];
+  // Called with the reserved version's id so the parent can select it and show
+  // the "Generating…" indicator immediately (without waiting for a refresh).
+  onGenerated?: (versionId: string) => void;
 }) {
   // Generation runs as a background job: the request returns immediately, the
   // version shows a "Generating…" indicator, and the scenarios land as
@@ -90,13 +94,16 @@ export default function GenerateScenariosModal({
     );
     try {
       const { folderId: resolvedFolderId } = await resolveFolderIdOrCreate();
-      await generate.mutateAsync({
+      const result = await generate.mutateAsync({
         mode,
         version_id: mode === 'overwrite' ? overwriteVersionId : null,
         parent_id: resolvedFolderId || null,
         generation_prompt: generationPrompt.trim() || null,
         count: parsedCount,
       });
+      // Select the reserved version so the "Generating…" chip shows right away
+      // (a new version otherwise stays unselected until a manual refresh).
+      onGenerated?.(result.version_id);
       showToast.success(
         'Generation started',
         'Scenarios are generating in the background — they’ll appear here for review when ready.',
