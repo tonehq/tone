@@ -41,3 +41,12 @@ export const discoverMcpTools = async (mcpServerId: string): Promise<MCPToolsRes
   });
   return data;
 };
+
+/** MCP servers attached to an agent's published version — the candidate set
+ * for the profile-variable CRM lookup source. */
+export const getMcpServersByAgent = async (agentId: string): Promise<MCPServer[]> => {
+  const { data } = await axiosInstance.get<MCPServer[]>('/mcp-server/get_mcp_servers_by_agent', {
+    params: { agent_id: agentId },
+  });
+  return Array.isArray(data) ? data : [];
+};

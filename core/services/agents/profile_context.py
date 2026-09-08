@@ -30,9 +30,13 @@ from uuid import UUID
 from loguru import logger
 from sqlalchemy.orm import Session
 
+from core.services.agents.agent_profile_crm_config_service import (
+    AgentProfileCrmConfigService,
+)
 from core.services.agents.agent_profile_variable_service import (
     AgentProfileVariableService,
 )
+from core.services.agents.profile_crm_enrichment_service import ProfileCrmPlan
 
 
 def load_profile_context(
@@ -55,3 +59,40 @@ def load_profile_context(
             "[profile-vars] load failed org={} agent={}", org_id, agent_id
         )
         return {}
+
+
+def load_profile_crm_plan(
+    db: Session,
+    org_id: Optional[Union[str, UUID]],
+    agent_id: Optional[Union[str, UUID]],
+) -> ProfileCrmPlan:
+    """Build the per-call CRM enrichment plan (sync DB reads only).
+
+    Returns a disabled ``ProfileCrmPlan`` when enrichment is off, unconfigured,
+    there are no empty mapped variables, or on any DB error — so the caller can
+    unconditionally start enrichment and it simply no-ops. The actual CRM call
+    is done separately (async) by ``ProfileCrmEnrichmentService.enrich``.
+    """
+    if not agent_id or not org_id:
+        return ProfileCrmPlan()
+    try:
+        config = AgentProfileCrmConfigService(db, org_id=org_id).get_config(agent_id)
+        if config is None or not config.is_enabled:
+            return ProfileCrmPlan()
+        fill_plan = AgentProfileVariableService(db, org_id=org_id).get_crm_fill_plan(
+            agent_id
+        )
+        if not fill_plan:
+            return ProfileCrmPlan()
+        return ProfileCrmPlan(
+            enabled=True,
+            mcp_server_id=config.mcp_server_id,
+            lookup_tool_name=config.lookup_tool_name,
+            phone_argument=config.phone_argument,
+            fill_plan=fill_plan,
+        )
+    except Exception:  # noqa: BLE001 — resolver must never break a call
+        logger.exception(
+            "[profile-crm] plan load failed org={} agent={}", org_id, agent_id
+        )
+        return ProfileCrmPlan()

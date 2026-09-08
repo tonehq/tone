@@ -53,6 +53,7 @@ interface PanelRow {
   key: string;
   value: string;
   description: string | null;
+  crm_field: string | null;
 }
 
 // ── EDIT mode (API-backed) ──────────────────────────────────────────────
@@ -72,6 +73,7 @@ function EditModePanel({ agentId }: { agentId: string }) {
         key: v.key,
         value: v.value,
         description: v.description,
+        crm_field: v.crm_field,
       })),
     [variables],
   );
@@ -82,6 +84,7 @@ function EditModePanel({ agentId }: { agentId: string }) {
         key: input.key,
         value: input.value,
         description: input.description?.trim() || null,
+        crm_field: input.crm_field?.trim() || null,
       });
     },
     [createMutation],
@@ -97,6 +100,7 @@ function EditModePanel({ agentId }: { agentId: string }) {
           // normalises whitespace-only / empty to NULL. Sending `null` would be
           // treated as "leave unchanged" by the PATCH-style update route.
           description: patch.description?.trim() ?? '',
+          crm_field: patch.crm_field?.trim() ?? '',
         },
       });
     },
@@ -136,6 +140,7 @@ function CreateModePanel() {
         key: d.key,
         value: d.value,
         description: d.description,
+        crm_field: d.crm_field,
       })),
     [drafts],
   );
@@ -157,6 +162,7 @@ function CreateModePanel() {
           key: input.key,
           value: input.value,
           description: input.description?.trim() || null,
+          crm_field: input.crm_field?.trim() || null,
         },
       ]);
     },
@@ -176,6 +182,7 @@ function CreateModePanel() {
                 // normalises whitespace-only / empty to NULL. Sending `null` would be
                 // treated as "leave unchanged" by the PATCH-style update route.
                 description: patch.description?.trim() ?? '',
+                crm_field: patch.crm_field?.trim() || null,
               }
             : d,
         ),
@@ -244,6 +251,7 @@ function useFlushRetryOnMount(agentId: string) {
             key: draft.key,
             value: draft.value,
             description: draft.description ?? undefined,
+            crm_field: draft.crm_field ?? undefined,
           });
         } catch (err) {
           console.error(
@@ -385,6 +393,17 @@ function VariablesPanel({
           ),
       },
       {
+        key: 'crm_field',
+        title: 'CRM field',
+        dataIndex: 'crm_field',
+        render: (_v, row) =>
+          row.crm_field ? (
+            <span className="font-mono text-xs text-muted-foreground">{row.crm_field}</span>
+          ) : (
+            <span className="text-muted-foreground">—</span>
+          ),
+      },
+      {
         key: 'actions',
         title: '',
         align: 'right',
@@ -456,6 +475,7 @@ function VariablesPanel({
                 key: editTarget.key,
                 value: editTarget.value,
                 description: editTarget.description,
+                crm_field: editTarget.crm_field,
                 created_at: null,
                 updated_at: null,
               }

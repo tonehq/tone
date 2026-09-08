@@ -1,4 +1,6 @@
 import base64
+import json
+from contextlib import asynccontextmanager
 from urllib.parse import urlparse
 import uuid as uuid_lib
 from datetime import datetime, timezone
@@ -183,6 +185,30 @@ def resolve_server_url(mcp_server) -> str:
 
 def has_secret_url(auth_config) -> bool:
     return bool((auth_config or {}).get(SECRET_URL_KEY))
+
+
+def parse_tool_result(result) -> Any:
+    """Best-effort parse of an MCP ``CallToolResult`` into usable data.
+
+    Concatenates the text content blocks and JSON-decodes them; returns the
+    parsed object (usually a dict or list) when it's JSON, the raw text when
+    it isn't, or ``None`` when the tool errored / returned nothing. Never
+    raises — callers treat ``None`` as "no data".
+    """
+    if result is None or getattr(result, "isError", False):
+        return None
+    parts = []
+    for item in getattr(result, "content", None) or []:
+        text = getattr(item, "text", None)
+        if isinstance(text, str):
+            parts.append(text)
+    text = "\n".join(parts).strip()
+    if not text:
+        return None
+    try:
+        return json.loads(text)
+    except (ValueError, TypeError):
+        return text
 
 
 def public_url_for(secret_url: str) -> str:
@@ -879,6 +905,97 @@ class McpServerService(BaseService):
             ),
         )
 
+    @asynccontextmanager
+    async def _open_mcp_session(
+        self, server_url: str, transport_type: str, headers: dict
+    ):
+        """Open a raw MCP ``ClientSession`` for one round-trip (list/call).
+
+        The single place the transport → session handshake lives, shared by
+        ``validate_mcp_connection`` (list_tools) and ``call_tool`` so there is
+        one connect implementation. Caller wraps the ``async with`` in its own
+        try/except to map failures to HTTP errors.
+        """
+        from mcp.client.session import ClientSession
+        from mcp.client.sse import sse_client
+        from mcp.client.streamable_http import streamablehttp_client
+
+        if transport_type == "sse":
+            async with sse_client(url=server_url, headers=headers) as (read, write):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
+        elif transport_type == "streamable_http":
+            async with streamablehttp_client(url=server_url, headers=headers) as (
+                read,
+                write,
+                _,
+            ):
+                async with ClientSession(read, write) as session:
+                    await session.initialize()
+                    yield session
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Unsupported transport type: {transport_type}",
+            )
+
+    async def _prepare_stored_server(self, mcp_server) -> tuple[str, str, dict]:
+        """``(url, transport_type, headers)`` for a STORED MCP server.
+
+        The single place a stored server's connection params + resolved auth
+        (decrypted static auth + meta headers + OAuth, in that precedence) are
+        assembled, so ``call_tool`` and ``discover_tools`` share one assembly.
+        """
+        self._validate_transport_type(mcp_server.transport_type)
+        decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
+        oauth_headers = await run_in_threadpool(
+            self._resolve_oauth_headers, mcp_server.oauth_connection_id
+        )
+        headers = (
+            build_auth_headers(
+                decrypted_auth, already_decrypted=True, auth_type=mcp_server.auth_type
+            )
+            if decrypted_auth
+            else {}
+        )
+        headers = {
+            **headers,
+            **headers_from_meta(mcp_server.meta_data),
+            **oauth_headers,
+        }
+        return resolve_server_url(mcp_server), mcp_server.transport_type, headers
+
+    async def call_tool(
+        self, mcp_server_id, tool_name: str, arguments: Optional[dict] = None
+    ) -> Any:
+        """Call one tool on a stored MCP server directly (outside the LLM loop)
+        and return its parsed result.
+
+        Reuses the SAME org-scoped load + auth resolution as ``discover_tools``
+        (decrypt config, OAuth headers, meta headers, secret-URL override), so
+        there is one place a stored MCP server is connected. Returns the parsed
+        JSON object (dict/list) when the tool returns JSON, the raw text when it
+        doesn't, or ``None`` on empty/error. Raises HTTPException(400) if the
+        connection itself fails (same sanitized mapping as validation)."""
+        mcp_server = self.get_mcp_server(mcp_server_id)
+        server_url, transport_type, headers = await self._prepare_stored_server(mcp_server)
+
+        try:
+            async with self._open_mcp_session(server_url, transport_type, headers) as session:
+                result = await session.call_tool(tool_name, arguments=arguments or {})
+        except HTTPException:
+            raise
+        except Exception:
+            # No secrets/PII logged: tool name only, never headers or the record.
+            logger.exception("[mcp] tool call failed (tool=%s)", tool_name)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Failed to call the MCP tool.",
+            )
+
+        return parse_tool_result(result)
+
     async def validate_mcp_connection(
         self,
         server_url: str,
@@ -894,10 +1011,6 @@ class McpServerService(BaseService):
         keep validating the same way they did before this column existed.
 
         Raises HTTPException(400) on failure."""
-        from mcp.client.session import ClientSession
-        from mcp.client.sse import sse_client
-        from mcp.client.streamable_http import streamablehttp_client
-
         self._validate_transport_type(transport_type)
         headers = (
             build_auth_headers(auth_config, already_decrypted=True, auth_type=auth_type)
@@ -909,16 +1022,8 @@ class McpServerService(BaseService):
             headers = {**headers, **extra_headers}
 
         try:
-            if transport_type == "sse":
-                async with sse_client(url=server_url, headers=headers) as (read, write):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.list_tools()
-            elif transport_type == "streamable_http":
-                async with streamablehttp_client(url=server_url, headers=headers) as (read, write, _):
-                    async with ClientSession(read, write) as session:
-                        await session.initialize()
-                        result = await session.list_tools()
+            async with self._open_mcp_session(server_url, transport_type, headers) as session:
+                result = await session.list_tools()
         except HTTPException:
             raise
         except Exception as e:
@@ -966,20 +1071,15 @@ class McpServerService(BaseService):
     async def discover_tools(self, mcp_server_id) -> Dict[str, Any]:
         """Connect to an MCP server and return its available tools."""
         mcp_server = self.get_mcp_server(mcp_server_id)
-        decrypted_auth = decrypt_auth_config(mcp_server.auth_config)
-        oauth_headers = await run_in_threadpool(
-            self._resolve_oauth_headers, mcp_server.oauth_connection_id
-        )
-        extra_headers = {
-            **headers_from_meta(mcp_server.meta_data),
-            **oauth_headers,
-        }
+        server_url, transport_type, headers = await self._prepare_stored_server(mcp_server)
+        # Pass the fully-assembled headers as extra_headers with no auth_config,
+        # so validate_mcp_connection uses them verbatim (identical net headers to
+        # the previous inline assembly — build_auth_headers + meta + oauth).
         result = await self.validate_mcp_connection(
-            resolve_server_url(mcp_server),
-            mcp_server.transport_type,
-            decrypted_auth,
-            extra_headers=extra_headers,
-            auth_type=mcp_server.auth_type,
+            server_url,
+            transport_type,
+            auth_config=None,
+            extra_headers=headers,
         )
         self._sync_mcp_tools(mcp_server, result["tools"])
         return {
