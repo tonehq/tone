@@ -23,3 +23,12 @@ class ProfileVariableKeyConflictError(ProfileVariableError):
 
 class ProfileVariableInvalidError(ProfileVariableError):
     """Payload failed validation: bad key format, reserved key, or oversize value."""
+
+
+class ProfileCrmConfigError(Exception):
+    """Base class for agent profile-CRM-config service errors."""
+
+
+class ProfileCrmConfigInvalidError(ProfileCrmConfigError):
+    """CRM config payload failed validation (e.g. MCP server not attached to
+    the agent, or a field exceeds its length cap)."""

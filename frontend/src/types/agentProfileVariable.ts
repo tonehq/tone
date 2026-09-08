@@ -10,6 +10,9 @@ export interface AgentProfileVariable {
   key: string;
   value: string;
   description: string | null;
+  /** CRM response field-path (e.g. `properties.firstname`) that fills this
+   * variable when `value` is empty and CRM enrichment is enabled. */
+  crm_field: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -19,6 +22,7 @@ export interface ProfileVariableInput {
   key: string;
   value: string;
   description?: string | null;
+  crm_field?: string | null;
 }
 
 /** PATCH-style body for PUT /agents/{id}/profile-variables/{variableId}. */
@@ -26,6 +30,7 @@ export interface ProfileVariablePatch {
   key?: string;
   value?: string;
   description?: string | null;
+  crm_field?: string | null;
 }
 
 export interface ListProfileVariablesResponse {
