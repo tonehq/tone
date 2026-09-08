@@ -15,7 +15,7 @@ exactly as before until someone configures CRM enrichment. Guards mirror
 ``c9e2a1f8b4d7_add_agent_profile_variables`` so re-running is safe.
 
 Revision ID: a1c7e5b93d20
-Revises: f3b8d1e0c6a9
+Revises: c9a1f2e6b4d7
 Create Date: 2026-09-07 00:00:00.000000
 """
 from alembic import op
@@ -25,7 +25,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision = "a1c7e5b93d20"
-down_revision = "f3b8d1e0c6a9"
+down_revision = "c9a1f2e6b4d7"
 branch_labels = None
 depends_on = None
 
