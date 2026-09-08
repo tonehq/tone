@@ -9,7 +9,7 @@ import IngestionChunksDrawer from '@/components/knowledge-base/IngestionChunksDr
 import { formatIngestionError } from '@/components/knowledge-base/ingestionErrorFormat';
 import NewIngestionRunModal from '@/components/knowledge-base/NewIngestionRunModal';
 import { Badge } from '@/components/ui/badge';
-import { useEvalSummariesByIngestion, useTriggerEvalRun } from '@/lib/api/evals';
+import { useInFlightEvalRunIds, useTriggerEvalRun } from '@/lib/api/evals';
 import {
   useActivateIngestionRun,
   useDeleteIngestionRun,
@@ -93,17 +93,11 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   const runs = data?.data ?? [];
   const total = data?.total ?? 0;
 
-  // Batch-fetch the in-flight eval state for every visible ingestion run in one
-  // query so the per-row "Run evals" button reflects queued/running batches
-  // (results themselves live in the dedicated Eval results tab).
+  // In-flight eval state for every visible ingestion run — the per-row "Run
+  // evals" button reflects queued/running batches (results live in the Eval
+  // results tab). The shared hook polls while any batch is in flight.
   const visibleRunIds = useMemo(() => runs.map((r) => r.id), [runs]);
-  const { data: evalSummariesResp } = useEvalSummariesByIngestion(uploadId, visibleRunIds);
-  // Ingestion runs whose eval batch is queued/running (no score row yet). The
-  // hook polls while this is non-empty; the "Run evals" button shows a spinner.
-  const inFlightEvalRunIds = useMemo(
-    () => new Set(evalSummariesResp?.in_flight_ingestion_run_ids ?? []),
-    [evalSummariesResp],
-  );
+  const inFlightEvalRunIds = useInFlightEvalRunIds(uploadId, visibleRunIds);
 
   // When the parent doesn't pass the KB's active run id (e.g. the KB payload
   // isn't reachable in that view), derive it from the runs list so the

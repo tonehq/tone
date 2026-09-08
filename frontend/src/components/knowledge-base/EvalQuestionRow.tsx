@@ -29,6 +29,10 @@ function sourceBadge(row: EvalQuestion): { label: string; className: string } {
 
 interface EvalQuestionRowProps {
   row: EvalQuestion;
+  // 1-based position in the currently displayed list. Shown as the "#N" badge
+  // instead of the stored `question_ord` so the list stays contiguous after
+  // deletes and under status filters (a deleted #4 no longer leaves a gap).
+  displayNumber: number;
   isEditing: boolean;
   editDraft: DraftQuestion;
   setEditDraft: Dispatch<SetStateAction<DraftQuestion>>;
@@ -48,6 +52,7 @@ interface EvalQuestionRowProps {
 // so the tab body stays orchestration-only.
 export default function EvalQuestionRow({
   row,
+  displayNumber,
   isEditing,
   editDraft,
   setEditDraft,
@@ -127,7 +132,7 @@ export default function EvalQuestionRow({
           <div className="min-w-0 flex-1">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <span className="text-xs font-medium tabular-nums text-muted-foreground">
-                #{row.question_ord + 1}
+                #{displayNumber}
               </span>
               <span
                 className={cn(
