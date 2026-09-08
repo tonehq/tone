@@ -39,8 +39,9 @@ export default function GenerateScenariosModal({
   defaultFolderId: string | null;
   versions: AgentLlmEvalScenarioVersion[];
 }) {
-  // Generation persists all scenarios as ``pending`` under a draft version;
-  // the user then reviews (approve/reject) them in the Manage-Evals list.
+  // Generation runs as a background job: the request returns immediately, the
+  // version shows a "Generating…" indicator, and the scenarios land as
+  // ``pending`` under it for review (approve/reject) once the worker finishes.
   const generate = useGenerateAgentLlmEvalVersion(agentId);
   const {
     folderId,
@@ -97,8 +98,8 @@ export default function GenerateScenariosModal({
         count: parsedCount,
       });
       showToast.success(
-        'Scenarios generated',
-        'Review the drafts below — approve the ones to keep and reject the rest.',
+        'Generation started',
+        'Scenarios are generating in the background — they’ll appear here for review when ready.',
       );
       onClose();
     } catch (error) {

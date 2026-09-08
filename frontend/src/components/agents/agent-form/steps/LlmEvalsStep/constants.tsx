@@ -1,12 +1,12 @@
-import { CheckCircle2, Clock, Loader2, MinusCircle, XCircle } from 'lucide-react';
+import { CheckCircle2, Loader2, MinusCircle, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 import type {
   AgentLlmEvalApprovalStatus,
-  AgentLlmEvalBatchStatus,
   AgentLlmEvalScenarioSource,
   AgentLlmEvalScenarioVersion,
   AgentLlmEvalVerdict,
+  AgentLlmEvalVersionStatus,
 } from '@/types/agentLlmEval';
 
 // ── Shared verdict chip styles ──────────────────────────────────────────
@@ -32,48 +32,6 @@ export const VERDICT_STYLES: Record<
     icon: <XCircle className="size-3" />,
   },
 };
-
-// ── Run status chip styles ──────────────────────────────────────────────
-
-// Chip for the Runs tab's status column. Same visual grammar as
-// ``VerdictChip`` so the two feel like siblings. Terminal states are
-// definitive (Completed / Failed); non-terminal states use motion cues
-// (spinner for running, clock for pending) so the eye picks them out
-// without a colour scan.
-export const RUN_STATUS_STYLES: Record<
-  AgentLlmEvalBatchStatus,
-  { label: string; className: string; icon: ReactNode }
-> = {
-  pending: {
-    label: 'Pending',
-    className: 'bg-muted text-muted-foreground ring-1 ring-border',
-    icon: <Clock className="size-3" />,
-  },
-  running: {
-    label: 'Running',
-    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
-    icon: <Loader2 className="size-3 animate-spin" />,
-  },
-  completed: {
-    label: 'Completed',
-    className:
-      'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 ring-1 ring-emerald-500/20',
-    icon: <CheckCircle2 className="size-3" />,
-  },
-  failed: {
-    label: 'Failed',
-    className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
-    icon: <XCircle className="size-3" />,
-  },
-};
-
-// Terminal states = drawer is safe to open (results are persisted).
-// Non-terminal rows (pending / running) suppress the drawer and show a
-// muted "Scoring N of M" progress readout in the Result column instead.
-export const RUN_TERMINAL_STATUSES: ReadonlySet<AgentLlmEvalBatchStatus> = new Set([
-  'completed',
-  'failed',
-]);
 
 // ── Sample CSV template ─────────────────────────────────────────────────
 //
@@ -178,12 +136,28 @@ export const GENERATE_MAX_COUNT = 50;
 
 // ── Versions + approval ─────────────────────────────────────────────────
 
-// Sentinel for the "All versions" option in the Results version filter.
-export const VERSION_FILTER_ALL_VALUE = '__all__';
-
 // Human label for a version option — "v3 · draft · 5/8 approved".
 export const versionLabel = (v: AgentLlmEvalScenarioVersion): string =>
   `v${v.version_number} · ${v.status} · ${v.counts.approved}/${v.counts.total} approved`;
+
+// Chip styles for the non-terminal / error version states surfaced next to the
+// version selector while a background generation runs (or after it fails).
+// ``draft`` / ``finalized`` are steady states the label already conveys, so
+// they get no chip (absent from the map → the chip renders nothing).
+export const VERSION_STATUS_STYLES: Partial<
+  Record<AgentLlmEvalVersionStatus, { label: string; className: string; icon: ReactNode }>
+> = {
+  generating: {
+    label: 'Generating…',
+    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
+    icon: <Loader2 className="size-3 animate-spin" />,
+  },
+  failed: {
+    label: 'Generation failed',
+    className: 'bg-destructive/10 text-destructive ring-1 ring-destructive/20',
+    icon: <XCircle className="size-3" />,
+  },
+};
 
 // Approval-state chip styles for a scenario row.
 export const APPROVAL_STATUS_STYLES: Record<

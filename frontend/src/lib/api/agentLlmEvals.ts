@@ -130,9 +130,10 @@ export function useAgentLlmEvalVersions(agentId: string | null) {
     queryFn: () => listAgentLlmEvalVersions(agentId as string),
     enabled: !!agentId,
     staleTime: 5_000,
-    // Poll while a version is still generating so a freshly-generated draft
-    // flips into view without a manual refresh (agent-LLM generation is
-    // synchronous today, but this keeps parity with the RAG shape).
+    // Auto-generation runs as a background job: poll while any version is
+    // 'generating' so the freshly-generated drafts flip into view (or the
+    // version flips to 'failed') without a manual refresh. Stops once no
+    // version is generating (draft/finalized/failed are all terminal).
     refetchInterval: (query) => {
       const items = query.state.data?.items ?? [];
       return items.some((v) => v.status === 'generating') ? 4_000 : false;

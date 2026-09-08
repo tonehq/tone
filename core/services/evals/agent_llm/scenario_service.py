@@ -706,6 +706,36 @@ class AgentLlmScenarioService(BaseService):
                 ),
             )
 
+        persisted = self.persist_generated(
+            agent_id,
+            generated,
+            folder_id=folder_id,
+            version_id=version_id,
+            approval_status=approval_status,
+        )
+        return GeneratedBatch(
+            strategy=strategy,
+            generated=generated,
+            persisted=persisted,
+        )
+
+    def persist_generated(
+        self,
+        agent_id: UUID,
+        generated: Sequence["GeneratedScenario"],
+        *,
+        folder_id: Optional[UUID] = None,
+        version_id: Optional[UUID] = None,
+        approval_status: Optional[str] = None,
+    ) -> list[AgentLlmEvalScenario]:
+        """Persist an ALREADY-generated batch via the shared bulk-create path.
+
+        Split out of :meth:`generate_scenarios` so a caller that produced the
+        scenarios in-memory (``dry_run=True``) — e.g. the background generation
+        worker doing a safe delete-old-then-insert swap — persists them without
+        re-invoking the (expensive) generator strategy. One mapping, one
+        ``create_scenarios_bulk`` entry point for every generation path.
+        """
         payloads = [
             _generated_to_input(
                 g,
@@ -715,14 +745,7 @@ class AgentLlmScenarioService(BaseService):
             )
             for g in generated
         ]
-        persisted = self.create_scenarios_bulk(
-            agent_id, payloads, source="generated"
-        )
-        return GeneratedBatch(
-            strategy=strategy,
-            generated=generated,
-            persisted=persisted,
-        )
+        return self.create_scenarios_bulk(agent_id, payloads, source="generated")
 
     # ── Internals ───────────────────────────────────────────────────────
 
