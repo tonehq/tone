@@ -19,7 +19,6 @@ from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED,
     EVENT_CALL_ENDED_ERROR,
     REASON_CLIENT_DISCONNECT,
-    REASON_LLM_END_CALL,
     log_call_event,
 )
 from core.services.pipeline.runner.base import PipelineRunner
@@ -718,19 +717,17 @@ class PipecatPipelineRunner(PipelineRunner):
                     )
             raise
         finally:
-            # Backstop hangup — only for the paths where the serializer's
-            # auto_hang_up did NOT already drop the leg:
-            #   * client_disconnect — caller hung up; the leg is already down.
-            #   * llm_end_call      — the end_call tool queued an EndFrame, so the
-            #                         serializer hangs up promptly; a second REST
-            #                         call here would just hit an already-ended
-            #                         call (e.g. Telnyx 422 / code 90018).
-            # Both are skipped. The terminator still fires on the remaining paths
-            # (pipeline error/crash, or any end the serializer can't handle), where
-            # it is the only thing that drops the leg. terminate_call never raises,
-            # so it cannot mask an exception being propagated.
-            _end_reason = end_reason_holder.get("reason")
-            if _end_reason not in (REASON_CLIENT_DISCONNECT, REASON_LLM_END_CALL):
+            # Authoritative, provider-agnostic hangup via the correct per-provider
+            # REST API. Skipped ONLY when the caller hung up first
+            # (client_disconnect): the leg is already down. It fires on every
+            # other end (llm_end_call, pipeline error) — this is what actually
+            # drops the phone leg for providers whose media serializer can't
+            # (e.g. Telnyx TeXML, whose serializer speaks the wrong Call-Control
+            # API). For providers whose serializer already hung up (Twilio), the
+            # terminator's redundant call sees an already-ended call and returns a
+            # quiet success. terminate_call never raises, so it cannot mask an
+            # exception being propagated.
+            if end_reason_holder.get("reason") != REASON_CLIENT_DISCONNECT:
                 # Local import: the pipeline package eager-imports this runner, so a
                 # module-level import of call_termination (which imports
                 # pipeline.call_end_events) would be a circular import.
