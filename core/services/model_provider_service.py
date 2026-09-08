@@ -1069,6 +1069,27 @@ class ModelProviderService(BaseService):
                 out[key] = candidate
         return out
 
+    def _ref_map(self, model, ids: list) -> dict[str, dict]:
+        """id → {id, slug, display_name, description} for a catalog ref model
+        (ModelProvider / CloudProvider), batch-loaded so table rows don't
+        lazy-load the related object per row."""
+        if not ids:
+            return {}
+        rows = (
+            self.db.query(model.id, model.slug, model.display_name, model.description)
+            .filter(model.id.in_(ids))
+            .all()
+        )
+        return {
+            str(r.id): {
+                "id": str(r.id),
+                "slug": r.slug,
+                "display_name": r.display_name,
+                "description": r.description,
+            }
+            for r in rows
+        }
+
     def list_models(self, body: dict) -> dict:
         """Flat, paginated list of every catalog Model with the org's API-key
         presence joined. Same ``{items, total, page, page_size}`` envelope as
@@ -1106,34 +1127,21 @@ class ModelProviderService(BaseService):
         provider_ids = [m.provider_id for m in rows]
         keys_map = self._keys_summary_by_provider_kind_map(provider_ids)
 
-        # Batch-load provider refs so we don't lazy-load m.provider per row.
-        provider_map: dict[str, dict] = {}
-        if provider_ids:
-            prows = (
-                self.db.query(
-                    ModelProvider.id,
-                    ModelProvider.slug,
-                    ModelProvider.display_name,
-                    ModelProvider.description,
-                )
-                .filter(ModelProvider.id.in_(provider_ids))
-                .all()
-            )
-            provider_map = {
-                str(p.id): {
-                    "id": str(p.id),
-                    "slug": p.slug,
-                    "display_name": p.display_name,
-                    "description": p.description,
-                }
-                for p in prows
-            }
+        # Batch-load the model-provider and cloud-provider refs so the table can
+        # show each name (not just the id) without a per-row lazy load.
+        provider_map = self._ref_map(ModelProvider, provider_ids)
+        cloud_provider_map = self._ref_map(
+            CloudProvider, [m.cloud_provider_id for m in rows if m.cloud_provider_id]
+        )
 
         items = []
         for m in rows:
             pid = str(m.provider_id)
             row = _model_to_dict(m)
             row["provider"] = provider_map.get(pid)
+            row["cloud_provider"] = (
+                cloud_provider_map.get(str(m.cloud_provider_id)) if m.cloud_provider_id else None
+            )
             row["api_key"] = keys_map.get((pid, m.kind))
             items.append(row)
 

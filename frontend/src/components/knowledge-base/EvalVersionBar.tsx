@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Loader2, Sparkles } from 'lucide-react';
 
 import { versionLabel } from '@/components/knowledge-base/evalsConstants';
 import { CustomButton, SelectInput } from '@/components/shared';
@@ -29,6 +29,7 @@ export default function EvalVersionBar({
   );
 
   const counts = selectedVersion?.counts;
+  const isGenerating = selectedVersion?.status === 'generating';
 
   return (
     <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border/60 bg-background/95 px-4 py-3">
@@ -49,20 +50,27 @@ export default function EvalVersionBar({
             <span className="text-sm text-muted-foreground">No versions yet</span>
           )}
         </div>
-        {counts && (
-          <span className="text-xs text-muted-foreground">
-            <span className="font-medium text-amber-600 dark:text-amber-400">
-              {counts.pending} pending
-            </span>
-            {' · '}
-            <span className="font-medium text-emerald-600 dark:text-emerald-400">
-              {counts.approved} approved
-            </span>
+        {isGenerating ? (
+          <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Loader2 className="size-3.5 animate-spin" />
+            Generating…
           </span>
+        ) : (
+          counts && (
+            <span className="text-xs text-muted-foreground">
+              <span className="font-medium text-amber-600 dark:text-amber-400">
+                {counts.pending} pending
+              </span>
+              {' · '}
+              <span className="font-medium text-emerald-600 dark:text-emerald-400">
+                {counts.approved} approved
+              </span>
+            </span>
+          )
         )}
       </div>
 
-      <CustomButton type="primary" size="sm" onClick={onOpenGenerate}>
+      <CustomButton type="primary" size="sm" onClick={onOpenGenerate} disabled={isGenerating}>
         <Sparkles className="mr-1 size-4" />
         Generate
       </CustomButton>

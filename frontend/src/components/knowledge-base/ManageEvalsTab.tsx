@@ -24,6 +24,7 @@ import {
   useEvalQuestions,
   useEvalVersions,
   useGenerateEvalVersion,
+  useInFlightEvalRunIds,
   useRejectAllEvalQuestions,
   useTriggerEvalRun,
   useUpdateEvalQuestion,
@@ -57,6 +58,19 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
       setSelectedVersionId(versions[0].id);
     }
   }, [versions, selectedVersionId]);
+
+  // After a Generate, focus the freshly generating version so the reviewer sees
+  // the "Generating questions…" spinner + live poll. The generate response has
+  // no version_id, so we detect the version whose status is now 'generating'.
+  const [awaitGeneratedSelect, setAwaitGeneratedSelect] = useState(false);
+  useEffect(() => {
+    if (!awaitGeneratedSelect) return;
+    const generating = versions.find((v) => v.status === 'generating');
+    if (generating) {
+      setSelectedVersionId(generating.id);
+      setAwaitGeneratedSelect(false);
+    }
+  }, [awaitGeneratedSelect, versions]);
 
   const selectedVersion: EvalVersion | null =
     versions.find((v) => v.id === selectedVersionId) ?? null;
@@ -130,6 +144,12 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
     [readyRuns],
   );
 
+  // Whether the selected recipe currently has a queued/running eval batch, so
+  // the Run button reflects it. Reuses the same in-flight signal the KB
+  // Ingestion-Runs table uses; the hook polls every 4s until the batch lands.
+  const inFlightRunIds = useInFlightEvalRunIds(uploadId, selectedRunId ? [selectedRunId] : []);
+  const isEvalRunning = !!selectedRunId && inFlightRunIds.has(selectedRunId);
+
   // Inline edit state for a question row.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editDraft, setEditDraft] = useState<DraftQuestion>(EMPTY_DRAFT);
@@ -143,6 +163,7 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const handleGenerate = async (payload: GenerateEvalVersionPayload) => {
     try {
       await generateMutation.mutateAsync(payload);
+      setAwaitGeneratedSelect(true);
       showToast.success(
         'Generation queued',
         'The eval set is being drafted — it will appear here shortly.',
@@ -289,17 +310,17 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
   const hasReadyRuns = readyRuns.length > 0;
   const isGenerating = selectedVersion?.status === 'generating';
   const runDisabled =
-    counts.approved === 0 || runMutation.isPending || !hasReadyRuns || !hasVersion;
+    counts.approved === 0 || runMutation.isPending || isEvalRunning || !hasReadyRuns || !hasVersion;
   const runButton = (
     <CustomButton
       type="primary"
       size="sm"
       onClick={handleRunEval}
-      loading={runMutation.isPending}
+      loading={runMutation.isPending || isEvalRunning}
       disabled={runDisabled}
     >
       <Play className="mr-1 size-4" />
-      Run eval
+      {isEvalRunning ? 'Running…' : 'Run eval'}
     </CustomButton>
   );
 
@@ -409,10 +430,11 @@ export default function ManageEvalsTab({ uploadId }: ManageEvalsTabProps) {
               </div>
             ) : (
               <ul className="flex flex-col gap-2">
-                {filteredQuestions.map((row) => (
+                {filteredQuestions.map((row, index) => (
                   <EvalQuestionRow
                     key={row.id}
                     row={row}
+                    displayNumber={index + 1}
                     isEditing={editingId === row.id}
                     editDraft={editDraft}
                     setEditDraft={setEditDraft}
