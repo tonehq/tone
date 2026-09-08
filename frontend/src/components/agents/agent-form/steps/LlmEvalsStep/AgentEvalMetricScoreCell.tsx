@@ -2,8 +2,9 @@
 
 import { CustomTooltip } from '@/components/shared';
 import { cn } from '@/utils/cn';
+import { formatMetricScore } from '@/utils/evalFormat';
 
-import { formatDecimal, metricScoreClasses } from './evalMetrics';
+import { metricScoreClasses } from './evalMetrics';
 
 interface MetricScore {
   score?: number;
@@ -23,7 +24,7 @@ export default function AgentEvalMetricScoreCell({ metric }: { metric: MetricSco
         metricScoreClasses(metric.score),
       )}
     >
-      {formatDecimal(metric.score)}
+      {formatMetricScore(metric.score)}
     </span>
   );
 

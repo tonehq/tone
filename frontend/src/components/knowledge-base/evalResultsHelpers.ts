@@ -1,5 +1,10 @@
-export const formatPercent = (v: number) => `${Math.round(v * 100)}%`;
-export const formatDecimal = (v: number) => (Number.isFinite(v) ? v.toFixed(2) : '—');
+// Score formatters are shared with the agent-LLM eval feature — single source
+// of truth in ``@/utils/evalFormat`` (re-exported here so existing imports of
+// ``formatPercent`` / ``formatDecimal`` from this module keep working).
+export {
+  formatRatioPercent as formatPercent,
+  formatMetricScore as formatDecimal,
+} from '@/utils/evalFormat';
 
 // Tailwind classes for a per-metric verdict pill/score. `metric_scores`
 // verdicts are lowercase ('pass' | 'partial' | 'fail'); anything else falls

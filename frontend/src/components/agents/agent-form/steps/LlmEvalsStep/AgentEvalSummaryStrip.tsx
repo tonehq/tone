@@ -3,8 +3,7 @@
 import type { ReactNode } from 'react';
 
 import type { AgentLlmEvalRunSummaryTotals } from '@/types/agentLlmEval';
-
-import { formatPercent } from './evalMetrics';
+import { formatRatioPercent } from '@/utils/evalFormat';
 
 // Aggregate scorecard for the selected run — pass/total, pass rate, and the
 // partial/fail breakdown. Mirrors the RAG SummaryStrip layout.
@@ -26,7 +25,7 @@ export default function AgentEvalSummaryStrip({
     },
     {
       label: 'Pass rate',
-      value: <span className="tabular-nums">{formatPercent(summary.pass_rate)}</span>,
+      value: <span className="tabular-nums">{formatRatioPercent(summary.pass_rate)}</span>,
     },
     {
       label: 'Partial / Fail',

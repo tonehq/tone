@@ -48,12 +48,6 @@ export function orderMetricNames(names: string[]): string[] {
   return [...known, ...unknown];
 }
 
-export const formatPercent = (v: number): string =>
-  Number.isFinite(v) ? `${Math.round(v * 100)}%` : '—';
-
-export const formatDecimal = (v: number | undefined): string =>
-  typeof v === 'number' && Number.isFinite(v) ? v.toFixed(2) : '—';
-
 // Tailwind classes for a metric-score pill, colored by score band (agent-LLM
 // metric scores carry no per-metric verdict). Mirrors the VerdictChip palette.
 export const metricScoreClasses = (score: number | undefined): string => {
