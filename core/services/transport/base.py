@@ -17,8 +17,10 @@ from loguru import logger
 from pipecat.runner.types import RunnerArguments
 from pipecat.runner.utils import parse_telephony_websocket
 from pipecat.transports.base_transport import BaseTransport
-from pipecat.transports.websocket.fastapi import (FastAPIWebsocketParams,
-                                                  FastAPIWebsocketTransport)
+from pipecat.transports.websocket.fastapi import (
+    FastAPIWebsocketParams,
+    FastAPIWebsocketTransport,
+)
 
 from core.utils.telephony import provider_call_id
 
@@ -130,6 +132,17 @@ class TelephonyTransport(CallTransport):
                     "[transport] resolved agent for this call id={} name={}",
                     agent.id, agent.name,
                 )
+
+            # Give the serializer the call's org so its provider credentials —
+            # and its built-in auto_hang_up REST call — resolve to the right
+            # tenant. Without this the serializer looks up creds with org_id=None
+            # (wrong tenant → 401 on hangup). The prefetch path (bot_worker) sets
+            # body["agent"] before build; on the plain parse path the agent is
+            # resolved later, so this is a no-op there and the call_termination
+            # terminator stays the backstop. Additive: never overwrites a value a
+            # caller already set.
+            if agent is not None and isinstance(call_data, dict) and not call_data.get("_org_id"):
+                call_data["_org_id"] = getattr(agent, "organization_id", None)
 
             serializer = provider.create_serializer(call_data)
             logger.bind(
