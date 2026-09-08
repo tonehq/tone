@@ -167,14 +167,22 @@ export default function ModelFormDrawer({
         {showProviderSelect && (
           <SelectInput
             name="providerId"
-            label="Provider"
+            label="Model provider"
             options={providerOptions}
             value={form.providerId}
             onValueChange={(v) => update('providerId', v)}
-            placeholder="Select a provider"
+            placeholder="Select a model provider"
             isRequired
           />
         )}
+        <SelectInput
+          name="cloudProviderId"
+          label="Cloud provider"
+          options={cloudProviderOptions}
+          value={form.cloudProviderId}
+          onValueChange={(v) => update('cloudProviderId', v)}
+          placeholder="Where the model is hosted"
+        />
         <TextInput
           name="name"
           label="Model name"
@@ -198,14 +206,6 @@ export default function ModelFormDrawer({
           onValueChange={(v) => update('kind', v as ServiceKind)}
           placeholder="Select a kind"
           isRequired
-        />
-        <SelectInput
-          name="cloudProviderId"
-          label="Cloud provider"
-          options={cloudProviderOptions}
-          value={form.cloudProviderId}
-          onValueChange={(v) => update('cloudProviderId', v)}
-          placeholder="Where the model is hosted"
         />
         <TextAreaField
           name="description"
