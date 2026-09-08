@@ -18,9 +18,12 @@ from typing import Any
 
 from loguru import logger
 
-
 EVENT_CALL_ENDED = "call_ended"
 EVENT_CALL_ENDED_ERROR = "call_ended_error"
+# Emitted by the provider-agnostic terminator (core/services/call_termination)
+# after it attempts the authoritative REST hangup at pipeline teardown — records
+# the provider, resolved hangup id, and outcome (success/failed).
+EVENT_CALL_TERMINATED = "call_terminated"
 # Emitted when the end_call tool handler refuses a tool invocation because
 # the mandatory two-step confirmation flow was not completed (no prior
 # confirmation ask from the assistant, or no subsequent user reply). Useful
