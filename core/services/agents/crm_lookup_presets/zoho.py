@@ -7,7 +7,8 @@ class ZohoCrmLookupPreset(CrmLookupPreset):
     records under ``data``."""
 
     slug = "zoho_crm"
-    default_tool_name = "Search Records"
+    default_tool_name = "search_records"
+    tool_name_candidates = ("search_records", "Search Records", "searchRecords")
     record_path = "data"
 
     def build_arguments(self, field: str, value: str) -> dict:
