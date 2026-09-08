@@ -13,6 +13,8 @@ import {
 import type { ModelUpsertPayload } from '@/services/servicesService';
 import type { ProviderModel, ServiceKind } from '@/types/service';
 
+import DrawerBackLink from './DrawerBackLink';
+
 interface ModelFormDrawerProps {
   open: boolean;
   editing: ProviderModel | null;
@@ -20,8 +22,23 @@ interface ModelFormDrawerProps {
   defaultKind?: ServiceKind | null;
   /** Restricts the kind dropdown to a subset (e.g. provider's supported kinds). */
   allowedKinds?: ServiceKind[];
+  /**
+   * When creating from a surface that isn't scoped to one provider (e.g. the
+   * flat models table), pass the selectable providers to render a required
+   * provider picker. Omit it on the provider detail page (provider is implied).
+   */
+  providers?: { id: string; display_name: string }[];
+  /** Cloud providers the model can be hosted on (optional select). */
+  cloudProviders?: { id: string; display_name: string }[];
+  /** When set, renders a breadcrumb that navigates back to the detail view the
+   * edit was launched from. Omit on the create flow (there's no detail to
+   * return to). */
+  onBack?: () => void;
+  /** Label for the back breadcrumb (usually the model name). */
+  backLabel?: string;
   onClose: () => void;
-  onSubmit: (payload: ModelUpsertPayload, id?: string) => Promise<void>;
+  /** `providerId` is only set when the provider picker is shown (create flow). */
+  onSubmit: (payload: ModelUpsertPayload, id?: string, providerId?: string) => Promise<void>;
   isPending: boolean;
 }
 
@@ -31,10 +48,16 @@ const ALL_KIND_OPTIONS: { value: ServiceKind; label: string }[] = [
   { value: 'tts', label: 'Text-to-Speech' },
 ];
 
+// Sentinel for "no cloud provider" (Radix Select can't use an empty-string
+// item value). Maps to `null` in the payload.
+const NO_CLOUD_PROVIDER = '__none__';
+
 interface FormState {
+  providerId: string;
   name: string;
   display_name: string;
   kind: ServiceKind | '';
+  cloudProviderId: string;
   description: string;
   base_url: string;
   is_active: boolean;
@@ -46,18 +69,22 @@ function initialFormState(
 ): FormState {
   if (!editing) {
     return {
+      providerId: '',
       name: '',
       display_name: '',
       kind: defaultKind ?? '',
+      cloudProviderId: NO_CLOUD_PROVIDER,
       description: '',
       base_url: '',
       is_active: true,
     };
   }
   return {
+    providerId: '',
     name: editing.name,
     display_name: editing.display_name ?? '',
     kind: editing.kind,
+    cloudProviderId: editing.cloud_provider_id ?? NO_CLOUD_PROVIDER,
     description: editing.description ?? '',
     base_url: editing.base_url ?? '',
     is_active: editing.is_active,
@@ -69,6 +96,10 @@ export default function ModelFormDrawer({
   editing,
   defaultKind,
   allowedKinds,
+  providers,
+  cloudProviders,
+  onBack,
+  backLabel,
   onClose,
   onSubmit,
   isPending,
@@ -88,8 +119,18 @@ export default function ModelFormDrawer({
       ? ALL_KIND_OPTIONS.filter((o) => allowedKinds.includes(o.value))
       : ALL_KIND_OPTIONS;
 
+  // Show the provider picker only when creating from a non-scoped surface.
+  const showProviderSelect = !editing && !!providers?.length;
+  const providerOptions = (providers ?? []).map((p) => ({ value: p.id, label: p.display_name }));
+
+  const cloudProviderOptions = [
+    { value: NO_CLOUD_PROVIDER, label: 'None' },
+    ...(cloudProviders ?? []).map((p) => ({ value: p.id, label: p.display_name })),
+  ];
+
   const trimmedName = form.name.trim();
-  const canSubmit = trimmedName.length > 0 && form.kind !== '';
+  const canSubmit =
+    trimmedName.length > 0 && form.kind !== '' && (!showProviderSelect || form.providerId !== '');
 
   const handleConfirm = async () => {
     if (!canSubmit) return;
@@ -97,11 +138,12 @@ export default function ModelFormDrawer({
       name: trimmedName,
       display_name: form.display_name.trim() || undefined,
       kind: form.kind as ServiceKind,
+      cloud_provider_id: form.cloudProviderId === NO_CLOUD_PROVIDER ? null : form.cloudProviderId,
       description: form.description.trim() || undefined,
       base_url: form.base_url.trim() || undefined,
       is_active: form.is_active,
     };
-    await onSubmit(payload, editing?.id);
+    await onSubmit(payload, editing?.id, showProviderSelect ? form.providerId : undefined);
   };
 
   return (
@@ -132,6 +174,26 @@ export default function ModelFormDrawer({
       }
     >
       <div className="flex flex-col gap-4 pt-1">
+        {onBack && <DrawerBackLink onClick={onBack} label={backLabel} />}
+        {showProviderSelect && (
+          <SelectInput
+            name="providerId"
+            label="Model provider"
+            options={providerOptions}
+            value={form.providerId}
+            onValueChange={(v) => update('providerId', v)}
+            placeholder="Select a model provider"
+            isRequired
+          />
+        )}
+        <SelectInput
+          name="cloudProviderId"
+          label="Cloud provider"
+          options={cloudProviderOptions}
+          value={form.cloudProviderId}
+          onValueChange={(v) => update('cloudProviderId', v)}
+          placeholder="Where the model is hosted"
+        />
         <TextInput
           name="name"
           label="Model name"

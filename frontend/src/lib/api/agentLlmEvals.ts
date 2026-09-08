@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import {
+  approveAgentLlmEvalScenario,
+  approveAllAgentLlmEvalScenarios,
   compareAgentLlmEvalRuns,
   createAgentLlmEvalFolder,
   createAgentLlmEvalScenario,
@@ -8,11 +10,14 @@ import {
   deleteAgentLlmEvalFolder,
   deleteAgentLlmEvalScenario,
   deleteAgentLlmEvalScenariosBulk,
-  generateAgentLlmEvalScenarios,
+  generateAgentLlmEvalVersion,
   getAgentLlmEvalRunDetail,
   listAgentLlmEvalFolders,
   listAgentLlmEvalRuns,
   listAgentLlmEvalScenarios,
+  listAgentLlmEvalVersions,
+  rejectAgentLlmEvalScenario,
+  rejectAllAgentLlmEvalScenarios,
   renameAgentLlmEvalFolder,
   triggerAgentLlmEvalRun,
   updateAgentLlmEvalScenario,
@@ -24,7 +29,7 @@ import type {
   CompareRunsPayload,
   CreateFolderPayload,
   DeleteFolderPayload,
-  GenerateScenariosPayload,
+  GenerateVersionPayload,
   ListRunsRequest,
   ListScenariosRequest,
   RenameFolderPayload,
@@ -119,6 +124,24 @@ export function useAgentLlmEvalFolders(agentId: string | null) {
   });
 }
 
+export function useAgentLlmEvalVersions(agentId: string | null) {
+  return useQuery({
+    queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'versions', agentId],
+    queryFn: () => listAgentLlmEvalVersions(agentId as string),
+    enabled: !!agentId,
+    staleTime: 5_000,
+    // Auto-generation runs as a background job: poll while any version is
+    // 'generating' so the freshly-generated drafts flip into view (or the
+    // version flips to 'failed') without a manual refresh. Stops once no
+    // version is generating (draft/finalized/failed are all terminal).
+    refetchInterval: (query) => {
+      const items = query.state.data?.items ?? [];
+      return items.some((v) => v.status === 'generating') ? 4_000 : false;
+    },
+    refetchIntervalInBackground: false,
+  });
+}
+
 // ── Shared invalidator ───────────────────────────────────────────────────
 
 /** Invalidate scenarios + runs + folders — used by every mutation. A
@@ -131,6 +154,7 @@ export function useInvalidateAgentLlmEvals(agentId: string) {
     qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'scenarios', agentId] });
     qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'runs', agentId] });
     qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'folders', agentId] });
+    qc.invalidateQueries({ queryKey: [AGENT_LLM_EVAL_QUERY_KEY, 'versions', agentId] });
   };
 }
 
@@ -187,16 +211,43 @@ export function useUploadAgentLlmEvalScenariosCsv(agentId: string) {
   });
 }
 
-export function useGenerateAgentLlmEvalScenarios(agentId: string) {
+export function useGenerateAgentLlmEvalVersion(agentId: string) {
   const invalidate = useInvalidateAgentLlmEvals(agentId);
   return useMutation({
-    mutationFn: (payload: GenerateScenariosPayload) =>
-      generateAgentLlmEvalScenarios(agentId, payload),
-    // Only invalidate on persisted (non-dry-run) results — a dry-run preview
-    // doesn't change any server state.
-    onSuccess: (data) => {
-      if (!data.dry_run) invalidate();
-    },
+    mutationFn: (payload: GenerateVersionPayload) => generateAgentLlmEvalVersion(agentId, payload),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveAgentLlmEvalScenario(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (scenarioId: string) => approveAgentLlmEvalScenario(agentId, scenarioId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectAgentLlmEvalScenario(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (scenarioId: string) => rejectAgentLlmEvalScenario(agentId, scenarioId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useApproveAllAgentLlmEvalScenarios(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (versionId: string) => approveAllAgentLlmEvalScenarios(agentId, versionId),
+    onSuccess: invalidate,
+  });
+}
+
+export function useRejectAllAgentLlmEvalScenarios(agentId: string) {
+  const invalidate = useInvalidateAgentLlmEvals(agentId);
+  return useMutation({
+    mutationFn: (versionId: string) => rejectAllAgentLlmEvalScenarios(agentId, versionId),
+    onSuccess: invalidate,
   });
 }
 

@@ -30,16 +30,27 @@ from core.services.evals.agent_llm.scenario_service import (
     ScenarioPatch,
 )
 from core.services.evals.agent_llm.service import AgentLlmEvalService
+from core.services.evals.agent_llm.version_service import (
+    GENERATION_FAILED_MESSAGE,
+    AgentLlmEvalVersionService,
+)
 from core.services.evals.errors import (
     AgentLlmEvalConfigError,
     AgentLlmEvalFolderNameConflictError,
     AgentLlmEvalFolderNotDeletableError,
     AgentLlmEvalFolderNotFoundError,
+    AgentLlmEvalVersionGeneratingError,
+    AgentLlmEvalVersionHasRunsError,
+    AgentLlmEvalVersionNotFoundError,
     AgentLlmScenarioKeyConflictError,
     AgentLlmScenarioNotFoundError,
     EvalConfigurationError,
+    EvalGenerationError,
 )
-from core.services.ingestion_queue import enqueue_agent_llm_eval_sync
+from core.services.ingestion_queue import (
+    enqueue_agent_llm_eval_sync,
+    enqueue_generate_agent_llm_eval_version_sync,
+)
 from shared.config import settings
 
 router = APIRouter()
@@ -61,6 +72,12 @@ class ListScenariosRequest(BaseModel):
     search: Optional[str] = None
     tags: Optional[List[str]] = None
     folder_id: Optional[UUID] = None
+    # Restrict to one version (Manage-Evals tab). ``None`` = all versions.
+    version_id: Optional[UUID] = None
+    # Review-state filter: 'pending' | 'approved'. ``None`` = both.
+    approval_status: Optional[str] = Field(
+        default=None, pattern="^(pending|approved)$"
+    )
     # Exact-match filter against ``AgentLlmEvalScenario.source``. Bounded
     # to the whitelisted set so a caller can't sneak arbitrary values into
     # the SQL. Any unlisted value is silently ignored by the service
@@ -138,6 +155,23 @@ class GenerateScenariosRequest(BaseModel):
     folder_id: Optional[UUID] = None
 
 
+class GenerateVersionRequest(BaseModel):
+    """POST /versions/generate — generate scenarios into a VERSION for review.
+
+    ``mode='new'`` creates the next version; ``mode='overwrite'`` regenerates
+    an existing (un-run) version — ``version_id`` is then required. Scenarios
+    are saved as ``pending`` for approve/reject. ``generation_prompt`` is an
+    optional custom prompt fed to the generator (in addition to the agent's
+    own prompt/workflow). ``parent_id`` targets a folder (default: Default).
+    """
+
+    mode: str = Field(default="new", pattern="^(new|overwrite)$")
+    version_id: Optional[UUID] = None
+    parent_id: Optional[UUID] = None
+    generation_prompt: Optional[str] = None
+    count: int = Field(default=10, ge=1, le=100)
+
+
 class TriggerRunRequest(BaseModel):
     """POST /runs — enqueue a Procrastinate job to score the agent."""
 
@@ -150,6 +184,9 @@ class TriggerRunRequest(BaseModel):
     # the service treats ``folder_ids`` as the source of truth and ignores
     # ``folder_id``.
     folder_ids: Optional[List[UUID]] = None
+    # Tie the run to one version — scores only that version's APPROVED
+    # scenarios. ``None`` runs the agent's version-less scenarios (legacy).
+    version_id: Optional[UUID] = None
     judge_model: Optional[str] = Field(default=None, min_length=1)
 
 
@@ -256,6 +293,9 @@ def _run_summary_to_dict(s) -> dict:
         "run_id": str(s.run_id),
         "agent_id": str(s.agent_id),
         "run_number": s.run_number,
+        "version_id": (
+            str(s.version_id) if getattr(s, "version_id", None) else None
+        ),
         "triggered_by": s.triggered_by,
         "judge_model": s.judge_model,
         # Answer model — the agent's LLM at the time of the run. Snapshotted
@@ -293,10 +333,30 @@ def _handle_scenario_error(exc: Exception) -> HTTPException:
             status_code=status.HTTP_409_CONFLICT,
             detail={"code": "SCENARIO_KEY_CONFLICT", "message": str(exc)},
         )
+    if isinstance(exc, AgentLlmEvalVersionNotFoundError):
+        return HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail={"code": "VERSION_NOT_FOUND", "message": str(exc)},
+        )
+    if isinstance(exc, AgentLlmEvalVersionHasRunsError):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "VERSION_HAS_RUNS", "message": str(exc)},
+        )
+    if isinstance(exc, AgentLlmEvalVersionGeneratingError):
+        return HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "VERSION_GENERATING", "message": str(exc)},
+        )
     if isinstance(exc, AgentLlmEvalConfigError):
         return HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail={"code": "AGENT_EVAL_CONFIG_INVALID", "message": str(exc)},
+        )
+    if isinstance(exc, EvalGenerationError):
+        return HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"code": "EVAL_GENERATION_INVALID", "message": str(exc)},
         )
     if isinstance(exc, EvalConfigurationError):
         return HTTPException(
@@ -354,6 +414,8 @@ def list_llm_eval_scenarios(
         tags=payload.tags,
         folder_id=payload.folder_id,
         source=payload.source,
+        version_id=payload.version_id,
+        approval_status=payload.approval_status,
         sort_by=payload.sort_by,
         sort_order=payload.sort_order,
         page_no=payload.page_no,
@@ -599,6 +661,180 @@ def generate_llm_eval_scenarios(
     }
 
 
+# ── Version routes (generate / review / approve) ────────────────────────
+
+
+@router.post("/agents/{agent_id}/llm-evals/versions/list")
+def list_llm_eval_versions(
+    agent_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Every version for the agent (newest first) with per-version approval
+    counts and a ``has_results`` flag. Drives the Manage-Evals version bar and
+    the Results version filter."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    return {"items": svc.list_versions(agent_id)}
+
+
+@router.post(
+    "/agents/{agent_id}/llm-evals/versions/generate",
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def generate_llm_eval_version(
+    agent_id: UUID,
+    body: GenerateVersionRequest = Body(...),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Enqueue a background scenario generation into a NEW or OVERWRITTEN
+    version and return immediately (202).
+
+    The version row is created SYNCHRONOUSLY in ``status='generating'`` so the
+    FE shows a live "Generating…" indicator the moment this returns; the
+    ``agent_eval`` worker produces the scenarios (saved ``pending`` for
+    approve/reject) and flips the version to ``draft`` — or ``failed`` with a
+    user-safe reason. Overwrite of an already-run version is refused (409), as
+    is regenerating a version whose generation is still in flight (409)."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    if body.mode == "overwrite" and body.version_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={
+                "code": "VERSION_ID_REQUIRED",
+                "message": "version_id is required when mode='overwrite'.",
+            },
+        )
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    # 1. Reserve the version row SYNCHRONOUSLY (status='generating') so the FE's
+    # versions poll shows the indicator the moment the invalidator fires.
+    try:
+        version = svc.begin_generation(
+            agent_id,
+            mode=body.mode,
+            version_id=body.version_id,
+            generation_prompt=body.generation_prompt,
+        )
+    except (
+        AgentLlmEvalVersionNotFoundError,
+        AgentLlmEvalVersionHasRunsError,
+        AgentLlmEvalVersionGeneratingError,
+        AgentLlmEvalConfigError,
+        EvalGenerationError,
+        EvalConfigurationError,
+    ) as e:
+        raise _handle_scenario_error(e) from e
+
+    # 2. Enqueue the Procrastinate job. On enqueue failure, flip the reserved
+    # row to 'failed' so the UI shows the failure instead of a version stuck in
+    # 'generating' forever.
+    try:
+        job_id = enqueue_generate_agent_llm_eval_version_sync(
+            version.id,
+            org_id,
+            count=body.count,
+            parent_id=body.parent_id,
+        )
+    except Exception as e:  # noqa: BLE001
+        logger.exception(
+            "[agent-llm-eval] generate enqueue failed agent={} org={} version_id={}",
+            agent_id, org_id, version.id,
+        )
+        try:
+            svc.fail_generation(version.id, GENERATION_FAILED_MESSAGE)
+        except Exception:  # noqa: BLE001
+            logger.exception(
+                "[agent-llm-eval] generate fail-flip cleanup failed version_id={}",
+                version.id,
+            )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "ENQUEUE_FAILED", "message": str(e)},
+        ) from e
+
+    return {
+        "job_id": job_id,
+        "version_id": str(version.id),
+        "status": "generating",
+    }
+
+
+@router.post("/agents/{agent_id}/llm-evals/versions/{version_id}/approve-all")
+def approve_all_llm_eval_scenarios(
+    agent_id: UUID,
+    version_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Approve every pending scenario in a version and finalize it."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    try:
+        n = svc.approve_all(agent_id, version_id)
+    except AgentLlmEvalVersionNotFoundError as e:
+        raise _handle_scenario_error(e) from e
+    return {"approved": n}
+
+
+@router.post("/agents/{agent_id}/llm-evals/versions/{version_id}/reject-all")
+def reject_all_llm_eval_scenarios(
+    agent_id: UUID,
+    version_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Reject (delete) every pending scenario in a version. Rejected scenarios
+    are not stored."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    try:
+        n = svc.reject_all(agent_id, version_id)
+    except AgentLlmEvalVersionNotFoundError as e:
+        raise _handle_scenario_error(e) from e
+    return {"rejected": n}
+
+
+@router.post("/agents/{agent_id}/llm-evals/scenarios/{scenario_id}/approve")
+def approve_llm_eval_scenario(
+    agent_id: UUID,
+    scenario_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Approve one pending scenario — it joins the version's scored set."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    try:
+        row = svc.approve_scenario(agent_id, scenario_id)
+    except AgentLlmScenarioNotFoundError as e:
+        raise _handle_scenario_error(e) from e
+    return row.to_dict()
+
+
+@router.post("/agents/{agent_id}/llm-evals/scenarios/{scenario_id}/reject")
+def reject_llm_eval_scenario(
+    agent_id: UUID,
+    scenario_id: UUID,
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    """Reject one scenario — DELETE the row (ignored evals are not stored)."""
+    org_id = _resolve_org_id(claims)
+    _ensure_agent_in_org(db, org_id, agent_id)
+    svc = AgentLlmEvalVersionService(db, org_id=org_id)
+    try:
+        svc.reject_scenario(agent_id, scenario_id)
+    except AgentLlmScenarioNotFoundError as e:
+        raise _handle_scenario_error(e) from e
+    return {"deleted": str(scenario_id)}
+
+
 # ── Run routes ──────────────────────────────────────────────────────────
 
 
@@ -631,6 +867,7 @@ def trigger_llm_eval_run(
             tags=payload.tags,
             folder_id=payload.folder_id,
             folder_ids=payload.folder_ids,
+            version_id=payload.version_id,
         )
     except AgentLlmEvalFolderNotFoundError as e:
         raise _handle_folder_error(e) from e
@@ -673,6 +910,7 @@ def trigger_llm_eval_run(
         judge_model=resolved_judge_model,
         judge_engine="deepeval",
         total_scenarios=len(rows),
+        version_id=payload.version_id,
         filter_snapshot={
             "scenario_ids": (
                 [str(s) for s in payload.scenario_ids] if payload.scenario_ids else None
@@ -682,6 +920,7 @@ def trigger_llm_eval_run(
             "folder_ids": (
                 [str(f) for f in payload.folder_ids] if payload.folder_ids else None
             ),
+            "version_id": str(payload.version_id) if payload.version_id else None,
         },
     )
 
@@ -701,6 +940,7 @@ def trigger_llm_eval_run(
             tags=payload.tags,
             folder_id=payload.folder_id,
             folder_ids=payload.folder_ids,
+            version_id=payload.version_id,
             judge_model=resolved_judge_model,
             run_id=str(run_row.id),
         )
@@ -735,6 +975,7 @@ def list_llm_eval_runs(
     agent_id: UUID,
     page_no: Optional[int] = Query(default=None, ge=1),
     page_size: Optional[int] = Query(default=None, ge=1, le=200),
+    version_id: Optional[UUID] = Query(default=None),
     claims: JWTClaims = Depends(require_org_member),
     db: Session = Depends(get_db),
 ):
@@ -753,6 +994,7 @@ def list_llm_eval_runs(
         db,
         agent_id=agent_id,
         organization_id=org_id,
+        version_id=version_id,
         page_no=page_no,
         page_size=page_size,
     )

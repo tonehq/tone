@@ -43,7 +43,7 @@ from core.utils.encryption import decrypt
 # removed in `load_agent_service_config`'s `result` dict). It is folded into every cache
 # version stamp, so a deploy that changes the shape invalidates all persisted entries
 # instead of serving them with a stale shape — there is no TTL to clear them otherwise.
-PAYLOAD_FORMAT_VERSION = "v8"  # v8: populate model_meta_data from Model.meta_data (was always {})
+PAYLOAD_FORMAT_VERSION = "v10"
 
 
 # Appended to every agent's system prompt so responses stay TTS-friendly. Two rule sets:
@@ -379,6 +379,10 @@ def _build_service_specs(
     )
 
     return llm_spec, stt_spec, tts_spec, is_s2s
+
+
+def _turn_settings(config: AgentConfig) -> Optional[dict]:
+    return dict(config.turn_settings) if isinstance(config.turn_settings, dict) else None
 
 
 def _config_service_ids(config) -> dict:
@@ -972,6 +976,7 @@ def load_agent_service_config(
         "is_s2s": is_s2s,
         "messages": messages,
         "end_call_message": getattr(config, "end_call_message", None),
+        "turn_settings": _turn_settings(config),
         "tools": _merge_tools(real_tools, api_request_tools),
         "kb": get_kb_document_names(agent_id),
         # `{id, name}` refs for the call-log snapshot. Cached here so the runner can

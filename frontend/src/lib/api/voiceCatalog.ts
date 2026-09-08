@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
+import { getTurnSettingsOptions } from '@/services/agentsService';
 import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
 import { listTtsLanguages, listTtsProviders, listTtsVoices } from '@/services/ttsService';
 import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
@@ -19,6 +20,7 @@ export const voiceCatalogKeys = {
     ['voice-catalog', 'tts-voices', providerId, language, modelId ?? null] as const,
   ttsModels: (providerId: string) => ['voice-catalog', 'tts-models', providerId] as const,
   sttModels: (providerId: string) => ['voice-catalog', 'stt-models', providerId] as const,
+  turnSettingsOptions: () => ['voice-catalog', 'turn-settings-options'] as const,
 };
 
 // Module-level selects so the reference stays stable across renders (TanStack
@@ -84,6 +86,14 @@ export function useSttModels(providerId: string) {
     queryFn: () => listProviderModels(providerId, { service_type: 'stt', page: 1, page_size: 100 }),
     enabled: !!providerId,
     select: selectActiveModels,
+    retry: false,
+  });
+}
+
+export function useTurnSettingsOptions() {
+  return useQuery({
+    queryKey: voiceCatalogKeys.turnSettingsOptions(),
+    queryFn: getTurnSettingsOptions,
     retry: false,
   });
 }

@@ -112,6 +112,7 @@ class DocumentProcessingService:
                             "[ingestion] reprocess wiping {} prior active run(s) upload={} new_run={}",
                             len(prior), upload_id, run.id,
                         )
+                    IngestionRunService.purge_remote_vectors(db, prior)
                     for old in prior:
                         db.delete(old)
                     db.commit()

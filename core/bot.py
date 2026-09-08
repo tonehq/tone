@@ -24,8 +24,9 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
     the called number). There is no env-based fallback — an unresolved agent is an error.
     """
     from core.database.session import get_db_context
-    from core.logging import get_applied_level, setup_logging, start_call_trace
+    from core.logging import get_applied_level, get_trace_id, setup_logging, start_call_trace
     from core.services.agent_runner_service import AgentRunnerService
+    from core.utils.memray_profiler import profile_call_memory
     from core.services.log_level_resolver import resolve_call_log_level
     from core.services.pipeline import get_engine
     from sqlalchemy.exc import SQLAlchemyError
@@ -59,7 +60,8 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
             "[bot] applied log level {} (source={}) for this call",
             call_log_level, call_log_level_source,
         )
-    start_call_trace(agent_id=agent.id, call_id=provider_call_id(body.get("call_data") or {}))
+    call_id = provider_call_id(body.get("call_data") or {})
+    start_call_trace(agent_id=agent.id, call_id=call_id)
     logger.info(f"Running bot with agent config: id={agent.id} name={agent.name}")
 
     # PipelineParams.load picks prefetch-vs-DB and closes the session before the long call.
@@ -76,7 +78,11 @@ async def run_bot(transport: BaseTransport, runner_args: RunnerArguments):
         transport_type=body.get("transport_type"),
     ).info("[bot] pipeline runner instantiated — starting run")
     try:
-        await runner.run()
+        # Wrap the whole pipeline run so a memray capture (when enabled) is scoped
+        # to exactly this call — one file per provider call id (trace_id fallback
+        # when the call id is unknown). No-op when profiling is off.
+        with profile_call_memory(call_id or get_trace_id()):
+            await runner.run()
     except asyncio.CancelledError:
         # Normal teardown when the transport closes / caller hangs up —
         # never swallow it, but do NOT log as an error either.

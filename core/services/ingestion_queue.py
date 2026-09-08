@@ -146,6 +146,7 @@ def ingest_upload(
     from core.database.session import get_db_context
     from core.services.document_processing_service import DocumentProcessingService
     from core.services.ingestion_run_service import IngestionRunService
+    from core.utils.memray_profiler import profile_ingestion_memory
 
     run_uuid = UUID(ingestion_run_id)
     try:
@@ -160,11 +161,14 @@ def ingest_upload(
             "[ingestion] processing upload {} (run={}, reprocess={})",
             upload_id, ingestion_run_id, delete_existing,
         )
-        DocumentProcessingService().process_upload(
-            UUID(upload_id), UUID(org_id),
-            ingestion_run_id=run_uuid,
-            delete_existing=delete_existing,
-        )
+        # Scope a memray capture (when enabled) to exactly this run — one file per
+        # run id. No-op when MEMRAY_INGESTION_PROFILING_ENABLED is off.
+        with profile_ingestion_memory(ingestion_run_id):
+            DocumentProcessingService().process_upload(
+                UUID(upload_id), UUID(org_id),
+                ingestion_run_id=run_uuid,
+                delete_existing=delete_existing,
+            )
         logger.info(
             "[ingestion] worker task done upload={} run={}",
             upload_id, ingestion_run_id,
@@ -495,6 +499,7 @@ def run_agent_llm_eval(
     run_id: Optional[str] = None,
     folder_id: Optional[str] = None,
     folder_ids: Optional[list[str]] = None,
+    version_id: Optional[str] = None,
 ) -> None:
     """Run one Level-2 (agent-LLM) eval batch asynchronously.
 
@@ -581,6 +586,7 @@ def run_agent_llm_eval(
                     folder_ids=(
                         [_UUID(f) for f in folder_ids] if folder_ids else None
                     ),
+                    version_id=_UUID(version_id) if version_id else None,
                     run_id=parsed_run_id,
                 )
             except Exception as scoring_error:  # noqa: BLE001
@@ -659,6 +665,56 @@ def run_agent_llm_eval(
     )
 
 
+@app.task(name="generate_agent_llm_eval_version", queue="agent_eval", pass_context=True)
+@_with_job_logging
+def generate_agent_llm_eval_version(
+    version_id: str,
+    org_id: str,
+    count: int = 10,
+    parent_id: Optional[str] = None,
+) -> None:
+    """Generate agent-LLM eval scenarios into a version asynchronously.
+
+    Runs on the SAME ``agent_eval`` queue as ``run_agent_llm_eval`` (workers
+    already consume it — no deploy change). The route created the version row in
+    ``status='generating'`` before defer; this worker produces the scenarios and
+    flips it to ``draft`` — or ``failed`` with a user-safe reason.
+
+    ``run_generation`` persists a generation failure itself (rollback → mark
+    ``failed``, keeping any prior drafts) and does NOT re-raise, so a bad LLM
+    response never crash-loops the job. Only an unexpected failure AROUND it
+    (DB connect, etc.) escapes here and is re-raised so Procrastinate retries.
+    """
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.agent_llm.version_service import (
+        AgentLlmEvalVersionService,
+    )
+
+    logger.info(
+        "[agent-llm-eval] worker picked generate job version_id={} count={} parent_id={}",
+        version_id, count, parent_id or "-",
+    )
+    try:
+        with get_db_context() as db:
+            svc = AgentLlmEvalVersionService(db, org_id=_UUID(org_id))
+            svc.run_generation(
+                _UUID(version_id),
+                count=count,
+                parent_id=_UUID(parent_id) if parent_id else None,
+            )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[agent-llm-eval] generate task failure version_id={} (re-raising for retry)",
+            version_id,
+        )
+        raise
+    logger.info(
+        "[agent-llm-eval] worker generate task done version_id={}", version_id
+    )
+
+
 async def enqueue_agent_llm_eval(
     agent_id,
     *,
@@ -667,6 +723,7 @@ async def enqueue_agent_llm_eval(
     tags: Optional[list[str]] = None,
     folder_id=None,
     folder_ids: Optional[list] = None,
+    version_id=None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -678,6 +735,7 @@ async def enqueue_agent_llm_eval(
             tags=list(tags) if tags else None,
             folder_id=str(folder_id) if folder_id else None,
             folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
+            version_id=str(version_id) if version_id else None,
             judge_model=judge_model,
             run_id=str(run_id) if run_id else None,
         )
@@ -691,6 +749,7 @@ def enqueue_agent_llm_eval_sync(
     tags: Optional[list[str]] = None,
     folder_id=None,
     folder_ids: Optional[list] = None,
+    version_id=None,
     judge_model: Optional[str] = None,
     run_id=None,
 ) -> int:
@@ -712,8 +771,30 @@ def enqueue_agent_llm_eval_sync(
         tags=list(tags) if tags else None,
         folder_id=str(folder_id) if folder_id else None,
         folder_ids=[str(f) for f in folder_ids] if folder_ids else None,
+        version_id=str(version_id) if version_id else None,
         judge_model=judge_model,
         run_id=str(run_id) if run_id else None,
+    )
+
+
+def enqueue_generate_agent_llm_eval_version_sync(
+    version_id,
+    org_id,
+    *,
+    count: int = 10,
+    parent_id=None,
+) -> int:
+    """Defer a background agent-LLM scenario generation for the ``def`` route
+    (which runs in the FastAPI threadpool and cannot ``await``). Same one-shot
+    ``SyncPsycopgConnector`` ephemeral-app pattern as
+    :func:`enqueue_agent_llm_eval_sync`."""
+    return _defer_via_ephemeral_app(
+        task_name="generate_agent_llm_eval_version",
+        queue="agent_eval",
+        version_id=str(version_id),
+        org_id=str(org_id),
+        count=count,
+        parent_id=str(parent_id) if parent_id else None,
     )
 
 

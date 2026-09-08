@@ -223,6 +223,22 @@ class Settings:
         # LLM/STT/TTS pipeline and takes no auth, so it is OFF by default and should
         # stay off in production — enable only in dev/staging for agent testing.
         self.ENABLE_WS_TEST_ENDPOINT: bool = _bool_env(get_secret("ENABLE_WS_TEST_ENDPOINT"))
+        # Memory profiling with memray, per flow. OFF by default — it adds overhead,
+        # so enable only in dev/staging when investigating memory. When on, each unit
+        # writes <MEMRAY_PROFILE_DIR>/<prefix>_<id>.bin (call_<call_id> for calls,
+        # ingestion_<run_id> for ingestion runs); view a flame graph with
+        # `python -m memray flamegraph <file>`. Empty MEMRAY_PROFILE_DIR → "memray_profiles".
+        # All stay OFF MANDATORY_KEYS (empty = disabled / default dir).
+        self.MEMRAY_PROFILING_ENABLED: bool = _bool_env(get_secret("MEMRAY_PROFILING_ENABLED"))
+        self.MEMRAY_INGESTION_PROFILING_ENABLED: bool = _bool_env(
+            get_secret("MEMRAY_INGESTION_PROFILING_ENABLED")
+        )
+        # Also capture NATIVE (C/C++) allocations, not just the Python heap. Needed to
+        # attribute native ML/audio memory (docling/transformers/onnxruntime, VAD/turn
+        # models, audio buffers) that heap-only tracking misses — applies to every flow.
+        # Extra overhead + larger files, so it is a separate OFF-by-default knob.
+        self.MEMRAY_NATIVE_TRACES: bool = _bool_env(get_secret("MEMRAY_NATIVE_TRACES"))
+        self.MEMRAY_PROFILE_DIR: str = get_secret("MEMRAY_PROFILE_DIR") or "memray_profiles"
         self.CALL_SERVER_HOST: str = get_secret("CALL_SERVER_HOST")
         self.CALL_WORKER_PREFIX: str = get_secret("CALL_WORKER_PREFIX")
         self.POD_SYNC_NAMESPACE: str = get_secret("POD_SYNC_NAMESPACE")
@@ -408,6 +424,14 @@ class Settings:
         # raises EmbeddingProviderUnavailableError if a run requests pinecone
         # without a key configured.
         self.PINECONE_API_KEY: str = get_secret("PINECONE_API_KEY")
+
+        self.TURBOPUFFER_API_KEY: str = get_secret("TURBOPUFFER_API_KEY")
+        self.TURBOPUFFER_REGION: str = get_secret("TURBOPUFFER_REGION")
+
+        self.TEN_TURN_DETECTION_BASE_URL: str = get_secret("TEN_TURN_DETECTION_BASE_URL")
+        self.TEN_TURN_DETECTION_API_KEY: str = get_secret("TEN_TURN_DETECTION_API_KEY")
+        self.TEN_TURN_DETECTION_MODEL: str = get_secret("TEN_TURN_DETECTION_MODEL")
+        self.TURN_DETECTION_PRELOAD: str = get_secret("TURN_DETECTION_PRELOAD")
 
         # ── RAG evaluation harness ──────────────────────────────────────────
         # Auto-runs after every successful ingestion (IngestionRunService.complete_run

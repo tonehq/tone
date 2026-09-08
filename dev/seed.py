@@ -297,6 +297,7 @@ _TEMPLATE_JSON_FIELDS = (
     "voice_settings",
     "stt_settings",
     "conversation_settings",
+    "turn_settings",
 )
 
 

@@ -9,6 +9,7 @@ import type {
 
 const DEFAULT_VOICE_SPEED = 1.0;
 const DEFAULT_MAX_DURATION = 600;
+export const DEFAULT_TURN_DETECTOR = 'smart_turn';
 
 export const defaultFormState = (agentType: AgentDirection): AgentFormState => ({
   name: agentType === 'outbound' ? 'My Outbound Assistant' : 'My Inbound Assistant',
@@ -31,6 +32,7 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
     },
     stt_settings: {},
     conversation_settings: { max_duration_seconds: DEFAULT_MAX_DURATION },
+    turn_settings: { turn_detection: { provider: DEFAULT_TURN_DETECTOR }, vad: {} },
   },
   tool_ids: [],
   mcp_server_ids: [],
@@ -77,6 +79,10 @@ export function agentDetailToFormState(detail: AgentDetail): AgentFormState {
       voice_settings: cfg.voice_settings ?? base.config.voice_settings,
       stt_settings: cfg.stt_settings ?? {},
       conversation_settings: cfg.conversation_settings ?? base.config.conversation_settings,
+      turn_settings: {
+        turn_detection: cfg.turn_settings?.turn_detection ?? { provider: DEFAULT_TURN_DETECTOR },
+        vad: cfg.turn_settings?.vad ?? {},
+      },
     },
     tool_ids: (detail.tools ?? []).map((t) => t.id),
     mcp_server_ids: (detail.mcp_servers ?? []).map((m) => m.id),

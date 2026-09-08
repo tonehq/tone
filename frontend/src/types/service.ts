@@ -7,6 +7,15 @@ export interface ServiceProviderRef {
   description?: string | null;
 }
 
+// Lightweight cloud-provider ref embedded on a model row (the hosting cloud's
+// name, resolved server-side) — mirrors ServiceProviderRef.
+export interface CloudProviderRef {
+  id: string;
+  slug: string;
+  display_name: string;
+  description?: string | null;
+}
+
 /** A single per-org ApiKey row (used on the detail page's API keys panel + drawer). */
 export interface Service {
   id: string;
@@ -101,12 +110,77 @@ export interface ModelProviderUpsertPayload {
   meta_data_schema?: Record<string, unknown> | null;
 }
 
+/**
+ * Global CloudProvider row — the cloud/host a model runs on (e.g. OpenAI cloud,
+ * AWS, Azure). Structurally mirrors ModelProvider. Admin-managed catalog.
+ */
+export interface CloudProvider {
+  id: string;
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description: string | null;
+  website_url: string | null;
+  is_active: boolean;
+  meta_data_schema: Record<string, unknown> | null;
+  created_at: number | null;
+  updated_at: number | null;
+}
+
+export interface CloudProviderUpsertPayload {
+  provider_id: string;
+  slug: string;
+  display_name: string;
+  description?: string;
+  website_url?: string;
+  is_active?: boolean;
+  meta_data_schema?: Record<string, unknown> | null;
+}
+
+/**
+ * API-key status for a flattened model row. Presence only — the raw secret is
+ * never sent to the client. `present` drives the masked-dots vs `-` column;
+ * the metadata feeds the row-detail drawer.
+ */
+export interface ModelApiKeyStatus {
+  /** ID of the representative key (default-preferred) — lets the drawer edit/delete it. */
+  id: string;
+  present: boolean;
+  label: string | null;
+  is_default: boolean;
+  is_active: boolean;
+}
+
+/**
+ * One catalog Model flattened for the Model Providers table view — a provider
+ * with N models yields N rows. `api_key` is null when the org has no key for
+ * this model's (provider, kind).
+ */
+export interface ModelRow {
+  id: string;
+  name: string;
+  display_name: string | null;
+  kind: ServiceKind;
+  cloud_provider_id: string | null;
+  description: string | null;
+  base_url: string | null;
+  is_active: boolean;
+  meta_data: Record<string, unknown> | null;
+  meta_data_schema: import('@/types/provider').MetaDataSchemaField[] | null;
+  provider: ServiceProviderRef;
+  cloud_provider: CloudProviderRef | null;
+  api_key: ModelApiKeyStatus | null;
+  created_at: number;
+  updated_at: number;
+}
+
 /** Read-only model from the global catalog (detail page Models panel). */
 export interface ProviderModel {
   id: string;
   name: string;
   display_name: string | null;
   kind: ServiceKind;
+  cloud_provider_id: string | null;
   description: string | null;
   base_url: string | null;
   is_active: boolean;

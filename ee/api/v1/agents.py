@@ -21,6 +21,7 @@ from core.api.v1.agents import (
 from core.api.v1.faceted_schemas import FacetsRequest, ListRequest
 from core.database.session import get_db
 from core.services.agent_service import AgentService
+from core.services.pipeline.turn_settings import turn_settings_options
 from ee.middleware.auth import EEJWTClaims, require_ee_org_member
 
 router = APIRouter()
@@ -53,6 +54,11 @@ def get_all_agents(
     db: Session = Depends(get_db),
 ):
     return _get_service(claims, db).get_all_agents()
+
+
+@router.get("/turn-settings/options")
+def get_turn_settings_options(claims: EEJWTClaims = Depends(require_ee_org_member)):
+    return turn_settings_options()
 
 
 @router.post("/create_agent", status_code=status.HTTP_201_CREATED)

@@ -129,6 +129,10 @@ Registered so future work discovers them (paths are import targets):
 - **`ContactSchemaService.build_sample_file(schema_id, fmt)`** (`core/services/contacts/contact_schema_service.py`) — server-side schema-shaped sample import file (CSV or `.xlsx` via openpyxl); served by `GET /contact-schemas/{id}/sample?format=`. Sample content (incl. example values) is built here, NOT in the client.
 - **`ContactSchemaService.apply_scheduled_at_from_column(records, schema_id, column)`** (`core/services/contacts/contact_schema_service.py`) — for an uploaded outbound file, map a user-named column into each `ParsedContact.metadata["scheduled_at"]`, parsed with the matching date/datetime schema field's `datetime_format` and timezone (field tz → org `get_scheduling_timezone` → UTC), so the schedule column and stored metadata resolve to the SAME instant. Per-row time overrides the request `scheduled_at` (fallback for empty cells). Returns `(record, reason)` for cells that are unparseable or in the PAST so the caller drops them to `invalid` instead of dialing ASAP. Used by `POST /outbound-call/create-from-file` (the past→invalid seam is gated to the file path; `_resolve_contact_when` is unchanged for manual/API scheduling).
 
+- **`build_user_turn_stop_strategies(settings, TurnDetectionContext)` / `TURN_DETECTORS`** (`core/services/pipeline/turn_detection/`) — the ONE place a per-agent turn-detection choice (`agent_configs.turn_settings.turn_detection = {provider, …params}`; the same JSONB column carries `vad = {confidence, start_secs, stop_secs, min_volume, speaking_max_secs}` for Silero VAD, resolved by `core/services/pipeline/turn_settings.py` → `resolve_vad()` / `validate_turn_settings()` / `turn_settings_options()` behind `GET /agent/turn-settings/options`) becomes Pipecat user-turn stop strategies. `TurnDetector` (ABC, one file per kind: `smart_turn` / `ten` / `livekit`) owns its slug, `meta_data_schema`, defaults and `fallback_timeout_secs`; `factory.py` registers kinds, coerces + defaults settings, and exposes `list_turn_detectors()` and `validate_turn_detection()` (called through `AgentService._validate_turn_settings` on every config write); both only offer detectors whose `available()` is true (TEN needs `TEN_TURN_DETECTION_BASE_URL`). Operator guide: `docs/TURN_DETECTION.md`. The builder (`_build_turn_detection`) appends the telephony `TranscriptionTimeoutUserTurnStopStrategy` only when the detector asks for it. Add a detector = new `TurnDetector` subclass + registry entry; never branch on the provider slug in the builder.
+
+- **`VECTOR_STORES` / `get_vector_store` / `DB_BACKED_STORES`** (`core/services/rag/factory.py`) — the ONE registry of ingestion vector stores (`pgvector`, `turbopuffer`). Every store implements `VectorStore` and reuses **`chunk_rows.insert_chunk_rows` / `chunk_rows_query`** (`core/services/rag/vector_stores/chunk_rows.py`) for the Postgres chunk rows and **`run_scope.scoped_runs` / `resolve_active_run_id`** (`core/services/rag/run_scope.py`) for retrieval scoping (explicit run → agent pin → KB default → legacy `is_active`, plus the published-config join for `agent_id`). **`IngestionRunService.purge_remote_vectors(db, runs)`** is the ONE hook that deletes vectors held outside Postgres; every path that drops run rows (delete run, replace file, re-ingest with `delete_existing`, delete document) calls it before the cascade. Operator guide: `docs/VECTOR_STORES.md`.
+
 ### Frontend: shared components
 
 - **Buttons:** Use `CustomButton` from `@/components/shared` only. Do not use native `<button>` or `Button` from `@/components/ui/button` in app/feature code (exception: inside `CustomButton.tsx` itself).
@@ -186,7 +190,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **bucharest** (19438 symbols, 49438 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **hanoi** (19856 symbols, 51090 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -202,7 +206,7 @@ This project is indexed by GitNexus as **bucharest** (19438 symbols, 49438 relat
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/bucharest/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/hanoi/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -241,10 +245,10 @@ This project is indexed by GitNexus as **bucharest** (19438 symbols, 49438 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/bucharest/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/bucharest/clusters` | All functional areas |
-| `gitnexus://repo/bucharest/processes` | All execution flows |
-| `gitnexus://repo/bucharest/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/hanoi/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/hanoi/clusters` | All functional areas |
+| `gitnexus://repo/hanoi/processes` | All execution flows |
+| `gitnexus://repo/hanoi/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 

@@ -13,8 +13,16 @@ from typing import Any
 
 from loguru import logger
 
+from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 from core.services.pipeline.builder.base import BuildResult, PipelineBuilder
 from core.services.pipeline.service_factory import build_llm, build_stt, build_tts
+from core.services.pipeline.turn_detection import (
+    DEFAULT_TURN_DETECTOR,
+    PROVIDER_KEY,
+    TurnDetectionContext,
+    build_user_turn_stop_strategies,
+)
+from core.services.pipeline.turn_settings import TURN_DETECTION_KEY, VAD_KEY, resolve_vad
 
 def _llm_safe_schema(node, mutations=None):
     """Coerce a JSON-schema node so every current LLM provider accepts it.
@@ -171,6 +179,33 @@ def _build_service_categories(*, stt: Any, llm: Any, tts: Any) -> dict:
     return {svc.name: role for role, svc in role_map.items() if svc is not None}
 
 
+def _build_turn_detection(spec: Any, context: Any, language: Any) -> tuple:
+    provider = (spec or {}).get(PROVIDER_KEY) or DEFAULT_TURN_DETECTOR
+    started = _time.monotonic()
+    try:
+        strategies, detector = build_user_turn_stop_strategies(
+            spec, TurnDetectionContext(llm_context=context, language=language)
+        )
+    except Exception:
+        logger.bind(turn_detector=provider).exception(
+            "[pipeline-builder] turn detection build failed provider={}", provider
+        )
+        raise
+    fallback_timeout = detector.fallback_timeout_secs
+    if fallback_timeout:
+        strategies.append(TranscriptionTimeoutUserTurnStopStrategy(timeout=fallback_timeout))
+    logger.bind(
+        turn_detector=detector.slug,
+        turn_detector_settings=detector.settings,
+        fallback_timeout_secs=fallback_timeout,
+        elapsed_ms=int((_time.monotonic() - started) * 1000),
+    ).info(
+        "[pipeline-builder] turn detection ready provider={} settings={} fallback_timeout_secs={}",
+        detector.slug, detector.settings, fallback_timeout,
+    )
+    return strategies, detector
+
+
 class PipecatPipelineBuilder(PipelineBuilder):
     """Assemble a Pipecat pipeline from `PipelineParams`."""
 
@@ -229,9 +264,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
         from pipecat.audio.vad.silero import SileroVADAnalyzer
         from pipecat.audio.vad.vad_analyzer import VADParams
-        from pipecat.turns.user_stop import TurnAnalyzerUserTurnStopStrategy
-        from pipecat.audio.turn.smart_turn.local_smart_turn_v3 import LocalSmartTurnAnalyzerV3
-        from pipecat.audio.turn.smart_turn.base_smart_turn import SmartTurnParams
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
         from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
 
@@ -243,7 +275,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # robust when Silero VAD gets stuck "speaking" on phone-line noise.
         from core.processors.vad_speaking_timeout import VADSpeakingTimeoutProcessor
         from core.processors.duplicate_transcription_filter import DuplicateTranscriptionFilter
-        from core.processors.transcription_timeout_turn_stop import TranscriptionTimeoutUserTurnStopStrategy
 
         _t_build_start = _time.monotonic()
         _agent_id = getattr(agent, "id", None)
@@ -555,43 +586,25 @@ class PipecatPipelineBuilder(PipelineBuilder):
         else:
             # Standard pipeline: STT -> LLM -> TTS
             context = LLMContext(messages, combined_tools)
-            # Turn-detection tuning — hoisted into named locals so the same
-            # values feed the constructors AND the log line below. A
-            # "why is barge-in flaky on this call?" report can then read the
-            # exact params from Loki without diffing source. Keep the
-            # comment guidance below in sync when any value changes.
-            #
-            # Smart Turn keeps stop_secs=0.8 to tolerate mid-sentence pauses
-            # (~0.5s, e.g. "Hi, what <pause> can you help me with") without
-            # splitting one utterance into two; VAD stop_secs=0.2 gives faster
-            # end-of-speech detection at the audio level.
-            _smart_turn_confidence_threshold = 0.7
-            _smart_turn_stop_secs = 0.8
-            _vad_stop_secs = 0.2
-            _transcription_timeout_secs = 0.6
-            _vad_speaking_max_secs = 8.0
-            smart_turn_analyzer = LocalSmartTurnAnalyzerV3(
-                confidence_threshold=_smart_turn_confidence_threshold,
-                params=SmartTurnParams(stop_secs=_smart_turn_stop_secs),
+            turn_settings = params.turn_settings or {}
+            vad = resolve_vad(turn_settings.get(VAD_KEY))
+            stop_strategies, turn_detector = _build_turn_detection(
+                turn_settings.get(TURN_DETECTION_KEY),
+                context,
+                ((params.stt or {}).get("metadata") or {}).get("language"),
             )
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
                     vad_analyzer=SileroVADAnalyzer(
-                        params=VADParams(stop_secs=_vad_stop_secs),
+                        params=VADParams(
+                            confidence=vad["confidence"],
+                            start_secs=vad["start_secs"],
+                            stop_secs=vad["stop_secs"],
+                            min_volume=vad["min_volume"],
+                        ),
                     ),
-                    user_turn_strategies=UserTurnStrategies(
-                        stop=[
-                            # Primary: Smart Turn (the new design's turn detector).
-                            TurnAnalyzerUserTurnStopStrategy(turn_analyzer=smart_turn_analyzer),
-                            # Telephony fallback: fire end-of-turn when transcription
-                            # goes quiet even if Silero VAD never reports "stopped"
-                            # (phone-line noise can keep VAD stuck in speaking state).
-                            TranscriptionTimeoutUserTurnStopStrategy(
-                                timeout=_transcription_timeout_secs,
-                            ),
-                        ]
-                    ),
+                    user_turn_strategies=UserTurnStrategies(stop=stop_strategies),
                 ),
             )
             user_aggregator = context_aggregator.user()
@@ -624,28 +637,14 @@ class PipecatPipelineBuilder(PipelineBuilder):
             # DuplicateTranscriptionFilter drops repeated final transcripts that
             # would otherwise trigger a duplicate LLM response (the turn-stop race).
             vad_timeout = VADSpeakingTimeoutProcessor(
-                max_duration_secs=_vad_speaking_max_secs,
+                max_duration_secs=vad["speaking_max_secs"],
             )
             duplicate_filter = DuplicateTranscriptionFilter()
 
-            # Emit the turn-detection tuning ONCE per build so a barge-in /
-            # end-of-turn incident can be diagnosed straight from Loki without
-            # opening source. Fields are structured so per-value filters work.
-            logger.bind(
-                smart_turn_confidence_threshold=_smart_turn_confidence_threshold,
-                smart_turn_stop_secs=_smart_turn_stop_secs,
-                vad_stop_secs=_vad_stop_secs,
-                transcription_timeout_secs=_transcription_timeout_secs,
-                vad_speaking_max_secs=_vad_speaking_max_secs,
-            ).info(
-                "[pipeline-builder] turn detection params smart_turn(confidence={}, "
-                "stop_secs={}) vad(stop_secs={}, speaking_max_secs={}) "
-                "transcription_timeout_secs={}",
-                _smart_turn_confidence_threshold,
-                _smart_turn_stop_secs,
-                _vad_stop_secs,
-                _vad_speaking_max_secs,
-                _transcription_timeout_secs,
+            logger.bind(turn_detector=turn_detector.slug, vad_settings=vad).info(
+                "[pipeline-builder] turn detection params provider={} vad={}",
+                turn_detector.slug,
+                vad,
             )
 
             # STTLatencyTap derives STT TTFB from the wall-clock gap between

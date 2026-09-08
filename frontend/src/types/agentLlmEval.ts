@@ -8,6 +8,17 @@ export type AgentLlmEvalVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 // while any row is non-terminal (see ``useAgentLlmEvalRuns``).
 export type AgentLlmEvalBatchStatus = 'pending' | 'running' | 'completed' | 'failed';
 export type AgentLlmEvalScenarioSource = 'manual' | 'csv' | 'generated' | 'fixture';
+// Review state for generated scenarios: 'pending' (awaiting approve/reject)
+// | 'approved' (counts for runs). Rejected rows are deleted, never stored.
+export type AgentLlmEvalApprovalStatus = 'pending' | 'approved';
+// Version lifecycle. Auto-generation is a background job: 'generating' while the
+// worker produces scenarios, then 'draft' (under review) → 'finalized', or
+// 'failed' (with a user-safe `generation_error`). The versions list polls while
+// any version is 'generating' (see `useAgentLlmEvalVersions`).
+export type AgentLlmEvalVersionStatus = 'generating' | 'draft' | 'finalized' | 'failed';
+export type AgentLlmEvalVersionSource = 'generated' | 'manual' | 'imported';
+// Tree node discriminator — folders and scenarios share one table.
+export type AgentLlmEvalNodeType = 'folder' | 'scenario';
 
 // Tool-aware eval (Phase 2). Both shapes match the backend
 // ``core.services.evals.agent_llm.tool_selection_metric`` contract 1:1 so the
@@ -32,6 +43,15 @@ export interface AgentLlmEvalScenario {
   id: string;
   organization_id: string;
   agent_id: string;
+  // Tree node fields. Scenario rows are `node_type: 'scenario'`; folders are
+  // `node_type: 'folder'`. `parent_id` is the containing folder node.
+  node_type: AgentLlmEvalNodeType;
+  parent_id: string | null;
+  name: string | null;
+  // Version this scenario belongs to (generation path). `null` = manual /
+  // version-less. Reviewed generation sets `approval_status: 'pending'`.
+  version_id: string | null;
+  approval_status: AgentLlmEvalApprovalStatus;
   scenario_key: string;
   scenario_ord: number;
   prompt: string;
@@ -56,15 +76,41 @@ export interface AgentLlmEvalScenario {
   updated_at: string | null;
 }
 
-// First-class folder row + its scenario count.
+// Folder node + its direct scenario count. `parent_id` lets the FE nest the
+// folder tree client-side (folders are an adjacency tree in the backend).
 export interface AgentLlmEvalFolder {
   id: string;
   agent_id: string;
   name: string;
   description: string | null;
+  parent_id: string | null;
   count: number;
   created_at: string | null;
   updated_at: string | null;
+}
+
+// One version of an agent's scenario set (mirrors backend
+// `AgentLlmEvalScenarioVersion.to_dict()` + list_versions counts).
+export interface AgentLlmEvalScenarioVersion {
+  id: string;
+  organization_id: string;
+  agent_id: string;
+  version_number: number;
+  source: AgentLlmEvalVersionSource;
+  status: AgentLlmEvalVersionStatus;
+  generation_prompt: string | null;
+  generated_by_model: string | null;
+  // User-safe reason surfaced when `status === 'failed'` (never the raw
+  // backend error). `null` in every other state.
+  generation_error: string | null;
+  counts: { total: number; approved: number; pending: number };
+  has_results: boolean;
+  created_at: string | null;
+  updated_at: string | null;
+}
+
+export interface ListVersionsResponse {
+  items: AgentLlmEvalScenarioVersion[];
 }
 
 export interface ListFoldersResponse {
@@ -119,6 +165,10 @@ export interface ListScenariosRequest {
   tags?: string[] | null;
   // Exact folder filter by FK; null/undefined skips.
   folder_id?: string | null;
+  // Restrict to one version (Manage-Evals tab); null/undefined = all.
+  version_id?: string | null;
+  // Review-state filter: 'pending' | 'approved'; null/undefined = both.
+  approval_status?: AgentLlmEvalApprovalStatus | null;
   // Exact-match filter on ``AgentLlmEvalScenario.source``. Whitelisted at
   // the router (Pydantic regex); non-whitelisted values are rejected.
   source?: AgentLlmEvalScenarioSource | null;
@@ -196,6 +246,8 @@ export interface AgentLlmEvalRunSummary {
   run_id: string;
   agent_id: string;
   run_number: number;
+  // The version this run scored (null for version-less / legacy runs).
+  version_id: string | null;
   triggered_by: string;
   judge_model: string | null;
   // Answer model — the agent's LLM at the time of the run (snapshotted).
@@ -262,6 +314,8 @@ export interface AgentLlmEvalRunDetail {
 export interface ListRunsRequest {
   page_no?: number;
   page_size?: number;
+  // Filter runs by the version they scored (Results tab). Omit = all.
+  version_id?: string | null;
 }
 
 export interface ListRunsResponse {
@@ -283,6 +337,8 @@ export interface TriggerRunPayload {
   // in the list. When both `folder_id` and `folder_ids` are provided the
   // backend uses `folder_ids` and ignores `folder_id`.
   folder_ids?: string[];
+  // Tie the run to one version — scores only its APPROVED scenarios.
+  version_id?: string | null;
   judge_model?: string | null;
 }
 
@@ -298,35 +354,26 @@ export interface TriggerRunResponse {
   triggered_by: string;
 }
 
-export interface GeneratedScenario {
-  scenario_key: string;
-  prompt: string;
-  expected_answer: string | null;
-  persona_criteria: string | null;
-  instruction_criteria: string | null;
-  tags: string[];
-  confidence: number | null;
-  generation_metadata: Record<string, unknown> | null;
-  // Tool-aware eval (Phase 2). ``null`` for text-only scenarios so the
-  // "tool" chip only shows on scenarios the generator actually pre-labeled.
-  expected_tools: ExpectedToolCall[] | null;
-}
-
-export interface GenerateScenariosPayload {
-  strategy?: string;
+// POST /versions/generate — generate scenarios into a version for review.
+export interface GenerateVersionPayload {
+  mode: 'new' | 'overwrite';
+  // Required when mode === 'overwrite'.
+  version_id?: string | null;
+  // Target folder node; omit for the agent's Default folder.
+  parent_id?: string | null;
+  // Optional custom generation prompt (in addition to the agent's own).
+  generation_prompt?: string | null;
   count?: number;
-  dry_run?: boolean;
-  options?: Record<string, unknown> | null;
-  // When set, every persisted (non-dry-run) scenario lands in this folder.
-  folder_id?: string | null;
 }
 
-export interface GenerateScenariosResponse {
-  strategy: string;
-  dry_run: boolean;
-  generated: GeneratedScenario[];
-  persisted: AgentLlmEvalScenario[];
-  note: string | null;
+// Generation now runs as a background job — the route returns immediately (202)
+// with the reserved version's id in `status: 'generating'`. The scenarios
+// appear via the versions/scenarios poll + invalidation once the worker flips
+// the version to `draft`.
+export interface GenerateVersionResponse {
+  job_id: number;
+  version_id: string;
+  status: Extract<AgentLlmEvalVersionStatus, 'generating'>;
 }
 
 export interface CompareRunsPayload {
