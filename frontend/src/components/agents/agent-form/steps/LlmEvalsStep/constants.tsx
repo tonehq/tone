@@ -140,6 +140,12 @@ export const GENERATE_MAX_COUNT = 50;
 export const versionLabel = (v: AgentLlmEvalScenarioVersion): string =>
   `v${v.version_number} · ${v.status} · ${v.counts.approved}/${v.counts.total} approved`;
 
+// Amber pill tint shared by the "in progress" chips — the 'generating' version
+// chip and the live "eval is running" indicator — so both async actions read
+// alike from ONE source (change the tint in one place).
+export const IN_PROGRESS_CHIP_CLASS =
+  'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20';
+
 // Chip styles for the non-terminal / error version states surfaced next to the
 // version selector while a background generation runs (or after it fails).
 // ``draft`` / ``finalized`` are steady states the label already conveys, so
@@ -149,7 +155,7 @@ export const VERSION_STATUS_STYLES: Partial<
 > = {
   generating: {
     label: 'Generating…',
-    className: 'bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-500/20',
+    className: IN_PROGRESS_CHIP_CLASS,
     icon: <Loader2 className="size-3 animate-spin" />,
   },
   failed: {

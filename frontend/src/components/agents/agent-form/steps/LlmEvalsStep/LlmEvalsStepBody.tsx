@@ -44,6 +44,7 @@ import { showToast } from '@/utils/toast';
 
 import AgentEvalResultsTab from './AgentEvalResultsTab';
 import AgentEvalVersionBar from './AgentEvalVersionBar';
+import EvalRunningIndicator from './EvalRunningIndicator';
 import FolderBreadcrumb from './FolderBreadcrumb';
 import FolderDeleteImpact from './FolderDeleteImpact';
 import FoldersView from './FoldersView';
@@ -108,6 +109,12 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
   // reset effects — so their dependency arrays can reference it without a
   // temporal-dead-zone error. Auto-selected to the newest version below.
   const [selectedVersionId, setSelectedVersionId] = useState<string | null>(null);
+  // Id of a version whose generation was just kicked off. It isn't in the
+  // versions list at the instant we start (the invalidated refetch is still in
+  // flight), so we remember it and select it the moment it lands — otherwise
+  // the auto-select effect below snaps back to the previous version and its
+  // "Generating…" chip only appears after a manual refresh.
+  const [justGeneratedVersionId, setJustGeneratedVersionId] = useState<string | null>(null);
   useEffect(() => {
     setPage(1);
   }, [selectedFolder, search, filterSource, selectedVersionId]);
@@ -136,10 +143,17 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
       if (selectedVersionId !== null) setSelectedVersionId(null);
       return;
     }
+    // Jump to a just-generated version the moment it appears, so its
+    // "Generating…" chip is visible immediately (no manual refresh).
+    if (justGeneratedVersionId && versions.some((v) => v.id === justGeneratedVersionId)) {
+      setSelectedVersionId(justGeneratedVersionId);
+      setJustGeneratedVersionId(null);
+      return;
+    }
     if (!selectedVersionId || !versions.some((v) => v.id === selectedVersionId)) {
       setSelectedVersionId(versions[0].id);
     }
-  }, [versions, selectedVersionId]);
+  }, [versions, selectedVersionId, justGeneratedVersionId]);
 
   const scenariosQuery = useAgentLlmEvalScenarios(agentId, {
     search: search || undefined,
@@ -537,6 +551,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         approvingAll={approveAll.isPending}
         rejectingAll={rejectAll.isPending}
       />
+      <EvalRunningIndicator agentId={agentId} />
       {inFolderView ? (
         <>
           <FolderBreadcrumb
@@ -682,6 +697,7 @@ export default function LlmEvalsStepBody({ agentId }: { agentId: string }) {
         folderOptions={folders}
         defaultFolderId={selectedFolder}
         versions={versions}
+        onGenerated={setJustGeneratedVersionId}
       />
       <NewFolderModal
         open={openNewFolder}
