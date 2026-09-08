@@ -19,6 +19,7 @@ import type { AgentProfileVariable } from '@/types/agentProfileVariable';
 const KEY_RE = /^[a-zA-Z][a-zA-Z0-9_]{0,63}$/;
 const MAX_VALUE_BYTES = 10_240;
 const MAX_DESCRIPTION_LEN = 1000;
+const MAX_CRM_FIELD_LEN = 200;
 
 const profileVarSchema = z.object({
   key: z
@@ -42,6 +43,11 @@ const profileVarSchema = z.object({
   description: z
     .string()
     .max(MAX_DESCRIPTION_LEN, `Description must be ${MAX_DESCRIPTION_LEN} characters or fewer.`),
+  // Optional CRM response field-path. Empty = not CRM-filled. Free-text (a
+  // dot-path like `properties.firstname`); only length is enforced.
+  crm_field: z
+    .string()
+    .max(MAX_CRM_FIELD_LEN, `CRM field must be ${MAX_CRM_FIELD_LEN} characters or fewer.`),
 });
 
 export type ProfileVarFormValues = z.infer<typeof profileVarSchema>;
@@ -55,7 +61,7 @@ interface Props {
   submitting?: boolean;
 }
 
-const EMPTY: ProfileVarFormValues = { key: '', value: '', description: '' };
+const EMPTY: ProfileVarFormValues = { key: '', value: '', description: '', crm_field: '' };
 
 export default function ProfileVariableModal({
   open,
@@ -86,6 +92,7 @@ export default function ProfileVariableModal({
             key: initial.key,
             value: initial.value ?? '',
             description: initial.description ?? '',
+            crm_field: initial.crm_field ?? '',
           }
         : EMPTY,
     );
@@ -143,6 +150,14 @@ export default function ProfileVariableModal({
           label="Description (optional)"
           rows={2}
           placeholder="What this variable represents — shown in the variable picker."
+          disabled={submitting}
+        />
+        <TextInput
+          name="crm_field"
+          control={control}
+          label="CRM field (optional)"
+          placeholder="e.g. properties.firstname"
+          helperText="When Value is empty and CRM enrichment is on, fill this variable from this field of the caller's CRM record (relative to the record — e.g. properties.firstname for HubSpot, FirstName for Salesforce, First_Name for Zoho). Dot-paths supported."
           disabled={submitting}
         />
       </form>
