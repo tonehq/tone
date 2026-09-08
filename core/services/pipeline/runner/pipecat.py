@@ -147,10 +147,33 @@ class PipecatPipelineRunner(PipelineRunner):
         # back to "client_disconnect" only if nothing else has set it yet.
         # Persisted onto metadata_ by CallLogService.complete_call.
         end_reason_holder: dict = {"reason": None, "detail": None}
-        # Idempotency guard for the authoritative provider hangup. The teardown
-        # `finally` calls terminate_call once; the holder makes a second call
-        # (from any future end path) a no-op.
+        # Idempotency guard for the authoritative provider hangup — makes the
+        # multiple call sites below (prompt hangup in on_audio_data + the teardown
+        # `finally` fallback) fire exactly once.
         termination_state: dict = {"done": False}
+
+        async def _terminate_call_once():
+            """Drop the phone leg via the correct per-provider REST API.
+
+            Fired PROMPTLY from on_audio_data (before the multi-second recording
+            encode/upload) so the caller isn't left on a silent line, with the
+            teardown ``finally`` as a fallback. Idempotent (termination_state),
+            skips client_disconnect (caller already hung up), and never raises.
+            """
+            if end_reason_holder.get("reason") == REASON_CLIENT_DISCONNECT:
+                return
+            # Local import: the pipeline package eager-imports this runner, so a
+            # module-level import of call_termination (which imports
+            # pipeline.call_end_events) would be a circular import.
+            from core.services.call_termination import terminate_call
+
+            await terminate_call(
+                transport_type=transport_type,
+                call_data=call_data,
+                org_id=getattr(agent, "organization_id", None),
+                reason=end_reason_holder.get("reason"),
+                state=termination_state,
+            )
         # The DB row's calls.id, populated once _create_call_log_in_thread
         # returns. Threaded through the builder to the tool handler and the
         # keyword detector so their structured log lines carry the id — makes
@@ -474,6 +497,14 @@ class PipecatPipelineRunner(PipelineRunner):
                 # Yield to let pending transcript event handlers complete first
                 await asyncio.sleep(0)
 
+                # Drop the phone leg NOW — before the multi-second recording
+                # encode + R2 upload below — so the caller isn't left on a silent
+                # line during teardown. Providers whose media serializer already
+                # hung up (Twilio) see an already-ended call and no-op quietly;
+                # providers whose serializer can't (Telnyx TeXML) get their real
+                # hangup here. Idempotent with the teardown `finally` fallback.
+                await _terminate_call_once()
+
                 # Wait for background call log creation to finish
                 call_log_id = await _get_call_log_id()
 
@@ -717,29 +748,11 @@ class PipecatPipelineRunner(PipelineRunner):
                     )
             raise
         finally:
-            # Authoritative, provider-agnostic hangup via the correct per-provider
-            # REST API. Skipped ONLY when the caller hung up first
-            # (client_disconnect): the leg is already down. It fires on every
-            # other end (llm_end_call, pipeline error) — this is what actually
-            # drops the phone leg for providers whose media serializer can't
-            # (e.g. Telnyx TeXML, whose serializer speaks the wrong Call-Control
-            # API). For providers whose serializer already hung up (Twilio), the
-            # terminator's redundant call sees an already-ended call and returns a
-            # quiet success. terminate_call never raises, so it cannot mask an
-            # exception being propagated.
-            if end_reason_holder.get("reason") != REASON_CLIENT_DISCONNECT:
-                # Local import: the pipeline package eager-imports this runner, so a
-                # module-level import of call_termination (which imports
-                # pipeline.call_end_events) would be a circular import.
-                from core.services.call_termination import terminate_call
-
-                await terminate_call(
-                    transport_type=transport_type,
-                    call_data=call_data,
-                    org_id=getattr(agent, "organization_id", None),
-                    reason=end_reason_holder.get("reason"),
-                    state=termination_state,
-                )
+            # Fallback hangup for ends where on_audio_data didn't run (no
+            # recording buffer, or empty audio) — idempotent with the prompt
+            # call above, so it's a no-op when the leg is already dropped. Never
+            # raises, so it can't mask an exception being propagated.
+            await _terminate_call_once()
 
         # Fallback: if on_audio_data didn't update DB (e.g. no audio captured),
         # update the call log here with whatever we have.
