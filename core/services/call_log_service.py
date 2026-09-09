@@ -197,7 +197,6 @@ class CallLogService(BaseService):
         recording_duration_seconds: Optional[int] = None,
         ended_reason: Optional[str] = None,
         ended_reason_detail: Optional[str] = None,
-        webhook_result: Optional[dict] = None,
     ) -> Optional[Call]:
         call = self.db.query(Call).filter(Call.id == call_log_id).first()
         if not call:
@@ -232,9 +231,6 @@ class CallLogService(BaseService):
         if ended_reason_detail:
             metadata["ended_reason_detail"] = ended_reason_detail
         call.metadata_ = metadata
-
-        if webhook_result is not None:
-            call.webhook_result = webhook_result
 
         self.db.commit()
         self.db.refresh(call)
