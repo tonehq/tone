@@ -132,12 +132,23 @@ def _confirmation_valid(
     ):
         return True
 
-    # Standard path: the confirmation ask that immediately precedes the user's
-    # reply. Skip any trailing user turns (the reply — which may or may not be
-    # recorded in the transcript yet), then scan the contiguous assistant block
-    # before them for the ask. (Not appending live_user_text as a synthetic
-    # entry avoids double-counting the reply when it IS already in the transcript,
-    # which previously broke the lookback and blocked valid confirmations.)
+    # Standard path requires the user to have actually REPLIED to the ask — a
+    # trailing user turn recorded in the transcript, or a live reply (the race
+    # where on_user_turn_stopped hasn't appended it yet). Without a reply there
+    # is nothing to confirm (e.g. the ask is the latest turn) — block, so the
+    # two-step gate can't be satisfied by an older user turn.
+    has_reply = bool(live_user_text and live_user_text.strip()) or (
+        bool(entries) and entries[-1].get("role") == "user"
+    )
+    if not has_reply:
+        return False
+
+    # Find the confirmation ask that immediately precedes the reply: skip any
+    # trailing user turns (the reply — which may or may not be recorded yet),
+    # then scan the contiguous assistant block before them for the ask. (Not
+    # appending live_user_text as a synthetic entry avoids double-counting the
+    # reply when it IS already in the transcript, which previously broke the
+    # lookback and blocked valid confirmations.)
     i = len(entries) - 1
     while i >= 0 and entries[i].get("role") == "user":
         i -= 1

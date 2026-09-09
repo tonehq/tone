@@ -64,6 +64,10 @@ from core.services.pipeline.tools.end_call_tool import _confirmation_valid
         ([], "can you end the call", True),
         # Bare affirmatives replying to the agent's "Can I end the call?" ask
         # must be authorized (guard side of the #5 fix).
+        # The ask is the latest turn and the user has NOT replied (no trailing
+        # user turn, no live text) → block: the two-step gate isn't satisfied.
+        ([{"role": "assistant", "text": "Can I end the call now?"}], None, False),
+        ([{"role": "assistant", "text": "Can I end the call now?"}], "   ", False),
         ([{"role": "assistant", "text": "Can I end the call now?"}], "yeah", True),
         ([{"role": "assistant", "text": "Can I end the call now?"}], "sure", True),
         ([{"role": "assistant", "text": "Can I end the call now?"}], "okay", True),
