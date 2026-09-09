@@ -55,6 +55,7 @@ def test_catalog_offers_only_providers_whose_sdk_and_config_are_present(all_sdks
 
 def test_missing_sdk_hides_the_provider(monkeypatch):
     monkeypatch.setattr(ten, "TENVADAnalyzer", None)
+    monkeypatch.setattr(aic_quail, "AICQuailVADAnalyzer", None)
     assert [c["id"] for c in vad_registry.list_vad_providers()] == ["silero"]
     with pytest.raises(ValueError, match="ten-vad"):
         vad_registry.build_vad_analyzer({"provider": "ten"}, VADParams())
@@ -72,7 +73,7 @@ def test_aic_takes_its_licence_from_server_config(all_sdks_present):
     params = VADParams()
     with mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         analyzer = vad_registry.build_vad_analyzer({"provider": "aic_quail", "model_id": ""}, params)
-    assert analyzer.kwargs == {"license_key": "key", "model_id": "quail-vad-2.0-xxs-16khz", "params": params}
+    assert analyzer.kwargs == {"license_key": "key", "model_id": "vad-ms-2.1-xxs-16khz", "params": params}
     with mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
         with pytest.raises(ValueError, match="AIC_SDK_LICENSE"):
             vad_registry.build_vad_analyzer({"provider": "aic_quail"}, params)

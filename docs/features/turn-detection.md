@@ -39,7 +39,7 @@ The lower bounds exist because values under them end the caller's turn on line n
 |---|---|---|---|
 | `silero` (default) | Silero ONNX bundled with Pipecat | 8 and 16 kHz | Nothing |
 | `ten` | TEN VAD (Apache 2.0), faster speech-to-silence transitions than Silero; telephony audio at 8 kHz is upsampled to the model's 16 kHz | 8 and 16 kHz | `pip install git+https://github.com/TEN-framework/ten-vad.git` in the worker image. Field: `hop_size` (160 or 256 samples) |
-| `aic_quail` | ai-coustics Quail VAD, licensed; the model downloads on first use | 16 kHz | `pip install "pipecat-ai[aic]"` and `AIC_SDK_LICENSE` from developers.ai-coustics.io. Field: `model_id` (default `quail-vad-2.0-xxs-16khz`) |
+| `aic_quail` | ai-coustics VAD (formerly Quail VAD), licensed; the model downloads from their CDN on first use | 16 kHz | `pip install "pipecat-ai[aic]"` and `AIC_SDK_LICENSE` from developers.ai-coustics.com. Field: `model_id` (default `vad-ms-2.1-xxs-16khz`; `vad-vf-2.0-s-16khz` is the voice-focus variant). The SDK's Python binding 3.1 and later needs model file version 7, which the older `quail-vad-2.0` id no longer provides |
 
 A model is offered in the agent editor and accepted by validation only while its package, and for the licensed one its key, is present on the server, the same rule as the TEN turn detector. Krisp VIVA VAD is not registered: Pipecat ships its analyzer, but Krisp only releases the SDK and the `.kef` models after enabling VIVA for the organisation, which has not happened yet. When it does, it is one `VADProvider` file plus a registry entry. An agent already configured for a model the worker cannot load fails at pipeline build with a message naming the missing package or variable.
 
