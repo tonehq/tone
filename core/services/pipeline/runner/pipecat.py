@@ -347,24 +347,33 @@ class PipecatPipelineRunner(PipelineRunner):
             )
 
             caller_phone = to_number if direction == "outbound" else from_number
+            _wh_service = AgentProfileWebhookService(None, org_id=profile_org_id)
             webhook_task = asyncio.ensure_future(
-                AgentProfileWebhookService(None, org_id=profile_org_id).enrich(
+                _wh_service.enrich(
                     plan=webhook_plan, caller_phone=caller_phone, direction=direction
                 )
             )
+            _wh_execution = None
             try:
-                enriched = await asyncio.wait_for(
+                _wh_outcome = await asyncio.wait_for(
                     webhook_task, timeout=webhook_plan.timeout_seconds
                 )
+                enriched = _wh_outcome.values
+                _wh_execution = _wh_outcome.execution
             except Exception:  # noqa: BLE001 — timeout or enrichment failure
                 logger.exception(
                     "[profile-webhook] enrichment failed/timed out agent={}",
                     getattr(agent, "id", None),
                 )
                 enriched = get_failure_strategy(direction).on_failure()
+                _wh_execution = _wh_service.timeout_execution(webhook_plan, caller_phone)
             for _k, _v in (enriched or {}).items():
                 if not (profile_vars.get(_k) or ""):  # fill-only-empty
                     profile_vars[_k] = _v
+            # Persisted as a ``webhook`` tool_executions row (same list the tool
+            # handlers use) for call-history debugging.
+            if _wh_execution:
+                tool_call_entries.append(_wh_execution)
 
         prompt_context = build_call_context(
             agent, call_data, transport_type, profile_variables=profile_vars

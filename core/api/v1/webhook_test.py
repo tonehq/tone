@@ -64,6 +64,17 @@ async def _build(phone: str, scenario: str) -> JSONResponse:
     return JSONResponse(content=_fake_record(phone))
 
 
+async def _phone_from_request(request: Request) -> str:
+    """Read the phone from a POST body (``phone`` or ``caller_number``); empty
+    / non-JSON bodies are fine for a mock."""
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — empty / non-JSON body is fine for a mock
+        logger.debug("[webhook-test] no JSON body on POST")
+    return str(body.get("phone") or body.get("caller_number") or "")
+
+
 @router.get("/webhook-test/lookup")
 async def webhook_test_lookup_get(
     phone: str = Query(default=""),
@@ -77,13 +88,7 @@ async def webhook_test_lookup_post(
     request: Request,
     scenario: str = Query(default="success"),
 ):
-    body: dict = {}
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 — empty / non-JSON body is fine for a mock
-        logger.debug("[webhook-test] no JSON body on POST")
-    phone = str(body.get("phone") or body.get("caller_number") or "")
-    return await _build(phone, scenario)
+    return await _build(await _phone_from_request(request), scenario)
 
 
 # ── Path-based scenario (robust) ──────────────────────────────────────────
@@ -99,10 +104,46 @@ async def webhook_test_lookup_get_path(scenario: str, phone: str = Query(default
 
 @router.post("/webhook-test/lookup/{scenario}")
 async def webhook_test_lookup_post_path(scenario: str, request: Request):
-    body: dict = {}
-    try:
-        body = await request.json()
-    except Exception:  # noqa: BLE001 — empty / non-JSON body is fine for a mock
-        logger.debug("[webhook-test] no JSON body on POST")
-    phone = str(body.get("phone") or body.get("caller_number") or "")
-    return await _build(phone, scenario)
+    return await _build(await _phone_from_request(request), scenario)
+
+
+# ── Match-my-number (realistic real-call test) ────────────────────────────
+# Returns a record ONLY when the incoming phone matches ``allowed`` (put YOUR
+# number in the URL path, e.g. …/webhook-test/match/18637658026); every other
+# caller gets 404 so the variable falls back to its default. Lets you place a
+# real inbound call from your phone and see it resolve, while other numbers
+# exercise the fallback. Comparison is on the last 10 digits, so +country-code
+# / formatting differences don't matter.
+
+
+def _digits(p: str) -> str:
+    return "".join(c for c in (p or "") if c.isdigit())[-10:]
+
+
+def _match_response(allowed: str, phone: str) -> JSONResponse:
+    if phone and _digits(phone) and _digits(phone) == _digits(allowed):
+        return JSONResponse(content=_fake_record(phone))
+    return JSONResponse(status_code=404, content={"error": "no customer for this phone"})
+
+
+@router.get("/webhook-test/match/{allowed}")
+async def webhook_test_match_get(allowed: str, phone: str = Query(default="")):
+    return _match_response(allowed, phone)
+
+
+@router.post("/webhook-test/match/{allowed}")
+async def webhook_test_match_post(allowed: str, request: Request):
+    return _match_response(allowed, await _phone_from_request(request))
+
+
+# ── Phone-in-the-path (tests the "URL path" identifier location) ──────────
+# Configure the webhook URL as …/webhook-test/by-path/{phone} with the phone
+# identifier set to location "URL path"; the caller's number is substituted
+# into the path. Returns a record for any non-empty phone, else 404.
+
+
+@router.get("/webhook-test/by-path/{phone}")
+async def webhook_test_by_path(phone: str):
+    if not _digits(phone):
+        return JSONResponse(status_code=404, content={"error": "no phone in path"})
+    return JSONResponse(content=_fake_record(phone))
