@@ -9,6 +9,7 @@ Usage:
     python scripts/update_provider_status.py staging   # runs on staging only
     python scripts/update_provider_status.py local     # runs on local only
 """
+import os
 import sys
 from pathlib import Path
 
@@ -24,11 +25,11 @@ PROVIDERS = {
     "tts": ["cartesia", "openai", "rime", "sarvam", "hathora", "inworld"],
 }
 
-# Hardcoded DB URLs — change these as needed
+# DB URLs from environment — set DATABASE_URL_DEV / DATABASE_URL_STAGING / DATABASE_URL_LOCAL
 DB_URLS = {
-    "dev": "postgresql://neondb_owner:npg_XFStP7eh4jZY@ep-blue-truth-an3xdo3i-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require",
-    "staging": "postgresql://neondb_owner:npg_tVwEx73KXolm@ep-divine-bonus-anek55ly-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require",
-    "local": "postgresql://neondb_owner:npg_iNWhZLF0gHt7@ep-holy-wind-ad79pdco-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require",
+    "dev": os.environ.get("DATABASE_URL_DEV"),
+    "staging": os.environ.get("DATABASE_URL_STAGING"),
+    "local": os.environ.get("DATABASE_URL_LOCAL"),
 }
 
 
@@ -101,7 +102,13 @@ if __name__ == "__main__":
         if target not in DB_URLS:
             print(f"Unknown target '{target}'. Choose from: {', '.join(DB_URLS.keys())}")
             sys.exit(1)
+        if not DB_URLS[target]:
+            print(f"Missing DB URL for '{target}'. Set the DATABASE_URL_{target.upper()} environment variable.")
+            sys.exit(1)
         update_providers(target, DB_URLS[target])
     else:
         for db_name, db_url in DB_URLS.items():
+            if not db_url:
+                print(f"Skipping '{db_name}': DATABASE_URL_{db_name.upper()} is not set.")
+                continue
             update_providers(db_name, db_url)
