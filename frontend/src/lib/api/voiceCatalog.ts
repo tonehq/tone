@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 
 import { getTurnSettingsOptions } from '@/services/agentsService';
-import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
+import { listAllProviderModels, listProviderCatalog } from '@/services/servicesService';
 import { listTtsLanguages, listTtsProviders, listTtsVoices } from '@/services/ttsService';
 import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
 
@@ -73,7 +73,7 @@ export function useTtsVoices(
 export function useTtsModels(providerId: string) {
   return useQuery({
     queryKey: voiceCatalogKeys.ttsModels(providerId),
-    queryFn: () => listProviderModels(providerId, { service_type: 'tts', page: 1, page_size: 100 }),
+    queryFn: () => listAllProviderModels(providerId, 'tts'),
     enabled: !!providerId,
     select: selectActiveModels,
     retry: false,
@@ -83,7 +83,7 @@ export function useTtsModels(providerId: string) {
 export function useSttModels(providerId: string) {
   return useQuery({
     queryKey: voiceCatalogKeys.sttModels(providerId),
-    queryFn: () => listProviderModels(providerId, { service_type: 'stt', page: 1, page_size: 100 }),
+    queryFn: () => listAllProviderModels(providerId, 'stt'),
     enabled: !!providerId,
     select: selectActiveModels,
     retry: false,
