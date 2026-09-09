@@ -6,6 +6,7 @@ import {
   MessageSquare,
   Radio,
   Settings2,
+  SlidersHorizontal,
   Users,
   Volume2,
   Wrench,
@@ -30,10 +31,10 @@ export interface AgentSection {
 // the agent's workflows behind a Prompt/Workflow toggle (they're two ways to
 // drive the same conversation), so there is no separate Workflow entry.
 //
-// Profile variables have no rail entry of their own — they're managed from a
-// right-side drawer ("Profile variables") opened from the Prompt step and the
-// workflow builder toolbar (see ProfileVariablesDrawer), right where the
-// `{{profile.<key>}}` placeholders are actually used.
+// Profile variables live in the "Advanced" section (AdvancedStep → the shared
+// ProfileVariablesPanel). The workflow builder toolbar also exposes them via a
+// drawer (ProfileVariablesDrawer) for convenience while authoring a pathway;
+// both render the same panel so they never drift.
 //
 // "Setup" bundles the read-only Overview (edit mode only), Basics, and AI
 // sections into a single page — they're all the "who is this agent + which
@@ -49,6 +50,9 @@ export const AGENT_SECTIONS: AgentSection[] = [
   // score the agent's actual answer + system-prompt behavior).
   { key: 'llm-evals', label: 'LLM Evals', icon: Gauge },
   { key: 'channels', label: 'Channels', icon: Radio },
+  // Advanced hosts the profile-variables feature ({{profile.<key>}} values +
+  // their webhook data source). Renders in both create and edit.
+  { key: 'advanced', label: 'Advanced', icon: SlidersHorizontal },
   { key: 'contacts', label: 'Contacts', icon: Users },
   { key: 'schedule', label: 'Outbound Calls', icon: CalendarClock },
   { key: 'call-history', label: 'Call History', icon: Clock },
