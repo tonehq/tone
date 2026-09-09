@@ -6,7 +6,7 @@ import TruncatedCell from '@/components/knowledge-base/TruncatedCell';
 import VerdictChip from '@/components/knowledge-base/VerdictChip';
 import { CustomTable } from '@/components/shared';
 import type { CustomTableColumn } from '@/types/components';
-import type { EvalVerdict } from '@/types/eval';
+import type { EvalVerdict, HumanVerdict } from '@/types/eval';
 import type {
   EvaluationConfig,
   EvaluationConfigResultRow,
@@ -20,6 +20,7 @@ import {
   meanRowScore,
   type QuestionMatrixRow,
 } from './evalConfigHelpers';
+import { HUMAN_VERDICT_COLOR, HUMAN_VERDICT_LABEL } from './verdictColors';
 
 interface EvaluationConfigScoresTableProps {
   passes: EvaluationConfigRunSummary[]; // selected passes (columns)
@@ -38,6 +39,14 @@ export default function EvaluationConfigScoresTable({
   configs,
 }: EvaluationConfigScoresTableProps) {
   const rows = useMemo(() => buildQuestionMatrix(results), [results]);
+
+  // Human mark is config-independent (lives on the source answer), so it's the
+  // same across every pass for a given question — take it from any row.
+  const humanByEval = useMemo(() => {
+    const map = new Map<string, HumanVerdict | null>();
+    for (const r of results) map.set(r.eval_id, r.human_verdict);
+    return map;
+  }, [results]);
 
   const columns = useMemo<CustomTableColumn<QuestionMatrixRow>[]>(() => {
     const passColumns: CustomTableColumn<QuestionMatrixRow>[] = passes.map((pass) => ({
@@ -64,9 +73,25 @@ export default function EvaluationConfigScoresTable({
         title: 'Question',
         render: (_v, r) => <TruncatedCell text={r.question} maxWidthClassName="max-w-[320px]" />,
       },
+      {
+        key: 'human_verdict',
+        title: 'Your call',
+        align: 'center',
+        render: (_v, r) => {
+          const human = humanByEval.get(r.evalId) ?? null;
+          if (!human) return <span className="text-muted-foreground">—</span>;
+          return (
+            <span
+              className={`rounded px-2 py-0.5 text-xs font-medium ${HUMAN_VERDICT_COLOR[human]}`}
+            >
+              {HUMAN_VERDICT_LABEL[human]}
+            </span>
+          );
+        },
+      },
       ...passColumns,
     ];
-  }, [passes, configs]);
+  }, [passes, configs, humanByEval]);
 
   if (passes.length === 0) return null;
 

@@ -3,6 +3,7 @@
 import { Eye } from 'lucide-react';
 
 import { CustomButton } from '@/components/shared';
+import { formatRatioPercent } from '@/utils/evalFormat';
 
 import VerdictTally from './VerdictTally';
 
@@ -12,6 +13,10 @@ interface CompareColumnHeaderProps {
   judgeModel: string | null;
   verdicts: Record<string, number>;
   isBaseline: boolean;
+  // How often this judge agreed with the human labels (0..1), and how many
+  // answers carry a mark. labeledCount === 0 ⇒ "no labels yet".
+  humanAgreement: number | null;
+  labeledCount: number;
   onViewPrompt: () => void;
 }
 
@@ -24,6 +29,8 @@ export default function CompareColumnHeader({
   judgeModel,
   verdicts,
   isBaseline,
+  humanAgreement,
+  labeledCount,
   onViewPrompt,
 }: CompareColumnHeaderProps) {
   return (
@@ -41,6 +48,11 @@ export default function CompareColumnHeader({
         {judgeModel ?? '—'}
       </span>
       <VerdictTally verdicts={verdicts} />
+      <span className="text-[11px] text-muted-foreground">
+        {labeledCount === 0
+          ? 'no labels yet'
+          : `agrees with you: ${formatRatioPercent(humanAgreement)}`}
+      </span>
       <CustomButton
         type="text"
         size="xs"

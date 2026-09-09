@@ -25,6 +25,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from core.models.eval import Eval
+from core.models.eval_result import EvalResult
 from core.models.evaluation_config import EvaluationConfig
 from core.models.evaluation_config_result import EvaluationConfigResult
 from core.services.base import BaseService
@@ -35,7 +36,12 @@ from core.services.evals.deepeval.metric_registry import (
     SUPPORTED_METRICS,
 )
 from core.services.evals.errors import EvalNotFoundError, EvalRunError
-from core.services.evals.eval_service import EvalService, _require_llm_key
+from core.services.evals.eval_service import (
+    HUMAN_ACCEPT,
+    EvalService,
+    _require_llm_key,
+    judge_accepts,
+)
 from core.services.evals.judge_factory import build_judge_service
 from core.services.org_settings import load_eval_settings_for_org
 
@@ -423,6 +429,21 @@ class EvaluationConfigService(BaseService):
         }
 
     # ── Read: results + compare ───────────────────────────────────────────
+    def _human_labels_for_run(self, source_run_id: Any) -> dict:
+        """``eval_id → 'accept'|'reject'`` for the frozen source run, org-scoped.
+        Loaded once and reused for both the per-question ``human_verdict`` column
+        and the per-config agreement % — the labels live on ``eval_results`` (the
+        source answers), so they're config-independent ground truth."""
+        return dict(
+            self.query(EvalResult)
+            .filter(
+                EvalResult.run_id == source_run_id,
+                EvalResult.human_verdict.isnot(None),
+            )
+            .with_entities(EvalResult.eval_id, EvalResult.human_verdict)
+            .all()
+        )
+
     def list_results(
         self,
         *,
@@ -451,11 +472,13 @@ class EvaluationConfigService(BaseService):
             )
             .all()
         )
+        human_labels = self._human_labels_for_run(source_run_id)
         out: List[dict] = []
         for result, question, question_ord in joined:
             row = result.to_dict()
             row["question"] = question
             row["question_ord"] = question_ord
+            row["human_verdict"] = human_labels.get(result.eval_id)
             out.append(row)
         return out
 
@@ -480,8 +503,13 @@ class EvaluationConfigService(BaseService):
             ):
                 judge_models[str(cid)] = model
 
+        # Human labels are config-independent ground truth on the source run's
+        # answers — loaded once, then each pass is scored against them.
+        human_labels = self._human_labels_for_run(source_run_id)
+
         by_pass: dict = {}
         score_acc: dict = {}  # config_run_id → [sum, count]
+        agree_acc: dict = {}  # config_run_id → [matches, labeled_count]
         for r in rows:
             key = str(r.config_run_id)
             cfg_id = str(r.evaluation_config_id) if r.evaluation_config_id else None
@@ -496,6 +524,8 @@ class EvaluationConfigService(BaseService):
                     "total": 0,
                     "verdicts": {},
                     "average_score": None,
+                    "human_agreement": None,
+                    "labeled_count": 0,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                 },
             )
@@ -508,10 +538,21 @@ class EvaluationConfigService(BaseService):
                 if isinstance(score, (int, float)) and not isinstance(score, bool):
                     acc[0] += float(score)
                     acc[1] += 1
+            human = human_labels.get(r.eval_id)
+            if human is not None:
+                ag = agree_acc.setdefault(key, [0, 0])
+                ag[1] += 1
+                if judge_accepts(r.verdict) == (human == HUMAN_ACCEPT):
+                    ag[0] += 1
 
         for key, (total_score, count) in score_acc.items():
             if count:
                 by_pass[key]["average_score"] = round(total_score / count, 4)
+
+        for key, (matches, labeled) in agree_acc.items():
+            by_pass[key]["labeled_count"] = labeled
+            if labeled:
+                by_pass[key]["human_agreement"] = round(matches / labeled, 4)
 
         return sorted(
             by_pass.values(),

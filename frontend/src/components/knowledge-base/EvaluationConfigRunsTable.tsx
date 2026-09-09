@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { CheckboxField, CustomTable } from '@/components/shared';
 import type { CustomTableColumn } from '@/types/components';
 import type { EvaluationConfig, EvaluationConfigRunSummary } from '@/types/evaluationConfig';
-import { formatMetricScore } from '@/utils/evalFormat';
+import { formatMetricScore, formatRatioPercent } from '@/utils/evalFormat';
 
 import { configNameById, verdictSummary } from './evalConfigHelpers';
 
@@ -67,6 +67,20 @@ export default function EvaluationConfigRunsTable({
         title: 'Avg score',
         align: 'center',
         render: (_v, r) => formatMetricScore(r.average_score),
+      },
+      {
+        key: 'agreement',
+        title: 'Agreement',
+        align: 'center',
+        render: (_v, r) =>
+          r.labeled_count === 0 ? (
+            <span className="text-muted-foreground">—</span>
+          ) : (
+            <div className="flex flex-col items-center">
+              <span className="text-foreground">{formatRatioPercent(r.human_agreement)}</span>
+              <span className="text-xs text-muted-foreground">{r.labeled_count} labeled</span>
+            </div>
+          ),
       },
       {
         key: 'verdicts',
