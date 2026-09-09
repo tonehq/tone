@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from typing import Any, Optional
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -169,6 +170,12 @@ class AgentProfileWebhookService(BaseService):
             )
 
         identifiers = self._normalize_identifiers(request_identifiers)
+        for ident in identifiers:
+            if ident["in"] == "path" and ("{" + ident["param"] + "}") not in url:
+                raise ProfileWebhookInvalidError(
+                    f"Add the placeholder {{{ident['param']}}} to the Endpoint URL "
+                    f"for the path identifier '{ident['param']}'."
+                )
         dirs = self._normalize_directions(directions)
         timeout = max(MIN_TIMEOUT_SECONDS, min(MAX_TIMEOUT_SECONDS, int(timeout_seconds or DEFAULT_TIMEOUT_SECONDS)))
         headers_blob = encrypt_json(headers or {})
@@ -369,10 +376,7 @@ class AgentProfileWebhookService(BaseService):
         caller_phone: Optional[str],
         timeout_seconds: int,
     ) -> tuple[int, Any]:
-        # Defense-in-depth: re-check even though the URL was validated on save
-        # (a rotated allowlist / stored bad value should still be caught).
-        _assert_safe_url(endpoint_url)
-
+        url = endpoint_url
         query_params: dict[str, str] = {}
         body: dict[str, str] = {}
         for ident in request_identifiers or []:
@@ -381,8 +385,20 @@ class AgentProfileWebhookService(BaseService):
             name = (ident.get("param") or "").strip()
             if not name:
                 continue
-            target = query_params if ident.get("in") == "query" else body
-            target[name] = caller_phone or ""
+            loc = ident.get("in")
+            value = caller_phone or ""
+            if loc == "path":
+                # Substitute ``{param}`` in the URL (URL-encoded); nothing added
+                # to the query string or body for a path identifier.
+                url = url.replace("{" + name + "}", quote(value, safe=""))
+            elif loc == "query":
+                query_params[name] = value
+            else:  # body
+                body[name] = value
+
+        # Defense-in-depth: validate the FINAL url (after path substitution),
+        # re-checked even though it was validated on save.
+        _assert_safe_url(url)
 
         headers = self._clean_headers(self._decrypt_headers(headers_blob))
         method = (http_method or "POST").upper()
@@ -390,11 +406,11 @@ class AgentProfileWebhookService(BaseService):
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds)) as client:
             if method == "GET":
                 resp = await client.get(
-                    endpoint_url, params=query_params or None, headers=headers or None
+                    url, params=query_params or None, headers=headers or None
                 )
             else:
                 resp = await client.post(
-                    endpoint_url,
+                    url,
                     params=query_params or None,
                     json=body or None,
                     headers=headers or None,

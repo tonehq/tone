@@ -5,7 +5,7 @@
  */
 
 export type WebhookHttpMethod = 'GET' | 'POST';
-export type RequestIdentifierLocation = 'query' | 'body';
+export type RequestIdentifierLocation = 'query' | 'body' | 'path';
 
 /** One identifier mapping: which caller field to send, under what param name,
  * and where. v1 supports only `phone`. */

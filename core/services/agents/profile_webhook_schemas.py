@@ -23,7 +23,8 @@ class RequestIdentifierIn(BaseModel):
 
     identifier: Literal["phone"]
     param: str = Field(min_length=1, max_length=120)
-    in_: Literal["query", "body"] = Field(alias="in")
+    # "path" substitutes the value into a ``{param}`` placeholder in the URL.
+    in_: Literal["query", "body", "path"] = Field(alias="in")
 
 
 # Validate each resolved response value is a usable scalar before it is injected
