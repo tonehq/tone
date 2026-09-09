@@ -30,7 +30,7 @@ import {
 import type { TtsVoice } from '@/services/ttsService';
 import type { AgentFormState } from '@/types/agent';
 import type { MetaDataSchemaField } from '@/types/provider';
-import { DEFAULT_TURN_DETECTOR } from '@/utils/agentFormUtils';
+import { DEFAULT_TURN_DETECTOR, DEFAULT_VAD_PROVIDER } from '@/utils/agentFormUtils';
 import { cn } from '@/utils/cn';
 
 /** Keys in voice_settings / stt_settings that are structural (not schema fields).
@@ -74,6 +74,11 @@ export default function VoiceStep() {
       control,
       name: 'config.turn_settings.turn_detection.provider' as never,
     }) as string | null | undefined) ?? DEFAULT_TURN_DETECTOR;
+  const vadProviderId =
+    (useWatch({
+      control,
+      name: 'config.turn_settings.vad.provider' as never,
+    }) as string | null | undefined) ?? DEFAULT_VAD_PROVIDER;
 
   const [nowPlaying, setNowPlaying] = useState<string | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -95,6 +100,10 @@ export default function VoiceStep() {
 
   const turnDetectors = useMemo(
     () => turnSettingsQuery.data?.turn_detectors ?? [],
+    [turnSettingsQuery.data],
+  );
+  const vadProviders = useMemo(
+    () => turnSettingsQuery.data?.vad_providers ?? [],
     [turnSettingsQuery.data],
   );
   const vadSchema = useMemo(
@@ -271,6 +280,19 @@ export default function VoiceStep() {
   );
   const selectedTurnDetector = turnDetectors.find((d) => d.id === turnDetectorId);
   const turnDetectorSchema = selectedTurnDetector?.meta_data_schema ?? [];
+
+  const setVadProvider = (v: string) => {
+    setValue('config.turn_settings.vad.provider' as never, (v || DEFAULT_VAD_PROVIDER) as never, {
+      shouldDirty: true,
+    });
+  };
+
+  const vadProviderOptions = useMemo(
+    () => vadProviders.map((p) => ({ value: p.id, label: p.display_name })),
+    [vadProviders],
+  );
+  const selectedVadProvider = vadProviders.find((p) => p.id === vadProviderId);
+  const vadProviderSchema = selectedVadProvider?.meta_data_schema ?? [];
 
   const languageOptions = useMemo(
     () =>
@@ -580,16 +602,35 @@ export default function VoiceStep() {
             exclude={['provider']}
           />
         )}
-        {vadSchema.length > 0 && (
+        {(vadProviders.length > 0 || vadSchema.length > 0) && (
           <div className="flex flex-col gap-3 border-t border-border/50 pt-4">
             <div className="flex flex-col gap-0.5">
               <p className="text-sm font-medium text-foreground">Voice activity detection</p>
               <p className="text-[11px] text-muted-foreground">
-                Silero VAD thresholds that decide when the caller starts and stops speaking. Leave
-                blank to keep the defaults.
+                The model and thresholds that decide when the caller starts and stops speaking.
+                Leave fields blank to keep the defaults.
               </p>
             </div>
-            <DynamicProviderFields fields={vadSchema} basePath="config.turn_settings.vad" />
+            <SelectInput
+              name="config.turn_settings.vad.provider"
+              label="Model"
+              options={vadProviderOptions}
+              loading={loadingTurnDetectors}
+              value={vadProviderId}
+              onValueChange={setVadProvider}
+              placeholder="Select a voice activity detection model"
+              helperText={selectedVadProvider?.description}
+            />
+            {vadProviderSchema.length > 0 && (
+              <DynamicProviderFields
+                fields={vadProviderSchema}
+                basePath="config.turn_settings.vad"
+                exclude={['provider']}
+              />
+            )}
+            {vadSchema.length > 0 && (
+              <DynamicProviderFields fields={vadSchema} basePath="config.turn_settings.vad" />
+            )}
           </div>
         )}
       </SectionCard>
