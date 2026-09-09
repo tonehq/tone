@@ -16,7 +16,7 @@ if __name__ == "__main__":
         sys.path.insert(0, _root)
 
 # ── Hardcode the target database URL here ──
-DATABASE_URL = "postgresql://neondb_owner:npg_6MIP1wKAkFQh@ep-round-pond-anxl0114-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"  # <-- paste your DB URL here
+DATABASE_URL = os.environ.get("DATABASE_URL")  # set via environment, e.g. export DATABASE_URL=...
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
