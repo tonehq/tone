@@ -247,10 +247,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
         # Piped into the same downstream sinks so their structured log lines
         # include call_id=<uuid> for direct Grafana → DB joins.
         call_id_holder: Any = None,
-        # Runner-owned list of {role, text, timestamp} turn entries. Passed to
-        # the end_call handler so its confirmation guard can inspect the
-        # conversation and refuse a tool call that skipped the ask/reply step.
-        transcript_entries: Any = None,
     ) -> BuildResult:
         params = self.params
         is_s2s = params.is_s2s
@@ -467,7 +463,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
                         current_turn=current_turn,
                         end_reason_holder=end_reason_holder,
                         call_id_holder=call_id_holder,
-                        transcript_entries=transcript_entries,
                     ),
                 )
             except Exception:

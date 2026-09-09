@@ -1,19 +1,19 @@
 """end_call: LLM-driven call termination tool.
 
 The single, canonical path for ending a call. Registered automatically for
-every agent. The LLM must follow a mandatory two-step confirmation encoded
-in ``END_CALL_SYSTEM_PROMPT``: it asks "Can I end the call?" first, waits
-for an explicit user confirmation, then speaks a farewell and calls this
-tool. The handler queues an EndFrame onto the pipeline worker, which
-gracefully tears down the pipeline (TTS finishes any current speech, then
-transports disconnect).
+every agent. The LLM is instructed (via ``END_CALL_SYSTEM_PROMPT``) to ask
+"Can I end the call?" and wait for confirmation before calling this tool — but
+that two-step is *guidance for the model*. The handler trusts the LLM's decision
+and does NOT re-validate it with a rigid word-check: an earlier regex
+confirmation gate kept false-blocking valid ends (e.g. when STT mis-heard "end"
+as "send", or on transcript-timing races). The only remaining code guard is
+single-fire, since an LLM occasionally double-calls the tool in one turn.
 
-A prior keyword-matching fast-path (CallEndDetectorProcessor) was removed
-so all end-of-call decisions flow through this same confirmation gate —
-eliminating false hangups from STT mistranscriptions and single-word triggers.
+The handler queues an EndFrame onto the pipeline worker, which gracefully tears
+down the pipeline (TTS finishes any current speech, then transports disconnect);
+the runner's provider-agnostic terminator drops the actual phone leg.
 """
 
-import re
 import time as _time
 from typing import Callable, List, Optional
 
@@ -24,7 +24,6 @@ from pipecat.services.llm_service import FunctionCallParams
 
 from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED,
-    EVENT_END_CALL_BLOCKED,
     REASON_LLM_END_CALL,
     log_call_event,
 )
@@ -32,169 +31,6 @@ from core.services.pipeline.tool_call_timing import (
     ToolCallTimer,
     finalize_and_record,
 )
-from core.utils.llm_context import flatten_message_content
-
-# Regex describing the phrasings the LLM uses to ask "may I end the call?".
-# Matches the assistant text that precedes the user's confirmation reply.
-# Case-insensitive; anchored on word boundaries.
-_CONFIRMATION_ASK_PATTERN = re.compile(
-    r"\b("
-    r"end (?:the |this |our )?call|"
-    r"end (?:the |our )?conversation|"
-    r"hang up|"
-    r"close (?:the |this )?call|"
-    r"finish (?:the |this |up )?call|"
-    r"wrap (?:up|things up|this up)|"
-    r"can i end|"
-    r"shall i end|"
-    r"may i end|"
-    r"should i end|"
-    r"okay (?:to|for me to) end|"
-    r"anything else"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-# Express-end path: the user's OWN message directly commands the end.
-# When this matches on a short user turn, we skip the assistant-ask
-# requirement — the user has given a direct instruction and asking for
-# confirmation again would feel tone-deaf. Kept short so contextual
-# mentions ("I hope you don't hang up on me before...") don't false-trigger.
-_USER_END_REQUEST_MAX_WORDS = 8
-_USER_END_REQUEST_PATTERN = re.compile(
-    r"\b("
-    r"hang up|"
-    r"end (?:the |this |our )?call|"
-    r"end (?:it|now|it now|the call now)|"
-    r"disconnect|"
-    r"stop (?:the |this )?call|"
-    r"cut (?:the )?call|"
-    r"just (?:hang up|end)"
-    r")\b",
-    re.IGNORECASE,
-)
-
-
-def _confirmation_valid(
-    transcript_entries: Optional[list], live_user_text: Optional[str] = None
-) -> bool:
-    """Return True iff the end_call attempt is authorized.
-
-    Two paths are accepted:
-
-    * **Standard two-step flow**:
-        1. Assistant asks "Can I end the call?" (matches
-           ``_CONFIRMATION_ASK_PATTERN``).
-        2. User replies (any content).
-        3. Assistant fires end_call.
-
-    * **Express path — user-initiated end**:
-        The user's most recent message is short (``≤ _USER_END_REQUEST_MAX_WORDS``
-        words) AND matches ``_USER_END_REQUEST_PATTERN``. The user has
-        directly commanded the end, so no assistant ask is required.
-
-    ``transcript_entries`` is the runner-owned list populated by the
-    aggregator handlers; ``None`` (unwired) falls back to allowing the call
-    to end so a mis-wired build cannot deadlock all calls.
-
-    ``live_user_text`` closes a transcript-timing race: pipecat pushes the
-    user's just-spoken turn into the LLM context (and dispatches this tool)
-    *before* ``on_user_turn_stopped`` appends it to ``transcript_entries``, so
-    the trailing user turn can be missing here. When the caller reads the most
-    recent user message straight from the LLM context and passes it in, we use
-    that as the latest user turn (with the trailing assistant turns from the
-    transcript as the standard-path ask). When it is ``None`` the behavior is
-    identical to the transcript-only logic.
-    """
-    if transcript_entries is None:
-        return True  # Backward-compat: unwired transcript → skip the check.
-
-    entries = transcript_entries
-
-    # Most-recent user text: prefer the live context value (race-free), else the
-    # last user turn recorded in the transcript.
-    last_user_text: Optional[str] = None
-    if live_user_text is not None and live_user_text.strip():
-        last_user_text = live_user_text
-    else:
-        for entry in reversed(entries):
-            if entry.get("role") == "user":
-                last_user_text = entry.get("text", "") or ""
-                break
-    if last_user_text is None:
-        return False  # No user turn yet — nothing could have been confirmed.
-
-    # Express path: user's own short direct end request.
-    if (
-        len(last_user_text.split()) <= _USER_END_REQUEST_MAX_WORDS
-        and _USER_END_REQUEST_PATTERN.search(last_user_text)
-    ):
-        return True
-
-    # Standard path requires the user to have actually REPLIED to the ask — a
-    # trailing user turn recorded in the transcript, or a live reply (the race
-    # where on_user_turn_stopped hasn't appended it yet). Without a reply there
-    # is nothing to confirm (e.g. the ask is the latest turn) — block, so the
-    # two-step gate can't be satisfied by an older user turn.
-    has_reply = bool(live_user_text and live_user_text.strip()) or (
-        bool(entries) and entries[-1].get("role") == "user"
-    )
-    if not has_reply:
-        return False
-
-    # Find the confirmation ask that immediately precedes the reply: skip any
-    # trailing user turns (the reply — which may or may not be recorded yet),
-    # then scan the contiguous assistant block before them for the ask. (Not
-    # appending live_user_text as a synthetic entry avoids double-counting the
-    # reply when it IS already in the transcript, which previously broke the
-    # lookback and blocked valid confirmations.)
-    i = len(entries) - 1
-    while i >= 0 and entries[i].get("role") == "user":
-        i -= 1
-    while i >= 0 and entries[i].get("role") == "assistant":
-        if _CONFIRMATION_ASK_PATTERN.search(entries[i].get("text", "") or ""):
-            return True
-        i -= 1
-    return False
-
-
-def _extract_live_user_text(params: FunctionCallParams) -> Optional[str]:
-    """Best-effort: the latest user message from the LLM context.
-
-    The aggregator adds the user turn to the context BEFORE dispatching this
-    tool, so this is race-free (unlike the runner-owned ``transcript_entries``,
-    which is appended only after dispatch). Returns ``None`` on any shape
-    mismatch so ``_confirmation_valid`` falls back to the transcript.
-    """
-    try:
-        context = getattr(params, "context", None)
-        if context is None:
-            return None
-        get_messages = getattr(context, "get_messages", None)
-        messages = get_messages() if callable(get_messages) else getattr(context, "messages", None)
-        if not messages:
-            return None
-        for msg in reversed(list(messages)):
-            role = msg.get("role") if isinstance(msg, dict) else getattr(msg, "role", None)
-            if role != "user":
-                continue
-            content = msg.get("content") if isinstance(msg, dict) else getattr(msg, "content", None)
-            return flatten_message_content(content) or None
-        return None
-    except Exception:
-        # Never let context introspection break end_call — fall back to transcript.
-        logger.debug("[end-call-tool] could not read live user text from context", exc_info=True)
-        return None
-
-
-_BLOCKED_LLM_MESSAGE = (
-    "Cannot end the call yet — the required confirmation step was skipped. "
-    "First ask the user 'Can I end the call now?' (or a similar clear "
-    "confirmation question) and WAIT for their reply. Only after the user "
-    "explicitly confirms may you call end_call again."
-)
-
 
 END_CALL_TOOL_NAME = "end_call"
 
@@ -378,7 +214,6 @@ def create_end_call_handler(
     current_turn: Optional[dict] = None,
     end_reason_holder: Optional[dict] = None,
     call_id_holder: Optional[dict] = None,
-    transcript_entries: Optional[list] = None,
 ) -> Callable:
     """Factory: build a handler that pushes EndFrame to gracefully end the call.
 
@@ -388,12 +223,10 @@ def create_end_call_handler(
     the pipeline worker — pipecat drains downstream queues (TTS) before
     actually terminating, so any farewell already in flight will be heard.
 
-    Two guards run BEFORE the EndFrame is queued:
-      1. Single-fire — LLMs occasionally double-call the tool in one turn.
-      2. Confirmation — the assistant must have asked "Can I end the call?"
-         and the user must have replied. Enforces the two-step flow encoded
-         in ``END_CALL_SYSTEM_PROMPT`` at the code level so an LLM that
-         ignores the prompt still cannot terminate the call.
+    The two-step confirmation is left to the LLM (per ``END_CALL_SYSTEM_PROMPT``);
+    the only code guard is single-fire, since an LLM occasionally double-calls the
+    tool in one turn. (A prior regex confirmation gate was removed — it kept
+    false-blocking valid ends, e.g. when STT mis-heard "end" as "send".)
 
     If ``end_reason_holder`` is provided (a dict owned by the runner), the
     first successful invocation stamps ``reason='llm_end_call'`` and the LLM's
@@ -435,36 +268,9 @@ def create_end_call_handler(
             await params.result_callback("Call is already ending.")
             return
 
-        # Confirmation guard — enforce the two-step flow. If the LLM skipped
-        # the ask/reply step, refuse and instruct it to try again. Do NOT
-        # mark ``state["fired"]`` so a later, valid attempt can still succeed.
-        # Pass the live user text from the LLM context so a transcript-append
-        # race can't hide the user's just-spoken confirmation.
-        live_user_text = _extract_live_user_text(params)
-        if not _confirmation_valid(transcript_entries, live_user_text=live_user_text):
-            logger.bind(
-                tool_name=END_CALL_TOOL_NAME,
-                tool_type="built_in",
-                call_id=call_id_holder.get("id") if call_id_holder else None,
-                reason=reason,
-                turn=current_turn["number"] if current_turn else None,
-            ).warning(
-                "[end-call-tool] end_call blocked — confirmation flow not completed reason={!r}",
-                reason,
-            )
-            log_call_event(
-                EVENT_END_CALL_BLOCKED,
-                call_id=call_id_holder.get("id") if call_id_holder else None,
-                source="llm_tool",
-                turn=current_turn["number"] if current_turn else None,
-                attempted_reason=reason,
-            )
-            entry["result"] = "blocked: missing confirmation"
-            entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
-            finalize_and_record(entry, timer, tool_call_entries)
-            await params.result_callback(_BLOCKED_LLM_MESSAGE)
-            return
-
+        # Trust the LLM's decision to end (the two-step is guidance in
+        # END_CALL_SYSTEM_PROMPT). No code-level confirmation re-check — it kept
+        # false-blocking valid ends on STT mis-hears / phrasing / timing.
         state["fired"] = True
         logger.bind(
             tool_name=END_CALL_TOOL_NAME,

@@ -47,6 +47,5 @@ class PipelineBuilder:
         tool_dedup: Optional[dict] = None,
         end_reason_holder: Optional[dict] = None,
         call_id_holder: Optional[dict] = None,
-        transcript_entries: Optional[list] = None,
     ) -> BuildResult:
         raise NotImplementedError
