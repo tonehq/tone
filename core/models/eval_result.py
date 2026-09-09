@@ -83,6 +83,14 @@ class EvalResult(OrgScopedModel):
     )
     completed_at = Column(DateTime(timezone=True), nullable=True)
 
+    # Human acceptance label — config-independent ground truth attached to the
+    # frozen answer, reused by every judge for agreement %. 'accept' | 'reject'
+    # | NULL (unlabeled). ``human_labeled_by`` mirrors other user-id columns
+    # (audit only, no FK).
+    human_verdict = Column(String(16), nullable=True)
+    human_labeled_by = Column(UUID(as_uuid=True), nullable=True)
+    human_labeled_at = Column(DateTime(timezone=True), nullable=True)
+
     eval = relationship("Eval", back_populates="results")
 
     def to_dict(self) -> dict:
@@ -110,6 +118,13 @@ class EvalResult(OrgScopedModel):
             "answer_error": self.answer_error,
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
+            "human_verdict": self.human_verdict,
+            "human_labeled_by": (
+                str(self.human_labeled_by) if self.human_labeled_by else None
+            ),
+            "human_labeled_at": (
+                self.human_labeled_at.isoformat() if self.human_labeled_at else None
+            ),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
