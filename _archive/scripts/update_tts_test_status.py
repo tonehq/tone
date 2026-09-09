@@ -24,7 +24,9 @@ from sqlalchemy import create_engine, text
 # ---------------------------------------------------------------------------
 
 EXCEL_PATH = "/Users/thilak/Documents/Tone/scripts/Voice_Test_Matrix.xlsx"
-DATABASE_URL = "postgresql://neondb_owner:npg_iNWhZLF0gHt7@ep-holy-wind-ad79pdco-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise SystemExit("DATABASE_URL environment variable is required")
 
 API_BASE_URL = "http://localhost:8000/api/v1"
 JWT_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoxLCJlbWFpbCI6InRoaWxhay5ndW5hc2VrYXJhbkBwcm9kdWN0ZnVzaW9uLmNvIiwib3JnX2lkIjoiYTc5MDUyZWEtNWFlYS00NzRkLWJlY2MtNTU4ZjY2ZWQ5ZGU0Iiwicm9sZSI6Im93bmVyIiwiaWF0IjoxNzc1MTE3MTkzLCJleHAiOjE3NzUyMDM1OTN9.jSvWFJQa7yfi9T9UbQsWrhgw8agBRAQvvqB0v1haEF4"

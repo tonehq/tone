@@ -40,7 +40,9 @@ from sqlalchemy.orm import sessionmaker
 # ---------------------------------------------------------------------------
 # Config — hardcoded DB URL + JWT secret (same as shared/config.py)
 # ---------------------------------------------------------------------------
-DATABASE_URL = "postgresql://neondb_owner:npg_6MIP1wKAkFQh@ep-round-pond-anxl0114-pooler.c-6.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require"
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    raise SystemExit("DATABASE_URL environment variable is required")
 JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "your-secret-key-here")
 
 TEST_TEXT = "Hello, this is a voice test."
