@@ -68,6 +68,27 @@ from core.services.pipeline.tools.end_call_tool import _confirmation_valid
         ([{"role": "assistant", "text": "Can I end the call now?"}], "sure", True),
         ([{"role": "assistant", "text": "Can I end the call now?"}], "okay", True),
         ([{"role": "assistant", "text": "Shall I go ahead and end the call?"}], "yep", True),
+        # Regression (prod Telnyx log): the user reply is ALREADY in the
+        # transcript AND live_user_text repeats it. The ask must still be found —
+        # the old code appended a duplicate user turn and the lookback broke here,
+        # wrongly blocking a valid "Yeah, please." confirmation.
+        (
+            [
+                {"role": "assistant", "text": "Alright, thank you for calling. Can I end the call now?"},
+                {"role": "user", "text": "Yeah, please."},
+            ],
+            "Yeah, please.",
+            True,
+        ),
+        (
+            [
+                {"role": "user", "text": "book a room for two"},
+                {"role": "assistant", "text": "Can I end the call now?"},
+                {"role": "user", "text": "yes"},
+            ],
+            "yes",
+            True,
+        ),
     ],
 )
 def test_confirmation_valid(entries, live, expected):

@@ -110,42 +110,41 @@ def _confirmation_valid(
     if transcript_entries is None:
         return True  # Backward-compat: unwired transcript → skip the check.
 
-    # Treat a live user turn as the most-recent entry so the single algorithm
-    # below covers both the wired-transcript and the race (transcript not yet
-    # appended) cases without branching.
     entries = transcript_entries
+
+    # Most-recent user text: prefer the live context value (race-free), else the
+    # last user turn recorded in the transcript.
+    last_user_text: Optional[str] = None
     if live_user_text is not None and live_user_text.strip():
-        entries = [*transcript_entries, {"role": "user", "text": live_user_text}]
-
-    if not entries:
-        return False
-
-    # Walk backwards for the most recent user turn.
-    last_user_idx = None
-    for i in range(len(entries) - 1, -1, -1):
-        if entries[i].get("role") == "user":
-            last_user_idx = i
-            break
-    if last_user_idx is None:
+        last_user_text = live_user_text
+    else:
+        for entry in reversed(entries):
+            if entry.get("role") == "user":
+                last_user_text = entry.get("text", "") or ""
+                break
+    if last_user_text is None:
         return False  # No user turn yet — nothing could have been confirmed.
 
     # Express path: user's own short direct end request.
-    last_user_text = entries[last_user_idx].get("text", "") or ""
     if (
         len(last_user_text.split()) <= _USER_END_REQUEST_MAX_WORDS
         and _USER_END_REQUEST_PATTERN.search(last_user_text)
     ):
         return True
 
-    # Standard path: immediately-preceding contiguous assistant turns must
-    # include a confirmation ask. (LLM may stream multiple assistant messages
-    # in a single turn; scan all of them.)
-    for i in range(last_user_idx - 1, -1, -1):
-        entry = entries[i]
-        if entry.get("role") != "assistant":
-            break
-        if _CONFIRMATION_ASK_PATTERN.search(entry.get("text", "") or ""):
+    # Standard path: the confirmation ask that immediately precedes the user's
+    # reply. Skip any trailing user turns (the reply — which may or may not be
+    # recorded in the transcript yet), then scan the contiguous assistant block
+    # before them for the ask. (Not appending live_user_text as a synthetic
+    # entry avoids double-counting the reply when it IS already in the transcript,
+    # which previously broke the lookback and blocked valid confirmations.)
+    i = len(entries) - 1
+    while i >= 0 and entries[i].get("role") == "user":
+        i -= 1
+    while i >= 0 and entries[i].get("role") == "assistant":
+        if _CONFIRMATION_ASK_PATTERN.search(entries[i].get("text", "") or ""):
             return True
+        i -= 1
     return False
 
 
