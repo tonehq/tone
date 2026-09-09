@@ -84,3 +84,25 @@ async def webhook_test_lookup_post(
         logger.debug("[webhook-test] no JSON body on POST")
     phone = str(body.get("phone") or body.get("caller_number") or "")
     return await _build(phone, scenario)
+
+
+# ── Path-based scenario (robust) ──────────────────────────────────────────
+# The scenario lives in the URL PATH (…/lookup/notfound) instead of a query
+# string, so it survives regardless of how the webhook config stores the URL —
+# no query params to lose. Prefer these for testing.
+
+
+@router.get("/webhook-test/lookup/{scenario}")
+async def webhook_test_lookup_get_path(scenario: str, phone: str = Query(default="")):
+    return await _build(phone, scenario)
+
+
+@router.post("/webhook-test/lookup/{scenario}")
+async def webhook_test_lookup_post_path(scenario: str, request: Request):
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — empty / non-JSON body is fine for a mock
+        logger.debug("[webhook-test] no JSON body on POST")
+    phone = str(body.get("phone") or body.get("caller_number") or "")
+    return await _build(phone, scenario)

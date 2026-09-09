@@ -116,7 +116,11 @@ export default function WebhookConfigSection({ agentId }: { agentId: string }) {
       <div className="flex flex-col gap-1.5">
         <span className="text-sm font-medium">Send caller identifiers</span>
         <p className="text-xs text-muted-foreground">
-          Which caller field to send, under what param name, and where.
+          On every call we automatically send the phone number to your endpoint so it can look
+          up the caller — <strong>inbound</strong> sends the caller&apos;s number (
+          <code>from</code>), <strong>outbound</strong> sends the number being called (
+          <code>to</code>). Just set the param name your API expects and where to put it (query
+          string or request body). You never type the number yourself.
         </p>
         <RequestIdentifiersField control={control} />
       </div>
