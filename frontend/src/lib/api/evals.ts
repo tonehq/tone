@@ -13,6 +13,7 @@ import {
   listEvalSummariesByIngestion,
   listEvalVersions,
   rejectAllEvalQuestions,
+  setEvalRunLabel,
   triggerEvalRun,
   updateEvalQuestion,
   uploadEvalQuestionsCsv,
@@ -20,9 +21,12 @@ import {
 import type {
   GenerateEvalVersionPayload,
   ManualQuestionInput,
+  SetHumanVerdictPayload,
   TriggerEvalRunPayload,
   UpdateQuestionPatch,
 } from '@/types/eval';
+
+import { EVAL_CONFIG_QUERY_KEY } from './evaluationConfigs';
 
 export const EVAL_QUERY_KEY = 'evals';
 
@@ -62,6 +66,21 @@ export function useEvalRunDetail(uploadId: string | null, runId: string | null) 
     queryFn: () => getEvalRunDetail(uploadId as string, runId as string),
     enabled: !!uploadId && !!runId,
     staleTime: 60_000,
+  });
+}
+
+// Set/clear the human Accept/Reject label on one scored answer. On success
+// refresh the batch detail (so the mark sticks) AND the config-results for the
+// same source run (so judge-agreement % recomputes) — the run_id being labeled
+// IS the config re-grade's source_run_id.
+export function useSetHumanVerdict(uploadId: string, runId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (payload: SetHumanVerdictPayload) => setEvalRunLabel(uploadId, runId, payload),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: [EVAL_QUERY_KEY, 'detail', uploadId, runId] });
+      qc.invalidateQueries({ queryKey: [EVAL_CONFIG_QUERY_KEY, 'results', runId] });
+    },
   });
 }
 

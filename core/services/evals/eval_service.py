@@ -81,6 +81,19 @@ _RESERVED_QUESTION_KEYS = {
     "category",
 }
 
+# Human acceptance labels — config-independent ground truth on the frozen
+# answer, reused by every judge to compute agreement %.
+HUMAN_ACCEPT = "accept"
+HUMAN_REJECT = "reject"
+_HUMAN_VERDICTS = frozenset({HUMAN_ACCEPT, HUMAN_REJECT})
+
+
+def judge_accepts(verdict: Optional[str]) -> bool:
+    """Agreement rule (v1): a judge "accepts" an answer when its overall verdict
+    is PASS; PARTIAL/FAIL count as reject. Documented in ONE place so every
+    agreement calculation (per run, per compare column) uses the same mapping."""
+    return (verdict or "").upper() == "PASS"
+
 
 @dataclass
 class EvalSetSummary:
@@ -1307,6 +1320,52 @@ class EvalService:
         questions = self._scored_rows_for_run(db, run_id=run_id, org_id=org_id)
         return {"summary": summary, "questions": questions}
 
+    def set_human_verdict(
+        self,
+        db: Session,
+        *,
+        org_id: Any,
+        run_id: Any,
+        eval_id: Any,
+        verdict: Optional[str],
+        user_id: Optional[Any] = None,
+    ) -> dict:
+        """Set (or clear) the human Accept/Reject label on one frozen answer.
+
+        Ground truth lives on the ``eval_results`` row matched by
+        ``(run_id, eval_id, organization_id)`` — config-independent, so every
+        judge reuses it for agreement %. ``verdict=None`` clears the mark.
+        Org-scoped: a caller from another tenant gets ``EvalNotFoundError`` even
+        with a valid ``run_id``/``eval_id``. Returns the updated row dict."""
+        if verdict is not None and verdict not in _HUMAN_VERDICTS:
+            raise EvalRunError(
+                f"human verdict must be one of {sorted(_HUMAN_VERDICTS)} or null; "
+                f"got {verdict!r}"
+            )
+        row = (
+            db.query(EvalResult)
+            .filter(
+                EvalResult.run_id == run_id,
+                EvalResult.eval_id == eval_id,
+                EvalResult.organization_id == org_id,
+            )
+            .first()
+        )
+        if row is None:
+            raise EvalNotFoundError(
+                f"No eval result for run_id={run_id} eval_id={eval_id}"
+            )
+        row.human_verdict = verdict
+        row.human_labeled_by = user_id
+        row.human_labeled_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(row)
+        logger.info(
+            "[eval] human verdict set run_id={} eval_id={} verdict={} by={}",
+            run_id, eval_id, verdict, user_id,
+        )
+        return row.to_dict()
+
     def compare_results(
         self,
         db: Session,
@@ -1925,6 +1984,7 @@ def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
         "retrieval_error": result.retrieval_error,
         "answer_error": result.answer_error,
         "status": result.status,
+        "human_verdict": result.human_verdict,
     }
 
 
