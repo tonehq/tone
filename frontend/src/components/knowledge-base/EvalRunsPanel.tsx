@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { CheckCircle2, Loader2 } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CustomButton, SelectInput } from '@/components/shared';
 import { useEvalRunsFiltered } from '@/lib/api/evals';
@@ -32,10 +33,50 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
   const [selectedConfigId, setSelectedConfigId] = useState<string>('');
   const [selectedPassIds, setSelectedPassIds] = useState<string[]>([]);
 
+  // Live re-grade status. The background job writes all rows only when it
+  // finishes, so "processing" is tracked client-side: we snapshot the known
+  // config-run ids at trigger time, poll the results while processing, and flip
+  // to "completed" the moment a new pass id lands — no page refresh needed.
+  const [processing, setProcessing] = useState(false);
+  const [justCompleted, setJustCompleted] = useState(false);
+  const knownRunIdsRef = useRef<Set<string>>(new Set());
+
   const runMutation = useRunEvaluationConfig();
-  const { data: resultsData } = useEvaluationConfigResults(sourceRunId || null, undefined, true);
+  // Poll only while a re-grade is in flight; otherwise a single fetch is enough.
+  const { data: resultsData } = useEvaluationConfigResults(
+    sourceRunId || null,
+    undefined,
+    processing,
+  );
   const passes = useMemo(() => resultsData?.runs ?? [], [resultsData]);
   const results = useMemo(() => resultsData?.results ?? [], [resultsData]);
+
+  // Switching source run resets the transient run status + selection.
+  useEffect(() => {
+    setProcessing(false);
+    setJustCompleted(false);
+    setSelectedPassIds([]);
+    knownRunIdsRef.current = new Set();
+  }, [sourceRunId]);
+
+  // A new config-run id appearing means the re-grade we triggered has landed
+  // (the worker is fail-soft, so a pass row is written even on failure).
+  useEffect(() => {
+    if (!processing) return;
+    const landed = passes.some((p) => !knownRunIdsRef.current.has(p.config_run_id));
+    if (landed) {
+      setProcessing(false);
+      setJustCompleted(true);
+      knownRunIdsRef.current = new Set(passes.map((p) => p.config_run_id));
+    }
+  }, [passes, processing]);
+
+  // Auto-hide the "completed" banner after a few seconds.
+  useEffect(() => {
+    if (!justCompleted) return;
+    const timer = setTimeout(() => setJustCompleted(false), 6000);
+    return () => clearTimeout(timer);
+  }, [justCompleted]);
 
   const runOptions = useMemo(
     () =>
@@ -78,7 +119,12 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
         source_run_id: sourceRunId,
         evaluation_config_id: selectedConfigId,
       });
-      showToast.success('Re-grade queued', 'Scores will appear here once the judge finishes.');
+      // Snapshot the passes that already exist so the next NEW one is detected
+      // as this run's result, then start the processing indicator + poll.
+      knownRunIdsRef.current = new Set(passes.map((p) => p.config_run_id));
+      setJustCompleted(false);
+      setProcessing(true);
+      showToast.success('Re-grade started', 'Scoring in progress — results will appear here.');
     } catch (error) {
       handleApiError(error);
     }
@@ -111,15 +157,30 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
             disabled={configOptions.length === 0}
           />
         </div>
-        <div className="mt-3">
+        <div className="mt-3 flex items-center gap-3">
           <CustomButton
             type="primary"
-            loading={runMutation.isPending}
-            disabled={!sourceRunId || !selectedConfigId}
+            loading={runMutation.isPending || processing}
+            disabled={!sourceRunId || !selectedConfigId || processing}
             onClick={handleRun}
           >
-            Run re-grade
+            {processing ? 'Running…' : 'Run re-grade'}
           </CustomButton>
+          {processing && (
+            <span
+              className="flex items-center gap-1.5 text-xs text-muted-foreground"
+              aria-live="polite"
+            >
+              <Loader2 className="size-4 animate-spin text-primary" />
+              Processing — scoring in progress…
+            </span>
+          )}
+          {justCompleted && !processing && (
+            <span className="flex items-center gap-1.5 text-xs text-foreground" aria-live="polite">
+              <CheckCircle2 className="size-4 text-primary" />
+              Re-grade completed.
+            </span>
+          )}
         </div>
       </section>
 

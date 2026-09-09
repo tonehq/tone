@@ -6,17 +6,21 @@ import type {
   EvaluationConfig,
   EvaluationConfigResult,
   EvaluationConfigResultRow,
+  EvaluationConfigRunSummary,
 } from '@/types/evaluationConfig';
 
-export interface MetricAverage {
+import { orderMetricNames } from './evalMetricsConstants';
+
+interface MetricAverage {
   metric: string;
   average: number;
   count: number;
 }
 
 // Mean per-metric score across a pass's rows. Rows missing a metric simply
-// don't contribute to that metric's average.
-export function averageMetricScores(rows: EvaluationConfigResult[]): MetricAverage[] {
+// don't contribute to that metric's average. Internal — consumed only by
+// buildCompareMatrix below.
+function averageMetricScores(rows: EvaluationConfigResult[]): MetricAverage[] {
   const sums = new Map<string, { total: number; count: number }>();
   for (const row of rows) {
     for (const [metric, entry] of Object.entries(row.metric_scores ?? {})) {
@@ -94,4 +98,51 @@ export function buildQuestionMatrix(results: EvaluationConfigResultRow[]): Quest
   return Array.from(byEval.values())
     .sort((a, b) => a.ord - b.ord)
     .map(({ ord: _ord, ...rest }) => rest);
+}
+
+export interface CompareMatrixRow {
+  metric: string;
+  // config_run_id → mean score for that metric (null = the pass didn't run it).
+  byPass: Record<string, number | null>;
+}
+
+// Build the aligned compare matrix: one row per metric (union across the
+// selected passes, in the canonical metric order), each with the per-pass mean
+// score. Lets the compare view render metrics as rows and configs as columns so
+// scores line up for a direct read.
+export function buildCompareMatrix(
+  passes: EvaluationConfigRunSummary[],
+  results: EvaluationConfigResult[],
+): CompareMatrixRow[] {
+  const rowsByPass = new Map<string, EvaluationConfigResult[]>();
+  for (const row of results) {
+    const list = rowsByPass.get(row.config_run_id) ?? [];
+    list.push(row);
+    rowsByPass.set(row.config_run_id, list);
+  }
+
+  const metricSet = new Set<string>();
+  const avgByPass = new Map<string, Map<string, number>>();
+  for (const pass of passes) {
+    const map = new Map<string, number>();
+    for (const m of averageMetricScores(rowsByPass.get(pass.config_run_id) ?? [])) {
+      map.set(m.metric, m.average);
+      metricSet.add(m.metric);
+    }
+    avgByPass.set(pass.config_run_id, map);
+  }
+
+  return orderMetricNames([...metricSet]).map((metric) => ({
+    metric,
+    byPass: Object.fromEntries(
+      passes.map((p) => [p.config_run_id, avgByPass.get(p.config_run_id)?.get(metric) ?? null]),
+    ),
+  }));
+}
+
+// The max score across a compare row's passes (ignoring nulls), or null when
+// no pass has a score — used to highlight the winning cell per metric.
+export function bestInRow(byPass: Record<string, number | null>): number | null {
+  const values = Object.values(byPass).filter((v): v is number => typeof v === 'number');
+  return values.length ? Math.max(...values) : null;
 }
