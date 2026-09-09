@@ -484,6 +484,10 @@ def main():
     p.add_argument("--layer", choices=sorted(LAYERS), required=True)
     p.add_argument("--provider", required=True, help="provider slug, from `catalogue`")
     p.add_argument("--model", required=True, help="model name, from `catalogue`")
+    p.add_argument("--agent", choices=sorted(AGENT_FOR.values()),
+                   help="write the layer on this agent instead of the one that varies it")
+    p.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE",
+                   help="model setting to write with the swap, e.g. reasoning_effort=low (repeatable)")
     p.add_argument("--org", help=ORG_HELP)
     args = ap.parse_args()
     if args.cmd == "status":
@@ -499,10 +503,32 @@ def main():
     return 1
 
 
+def _coerce_setting(raw):
+    lowered = raw.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    for cast in (int, float):
+        try:
+            return cast(raw)
+        except ValueError:
+            continue
+    return raw
+
+
+def _parse_settings(pairs):
+    settings = {}
+    for pair in pairs:
+        if "=" not in pair:
+            raise SystemExit(f"--set expects FIELD=VALUE, got {pair!r}")
+        key, raw = pair.split("=", 1)
+        settings[key.strip()] = _coerce_setting(raw.strip())
+    return settings
+
+
 def cmd_swap(args):
     base = base_url()
     token, _ = session(base, getattr(args, "org", None))
-    name = AGENT_FOR[args.layer]
+    name = args.agent or AGENT_FOR[args.layer]
     found = agents(token, base)
     if name not in found:
         raise SystemExit(f"{name} is not provisioned. Run provision first.")
@@ -526,6 +552,8 @@ def cmd_swap(args):
     before = (blob.get("provider_id"), blob.get("model_id"))
     blob["provider_id"] = prov["id"]
     blob["model_id"] = model["id"]
+    settings = _parse_settings(args.set)
+    blob.update(settings)
     # Partial config write: _apply_config_fields only touches keys present in the
     # payload, so the other two layers and the prompt are left exactly as they were.
     call("PUT", f"/agent/update_agent?agent_id={agent['id']}", token,
@@ -534,6 +562,8 @@ def cmd_swap(args):
     print(f"  before: provider_id={before[0]} model_id={before[1]}")
     print(f"  after : provider_id={prov['id']} model_id={model['id']}  "
           f"({args.provider}/{args.model})")
+    if settings:
+        print("  settings: " + ", ".join(f"{k}={v!r}" for k, v in settings.items()))
     print("\nThe other two agents are unchanged — any difference on a call is this swap.")
     return 0
 
