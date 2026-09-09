@@ -375,7 +375,6 @@ class PipecatPipelineRunner(PipelineRunner):
             tool_dedup=tool_dedup,
             end_reason_holder=end_reason_holder,
             call_id_holder=call_id_holder,
-            transcript_entries=transcript_entries,
         )
         task = build.task
         rtvi = build.rtvi
