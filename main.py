@@ -38,7 +38,7 @@ if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, agent_llm_evals, agent_profile_variables,
-        agent_profile_webhook,
+        agent_profile_webhook, webhook_test,
         benchmarks, mcp_servers, services, cloud_providers, tools, dashboard,
         call_logs, call_metrics, call_transcript_evals, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
@@ -223,6 +223,10 @@ if ee_enabled:
         api_v1.include_router(
             agent_profile_webhook.router, tags=["agent-profile-webhook"]
         )
+        # TEMPORARY test aid for the profile-webhook data source — a public mock
+        # lookup returning synthetic data. Delete this line + core/api/v1/webhook_test.py
+        # once webhook testing is done.
+        api_v1.include_router(webhook_test.router, tags=["webhook-test"])
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
@@ -289,6 +293,10 @@ else:
         api_v1.include_router(
             agent_profile_webhook.router, tags=["agent-profile-webhook"]
         )
+        # TEMPORARY test aid for the profile-webhook data source — a public mock
+        # lookup returning synthetic data. Delete this line + core/api/v1/webhook_test.py
+        # once webhook testing is done.
+        api_v1.include_router(webhook_test.router, tags=["webhook-test"])
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
