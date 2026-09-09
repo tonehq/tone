@@ -24,11 +24,6 @@ EVENT_CALL_ENDED_ERROR = "call_ended_error"
 # after it attempts the authoritative REST hangup at pipeline teardown — records
 # the provider, resolved hangup id, and outcome (success/failed).
 EVENT_CALL_TERMINATED = "call_terminated"
-# Emitted when the end_call tool handler refuses a tool invocation because
-# the mandatory two-step confirmation flow was not completed (no prior
-# confirmation ask from the assistant, or no subsequent user reply). Useful
-# for alerting on LLM bypass attempts.
-EVENT_END_CALL_BLOCKED = "end_call_blocked"
 
 REASON_LLM_END_CALL = "llm_end_call"
 REASON_CLIENT_DISCONNECT = "client_disconnect"
