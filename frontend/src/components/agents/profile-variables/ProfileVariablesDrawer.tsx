@@ -3,7 +3,6 @@
 import { Braces } from 'lucide-react';
 import { useState } from 'react';
 
-import ProfileCrmConfigForm from '@/components/agents/profile-variables/ProfileCrmConfigForm';
 import ProfileVariablesManager from '@/components/agents/profile-variables/ProfileVariablesManager';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
@@ -43,10 +42,7 @@ export default function ProfileVariablesDrawer({ agentId }: { agentId: string | 
         title="Profile variables"
         description="Reusable values referenced anywhere as {{profile.<key>}} — prompt, workflow nodes, and more. Update once, applied everywhere on the next call."
       >
-        <div className="flex flex-col gap-4">
-          {agentId && <ProfileCrmConfigForm agentId={agentId} />}
-          <ProfileVariablesManager agentId={agentId} />
-        </div>
+        <ProfileVariablesManager agentId={agentId} />
       </CustomDrawer>
     </>
   );

@@ -301,7 +301,6 @@ export interface ProfileVariableDraft {
   key: string;
   value: string;
   description: string | null;
-  crm_field: string | null;
 }
 
 /** Single source of truth for the agent create/edit form. Mirrors the

@@ -24,14 +24,10 @@ from sqlalchemy.orm import Session
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
 from core.models.agent import Agent
-from core.services.agents.agent_profile_crm_config_service import (
-    AgentProfileCrmConfigService,
-)
 from core.services.agents.agent_profile_variable_service import (
     AgentProfileVariableService,
 )
 from core.services.agents.errors import (
-    ProfileCrmConfigInvalidError,
     ProfileVariableInvalidError,
     ProfileVariableKeyConflictError,
     ProfileVariableNotFoundError,
@@ -50,7 +46,6 @@ class ProfileVariableIn(BaseModel):
     key: str = Field(..., min_length=1, max_length=64)
     value: str = Field(default="", max_length=10_240)
     description: Optional[str] = Field(default=None, max_length=1000)
-    crm_field: Optional[str] = Field(default=None, max_length=200)
 
 
 class ProfileVariablePatchRequest(BaseModel):
@@ -60,17 +55,6 @@ class ProfileVariablePatchRequest(BaseModel):
     key: Optional[str] = Field(default=None, min_length=1, max_length=64)
     value: Optional[str] = Field(default=None, max_length=10_240)
     description: Optional[str] = Field(default=None, max_length=1000)
-    crm_field: Optional[str] = Field(default=None, max_length=200)
-
-
-class ProfileCrmConfigRequest(BaseModel):
-    """Body for PUT /agents/{agent_id}/profile-crm-config — the per-agent CRM
-    lookup settings used to fill empty profile variables at call start."""
-
-    mcp_server_id: Optional[UUID] = Field(default=None)
-    lookup_tool_name: Optional[str] = Field(default=None, max_length=200)
-    phone_argument: Optional[str] = Field(default=None, max_length=120)
-    is_enabled: bool = Field(default=False)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
@@ -161,7 +145,6 @@ def create_profile_variable(
             key=body.key,
             value=body.value,
             description=body.description,
-            crm_field=body.crm_field,
         )
     except (
         ProfileVariableKeyConflictError,
@@ -190,7 +173,6 @@ def update_profile_variable(
             key=body.key,
             value=body.value,
             description=body.description,
-            crm_field=body.crm_field,
         )
     except (
         ProfileVariableNotFoundError,
@@ -222,46 +204,3 @@ def delete_profile_variable(
     except ProfileVariableNotFoundError as exc:
         raise _handle_profile_var_error(exc) from exc
     return {"deleted": str(variable_id)}
-
-
-# ── CRM lookup config (per agent) ────────────────────────────────────────
-
-
-@router.get("/agents/{agent_id}/profile-crm-config")
-def get_profile_crm_config(
-    agent_id: UUID,
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    """The agent's CRM-lookup config, or ``{"config": null}`` if none is set."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
-    svc = AgentProfileCrmConfigService(db, org_id=org_id)
-    return {"config": svc.config_response(svc.get_config(agent_id))}
-
-
-@router.put("/agents/{agent_id}/profile-crm-config")
-def upsert_profile_crm_config(
-    agent_id: UUID,
-    body: ProfileCrmConfigRequest = Body(...),
-    claims: JWTClaims = Depends(require_org_member),
-    db: Session = Depends(get_db),
-):
-    """Create or update the agent's CRM-lookup config (one row per agent)."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
-    svc = AgentProfileCrmConfigService(db, org_id=org_id)
-    try:
-        row = svc.upsert_config(
-            agent_id,
-            mcp_server_id=body.mcp_server_id,
-            lookup_tool_name=body.lookup_tool_name,
-            phone_argument=body.phone_argument,
-            is_enabled=body.is_enabled,
-        )
-    except ProfileCrmConfigInvalidError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": "PROFILE_CRM_CONFIG_INVALID", "message": str(exc)},
-        ) from exc
-    return {"config": svc.config_response(row)}

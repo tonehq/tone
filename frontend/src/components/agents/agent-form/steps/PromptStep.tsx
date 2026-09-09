@@ -91,7 +91,6 @@ export default function PromptStep() {
               key: d.key,
               value: d.value,
               description: d.description,
-              crm_field: d.crm_field,
               created_at: null,
               updated_at: null,
             })),
