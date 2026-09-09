@@ -605,6 +605,34 @@ def test_hosted_tts_returns_none_without_base_url():
     assert svc is None
 
 
+def test_hosted_tts_voxtral_uses_base64_audio_field():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "voxtral-hosted", "voxtral-mini-tts-2603", metadata={"voice_id": "en_paul_neutral"},
+            model_meta={"base_url": "https://api.mistral.ai/v1/audio/speech",
+                        "model_field": "model", "text_field": "input", "voice_field": "voice",
+                        "audio_field": "audio_data", "strip_wav_header": True,
+                        "extra_body": {"response_format": "wav"}},
+        ))
+    assert svc.base_url == "https://api.mistral.ai/v1/audio/speech"
+    assert svc.kwargs["text_field"] == "input"
+    assert svc.kwargs["audio_field"] == "audio_data"
+    assert svc.kwargs["strip_wav_header"] is True
+    assert svc.kwargs["extra_body"] == {"response_format": "wav"}
+    assert svc.voice_id == "en_paul_neutral"
+
+
+def test_hosted_tts_covers_deepinfra_qwen3():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "qwen3-tts-hosted", "Qwen/Qwen3-TTS",
+            model_meta={"base_url": "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-TTS",
+                        "audio_field": "audio"},
+        ))
+    assert svc.base_url == "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-TTS"
+    assert svc.kwargs["audio_field"] == "audio"
+
+
 def test_openai_compatible_stt_covers_aggregators_with_base_url():
     with _patched_modules():
         svc = build_stt(_spec(

@@ -211,6 +211,16 @@ LLM_REQUEST_EXTRAS = {
     "openrouter": _openrouter_request_extra,
 }
 
+HOSTED_TTS_PROVIDERS = (
+    "maya1",
+    "higgs-audio",
+    "indextts",
+    "chatterbox-hosted",
+    "cosyvoice-hosted",
+    "voxtral-hosted",
+    "qwen3-tts-hosted",
+)
+
 
 def build_llm_settings(settings_class, metadata: dict, provider_name: str, **overrides):
     declared = {f.name for f in dataclasses.fields(settings_class)}
@@ -1183,7 +1193,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 **xai_kwargs,
             )
 
-        if provider_name in ("maya1", "higgs-audio", "indextts", "chatterbox-hosted", "cosyvoice-hosted"):
+        if provider_name in HOSTED_TTS_PROVIDERS:
             from core.services.pipeline.hosted_tts_service import HostedTTSService
             from core.logging import get_trace_id
             endpoint = model_meta.get("base_url") or metadata.get("base_url")
