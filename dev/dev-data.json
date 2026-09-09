@@ -63445,6 +63445,209 @@
         }
       ],
       "status": "active"
+    },
+    {
+      "name": "voxtral-hosted",
+      "provider_type": "tts",
+      "display_name": "Mistral Voxtral TTS (hosted)",
+      "description": "Voxtral Mini TTS on Mistral's hosted API (api.mistral.ai). Request-response JSON with base64 WAV at 24 kHz",
+      "api_key_env": "MISTRAL_API_KEY",
+      "models": [
+        {
+          "name": "voxtral-mini-tts-2603",
+          "base_url": "https://api.mistral.ai/v1/audio/speech",
+          "meta_data": {
+            "model": "voxtral-mini-tts-2603",
+            "model_field": "model",
+            "text_field": "input",
+            "voice_field": "voice",
+            "audio_field": "audio_data",
+            "strip_wav_header": true,
+            "extra_body": {
+              "response_format": "wav"
+            }
+          },
+          "meta_data_schema": []
+        }
+      ],
+      "meta_data_schema": [],
+      "voices": [
+        {
+          "name": "Paul - Neutral",
+          "voice_id": "en_paul_neutral",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Cheerful",
+          "voice_id": "en_paul_cheerful",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Happy",
+          "voice_id": "en_paul_happy",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Confident",
+          "voice_id": "en_paul_confident",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Excited",
+          "voice_id": "en_paul_excited",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Sad",
+          "voice_id": "en_paul_sad",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Frustrated",
+          "voice_id": "en_paul_frustrated",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Paul - Angry",
+          "voice_id": "en_paul_angry",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "American",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Oliver - Neutral",
+          "voice_id": "gb_oliver_neutral",
+          "description": null,
+          "gender": "male",
+          "language": "en",
+          "sample_url": null,
+          "accent": "British",
+          "language_list": [
+            "en"
+          ]
+        },
+        {
+          "name": "Jane - Sarcasm",
+          "voice_id": "gb_jane_sarcasm",
+          "description": null,
+          "gender": "female",
+          "language": "en",
+          "sample_url": null,
+          "accent": "British",
+          "language_list": [
+            "en"
+          ]
+        }
+      ],
+      "status": "active"
+    },
+    {
+      "name": "chatterbox-hosted",
+      "provider_type": "tts",
+      "display_name": "Resemble Chatterbox Turbo (DeepInfra)",
+      "description": "Chatterbox Turbo served by DeepInfra's inference API. Needs DEEPINFRA_API_KEY; response field and voice presets to be confirmed on the first call",
+      "api_key_env": "DEEPINFRA_API_KEY",
+      "models": [
+        {
+          "name": "ResembleAI/chatterbox-turbo",
+          "base_url": "https://api.deepinfra.com/v1/inference/ResembleAI/chatterbox-turbo",
+          "meta_data": {
+            "model": "ResembleAI/chatterbox-turbo",
+            "text_field": "text",
+            "voice_field": "voice",
+            "audio_field": "audio",
+            "strip_wav_header": true,
+            "extra_body": {
+              "output_format": "wav"
+            }
+          },
+          "meta_data_schema": []
+        }
+      ],
+      "meta_data_schema": [],
+      "voices": [],
+      "status": "active"
+    },
+    {
+      "name": "qwen3-tts-hosted",
+      "provider_type": "tts",
+      "display_name": "Qwen3-TTS (DeepInfra)",
+      "description": "Qwen3-TTS served by DeepInfra's inference API. Needs DEEPINFRA_API_KEY; response field and voice presets to be confirmed on the first call",
+      "api_key_env": "DEEPINFRA_API_KEY",
+      "models": [
+        {
+          "name": "Qwen/Qwen3-TTS",
+          "base_url": "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-TTS",
+          "meta_data": {
+            "model": "Qwen/Qwen3-TTS",
+            "text_field": "text",
+            "voice_field": "voice",
+            "audio_field": "audio",
+            "strip_wav_header": true,
+            "extra_body": {
+              "output_format": "wav"
+            }
+          },
+          "meta_data_schema": []
+        }
+      ],
+      "meta_data_schema": [],
+      "voices": [],
+      "status": "active"
     }
   ],
   "built_in_tools": [
