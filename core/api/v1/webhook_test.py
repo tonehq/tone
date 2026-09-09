@@ -106,3 +106,38 @@ async def webhook_test_lookup_post_path(scenario: str, request: Request):
         logger.debug("[webhook-test] no JSON body on POST")
     phone = str(body.get("phone") or body.get("caller_number") or "")
     return await _build(phone, scenario)
+
+
+# ── Match-my-number (realistic real-call test) ────────────────────────────
+# Returns a record ONLY when the incoming phone matches ``allowed`` (put YOUR
+# number in the URL path, e.g. …/webhook-test/match/18637658026); every other
+# caller gets 404 so the variable falls back to its default. Lets you place a
+# real inbound call from your phone and see it resolve, while other numbers
+# exercise the fallback. Comparison is on the last 10 digits, so +country-code
+# / formatting differences don't matter.
+
+
+def _digits(p: str) -> str:
+    return "".join(c for c in (p or "") if c.isdigit())[-10:]
+
+
+def _match_response(allowed: str, phone: str) -> JSONResponse:
+    if phone and _digits(phone) and _digits(phone) == _digits(allowed):
+        return JSONResponse(content=_fake_record(phone))
+    return JSONResponse(status_code=404, content={"error": "no customer for this phone"})
+
+
+@router.get("/webhook-test/match/{allowed}")
+async def webhook_test_match_get(allowed: str, phone: str = Query(default="")):
+    return _match_response(allowed, phone)
+
+
+@router.post("/webhook-test/match/{allowed}")
+async def webhook_test_match_post(allowed: str, request: Request):
+    body: dict = {}
+    try:
+        body = await request.json()
+    except Exception:  # noqa: BLE001 — empty / non-JSON body is fine for a mock
+        logger.debug("[webhook-test] no JSON body on POST")
+    phone = str(body.get("phone") or body.get("caller_number") or "")
+    return _match_response(allowed, phone)
