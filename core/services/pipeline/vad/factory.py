@@ -5,13 +5,11 @@ from pipecat.audio.vad.vad_analyzer import VADAnalyzer, VADParams
 from core.services.meta_data_schema_validator import MetaDataSchemaValidator, coerce_settings
 from core.services.pipeline.vad.aic_quail import AICQuailVADProvider
 from core.services.pipeline.vad.base import VADProvider
-from core.services.pipeline.vad.krisp import KrispVivaVADProvider
 from core.services.pipeline.vad.silero import SileroVADProvider
 from core.services.pipeline.vad.ten import TENVADProvider
 
 VAD_PROVIDERS: Dict[str, Type[VADProvider]] = {
-    cls.slug: cls
-    for cls in (SileroVADProvider, TENVADProvider, KrispVivaVADProvider, AICQuailVADProvider)
+    cls.slug: cls for cls in (SileroVADProvider, TENVADProvider, AICQuailVADProvider)
 }
 
 DEFAULT_VAD_PROVIDER = SileroVADProvider.slug

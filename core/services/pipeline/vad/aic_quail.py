@@ -13,10 +13,10 @@ else:
 
 class AICQuailVADProvider(VADProvider):
     slug = "aic_quail"
-    display_name = "ai-coustics Quail VAD"
+    display_name = "ai-coustics VAD"
     description = (
-        "ai-coustics' standalone Quail VAD model. Needs aic_sdk and AIC_SDK_LICENSE on the "
-        "call workers; the model downloads on first use."
+        "ai-coustics' standalone VAD model (formerly Quail VAD). Needs aic_sdk and AIC_SDK_LICENSE "
+        "on the call workers; the model downloads from their CDN on first use."
     )
     schema = [
         {
@@ -26,8 +26,8 @@ class AICQuailVADProvider(VADProvider):
             "format": "string",
             "validator": None,
             "required": 0,
-            "default": "quail-vad-2.0-xxs-16khz",
-            "description": "Quail VAD model identifier published by ai-coustics",
+            "default": "vad-ms-2.1-xxs-16khz",
+            "description": "ai-coustics VAD model identifier, e.g. vad-ms-2.1-xxs-16khz or vad-vf-2.0-s-16khz",
         },
     ]
 
