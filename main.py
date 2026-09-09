@@ -38,6 +38,7 @@ if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, agent_llm_evals, agent_profile_variables,
+        agent_profile_webhook,
         benchmarks, mcp_servers, services, cloud_providers, tools, dashboard,
         call_logs, call_metrics, call_transcript_evals, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
@@ -215,6 +216,12 @@ if ee_enabled:
         api_v1.include_router(
             agent_profile_variables.router, tags=["agent-profile-variables"]
         )
+        # Agent Profile Webhook — per-agent HTTP data source that fills
+        # webhook-sourced profile variables at call start. Router paths carry
+        # the /agents/{agent_id}/profile-webhook prefix.
+        api_v1.include_router(
+            agent_profile_webhook.router, tags=["agent-profile-webhook"]
+        )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
@@ -273,6 +280,12 @@ else:
         # Router paths carry the /agents/{agent_id}/profile-variables prefix.
         api_v1.include_router(
             agent_profile_variables.router, tags=["agent-profile-variables"]
+        )
+        # Agent Profile Webhook — per-agent HTTP data source that fills
+        # webhook-sourced profile variables at call start. Router paths carry
+        # the /agents/{agent_id}/profile-webhook prefix.
+        api_v1.include_router(
+            agent_profile_webhook.router, tags=["agent-profile-webhook"]
         )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.

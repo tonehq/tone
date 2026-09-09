@@ -55,3 +55,35 @@ def load_profile_context(
             "[profile-vars] load failed org={} agent={}", org_id, agent_id
         )
         return {}
+
+
+def load_profile_webhook_plan(
+    db: Session,
+    org_id: Optional[Union[str, UUID]],
+    agent_id: Optional[Union[str, UUID]],
+):
+    """Return the agent's :class:`WebhookPlan` for this call, or a disabled plan.
+
+    The sync (DB) half of webhook enrichment — runs in the runner's executor
+    alongside :func:`load_profile_context`. Never raises: on any error it
+    returns a disabled plan so a live call is never broken by this load (mirrors
+    :func:`load_profile_context`). The async network call (``enrich``) takes the
+    returned plan and opens no session.
+    """
+    # Local import: the webhook service imports the profile-variable service,
+    # which imports prompt_variables — keep this off the module import path to
+    # avoid a heavy/circular import at startup.
+    from core.services.agents.agent_profile_webhook_service import (
+        AgentProfileWebhookService,
+        WebhookPlan,
+    )
+
+    if not agent_id or not org_id:
+        return WebhookPlan(enabled=False)
+    try:
+        return AgentProfileWebhookService(db, org_id=org_id).load_webhook_plan(agent_id)
+    except Exception:  # noqa: BLE001 — loader must never break a call
+        logger.exception(
+            "[profile-webhook] plan load failed org={} agent={}", org_id, agent_id
+        )
+        return WebhookPlan(enabled=False)

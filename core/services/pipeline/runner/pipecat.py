@@ -308,20 +308,64 @@ class PipecatPipelineRunner(PipelineRunner):
         # a transient DB failure degrades to an empty map instead of failing the call.
         from core.services.pipeline.prompt_variables import build_call_context
 
-        def _load_profile_vars_blocking() -> dict:
-            from core.services.agents.profile_context import load_profile_context
+        def _load_profile_blocking():
+            # Load the static profile-variable map AND the webhook enrichment
+            # plan in the SAME executor pass (one DB context, off the loop).
+            from core.services.agents.agent_profile_webhook_service import WebhookPlan
+            from core.services.agents.profile_context import (
+                load_profile_context,
+                load_profile_webhook_plan,
+            )
             try:
                 _agent_id = getattr(agent, "id", None)
                 _org_id = getattr(agent, "organization_id", None)
             except Exception:  # noqa: BLE001 — detached ORM instance, etc.
                 logger.exception("[runner] failed to read agent identity for profile vars")
-                return {}
+                return {}, WebhookPlan(enabled=False), None
             with get_db_context() as _db:
-                return load_profile_context(_db, _org_id, _agent_id)
+                _vars = load_profile_context(_db, _org_id, _agent_id)
+                _plan = load_profile_webhook_plan(_db, _org_id, _agent_id)
+            return _vars, _plan, _org_id
 
-        profile_vars = await asyncio.get_event_loop().run_in_executor(
-            None, _load_profile_vars_blocking
+        profile_vars, webhook_plan, profile_org_id = await asyncio.get_event_loop().run_in_executor(
+            None, _load_profile_blocking
         )
+
+        # Webhook data source: fill EMPTY webhook-sourced profile variables from
+        # the agent's configured endpoint at call start. Awaited under a HARD
+        # ``asyncio.wait_for`` cap (per-agent ``timeout_seconds``) — distinct
+        # from httpx's per-phase timeout — so a slow endpoint never delays the
+        # call beyond the cap. Failures degrade per the per-direction strategy
+        # (inbound graceful; outbound abort is deferred). Never overwrites a
+        # value the user already set (fill-only-empty).
+        if webhook_plan.is_actionable:
+            from core.services.agents.agent_profile_webhook_service import (
+                AgentProfileWebhookService,
+            )
+            from core.services.agents.webhook_failure_strategies import (
+                get_failure_strategy,
+            )
+
+            caller_phone = to_number if direction == "outbound" else from_number
+            webhook_task = asyncio.ensure_future(
+                AgentProfileWebhookService(None, org_id=profile_org_id).enrich(
+                    plan=webhook_plan, caller_phone=caller_phone, direction=direction
+                )
+            )
+            try:
+                enriched = await asyncio.wait_for(
+                    webhook_task, timeout=webhook_plan.timeout_seconds
+                )
+            except Exception:  # noqa: BLE001 — timeout or enrichment failure
+                logger.exception(
+                    "[profile-webhook] enrichment failed/timed out agent={}",
+                    getattr(agent, "id", None),
+                )
+                enriched = get_failure_strategy(direction).on_failure()
+            for _k, _v in (enriched or {}).items():
+                if not (profile_vars.get(_k) or ""):  # fill-only-empty
+                    profile_vars[_k] = _v
+
         prompt_context = build_call_context(
             agent, call_data, transport_type, profile_variables=profile_vars
         )
