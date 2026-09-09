@@ -199,6 +199,22 @@ class TestTelnyxInitiateAndEnd:
         assert url == "https://api.telnyx.com/v2/texml/Accounts/acct-1/Calls/v3%3Aabc"
         assert mock_requests.post.call_args.kwargs["data"] == {"Status": "completed"}
 
+    def test_end_call_already_ended_is_success(self, mock_requests, _creds):
+        # Hanging up an already-terminal call (e.g. caller hung up first) is a
+        # no-op success, not a failure — mirror the Twilio engine behavior.
+        mock_requests.post.return_value.raise_for_status.side_effect = Exception("422")
+        mock_requests.get.return_value.raise_for_status.return_value = None
+        mock_requests.get.return_value.json.return_value = {"status": "completed"}
+        engine = get_call_engine("telnyx", org_id="org-1")
+        assert engine.end_call("v3:abc") is True
+
+    def test_end_call_real_failure_returns_false(self, mock_requests, _creds):
+        mock_requests.post.return_value.raise_for_status.side_effect = Exception("500")
+        mock_requests.get.return_value.raise_for_status.return_value = None
+        mock_requests.get.return_value.json.return_value = {"status": "in-progress"}
+        engine = get_call_engine("telnyx", org_id="org-1")
+        assert engine.end_call("v3:abc") is False
+
 
 @patch("core.services.call_engines.telnyx_engine.get_telnyx_credentials", return_value={})
 def test_telnyx_missing_credentials_raises(_creds):

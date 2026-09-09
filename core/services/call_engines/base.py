@@ -20,6 +20,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+# A call in any of these states is already over — hanging it up again is a no-op
+# success, not a failure (e.g. the media serializer or the caller already dropped
+# it). These are the providers' RAW call-status strings (Twilio + Telnyx TeXML are
+# Twilio-compatible, note "no-answer" with a hyphen); do NOT confuse with
+# outbound_call_service._TERMINAL, which holds the repo's INTERNAL statuses
+# ("no_answer" with an underscore) — different value spaces.
+TERMINAL_CALL_STATUSES = {"completed", "canceled", "failed", "busy", "no-answer"}
+
 
 @dataclass
 class CallInfo:
