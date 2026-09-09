@@ -175,6 +175,7 @@ class IngestionRunService:
         config: dict,
         procrastinate_job_id: Optional[int] = None,
         ingestion_config_id: Optional[Any] = None,
+        name: Optional[str] = None,
     ) -> IngestionPipelineRun:
         """Insert a run row in ``pending`` status BEFORE the Procrastinate job
         is deferred. The row exists so the router can stamp the returned
@@ -204,6 +205,7 @@ class IngestionRunService:
                 upload_id=upload_id,
                 knowledge_base_id=knowledge_base_id,
                 run_number=next_run_number,
+                name=(name.strip() if isinstance(name, str) and name.strip() else None),
                 parser=config["parser"],
                 parser_config=config.get("parser_config"),
                 tokeniser=config["tokeniser"],
@@ -289,6 +291,7 @@ class IngestionRunService:
         request_config: Optional[dict],
         delete_existing: bool,
         ingestion_config_id: Optional[Any] = None,
+        name: Optional[str] = None,
     ) -> Tuple[IngestionPipelineRun, int]:
         """Create a pending IngestionPipelineRun, defer the Procrastinate job, and
         stamp the returned job id on the run. Shared by every KB write path
@@ -316,6 +319,7 @@ class IngestionRunService:
             org_id=org_id,
             config=cfg,
             ingestion_config_id=ingestion_config_id,
+            name=name,
         )
         enqueue = enqueue_reprocess if delete_existing else enqueue_upload
         try:
@@ -414,6 +418,8 @@ class IngestionRunService:
         from core.services.upload_service import UploadService
 
         kb = UploadService.kb_for_upload(db, org_id, upload.id)
+        # ``begin_pending_run`` is the single place ``name`` is normalized
+        # (trim / blank → None), so pass the raw value straight through.
         run, job_id = await IngestionRunService.start_ingestion_run(
             db,
             upload=upload,
@@ -422,6 +428,7 @@ class IngestionRunService:
             request_config=run_config or None,
             delete_existing=False,
             ingestion_config_id=ingestion_config_id,
+            name=raw_body.get("name"),
         )
         logger.info(
             "[ingestion] enqueued custom run for upload {} (run={}, job={}, "
@@ -1041,6 +1048,7 @@ class IngestionRunService:
             base,
             search=search,
             search_fields=[
+                IngestionPipelineRun.name,
                 IngestionPipelineRun.parser,
                 IngestionPipelineRun.tokeniser,
                 IngestionPipelineRun.embedding_provider,

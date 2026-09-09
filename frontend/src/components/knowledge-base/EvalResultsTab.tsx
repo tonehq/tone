@@ -4,13 +4,14 @@ import { useEffect, useMemo, useState } from 'react';
 
 import EvalResultsTable from '@/components/knowledge-base/EvalResultsTable';
 import SummaryStrip from '@/components/knowledge-base/SummaryStrip';
-import { versionLabel } from '@/components/knowledge-base/evalsConstants';
+import { ingestionRunLabel } from '@/components/knowledge-base/ingestionRunLabel';
+import { versionNumberMap } from '@/components/knowledge-base/evalsConstants';
 import { SelectInput } from '@/components/shared';
 import {
   useEvalRunDetail,
   useEvalRunsFiltered,
-  useInFlightEvalRunIds,
   useEvalVersions,
+  useInFlightEvalRunIds,
 } from '@/lib/api/evals';
 import { useIngestionRuns } from '@/lib/api/ingestion-runs';
 import type { EvalRunSummaryTotals } from '@/types/eval';
@@ -25,7 +26,9 @@ const HINT_CLASS =
 
 const ALL = '__all__';
 
-// Eval-batch results as a table, filterable by eval version and ingestion run.
+// Eval-batch results as a table. Two-step picker: choose an ingestion run, then
+// a batch (each labelled with its version + date) — the version is shown on the
+// batch itself, so no separate version filter is needed.
 export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
   const { data: versions = [] } = useEvalVersions(uploadId);
   const { data: runsResp } = useIngestionRuns(uploadId, {
@@ -36,15 +39,14 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
   });
   const readyRuns = useMemo(() => runsResp?.data ?? [], [runsResp]);
 
-  const [versionFilter, setVersionFilter] = useState<string>(ALL);
   const [ingestionFilter, setIngestionFilter] = useState<string>(ALL);
 
   const filters = useMemo(
     () => ({
-      eval_version_id: versionFilter === ALL ? null : versionFilter,
+      eval_version_id: null,
       ingestion_run_id: ingestionFilter === ALL ? null : ingestionFilter,
     }),
-    [versionFilter, ingestionFilter],
+    [ingestionFilter],
   );
 
   // While any visible ingestion run has a queued/running eval batch, poll the
@@ -66,34 +68,30 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
     }
   }, [batches, selectedRunId]);
 
-  const versionOptions = useMemo(
-    () => [
-      { value: ALL, label: 'All versions' },
-      ...versions.map((v) => ({ value: v.id, label: versionLabel(v) })),
-    ],
-    [versions],
-  );
-
   const ingestionOptions = useMemo(
     () => [
       { value: ALL, label: 'All ingestion runs' },
       ...readyRuns.map((r) => ({
         value: r.id,
-        label: `Run #${r.run_number}${r.is_active ? ' (active)' : ''}`,
+        label: `${ingestionRunLabel(r)}${r.is_active ? ' (active)' : ''}`,
       })),
     ],
     [readyRuns],
   );
 
+  // version id → "v<N>" so a batch can carry its version in the label.
+  const versionNumberById = useMemo(() => versionNumberMap(versions), [versions]);
+
   const batchOptions = useMemo(
     () =>
-      batches.map((b) => ({
-        value: b.run_id,
-        label: `Batch #${b.run_number}${b.started_at ? ` · ${formatDate(b.started_at)}` : ''}${
-          b.status === 'failed' ? ' · failed' : ''
-        }`,
-      })),
-    [batches],
+      batches.map((b) => {
+        const versionNo = b.eval_version_id ? versionNumberById.get(b.eval_version_id) : undefined;
+        const versionPart = versionNo ? `v${versionNo}` : 'Unversioned';
+        const datePart = b.started_at ? ` · ${formatDate(b.started_at)}` : '';
+        const failedPart = b.status === 'failed' ? ' · failed' : '';
+        return { value: b.run_id, label: `${versionPart}${datePart}${failedPart}` };
+      }),
+    [batches, versionNumberById],
   );
 
   const detailQuery = useEvalRunDetail(uploadId, selectedRunId);
@@ -110,27 +108,14 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
         <h2 className="text-lg font-semibold text-foreground">Eval results</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
           Every question scored in a batch — expected vs. actual answer and each DeepEval metric.
-          Filter by version and ingestion run.
+          Pick an ingestion run, then a batch.
         </p>
       </div>
 
       <div className="flex flex-wrap items-center gap-4">
         <div className="flex items-center gap-2">
           <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Version
-          </label>
-          <div className="min-w-[240px]">
-            <SelectInput
-              name="results-version-filter"
-              value={versionFilter}
-              onValueChange={(v) => setVersionFilter(v || ALL)}
-              options={versionOptions}
-            />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-[11px] uppercase tracking-wide text-muted-foreground">
-            Ingest recipe
+            Ingestion run
           </label>
           <div className="min-w-[220px]">
             <SelectInput
@@ -163,7 +148,7 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
 
       {!batchesQuery.isLoading && batches.length === 0 && (
         <div className={HINT_CLASS}>
-          No eval batches match these filters — run an eval from the Manage evals tab.
+          No eval batches for this ingestion run — run an eval from the Manage evals tab.
         </div>
       )}
 

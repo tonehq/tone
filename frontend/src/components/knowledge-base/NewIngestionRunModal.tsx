@@ -5,7 +5,7 @@ import { Loader2, Play } from 'lucide-react';
 
 import EmbeddingModelSelect from '@/components/knowledge-base/EmbeddingModelSelect';
 import { HintIcon, INGESTION_FIELD_HINTS } from '@/components/knowledge-base/ingestionFieldHints';
-import { CustomButton, CustomModal, SelectInput } from '@/components/shared';
+import { CustomButton, CustomModal, SelectInput, TextInput } from '@/components/shared';
 import { useIngestionConfigs } from '@/lib/api/ingestion-configs';
 import { useCreateCustomIngestionRun, usePipelineOptions } from '@/lib/api/ingestion-runs';
 import type { IngestionConfig } from '@/types/ingestionConfig';
@@ -76,6 +76,9 @@ export default function NewIngestionRunModal({
 
   const [configId, setConfigId] = useState<string>(CUSTOM_SENTINEL);
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  // Optional run label — kept separate from the recipe form so switching
+  // config (which re-seeds the recipe fields) never wipes the user's name.
+  const [runName, setRunName] = useState<string>('');
 
   const configOptions = useMemo(
     () => [
@@ -96,6 +99,7 @@ export default function NewIngestionRunModal({
     if (!open) {
       setConfigId(CUSTOM_SENTINEL);
       setForm(EMPTY_FORM);
+      setRunName('');
       return;
     }
   }, [open]);
@@ -161,9 +165,11 @@ export default function NewIngestionRunModal({
 
   const handleSubmit = async () => {
     if (!canSubmit) return;
+    const trimmedName = runName.trim() || undefined;
     const payload: CreateIngestionRunPayload = usingSavedConfig
-      ? { ingestion_config_id: selectedConfig!.id }
+      ? { name: trimmedName, ingestion_config_id: selectedConfig!.id }
       : {
+          name: trimmedName,
           parser: form.parser,
           tokeniser: form.tokeniser,
           embedding_provider: form.embedding_provider,
@@ -216,6 +222,14 @@ export default function NewIngestionRunModal({
         </div>
       ) : (
         <div className="flex flex-col gap-4 py-2">
+          <TextInput
+            name="name"
+            label="Run name"
+            placeholder="Optional — e.g. baseline, 512-token chunks"
+            value={runName}
+            onChange={(e) => setRunName(e.target.value)}
+            disabled={createMutation.isPending}
+          />
           <SelectInput
             name="config"
             label="Config"

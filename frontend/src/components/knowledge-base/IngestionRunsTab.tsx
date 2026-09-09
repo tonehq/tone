@@ -162,14 +162,21 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
     () => [
       {
         key: 'run_number',
-        title: 'Run #',
+        title: 'Run',
         dataIndex: 'run_number',
         sorter: true,
-        width: 'w-[80px]',
-        render: (value) => (
-          <span className="text-sm font-medium tabular-nums text-foreground">
-            #{value as number}
-          </span>
+        width: 'w-[160px]',
+        render: (_value, r) => (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium tabular-nums text-foreground">
+              #{r.run_number}
+            </span>
+            {r.name && (
+              <span className="line-clamp-1 max-w-[150px] text-xs text-muted-foreground">
+                {r.name}
+              </span>
+            )}
+          </div>
         ),
       },
       {
