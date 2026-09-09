@@ -76,14 +76,20 @@ class _FakeGenerationConfig:
 
 
 class _FakeCartesia:
-    class InputParams(_FakeParams):
-        model_fields = {"generation_config": None}
 
-    def __init__(self, api_key=None, model=None, params=None, **voice_kwargs):
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        voice: str = None
+        language: str = None
+        generation_config: object = None
+        pronunciation_dict_id: str = None
+        extra: dict = None
+
+    def __init__(self, api_key=None, settings=None, **kwargs):
         self.api_key = api_key
-        self.model = model
-        self.params = params
-        self.voice_kwargs = voice_kwargs
+        self.settings = settings
+        self.kwargs = kwargs
 
 
 class _FakeLiveOptions:
@@ -92,9 +98,19 @@ class _FakeLiveOptions:
 
 
 class _FakeDeepgram:
-    def __init__(self, api_key=None, live_options=None, **kwargs):
+
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        language: str = None
+        smart_format: bool = None
+        diarize: bool = None
+        utterance_end_ms: int = None
+        extra: dict = None
+
+    def __init__(self, api_key=None, settings=None, **kwargs):
         self.api_key = api_key
-        self.live_options = live_options
+        self.settings = settings
         self.kwargs = kwargs
 
 
@@ -302,20 +318,19 @@ def test_deepgram_forwards_model_and_options():
             "filler_words": True, "utterance_end_ms": 1000,
         }))
     assert isinstance(svc, _FakeDeepgram)
-    lo = svc.live_options.kwargs
-    assert lo["model"] == "nova-2-phonecall"      # was ignored before the fix
-    assert lo["language"] == "en"
-    assert lo["smart_format"] is True
-    assert lo["diarize"] is False                 # False must survive (not treated as unset)
-    assert lo["filler_words"] is True
-    assert lo["utterance_end_ms"] == 1000
+    assert svc.settings.model == "nova-2-phonecall"
+    assert svc.settings.language == "en"
+    assert svc.settings.smart_format is True
+    assert svc.settings.diarize is False
+    assert svc.settings.utterance_end_ms == 1000
+    assert svc.settings.extra == {"filler_words": True}
 
 
-def test_deepgram_no_options_yields_no_live_options():
+def test_deepgram_no_options_yields_no_settings():
     with _patched_modules():
         svc = build_stt(_spec("deepgram", model="", metadata={}))
     assert isinstance(svc, _FakeDeepgram)
-    assert svc.live_options is None               # unchanged behavior when nothing is set
+    assert svc.settings is None
 
 
 def test_anthropic_enables_thinking_from_budget():
@@ -343,16 +358,18 @@ def test_cartesia_wires_speed_and_emotion_into_generation_config():
             "speed": 1.1, "emotion": "happy",
         }))
     assert isinstance(svc, _FakeCartesia)
-    assert isinstance(svc.params.generation_config, _FakeGenerationConfig)
-    assert svc.params.generation_config.speed == 1.1
-    assert svc.params.generation_config.emotion == "happy"
+    assert svc.settings.model == "sonic-3"
+    assert svc.settings.voice == "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+    assert isinstance(svc.settings.generation_config, _FakeGenerationConfig)
+    assert svc.settings.generation_config.speed == 1.1
+    assert svc.settings.generation_config.emotion == "happy"
 
 
 def test_cartesia_without_speed_leaves_generation_config_unset():
     with _patched_modules():
         svc = build_tts(_spec("cartesia", model="sonic-3", metadata={}))
     assert isinstance(svc, _FakeCartesia)
-    assert getattr(svc.params, "generation_config", None) is None
+    assert svc.settings.generation_config is None
 
 
 def test_assemblyai_parses_comma_separated_keyterms():
