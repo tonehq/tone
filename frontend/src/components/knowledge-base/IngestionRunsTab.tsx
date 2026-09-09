@@ -17,6 +17,7 @@ import {
 } from '@/lib/api/ingestion-runs';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { IngestionRun, IngestionRunStatus } from '@/types/ingestionRun';
+import { copyToClipboard } from '@/utils/clipboard';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
@@ -150,11 +151,8 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   };
 
   const copyJobId = async (jobId: number) => {
-    try {
-      await navigator.clipboard.writeText(String(jobId));
+    if (await copyToClipboard(String(jobId))) {
       showToast.success('Copied', 'Procrastinate job id copied to clipboard.');
-    } catch {
-      // Clipboard blocked (e.g. no HTTPS in dev) — silent, non-critical.
     }
   };
 
@@ -162,14 +160,21 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
     () => [
       {
         key: 'run_number',
-        title: 'Run #',
+        title: 'Run',
         dataIndex: 'run_number',
         sorter: true,
-        width: 'w-[80px]',
-        render: (value) => (
-          <span className="text-sm font-medium tabular-nums text-foreground">
-            #{value as number}
-          </span>
+        width: 'w-[160px]',
+        render: (_value, r) => (
+          <div className="flex flex-col">
+            <span className="text-sm font-medium tabular-nums text-foreground">
+              #{r.run_number}
+            </span>
+            {r.name && (
+              <span className="line-clamp-1 max-w-[150px] text-xs text-muted-foreground">
+                {r.name}
+              </span>
+            )}
+          </div>
         ),
       },
       {

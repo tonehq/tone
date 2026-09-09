@@ -27,3 +27,11 @@ export function versionLabel(v: EvalVersion): string {
     v.status === 'generating' ? 'generating…' : v.status === 'finalized' ? 'finalized' : 'draft';
   return `v${v.version_number} · ${status} · ${v.counts.approved}/${v.counts.total} approved`;
 }
+
+// version id → version_number, for labelling batches / runs by their version
+// (e.g. "v2") without re-deriving the map in each component.
+export function versionNumberMap(versions: EvalVersion[]): Map<string, number> {
+  const map = new Map<string, number>();
+  for (const v of versions) map.set(v.id, v.version_number);
+  return map;
+}
