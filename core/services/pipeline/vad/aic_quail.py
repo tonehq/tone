@@ -15,7 +15,7 @@ class AICQuailVADProvider(VADProvider):
     slug = "aic_quail"
     display_name = "ai-coustics Quail VAD"
     description = (
-        "ai-coustics' standalone Quail VAD model. Needs aic_sdk and AIC_LICENSE_KEY on the "
+        "ai-coustics' standalone Quail VAD model. Needs aic_sdk and AIC_SDK_LICENSE on the "
         "call workers; the model downloads on first use."
     )
     schema = [
@@ -33,13 +33,13 @@ class AICQuailVADProvider(VADProvider):
 
     @classmethod
     def available(cls) -> bool:
-        return AICQuailVADAnalyzer is not None and bool(settings.AIC_LICENSE_KEY)
+        return AICQuailVADAnalyzer is not None and bool(settings.AIC_SDK_LICENSE)
 
     def build(self, params: VADParams) -> VADAnalyzer:
         if not self.available():
-            raise ValueError("ai-coustics Quail VAD requires aic_sdk and AIC_LICENSE_KEY")
+            raise ValueError("ai-coustics Quail VAD requires aic_sdk and AIC_SDK_LICENSE")
         return AICQuailVADAnalyzer(
-            license_key=settings.AIC_LICENSE_KEY,
+            license_key=settings.AIC_SDK_LICENSE,
             model_id=self.settings["model_id"],
             params=params,
         )

@@ -47,10 +47,11 @@ def test_unknown_provider_fails_fast():
 
 def test_catalog_offers_only_providers_whose_sdk_and_config_are_present(all_sdks_present):
     with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", ""), \
-            mock.patch.object(settings, "AIC_LICENSE_KEY", ""):
+            mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
         assert [c["id"] for c in vad_registry.list_vad_providers()] == ["silero", "ten"]
-    with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"), \
-            mock.patch.object(settings, "AIC_LICENSE_KEY", "key"):
+    with mock.patch.object(settings, "KRISP_VIVA_API_KEY", "krisp-key"), \
+            mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"), \
+            mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         catalog = vad_registry.list_vad_providers()
     assert [c["id"] for c in catalog] == ["silero", "ten", "krisp_viva", "aic_quail"]
     assert catalog[1]["meta_data_schema"][0]["name"] == "hop_size"
@@ -73,10 +74,11 @@ def test_ten_settings_are_coerced_and_forwarded(all_sdks_present):
 
 def test_krisp_and_aic_take_their_credentials_from_server_config(all_sdks_present):
     params = VADParams()
-    with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"):
+    with mock.patch.object(settings, "KRISP_VIVA_API_KEY", "krisp-key"), \
+            mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"):
         analyzer = vad_registry.build_vad_analyzer({"provider": "krisp_viva", "frame_duration": "20"}, params)
     assert analyzer.kwargs == {"model_path": "/models/vad.kef", "frame_duration": 20, "params": params}
-    with mock.patch.object(settings, "AIC_LICENSE_KEY", "key"):
+    with mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         analyzer = vad_registry.build_vad_analyzer({"provider": "aic_quail", "model_id": ""}, params)
     assert analyzer.kwargs == {"license_key": "key", "model_id": "quail-vad-2.0-xxs-16khz", "params": params}
     with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", ""):

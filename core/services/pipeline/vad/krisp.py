@@ -15,8 +15,8 @@ class KrispVivaVADProvider(VADProvider):
     slug = "krisp_viva"
     display_name = "Krisp VIVA VAD"
     description = (
-        "Krisp's licensed VAD model from the VIVA SDK. Needs krisp_audio and "
-        "KRISP_VIVA_VAD_MODEL_PATH on the call workers."
+        "Krisp's licensed VAD model from the VIVA SDK. Needs krisp_audio, KRISP_VIVA_API_KEY "
+        "and KRISP_VIVA_VAD_MODEL_PATH on the call workers."
     )
     schema = [
         {
@@ -34,11 +34,15 @@ class KrispVivaVADProvider(VADProvider):
 
     @classmethod
     def available(cls) -> bool:
-        return KrispVivaVadAnalyzer is not None and bool(settings.KRISP_VIVA_VAD_MODEL_PATH)
+        return (
+            KrispVivaVadAnalyzer is not None
+            and bool(settings.KRISP_VIVA_API_KEY)
+            and bool(settings.KRISP_VIVA_VAD_MODEL_PATH)
+        )
 
     def build(self, params: VADParams) -> VADAnalyzer:
         if not self.available():
-            raise ValueError("Krisp VIVA VAD requires krisp_audio and KRISP_VIVA_VAD_MODEL_PATH")
+            raise ValueError("Krisp VIVA VAD requires krisp_audio, KRISP_VIVA_API_KEY and KRISP_VIVA_VAD_MODEL_PATH")
         return KrispVivaVadAnalyzer(
             model_path=settings.KRISP_VIVA_VAD_MODEL_PATH,
             frame_duration=self.settings["frame_duration"],

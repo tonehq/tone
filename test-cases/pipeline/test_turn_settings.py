@@ -1,6 +1,7 @@
 from unittest import mock
 
 from core.config import settings
+from core.services.pipeline.vad import ten
 from core.services.pipeline.turn_settings import (
     TURN_DETECTION_KEY,
     VAD_KEY,
@@ -33,7 +34,8 @@ def test_vad_coerces_strings_and_fills_blanks():
 
 
 def test_options_expose_detectors_vad_providers_and_vad_schema():
-    with mock.patch.object(settings, "TEN_TURN_DETECTION_BASE_URL", ""):
+    with mock.patch.object(settings, "TEN_TURN_DETECTION_BASE_URL", ""), \
+            mock.patch.object(ten, "TENVADAnalyzer", None):
         options = turn_settings_options()
     assert [d["id"] for d in options["turn_detectors"]] == ["smart_turn", "livekit"]
     assert options["default_turn_detector"] == "smart_turn"

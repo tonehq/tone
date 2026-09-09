@@ -39,8 +39,8 @@ The lower bounds exist because values under them end the caller's turn on line n
 |---|---|---|---|
 | `silero` (default) | Silero ONNX bundled with Pipecat | 8 and 16 kHz | Nothing |
 | `ten` | TEN VAD (Apache 2.0), faster speech-to-silence transitions than Silero; telephony audio at 8 kHz is upsampled to the model's 16 kHz | 8 and 16 kHz | `pip install git+https://github.com/TEN-framework/ten-vad.git` in the worker image. Field: `hop_size` (160 or 256 samples) |
-| `krisp_viva` | Krisp VIVA VAD, licensed | 8, 16, 32, 44.1 and 48 kHz | The `krisp_audio` SDK and `KRISP_VIVA_VAD_MODEL_PATH=/models/<file>.kef`. Field: `frame_duration` (10, 20 or 30 ms) |
-| `aic_quail` | ai-coustics Quail VAD, licensed; the model downloads on first use | 16 kHz | The `aic_sdk` package and `AIC_LICENSE_KEY`. Field: `model_id` (default `quail-vad-2.0-xxs-16khz`) |
+| `krisp_viva` | Krisp VIVA VAD, licensed | 8, 16, 32, 44.1 and 48 kHz | The `krisp_audio` wheel from the Krisp developer portal (sdk.krisp.ai), `KRISP_VIVA_API_KEY` from the same portal and `KRISP_VIVA_VAD_MODEL_PATH` pointing at the downloaded `krisp-viva-vad-v2.kef`. Field: `frame_duration` (10, 20 or 30 ms) |
+| `aic_quail` | ai-coustics Quail VAD, licensed; the model downloads on first use | 16 kHz | `pip install "pipecat-ai[aic]"` and `AIC_SDK_LICENSE` from developers.ai-coustics.io. Field: `model_id` (default `quail-vad-2.0-xxs-16khz`) |
 
 A model is offered in the agent editor and accepted by validation only while its package, and for the licensed ones its key or model path, is present on the server, the same rule as the TEN turn detector. An agent already configured for a model the worker cannot load fails at pipeline build with a message naming the missing package or variable.
 
