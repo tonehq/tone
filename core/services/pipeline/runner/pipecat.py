@@ -147,6 +147,11 @@ class PipecatPipelineRunner(PipelineRunner):
         # back to "client_disconnect" only if nothing else has set it yet.
         # Persisted onto metadata_ by CallLogService.complete_call.
         end_reason_holder: dict = {"reason": None, "detail": None}
+        # Compact summary of the profile-variable webhook data source for this
+        # call (status flags + resolved/applied variable keys). Stays None when
+        # no webhook ran; persisted onto calls.webhook_result at completion.
+        # Never holds the phone or the raw response (PII/secret-safe).
+        webhook_result_holder: dict = {"result": None}
         # Idempotency guard for the authoritative provider hangup — makes the
         # multiple call sites below (prompt hangup in on_audio_data + the teardown
         # `finally` fallback) fire exactly once.
@@ -352,6 +357,7 @@ class PipecatPipelineRunner(PipelineRunner):
                     plan=webhook_plan, caller_phone=caller_phone, direction=direction
                 )
             )
+            _wh_failed = False
             try:
                 enriched = await asyncio.wait_for(
                     webhook_task, timeout=webhook_plan.timeout_seconds
@@ -362,9 +368,28 @@ class PipecatPipelineRunner(PipelineRunner):
                     getattr(agent, "id", None),
                 )
                 enriched = get_failure_strategy(direction).on_failure()
+                _wh_failed = True
+            _wh_applied: list[str] = []
             for _k, _v in (enriched or {}).items():
                 if not (profile_vars.get(_k) or ""):  # fill-only-empty
                     profile_vars[_k] = _v
+                    _wh_applied.append(_k)
+            # Compact, PII/secret-safe summary for calls.webhook_result — only
+            # variable keys + status flags (no phone, no response body, no URL).
+            _wh_expected = [k for k, _ in webhook_plan.fill_plan]
+            webhook_result_holder["result"] = {
+                "attempted": True,
+                "failed": _wh_failed,
+                "resolved": bool(enriched),
+                "direction": direction,
+                "variables_expected": _wh_expected,
+                "variables_resolved": [
+                    k for k in _wh_expected if f"profile.{k}" in (enriched or {})
+                ],
+                "variables_applied": [
+                    k for k in _wh_expected if f"profile.{k}" in _wh_applied
+                ],
+            }
 
         prompt_context = build_call_context(
             agent, call_data, transport_type, profile_variables=profile_vars
@@ -621,6 +646,7 @@ class PipecatPipelineRunner(PipelineRunner):
                                 recording_duration_seconds=recording_seconds,
                                 ended_reason=end_reason_holder.get("reason"),
                                 ended_reason_detail=end_reason_holder.get("detail"),
+                                webhook_result=webhook_result_holder.get("result"),
                             )
                         call_log_updated["done"] = True
                         logger.bind(
@@ -801,6 +827,7 @@ class PipecatPipelineRunner(PipelineRunner):
                             tool_calls=merged_tool_entries or None,
                             ended_reason=end_reason_holder.get("reason"),
                             ended_reason_detail=end_reason_holder.get("detail"),
+                            webhook_result=webhook_result_holder.get("result"),
                         )
                     logger.bind(
                         call_id=str(call_log_id),

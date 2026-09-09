@@ -47,6 +47,10 @@ class Call(OrgScopedModel):
     # (see ConsolidatedTranscriptService). Written by the ``consolidate_transcript``
     # post-call action; safe to recompute at any time.
     consolidated_transcript = Column(JSONB, nullable=True)
+    # Compact per-call summary of the profile-variable webhook data source
+    # (status flags + which variables resolved/applied). NULL when no webhook
+    # ran. Never stores the caller phone or the raw response (PII/secret-safe).
+    webhook_result = Column(JSONB, nullable=True)
 
     pod = relationship("Pod", back_populates="calls")
 

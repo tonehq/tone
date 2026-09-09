@@ -577,5 +577,6 @@ class CallService(BaseService):
             "served_by": served_by,
             "pipeline_config": call.pipeline_config,
             "consolidated_transcript": call.consolidated_transcript,
+            "webhook_result": call.webhook_result,
             "metrics": metrics,
         }
