@@ -6,7 +6,6 @@ import { useFormContext, useWatch } from 'react-hook-form';
 
 import SectionCard from '@/components/agents/agent-form/SectionCard';
 import AgentWorkflowsSection from '@/components/agents/agent-workflows/AgentWorkflowsSection';
-import ProfileVariablesDrawer from '@/components/agents/profile-variables/ProfileVariablesDrawer';
 import { useAgentEditor } from '@/components/agents/AgentEditorContext';
 import { CustomButton, RichPromptEditorField } from '@/components/shared';
 import { Badge } from '@/components/ui/badge';
@@ -174,20 +173,13 @@ export default function PromptStep() {
     <div className="flex h-full flex-col gap-3">
       {/* ── Conversation-driver hero (compact) ───────────────────────────── */}
       <section className="relative shrink-0 overflow-hidden rounded-lg border border-border bg-surface px-3.5 py-3">
-        <div className="mb-2 flex items-start justify-between gap-3">
-          <div className="flex flex-wrap items-baseline gap-x-2">
-            <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
-              How {versionLabel} drives conversations
-            </h2>
-            <p className="text-[11.5px] text-muted-foreground">
-              Pick one way to run the call — each version keeps its own setup.
-            </p>
-          </div>
-          {/* Manage the `{{profile.<key>}}` values used by both the prompt and
-              workflow nodes, without leaving this page. */}
-          <div className="shrink-0">
-            <ProfileVariablesDrawer agentId={agentId} />
-          </div>
+        <div className="mb-2 flex flex-wrap items-baseline gap-x-2">
+          <h2 className="text-[13px] font-semibold tracking-tight text-foreground">
+            How {versionLabel} drives conversations
+          </h2>
+          <p className="text-[11.5px] text-muted-foreground">
+            Pick one way to run the call — each version keeps its own setup.
+          </p>
         </div>
 
         <div role="group" aria-label="Conversation mode" className="grid grid-cols-2 gap-2">
