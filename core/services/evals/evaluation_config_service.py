@@ -430,50 +430,89 @@ class EvaluationConfigService(BaseService):
         config_run_ids: Optional[List[Any]] = None,
     ) -> List[dict]:
         """Rows for a source run (optionally limited to specific config passes),
-        joined to their question, org-scoped."""
-        q = (
-            self.query(EvaluationConfigResult)
-            .filter(EvaluationConfigResult.source_run_id == source_run_id)
+        joined to their question, org-scoped. Each row carries the question text
+        + order so the per-question compare table can label/sort rows without a
+        second fetch."""
+        q = self.query(EvaluationConfigResult).filter(
+            EvaluationConfigResult.source_run_id == source_run_id
         )
         if config_run_ids:
             q = q.filter(
                 EvaluationConfigResult.config_run_id.in_(list(config_run_ids))
             )
-        rows = q.order_by(
-            EvaluationConfigResult.config_run_number.desc()
-        ).all()
-        return [r.to_dict() for r in rows]
+        joined = (
+            q.join(Eval, Eval.id == EvaluationConfigResult.eval_id)
+            .with_entities(
+                EvaluationConfigResult, Eval.question, Eval.question_ord
+            )
+            .order_by(
+                EvaluationConfigResult.config_run_number.desc(),
+                Eval.question_ord.asc(),
+            )
+            .all()
+        )
+        out: List[dict] = []
+        for result, question, question_ord in joined:
+            row = result.to_dict()
+            row["question"] = question
+            row["question_ord"] = question_ord
+            out.append(row)
+        return out
 
     def list_config_runs(self, *, source_run_id: Any) -> List[dict]:
         """One summary row per config pass against this source run (for the
-        run/compare picker): config id, run number, counts + verdict tally."""
+        run/compare picker + runs table): config id, run number, counts, verdict
+        tally, the judge model used, and the mean metric score across the pass."""
         rows = (
             self.query(EvaluationConfigResult)
             .filter(EvaluationConfigResult.source_run_id == source_run_id)
             .all()
         )
+        # Resolve judge_model per config in one query (a pass may reference a
+        # since-deleted config → judge_model stays None).
+        config_ids = {r.evaluation_config_id for r in rows if r.evaluation_config_id}
+        judge_models: dict = {}
+        if config_ids:
+            for cid, model in (
+                self.db.query(EvaluationConfig.id, EvaluationConfig.judge_model)
+                .filter(EvaluationConfig.id.in_(config_ids))
+                .all()
+            ):
+                judge_models[str(cid)] = model
+
         by_pass: dict = {}
+        score_acc: dict = {}  # config_run_id → [sum, count]
         for r in rows:
             key = str(r.config_run_id)
+            cfg_id = str(r.evaluation_config_id) if r.evaluation_config_id else None
             agg = by_pass.setdefault(
                 key,
                 {
                     "config_run_id": key,
-                    "evaluation_config_id": (
-                        str(r.evaluation_config_id)
-                        if r.evaluation_config_id
-                        else None
-                    ),
+                    "evaluation_config_id": cfg_id,
                     "config_run_number": r.config_run_number,
                     "source_run_id": str(r.source_run_id),
+                    "judge_model": judge_models.get(cfg_id) if cfg_id else None,
                     "total": 0,
                     "verdicts": {},
+                    "average_score": None,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                 },
             )
             agg["total"] += 1
             v = (r.verdict or "UNKNOWN").upper()
             agg["verdicts"][v] = agg["verdicts"].get(v, 0) + 1
+            acc = score_acc.setdefault(key, [0.0, 0])
+            for entry in (r.metric_scores or {}).values():
+                score = entry.get("score") if isinstance(entry, dict) else None
+                if isinstance(score, (int, float)) and not isinstance(score, bool):
+                    acc[0] += float(score)
+                    acc[1] += 1
+
+        for key, (total_score, count) in score_acc.items():
+            if count:
+                by_pass[key]["average_score"] = round(total_score / count, 4)
+
         return sorted(
             by_pass.values(),
             key=lambda a: a["config_run_number"],

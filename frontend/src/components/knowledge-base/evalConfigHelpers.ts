@@ -2,7 +2,11 @@
 // rows for the compare view. Kept out of components per the repo's
 // "no logic inline in a component" rule.
 
-import type { EvaluationConfig, EvaluationConfigResult } from '@/types/evaluationConfig';
+import type {
+  EvaluationConfig,
+  EvaluationConfigResult,
+  EvaluationConfigResultRow,
+} from '@/types/evaluationConfig';
 
 export interface MetricAverage {
   metric: string;
@@ -52,4 +56,42 @@ export function configById(
 ): EvaluationConfig | null {
   if (!id) return null;
   return configs.find((c) => c.id === id) ?? null;
+}
+
+// Mean of a single row's metric scores (0..1), or null when it has none.
+export function meanRowScore(row: EvaluationConfigResult): number | null {
+  const scores = Object.values(row.metric_scores ?? {})
+    .map((e) => e?.score)
+    .filter((s): s is number => typeof s === 'number' && Number.isFinite(s));
+  if (!scores.length) return null;
+  return scores.reduce((a, b) => a + b, 0) / scores.length;
+}
+
+export interface QuestionMatrixRow {
+  evalId: string;
+  question: string;
+  byPass: Record<string, EvaluationConfigResult>;
+}
+
+// Pivot config-result rows into one row per question, keyed by config_run_id,
+// so the per-question compare table can render a column per selected pass.
+// Ordered by the question's original position in the source run.
+export function buildQuestionMatrix(results: EvaluationConfigResultRow[]): QuestionMatrixRow[] {
+  const byEval = new Map<string, QuestionMatrixRow & { ord: number }>();
+  for (const row of results) {
+    const existing = byEval.get(row.eval_id);
+    if (existing) {
+      existing.byPass[row.config_run_id] = row;
+    } else {
+      byEval.set(row.eval_id, {
+        evalId: row.eval_id,
+        question: row.question ?? '',
+        ord: row.question_ord ?? 0,
+        byPass: { [row.config_run_id]: row },
+      });
+    }
+  }
+  return Array.from(byEval.values())
+    .sort((a, b) => a.ord - b.ord)
+    .map(({ ord: _ord, ...rest }) => rest);
 }

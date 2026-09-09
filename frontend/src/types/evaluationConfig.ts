@@ -41,20 +41,29 @@ export interface EvaluationConfigResult {
   updated_at: string | null;
 }
 
+// The list_results read shape: a config-result row joined to its source
+// question (the persisted model has no question column — the join adds it).
+export interface EvaluationConfigResultRow extends EvaluationConfigResult {
+  question: string;
+  question_ord: number;
+}
+
 // One config pass against a source run — the compare/run picker unit.
 export interface EvaluationConfigRunSummary {
   config_run_id: string;
   evaluation_config_id: string | null;
   config_run_number: number;
   source_run_id: string;
+  judge_model: string | null;
   total: number;
   verdicts: Record<string, number>;
+  average_score: number | null;
   created_at: string | null;
 }
 
 export interface EvaluationConfigResultsResponse {
   runs: EvaluationConfigRunSummary[];
-  results: EvaluationConfigResult[];
+  results: EvaluationConfigResultRow[];
 }
 
 export interface EvaluationConfigCreatePayload {
