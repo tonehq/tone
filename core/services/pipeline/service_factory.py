@@ -167,6 +167,19 @@ def build_settings(settings_class, metadata: dict, **overrides):
     return settings_class(**filtered) if filtered else None
 
 
+LLM_REQUEST_EXTRA_FIELDS = ("reasoning_effort",)
+
+
+def build_llm_settings(settings_class, metadata: dict, **overrides):
+    declared = {f.name for f in dataclasses.fields(settings_class)}
+    extra = {
+        key: metadata[key]
+        for key in LLM_REQUEST_EXTRA_FIELDS
+        if key not in declared and metadata.get(key) not in (None, "", "None")
+    }
+    return build_settings(settings_class, metadata, extra=extra or None, **overrides)
+
+
 _CARTESIA_SPEED_MIN = 0.6
 _CARTESIA_SPEED_MAX = 1.5
 _CARTESIA_SPEED_WORDS = {
@@ -299,10 +312,26 @@ def build_llm(spec: dict) -> Optional[Any]:
             return AnthropicLLMService(api_key=api_key, model=model or "claude-haiku-4-5-20251001", params=params)
         if provider_name == "groq":  # done
             from pipecat.services.groq.llm import GroqLLMService
-            return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=build_input_params(GroqLLMService, metadata), **_url_kwargs(metadata))
+            return GroqLLMService(
+                api_key=api_key,
+                settings=build_llm_settings(
+                    GroqLLMService.Settings,
+                    metadata,
+                    model=model or "llama-3.3-70b-versatile",
+                ),
+                **_url_kwargs(metadata),
+            )
         if provider_name == "openrouter":  # done
             from pipecat.services.openrouter.llm import OpenRouterLLMService
-            return OpenRouterLLMService(api_key=api_key, model=model or "openai/gpt-4o-2024-11-20", params=build_input_params(OpenRouterLLMService, metadata), **_url_kwargs(metadata))
+            return OpenRouterLLMService(
+                api_key=api_key,
+                settings=build_llm_settings(
+                    OpenRouterLLMService.Settings,
+                    metadata,
+                    model=model or "openai/gpt-4o-2024-11-20",
+                ),
+                **_url_kwargs(metadata),
+            )
         if provider_name == "aws_bedrock":  # done
             from pipecat.services.aws.llm import AWSBedrockLLMService
             return AWSBedrockLLMService(api_key=api_key, model=model or "amazon.nova-pro-v1:0", params=build_input_params(AWSBedrockLLMService, metadata))

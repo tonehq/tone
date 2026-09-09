@@ -32,7 +32,6 @@ from core.models.agent_channel import AgentChannel
 from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
-from core.models.agent_profile_crm_config import AgentProfileCrmConfig
 from core.models.agent_profile_variable import AgentProfileVariable
 from core.models.agent_readiness_run import AgentReadinessRun
 from core.models.agent_tool import AgentTool

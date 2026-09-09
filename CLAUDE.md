@@ -133,6 +133,8 @@ Registered so future work discovers them (paths are import targets):
 
 - **`VECTOR_STORES` / `get_vector_store` / `DB_BACKED_STORES`** (`core/services/rag/factory.py`) — the ONE registry of ingestion vector stores (`pgvector`, `turbopuffer`). Every store implements `VectorStore` and reuses **`chunk_rows.insert_chunk_rows` / `chunk_rows_query`** (`core/services/rag/vector_stores/chunk_rows.py`) for the Postgres chunk rows and **`run_scope.scoped_runs` / `resolve_active_run_id`** (`core/services/rag/run_scope.py`) for retrieval scoping (explicit run → agent pin → KB default → legacy `is_active`, plus the published-config join for `agent_id`). **`IngestionRunService.purge_remote_vectors(db, runs)`** is the ONE hook that deletes vectors held outside Postgres; every path that drops run rows (delete run, replace file, re-ingest with `delete_existing`, delete document) calls it before the cascade. Operator guide: `docs/VECTOR_STORES.md`.
 
+- **`build_llm_settings(settings_class, metadata, **overrides)` / `LLM_REQUEST_EXTRA_FIELDS`** (`core/services/pipeline/service_factory.py`) — the ONE way an OpenAI-compatible LLM that Pipecat configures through `settings=` (Groq, OpenRouter; both ignore `params=`) receives agent metadata. Declared `Settings` fields pass through `build_settings`; request-level knobs the class does not declare (`reasoning_effort` for Groq gpt-oss) are routed into `Settings.extra`, which Pipecat merges into the chat request. Add a knob = one entry in `LLM_REQUEST_EXTRA_FIELDS` plus the model's `meta_data_schema` field; the resolver drops anything not in the stored schema.
+
 ### Frontend: shared components
 
 - **Buttons:** Use `CustomButton` from `@/components/shared` only. Do not use native `<button>` or `Button` from `@/components/ui/button` in app/feature code (exception: inside `CustomButton.tsx` itself).
@@ -190,7 +192,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **curitiba** (20133 symbols, 51938 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **bucharest** (19931 symbols, 51284 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -206,7 +208,7 @@ This project is indexed by GitNexus as **curitiba** (20133 symbols, 51938 relati
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/curitiba/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/bucharest/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -245,10 +247,10 @@ This project is indexed by GitNexus as **curitiba** (20133 symbols, 51938 relati
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/curitiba/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/curitiba/clusters` | All functional areas |
-| `gitnexus://repo/curitiba/processes` | All execution flows |
-| `gitnexus://repo/curitiba/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/bucharest/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/bucharest/clusters` | All functional areas |
+| `gitnexus://repo/bucharest/processes` | All execution flows |
+| `gitnexus://repo/bucharest/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
