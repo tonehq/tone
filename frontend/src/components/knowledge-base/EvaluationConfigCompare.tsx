@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 
-import { CustomButton, CustomTable } from '@/components/shared';
+import { CustomTable } from '@/components/shared';
 import type { CustomTableColumn } from '@/types/components';
 import type {
   EvaluationConfig,
@@ -11,13 +11,13 @@ import type {
 } from '@/types/evaluationConfig';
 import { formatMetricScore } from '@/utils/evalFormat';
 
+import CompareColumnHeader from './CompareColumnHeader';
 import { metricLabel } from './evalMetricsConstants';
 import {
   bestInRow,
   buildCompareMatrix,
   configById,
   configNameById,
-  verdictSummary,
   type CompareMatrixRow,
 } from './evalConfigHelpers';
 import JudgePromptModal from './JudgePromptModal';
@@ -71,25 +71,14 @@ export default function EvaluationConfigCompare({
         key: pass.config_run_id,
         align: 'center',
         title: (
-          <div className="flex flex-col items-center gap-1">
-            <span className="font-medium text-foreground">
-              {name} #{pass.config_run_number}
-              {isBaseline && <span className="ml-1 text-xs text-muted-foreground">(baseline)</span>}
-            </span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {pass.judge_model ?? '—'}
-            </span>
-            <span className="text-xs font-normal text-muted-foreground">
-              {verdictSummary(pass.verdicts)}
-            </span>
-            <CustomButton
-              type="text"
-              size="xs"
-              onClick={() => setPromptView({ name, prompt: config?.judge_prompt ?? null })}
-            >
-              View prompt
-            </CustomButton>
-          </div>
+          <CompareColumnHeader
+            name={name}
+            runNumber={pass.config_run_number}
+            judgeModel={pass.judge_model}
+            verdicts={pass.verdicts}
+            isBaseline={isBaseline}
+            onViewPrompt={() => setPromptView({ name, prompt: config?.judge_prompt ?? null })}
+          />
         ),
         render: (_v, r) => {
           const value = r.byPass[pass.config_run_id];

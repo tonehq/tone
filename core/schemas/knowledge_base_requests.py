@@ -41,6 +41,8 @@ class PipelineRunRequest(BaseModel):
 
     model_config = ConfigDict(extra="allow")
 
+    # Optional human-friendly label for the run (falls back to "Run #N").
+    name: Optional[str] = None
     ingestion_config_id: Optional[Any] = None
     parser: Optional[str] = None
     parser_config: Optional[Dict[str, Any]] = None

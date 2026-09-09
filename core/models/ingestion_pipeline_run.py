@@ -48,6 +48,10 @@ class IngestionPipelineRun(OrgScopedModel):
         index=True,
     )
     run_number = Column(Integer, nullable=False)
+    # Optional human-friendly label for this run (e.g. "baseline", "512-token
+    # chunks"). Nullable — runs created before this column, and runs where the
+    # user left it blank, fall back to "Run #<run_number>" in the UI.
+    name = Column(String(120), nullable=True)
 
     parser = Column(String(50), nullable=False)
     parser_config = Column(JSONB, nullable=True)
@@ -135,6 +139,7 @@ class IngestionPipelineRun(OrgScopedModel):
             "upload_id": str(self.upload_id),
             "knowledge_base_id": str(self.knowledge_base_id),
             "run_number": self.run_number,
+            "name": self.name,
             "parser": self.parser,
             "parser_config": self.parser_config,
             "tokeniser": self.tokeniser,

@@ -17,8 +17,11 @@ and header values are NEVER logged.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
+from urllib.parse import quote
 from uuid import UUID
 
 import httpx
@@ -118,6 +121,16 @@ class WebhookPlan:
         return bool(self.enabled and self.endpoint_url and self.fill_plan)
 
 
+@dataclass
+class EnrichOutcome:
+    """Result of a call-start enrichment: the ``{"profile.<key>": value}`` map to
+    merge into the prompt, plus a ``tool_executions``-shaped record (``tool_type
+    = "webhook"``) persisted for call debugging."""
+
+    values: dict[str, str]
+    execution: dict
+
+
 class AgentProfileWebhookService(BaseService):
     """CRUD + runtime enrichment for one agent's webhook data source."""
 
@@ -169,6 +182,12 @@ class AgentProfileWebhookService(BaseService):
             )
 
         identifiers = self._normalize_identifiers(request_identifiers)
+        for ident in identifiers:
+            if ident["in"] == "path" and ("{" + ident["param"] + "}") not in url:
+                raise ProfileWebhookInvalidError(
+                    f"Add the placeholder {{{ident['param']}}} to the Endpoint URL "
+                    f"for the path identifier '{ident['param']}'."
+                )
         dirs = self._normalize_directions(directions)
         timeout = max(MIN_TIMEOUT_SECONDS, min(MAX_TIMEOUT_SECONDS, int(timeout_seconds or DEFAULT_TIMEOUT_SECONDS)))
         headers_blob = encrypt_json(headers or {})
@@ -258,15 +277,22 @@ class AgentProfileWebhookService(BaseService):
         plan: WebhookPlan,
         caller_phone: Optional[str],
         direction: Optional[str],
-    ) -> dict[str, str]:
-        """Call the endpoint and return ``{"profile.<key>": value}`` for the
-        plan's fill targets. Any failure → ``{}`` (the call continues; inbound
-        variables fall back to their defaults)."""
-        if not plan.is_actionable or not _direction_enabled(plan.directions, direction):
-            return {}
-        if not (caller_phone or "").strip():
-            return {}
+    ) -> EnrichOutcome:
+        """Call the endpoint and return the filled ``{"profile.<key>": value}``
+        map plus a ``webhook`` tool-execution record for call debugging. Any
+        failure → empty values (the call continues; inbound variables fall back
+        to their defaults); the record captures the status/response/error."""
+        execution = self._base_execution(plan, caller_phone)
+        if (
+            not plan.is_actionable
+            or not _direction_enabled(plan.directions, direction)
+            or not (caller_phone or "").strip()
+        ):
+            execution["status"] = "cancelled"
+            execution["result"] = "skipped (not applicable for this call)"
+            return self._finalize({}, execution)
 
+        started = time.monotonic()
         try:
             status, parsed = await self._call_endpoint(
                 endpoint_url=plan.endpoint_url,
@@ -282,7 +308,17 @@ class AgentProfileWebhookService(BaseService):
                 self.org_id,
                 direction,
             )
-            return {}
+            execution.update(
+                status="error",
+                result="error: request failed",
+                error="request failed",
+                duration_ms=int((time.monotonic() - started) * 1000),
+            )
+            return self._finalize({}, execution)
+
+        execution["duration_ms"] = int((time.monotonic() - started) * 1000)
+        execution["status_code"] = status
+        execution["result"] = parsed
 
         if not (200 <= status < 300):
             logger.warning(
@@ -290,18 +326,58 @@ class AgentProfileWebhookService(BaseService):
                 self.org_id,
                 status,
             )
-            return {}
+            execution.update(status="error", error=f"HTTP {status}")
+            return self._finalize({}, execution)
 
         record = _first_record(parsed)
         if not isinstance(record, dict):
-            return {}
+            execution.update(status="error", error="response has no usable record")
+            return self._finalize({}, execution)
 
         filled: dict[str, str] = {}
         for key, source_path in plan.fill_plan:
             value = _resolve_scalar(record, source_path)
             if value is not None:
                 filled[f"{PROFILE_PREFIX}{key}"] = value
-        return filled
+        execution["status"] = "success"
+        return self._finalize(filled, execution)
+
+    def _finalize(self, values: dict[str, str], execution: dict) -> EnrichOutcome:
+        """Stamp ``completed_at`` on the execution record (parity with the tool
+        handlers' ``finalize_and_record``) and package the outcome."""
+        execution["completed_at"] = datetime.now(timezone.utc).isoformat()
+        return EnrichOutcome(values, execution)
+
+    def _base_execution(self, plan: WebhookPlan, caller_phone: Optional[str]) -> dict:
+        """A ``tool_executions``-shaped entry skeleton for this webhook call
+        (``tool_type = "webhook"``). ``arguments`` is the request summary; the
+        caller fills status/result/status_code/duration_ms. Same list the tool
+        handlers use — persisted by ``record_executions`` at call end."""
+        return {
+            "tool": "Profile Webhook",
+            "tool_type": "webhook",
+            "arguments": {
+                "method": plan.http_method,
+                "url": plan.endpoint_url,
+                "phone": caller_phone or "",
+            },
+            "turn": 0,
+            "timestamp": int(time.time()),
+        }
+
+    def timeout_execution(self, plan: WebhookPlan, caller_phone: Optional[str]) -> dict:
+        """The execution record for the timeout path (the task is cancelled by
+        the runner's ``asyncio.wait_for``, so ``enrich`` never returns one)."""
+        execution = self._base_execution(plan, caller_phone)
+        secs = plan.timeout_seconds or DEFAULT_TIMEOUT_SECONDS
+        execution.update(
+            status="error",
+            error=f"timed out after {secs}s",
+            result=f"error: timed out after {secs}s",
+            duration_ms=int(secs * 1000),
+            completed_at=datetime.now(timezone.utc).isoformat(),
+        )
+        return execution
 
     # ── Test (config-time) ────────────────────────────────────────────────
 
@@ -369,10 +445,7 @@ class AgentProfileWebhookService(BaseService):
         caller_phone: Optional[str],
         timeout_seconds: int,
     ) -> tuple[int, Any]:
-        # Defense-in-depth: re-check even though the URL was validated on save
-        # (a rotated allowlist / stored bad value should still be caught).
-        _assert_safe_url(endpoint_url)
-
+        url = endpoint_url
         query_params: dict[str, str] = {}
         body: dict[str, str] = {}
         for ident in request_identifiers or []:
@@ -381,8 +454,20 @@ class AgentProfileWebhookService(BaseService):
             name = (ident.get("param") or "").strip()
             if not name:
                 continue
-            target = query_params if ident.get("in") == "query" else body
-            target[name] = caller_phone or ""
+            loc = ident.get("in")
+            value = caller_phone or ""
+            if loc == "path":
+                # Substitute ``{param}`` in the URL (URL-encoded); nothing added
+                # to the query string or body for a path identifier.
+                url = url.replace("{" + name + "}", quote(value, safe=""))
+            elif loc == "query":
+                query_params[name] = value
+            else:  # body
+                body[name] = value
+
+        # Defense-in-depth: validate the FINAL url (after path substitution),
+        # re-checked even though it was validated on save.
+        _assert_safe_url(url)
 
         headers = self._clean_headers(self._decrypt_headers(headers_blob))
         method = (http_method or "POST").upper()
@@ -390,11 +475,11 @@ class AgentProfileWebhookService(BaseService):
         async with httpx.AsyncClient(timeout=httpx.Timeout(timeout_seconds)) as client:
             if method == "GET":
                 resp = await client.get(
-                    endpoint_url, params=query_params or None, headers=headers or None
+                    url, params=query_params or None, headers=headers or None
                 )
             else:
                 resp = await client.post(
-                    endpoint_url,
+                    url,
                     params=query_params or None,
                     json=body or None,
                     headers=headers or None,
