@@ -675,6 +675,19 @@
               },
               "required": 0,
               "description": "Maximum number of completion tokens to generate. Min: 16"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "Reasoning depth before answering. low keeps voice turns fast"
             }
           ]
         },
@@ -733,6 +746,19 @@
               },
               "required": 0,
               "description": "Maximum number of completion tokens to generate. Min: 16"
+            },
+            {
+              "name": "reasoning_effort",
+              "data_type": "string",
+              "type": "select",
+              "format": "string",
+              "options": [
+                "low",
+                "medium",
+                "high"
+              ],
+              "required": 0,
+              "description": "Reasoning depth before answering. low keeps voice turns fast"
             }
           ]
         }
