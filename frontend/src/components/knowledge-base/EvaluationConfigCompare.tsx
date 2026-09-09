@@ -77,6 +77,8 @@ export default function EvaluationConfigCompare({
             judgeModel={pass.judge_model}
             verdicts={pass.verdicts}
             isBaseline={isBaseline}
+            humanAgreement={pass.human_agreement}
+            labeledCount={pass.labeled_count}
             onViewPrompt={() => setPromptView({ name, prompt: config?.judge_prompt ?? null })}
           />
         ),

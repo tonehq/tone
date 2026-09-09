@@ -154,13 +154,17 @@ export default function EvalResultsTab({ uploadId }: EvalResultsTabProps) {
 
       {detailQuery.isLoading && selectedRunId && <div className={HINT_CLASS}>Loading batch…</div>}
 
-      {detailQuery.data && hasSummary && (
+      {detailQuery.data && hasSummary && selectedRunId && (
         <div className="flex min-h-0 flex-1 flex-col gap-4">
           <SummaryStrip
             summary={summaryTotals as EvalRunSummaryTotals}
             batch={detailQuery.data.summary}
           />
-          <EvalResultsTable questions={detailQuery.data.questions} />
+          <EvalResultsTable
+            uploadId={uploadId}
+            runId={selectedRunId}
+            questions={detailQuery.data.questions}
+          />
         </div>
       )}
     </div>

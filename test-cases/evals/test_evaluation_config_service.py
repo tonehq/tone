@@ -253,3 +253,104 @@ def test_create_rejects_duplicate_name():
             metrics_enabled=["faithfulness"],
         )
     assert exc.value.status_code == 400
+
+
+# ── Human-agreement % (list_config_runs) ───────────────────────────────────
+
+
+def _cfg_result_row(*, config_run_id, run_number, eval_id, verdict):
+    return SimpleNamespace(
+        config_run_id=config_run_id,
+        evaluation_config_id=uuid4(),
+        config_run_number=run_number,
+        source_run_id=uuid4(),
+        verdict=verdict,
+        metric_scores={},
+        created_at=None,
+        eval_id=eval_id,
+    )
+
+
+class _AgreementDB:
+    """A db that dispatches ``query`` by model: config-result rows, the human
+    label tuples, and (empty) judge-model rows."""
+
+    def __init__(self, *, config_rows, human_rows):
+        self._config_rows = config_rows
+        self._human_rows = human_rows
+
+    def query(self, *args):
+        from core.models.eval_result import EvalResult
+        from core.models.evaluation_config_result import EvaluationConfigResult
+
+        head = args[0]
+        if head is EvaluationConfigResult:
+            return _FakeAgreementQuery(self._config_rows)
+        if head is EvalResult:
+            return _FakeAgreementQuery(self._human_rows)
+        return _FakeAgreementQuery([])  # judge_models lookup → none
+
+
+class _FakeAgreementQuery:
+    def __init__(self, rows):
+        self._rows = rows
+
+    def filter(self, *a, **k):
+        return self
+
+    def with_entities(self, *a, **k):
+        return self
+
+    def all(self):
+        return list(self._rows)
+
+
+def test_list_config_runs_scores_agreement_against_human_labels():
+    """The pass whose accept/reject matches the human marks scores higher.
+    Rule: judge-accept == (verdict==PASS); human-accept == (label=='accept');
+    only labeled questions count."""
+    e1, e2, e3 = uuid4(), uuid4(), uuid4()
+    pass_a, pass_b = uuid4(), uuid4()
+
+    # Human labels: e1 accept, e2 reject, e3 unlabeled (excluded).
+    human_rows = [(e1, "accept"), (e2, "reject")]
+
+    config_rows = [
+        # Pass A agrees on both labeled questions → 100%.
+        _cfg_result_row(config_run_id=pass_a, run_number=1, eval_id=e1, verdict="PASS"),
+        _cfg_result_row(config_run_id=pass_a, run_number=1, eval_id=e2, verdict="FAIL"),
+        _cfg_result_row(config_run_id=pass_a, run_number=1, eval_id=e3, verdict="PASS"),
+        # Pass B disagrees on e1 (says FAIL vs human accept) → 50%.
+        _cfg_result_row(config_run_id=pass_b, run_number=2, eval_id=e1, verdict="FAIL"),
+        _cfg_result_row(config_run_id=pass_b, run_number=2, eval_id=e2, verdict="FAIL"),
+        _cfg_result_row(config_run_id=pass_b, run_number=2, eval_id=e3, verdict="PASS"),
+    ]
+
+    db = _AgreementDB(config_rows=config_rows, human_rows=human_rows)
+    svc = EvaluationConfigService(db, org_id=uuid4())
+    passes = svc.list_config_runs(source_run_id=uuid4())
+
+    by_id = {p["config_run_id"]: p for p in passes}
+    a = by_id[str(pass_a)]
+    b = by_id[str(pass_b)]
+
+    assert a["labeled_count"] == 2
+    assert a["human_agreement"] == 1.0
+    assert b["labeled_count"] == 2
+    assert b["human_agreement"] == 0.5
+    # The better-matching config scores strictly higher.
+    assert a["human_agreement"] > b["human_agreement"]
+
+
+def test_list_config_runs_no_labels_yields_none_agreement():
+    """With no human labels, agreement is None and labeled_count is 0 (UI '—')."""
+    pass_a = uuid4()
+    config_rows = [
+        _cfg_result_row(config_run_id=pass_a, run_number=1, eval_id=uuid4(), verdict="PASS"),
+    ]
+    db = _AgreementDB(config_rows=config_rows, human_rows=[])
+    svc = EvaluationConfigService(db, org_id=uuid4())
+    passes = svc.list_config_runs(source_run_id=uuid4())
+
+    assert passes[0]["labeled_count"] == 0
+    assert passes[0]["human_agreement"] is None
