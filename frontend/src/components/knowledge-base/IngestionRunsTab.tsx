@@ -17,6 +17,7 @@ import {
 } from '@/lib/api/ingestion-runs';
 import type { CustomTableColumn, CustomTableSortState } from '@/types/components';
 import type { IngestionRun, IngestionRunStatus } from '@/types/ingestionRun';
+import { copyToClipboard } from '@/utils/clipboard';
 import { cn } from '@/utils/cn';
 import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
@@ -150,11 +151,8 @@ export default function IngestionRunsTab({ uploadId, activeRunId }: IngestionRun
   };
 
   const copyJobId = async (jobId: number) => {
-    try {
-      await navigator.clipboard.writeText(String(jobId));
+    if (await copyToClipboard(String(jobId))) {
       showToast.success('Copied', 'Procrastinate job id copied to clipboard.');
-    } catch {
-      // Clipboard blocked (e.g. no HTTPS in dev) — silent, non-critical.
     }
   };
 
