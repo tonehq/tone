@@ -49,4 +49,6 @@ playwright-report/
 .design-sync/
 .ds-sync/
 ds-bundle/
-types/
+# Anchored to the frontend root so it ignores the design-sync `types/` artifact
+# dir only — NOT `src/types/`, which holds the app's tracked domain types.
+/types/

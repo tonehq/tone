@@ -8,11 +8,13 @@ import {
   ClipboardCheck,
   FileText,
   ListChecks,
+  Scale,
   Settings2,
 } from 'lucide-react';
 import Link from 'next/link';
 
 import EvalResultsTab from '@/components/knowledge-base/EvalResultsTab';
+import EvaluationConfigTab from '@/components/knowledge-base/EvaluationConfigTab';
 import IngestionConfigsTab from '@/components/knowledge-base/IngestionConfigsTab';
 import IngestionRunsTab from '@/components/knowledge-base/IngestionRunsTab';
 import KnowledgeBaseOverview from '@/components/knowledge-base/KnowledgeBaseOverview';
@@ -90,6 +92,12 @@ export default function KnowledgeBaseDetailPage({ uploadId }: KnowledgeBaseDetai
         label: 'Eval results',
         icon: <BarChart3 className="size-4" />,
         children: <EvalResultsTab uploadId={uploadId} />,
+      },
+      {
+        key: 'evaluation-config',
+        label: 'Evaluation config',
+        icon: <Scale className="size-4" />,
+        children: <EvaluationConfigTab uploadId={uploadId} />,
       },
       {
         key: 'ingestion-configs',

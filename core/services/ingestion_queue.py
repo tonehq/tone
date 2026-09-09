@@ -481,6 +481,59 @@ async def enqueue_eval_version_generation(
         )
 
 
+@app.task(name="evaluation_config_run", queue="eval", pass_context=True)
+@_with_job_logging
+def evaluation_config_run(
+    source_run_id: str,
+    evaluation_config_id: str,
+    triggered_by: str = "manual",
+) -> None:
+    """Re-judge a frozen eval run's answers with one evaluation config.
+
+    Runs on the ``eval`` queue (same reasons as ``eval_ingestion_run``): the
+    judge loop is LLM-heavy and must not compete with ingestion slots, and an
+    older worker that doesn't know this task can't grab it off a different
+    queue. ``EvaluationConfigService.run_config`` reuses the source run's frozen
+    answers (no retrieval / answer generation) and writes
+    ``evaluation_config_results`` rows tagged with a fresh ``config_run_id``.
+
+    Failures are logged with a full traceback but NEVER re-raised — a bad
+    re-judge must not crash the worker; the user can retry."""
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.evaluation_config_service import EvaluationConfigService
+
+    try:
+        with get_db_context() as db:
+            EvaluationConfigService(db).run_config(
+                db,
+                source_run_id=_UUID(source_run_id),
+                evaluation_config_id=_UUID(evaluation_config_id),
+                triggered_by=triggered_by,
+            )
+        logger.info(
+            "[eval-config] worker task done source_run={} config={}",
+            source_run_id, evaluation_config_id,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[eval-config] run failed source_run={} config={} (swallowed)",
+            source_run_id, evaluation_config_id,
+        )
+
+
+async def enqueue_evaluation_config_run(
+    *, source_run_id, evaluation_config_id, triggered_by: str = "manual",
+) -> int:
+    async with app.open_async():
+        return await evaluation_config_run.defer_async(
+            source_run_id=str(source_run_id),
+            evaluation_config_id=str(evaluation_config_id),
+            triggered_by=triggered_by,
+        )
+
+
 # Every ``triggered_by`` value the agent-LLM task will accept. Mirrors
 # ``AgentLlmEvalService.TRIGGERED_BY_VALUES`` — kept as a local set so this
 # worker module stays import-safe even before ``run_eval_for_agent`` is
