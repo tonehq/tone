@@ -133,7 +133,7 @@ Registered so future work discovers them (paths are import targets):
 
 - **`VECTOR_STORES` / `get_vector_store` / `DB_BACKED_STORES`** (`core/services/rag/factory.py`) — the ONE registry of ingestion vector stores (`pgvector`, `turbopuffer`). Every store implements `VectorStore` and reuses **`chunk_rows.insert_chunk_rows` / `chunk_rows_query`** (`core/services/rag/vector_stores/chunk_rows.py`) for the Postgres chunk rows and **`run_scope.scoped_runs` / `resolve_active_run_id`** (`core/services/rag/run_scope.py`) for retrieval scoping (explicit run → agent pin → KB default → legacy `is_active`, plus the published-config join for `agent_id`). **`IngestionRunService.purge_remote_vectors(db, runs)`** is the ONE hook that deletes vectors held outside Postgres; every path that drops run rows (delete run, replace file, re-ingest with `delete_existing`, delete document) calls it before the cascade. Operator guide: `docs/VECTOR_STORES.md`.
 
-- **`build_llm_settings(settings_class, metadata, **overrides)` / `LLM_REQUEST_EXTRA_FIELDS`** (`core/services/pipeline/service_factory.py`) — the ONE way an OpenAI-compatible LLM that Pipecat configures through `settings=` (Groq, OpenRouter; both ignore `params=`) receives agent metadata. Declared `Settings` fields pass through `build_settings`; request-level knobs the class does not declare (`reasoning_effort` for Groq gpt-oss) are routed into `Settings.extra`, which Pipecat merges into the chat request. Add a knob = one entry in `LLM_REQUEST_EXTRA_FIELDS` plus the model's `meta_data_schema` field; the resolver drops anything not in the stored schema.
+- **`build_llm_settings(settings_class, metadata, provider_name, **overrides)` / `LLM_REQUEST_EXTRAS` / `LLM_REQUEST_EXTRA_FIELDS`** (`core/services/pipeline/service_factory.py`) — the ONE way an OpenAI-compatible LLM that Pipecat configures through `settings=` (Groq, OpenRouter; both ignore `params=`) receives agent metadata. Declared `Settings` fields pass through `build_settings`; request-level knobs the class does not declare (`reasoning_effort`, `reasoning_format`, `reasoning_enabled`) are translated by the provider's adapter in `LLM_REQUEST_EXTRAS` into `Settings.extra`, which Pipecat merges into the chat request: Groq gets `reasoning_effort` top-level and `reasoning_format` in `extra_body`; OpenRouter gets its unified `extra_body.reasoning` object (`effort`, `enabled`). Add a knob = the field name in `LLM_REQUEST_EXTRA_FIELDS`, the mapping in the provider's adapter, and the model's `meta_data_schema` field; a new provider = one adapter in `LLM_REQUEST_EXTRAS`. The resolver drops anything not in the stored schema.
 
 ### Frontend: shared components
 
@@ -192,7 +192,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **stockholm** (20295 symbols, 51925 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **stockholm** (20315 symbols, 51984 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
