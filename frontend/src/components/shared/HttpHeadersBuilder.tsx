@@ -1,7 +1,9 @@
 'use client';
 
-import { CustomButton, TextInput } from '@/components/shared';
 import { Plus, Trash2 } from 'lucide-react';
+
+import CustomButton from './CustomButton';
+import TextInput from './TextInput';
 
 export interface HttpHeaderRow {
   id: string;
@@ -16,6 +18,11 @@ interface HttpHeadersBuilderProps {
   onChange: (id: string, patch: Partial<Pick<HttpHeaderRow, 'key' | 'value'>>) => void;
 }
 
+/**
+ * Controlled key/value header editor. Presentational only — the parent owns the
+ * rows (usually via RHF `useFieldArray`). Shared by the MCP form and the
+ * profile-webhook config section.
+ */
 export default function HttpHeadersBuilder({
   rows,
   onAdd,

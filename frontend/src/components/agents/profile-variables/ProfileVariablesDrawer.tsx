@@ -4,6 +4,8 @@ import { Braces } from 'lucide-react';
 import { useState } from 'react';
 
 import ProfileVariablesManager from '@/components/agents/profile-variables/ProfileVariablesManager';
+import WebhookConfigSection from '@/components/agents/profile-variables/webhook/WebhookConfigSection';
+import CollapsibleSection from '@/components/shared/CollapsibleSection';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
 
@@ -43,6 +45,22 @@ export default function ProfileVariablesDrawer({ agentId }: { agentId: string | 
         description="Reusable values referenced anywhere as {{profile.<key>}} — prompt, workflow nodes, and more. Update once, applied everywhere on the next call."
       >
         <ProfileVariablesManager agentId={agentId} />
+
+        {agentId ? (
+          <div className="mt-6">
+            <CollapsibleSection
+              title="Webhook data source"
+              description="Call your endpoint at call start and fill webhook-sourced variables from the response."
+              defaultExpanded={false}
+            >
+              <WebhookConfigSection agentId={agentId} />
+            </CollapsibleSection>
+          </div>
+        ) : (
+          <p className="mt-6 text-xs text-muted-foreground">
+            Save the agent first to configure a webhook data source.
+          </p>
+        )}
       </CustomDrawer>
     </>
   );

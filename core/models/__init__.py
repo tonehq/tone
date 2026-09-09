@@ -21,6 +21,8 @@ from core.models.knowledge_base_chunk_embedding import KnowledgeBaseChunkEmbeddi
 from core.models.eval_version import EvalVersion
 from core.models.eval import Eval
 from core.models.eval_result import EvalResult
+from core.models.evaluation_config import EvaluationConfig
+from core.models.evaluation_config_result import EvaluationConfigResult
 from core.models.agent_llm_eval_scenario_version import AgentLlmEvalScenarioVersion
 from core.models.agent_llm_eval_result import AgentLlmEvalResult
 from core.models.agent_llm_eval_run import AgentLlmEvalRun
@@ -33,6 +35,7 @@ from core.models.agent_config import AgentConfig
 from core.models.agent_knowledge_base import AgentKnowledgeBase
 from core.models.agent_mcp_server import AgentMcpServer
 from core.models.agent_profile_variable import AgentProfileVariable
+from core.models.agent_profile_webhook import AgentProfileWebhook
 from core.models.agent_readiness_run import AgentReadinessRun
 from core.models.agent_tool import AgentTool
 

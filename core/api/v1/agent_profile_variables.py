@@ -14,16 +14,16 @@ another agent still 404s.
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from core.api.v1._agent_guards import ensure_agent_in_org, resolve_org_id
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
-from core.models.agent import Agent
 from core.services.agents.agent_profile_variable_service import (
     AgentProfileVariableService,
 )
@@ -32,7 +32,6 @@ from core.services.agents.errors import (
     ProfileVariableKeyConflictError,
     ProfileVariableNotFoundError,
 )
-from shared.config import settings
 
 router = APIRouter()
 
@@ -46,6 +45,8 @@ class ProfileVariableIn(BaseModel):
     key: str = Field(..., min_length=1, max_length=64)
     value: str = Field(default="", max_length=10_240)
     description: Optional[str] = Field(default=None, max_length=1000)
+    source: Literal["static", "webhook"] = "static"
+    source_path: Optional[str] = Field(default=None, max_length=200)
 
 
 class ProfileVariablePatchRequest(BaseModel):
@@ -55,34 +56,11 @@ class ProfileVariablePatchRequest(BaseModel):
     key: Optional[str] = Field(default=None, min_length=1, max_length=64)
     value: Optional[str] = Field(default=None, max_length=10_240)
     description: Optional[str] = Field(default=None, max_length=1000)
+    source: Optional[Literal["static", "webhook"]] = None
+    source_path: Optional[str] = Field(default=None, max_length=200)
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
-
-
-def _resolve_org_id(claims: JWTClaims) -> UUID:
-    return UUID(str(claims.org_id)) if claims.org_id else UUID(settings.DEFAULT_ORG_ID)
-
-
-def _ensure_agent_in_org(db: Session, org_id: UUID, agent_id: UUID) -> UUID:
-    """Verify ``agent_id`` belongs to the caller's org AND is not soft-deleted
-    — otherwise a forged URL could still hit the profile-variable service,
-    and a tombstoned agent would silently accept CRUD. Fail fast at the
-    route boundary (mirrors ``agent_llm_evals``)."""
-    exists = (
-        db.query(Agent.id)
-        .filter(
-            Agent.id == agent_id,
-            Agent.organization_id == org_id,
-            Agent.deleted_at.is_(None),
-        )
-        .first()
-    )
-    if exists is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Agent not found"
-        )
-    return agent_id
 
 
 def _handle_profile_var_error(exc: Exception) -> HTTPException:
@@ -117,8 +95,8 @@ def list_profile_variables(
 ):
     """All profile variables for one agent, ordered by key. No pagination —
     per-agent sets are tiny; the frontend filters client-side."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
+    org_id = resolve_org_id(claims)
+    ensure_agent_in_org(db, org_id, agent_id)
     svc = AgentProfileVariableService(db, org_id=org_id)
     rows = svc.list_variables(agent_id)
     return {"items": [svc.variable_response(r) for r in rows]}
@@ -136,8 +114,8 @@ def create_profile_variable(
 ):
     """Create one profile variable. Returns the persisted row so the FE can
     drop it into its cache without a refetch."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
+    org_id = resolve_org_id(claims)
+    ensure_agent_in_org(db, org_id, agent_id)
     svc = AgentProfileVariableService(db, org_id=org_id)
     try:
         row = svc.create_variable(
@@ -145,6 +123,8 @@ def create_profile_variable(
             key=body.key,
             value=body.value,
             description=body.description,
+            source=body.source,
+            source_path=body.source_path,
         )
     except (
         ProfileVariableKeyConflictError,
@@ -163,8 +143,8 @@ def update_profile_variable(
     db: Session = Depends(get_db),
 ):
     """PATCH-style update — fields left unset on the body are not touched."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
+    org_id = resolve_org_id(claims)
+    ensure_agent_in_org(db, org_id, agent_id)
     svc = AgentProfileVariableService(db, org_id=org_id)
     try:
         row = svc.update_variable(
@@ -173,6 +153,8 @@ def update_profile_variable(
             key=body.key,
             value=body.value,
             description=body.description,
+            source=body.source,
+            source_path=body.source_path,
         )
     except (
         ProfileVariableNotFoundError,
@@ -196,8 +178,8 @@ def delete_profile_variable(
     """Hard-delete one profile variable. Any surviving ``{{profile.<key>}}``
     references render verbatim (unknown-key fallback in ``substitute_variables``)
     — matches the "delete = loose" v1 decision, no cascading edits."""
-    org_id = _resolve_org_id(claims)
-    _ensure_agent_in_org(db, org_id, agent_id)
+    org_id = resolve_org_id(claims)
+    ensure_agent_in_org(db, org_id, agent_id)
     svc = AgentProfileVariableService(db, org_id=org_id)
     try:
         svc.delete_variable(agent_id, variable_id)

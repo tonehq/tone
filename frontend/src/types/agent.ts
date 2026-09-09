@@ -1,3 +1,4 @@
+import type { ProfileVariableSource } from '@/types/agentProfileVariable';
 import type { MetaDataSchemaField } from '@/types/provider';
 import type { ReadinessOverallStatus } from '@/types/readiness';
 
@@ -301,6 +302,8 @@ export interface ProfileVariableDraft {
   key: string;
   value: string;
   description: string | null;
+  source: ProfileVariableSource;
+  source_path: string | null;
 }
 
 /** Single source of truth for the agent create/edit form. Mirrors the

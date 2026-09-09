@@ -103,7 +103,14 @@ class DeepEvalJudgeService:
         retrieved_chunks: Iterable[dict],
         api_key: str,
         model: str,
+        criteria: dict[str, str] | None = None,
     ) -> dict:
+        # ``criteria`` maps a GEval metric name → its rubric text (the ONE
+        # DeepEval hook that accepts free text). Only GEval builders
+        # (correctness / persona / instruction) consume it; other metrics
+        # ignore it. Used by the evaluation-config re-judge to thread a user's
+        # custom prompt into the ``correctness`` metric. Existing callers pass
+        # nothing and are unaffected.
         chunks_list = list(retrieved_chunks)
         retrieval_context = [c.get("text", "") for c in chunks_list]
 
@@ -164,6 +171,7 @@ class DeepEvalJudgeService:
             llm,
             active_metrics,
             active_threshold,
+            criteria=criteria,
         )
 
         test_case = LLMTestCase(

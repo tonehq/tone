@@ -17,6 +17,7 @@ import DateTimePicker from './DateTimePicker';
 import Divider from './Divider';
 import ErrorBoundary from './ErrorBoundary';
 import Form from './Form';
+import HttpHeadersBuilder from './HttpHeadersBuilder';
 import IconChip from './IconChip';
 import Logo from './Logo';
 import MultiSelectField from './MultiSelectField';
@@ -71,6 +72,7 @@ export type {
   TokenSearchField,
 } from '@/types/components';
 export type { CollapsibleSectionProps } from './CollapsibleSection';
+export type { HttpHeaderRow } from './HttpHeadersBuilder';
 export type { IconChipProps, IconChipSize, IconChipTone } from './IconChip';
 export { ICON_CHIP_TONES } from './IconChip';
 export type { CustomCardProps } from './CustomCard';
@@ -111,6 +113,7 @@ export {
   Divider,
   ErrorBoundary,
   Form,
+  HttpHeadersBuilder,
   IconChip,
   Logo,
   MultiSelectField,

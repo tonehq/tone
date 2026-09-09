@@ -38,12 +38,14 @@ if _LOAD_FULL_API:
     from core.api.v1 import (
         auth, users, organizations, agent_configs, channels, oauth,
         agents, agent_readiness, agent_llm_evals, agent_profile_variables,
+        agent_profile_webhook,
         benchmarks, mcp_servers, services, cloud_providers, tools, dashboard,
         call_logs, call_metrics, call_transcript_evals, sessions, workflows, audit_logs,
         app_integrations, outbound_calls, admin, contacts,
         contact_directories, contact_datasources, contact_schemas,
         contact_syncs, agent_contacts,
         ingestion_configs,
+        evaluation_configs,
         generated_api_keys,
     )
 from core.middleware.request_context import RequestContextMiddleware
@@ -215,6 +217,12 @@ if ee_enabled:
         api_v1.include_router(
             agent_profile_variables.router, tags=["agent-profile-variables"]
         )
+        # Agent Profile Webhook — per-agent HTTP data source that fills
+        # webhook-sourced profile variables at call start. Router paths carry
+        # the /agents/{agent_id}/profile-webhook prefix.
+        api_v1.include_router(
+            agent_profile_webhook.router, tags=["agent-profile-webhook"]
+        )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
@@ -243,6 +251,7 @@ if ee_enabled:
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(ingestion_configs.router, tags=["ingestion-config"])
+        api_v1.include_router(evaluation_configs.router, tags=["evaluation-config"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
         api_v1.include_router(
             ee_generated_api_keys.router,
@@ -274,6 +283,12 @@ else:
         api_v1.include_router(
             agent_profile_variables.router, tags=["agent-profile-variables"]
         )
+        # Agent Profile Webhook — per-agent HTTP data source that fills
+        # webhook-sourced profile variables at call start. Router paths carry
+        # the /agents/{agent_id}/profile-webhook prefix.
+        api_v1.include_router(
+            agent_profile_webhook.router, tags=["agent-profile-webhook"]
+        )
         # Post-call transcript (Level-3) evals — read-only in v1. Router
         # paths include /calls/{call_id}/eval-results so no prefix.
         api_v1.include_router(
@@ -302,6 +317,7 @@ else:
         api_v1.include_router(contact_syncs.router, prefix="/contact-syncs", tags=["contact-sync"])
         api_v1.include_router(agent_contacts.router, prefix="/agents", tags=["agent-contacts"])
         api_v1.include_router(ingestion_configs.router, tags=["ingestion-config"])
+        api_v1.include_router(evaluation_configs.router, tags=["evaluation-config"])
         api_v1.include_router(admin.router, prefix="/admin", tags=["admin"])
         api_v1.include_router(
             generated_api_keys.router,
