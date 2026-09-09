@@ -4,20 +4,24 @@ import { CheckCircle2, Loader2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { CustomButton, SelectInput } from '@/components/shared';
-import { useEvalRunsFiltered } from '@/lib/api/evals';
+import { useEvalRunsFiltered, useEvalVersions } from '@/lib/api/evals';
 import {
   useEvaluationConfigResults,
   useEvaluationConfigs,
   useRunEvaluationConfig,
 } from '@/lib/api/evaluationConfigs';
+import { useIngestionRuns } from '@/lib/api/ingestion-runs';
+import { formatDate } from '@/utils/date';
 import { handleApiError } from '@/utils/helpers';
 import { toSelectOptions } from '@/utils/selectUtils';
 import { showToast } from '@/utils/toast';
 
 import { MAX_COMPARE } from './evalConfigConstants';
+import { versionNumberMap } from './evalsConstants';
 import EvaluationConfigCompare from './EvaluationConfigCompare';
 import EvaluationConfigRunsTable from './EvaluationConfigRunsTable';
 import EvaluationConfigScoresTable from './EvaluationConfigScoresTable';
+import { ingestionRunLabel } from './ingestionRunLabel';
 
 interface EvalRunsPanelProps {
   uploadId: string;
@@ -29,6 +33,22 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
   const configs = useMemo(() => configList?.items ?? [], [configList]);
 
   const { data: runs = [] } = useEvalRunsFiltered(uploadId, {});
+  // Lookups so a source run reads as "<ingestion> · v<N> · <date>" instead of
+  // the opaque "Run #N · <judge model>".
+  const { data: versions = [] } = useEvalVersions(uploadId);
+  const { data: ingestionResp } = useIngestionRuns(uploadId, {
+    status_filter: ['ready'],
+    page_size: 100,
+    sort_by: 'run_number',
+    sort_order: 'desc',
+  });
+  const ingestionNameById = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const r of ingestionResp?.data ?? []) map.set(r.id, ingestionRunLabel(r));
+    return map;
+  }, [ingestionResp]);
+  const versionNumberById = useMemo(() => versionNumberMap(versions), [versions]);
+
   const [sourceRunId, setSourceRunId] = useState<string>('');
   const [selectedConfigId, setSelectedConfigId] = useState<string>('');
   const [selectedPassIds, setSelectedPassIds] = useState<string[]>([]);
@@ -83,9 +103,21 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
       toSelectOptions(runs, {
         valueKey: 'run_id',
         labelKey: 'run_id',
-        labelFormatter: (r) => `Run #${r.run_number}${r.judge_model ? ` · ${r.judge_model}` : ''}`,
+        labelFormatter: (r) => {
+          const parts = [
+            r.ingestion_run_id
+              ? (ingestionNameById.get(r.ingestion_run_id) ?? `Run #${r.run_number}`)
+              : `Run #${r.run_number}`,
+          ];
+          const versionNo = r.eval_version_id
+            ? versionNumberById.get(r.eval_version_id)
+            : undefined;
+          if (versionNo) parts.push(`v${versionNo}`);
+          if (r.started_at) parts.push(formatDate(r.started_at));
+          return parts.join(' · ');
+        },
       }),
-    [runs],
+    [runs, ingestionNameById, versionNumberById],
   );
   const configOptions = useMemo(
     () =>
@@ -141,6 +173,7 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
           <SelectInput
             name="source_run"
             label="Source eval run"
+            helperText="A past eval batch — its questions + answers are re-graded (retrieval isn't re-run)."
             placeholder={runOptions.length ? 'Select a run' : 'No eval runs yet'}
             options={runOptions}
             value={sourceRunId || undefined}
@@ -150,6 +183,7 @@ export default function EvalRunsPanel({ uploadId }: EvalRunsPanelProps) {
           <SelectInput
             name="config"
             label="Evaluation config"
+            helperText="The judge to grade with — model, custom prompt, and metrics."
             placeholder={configOptions.length ? 'Select a config' : 'Create a config first'}
             options={configOptions}
             value={selectedConfigId || undefined}

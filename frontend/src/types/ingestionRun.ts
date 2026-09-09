@@ -9,6 +9,8 @@ export interface IngestionRun {
   upload_id: string;
   knowledge_base_id: string;
   run_number: number;
+  // Optional user-given label; falls back to "Run #<run_number>" in the UI.
+  name: string | null;
 
   parser: string;
   parser_config: Record<string, unknown> | null;
