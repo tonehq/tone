@@ -6,6 +6,7 @@ import { useState } from 'react';
 import ProfileVariablesPanel from '@/components/agents/profile-variables/ProfileVariablesPanel';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
+import { PROFILE_VARIABLES_DESCRIPTION } from '@/constants/profileWebhook';
 
 /**
  * "Profile variables" trigger button + right-side drawer — a convenience entry
@@ -37,7 +38,7 @@ export default function ProfileVariablesDrawer({ agentId }: { agentId: string | 
         side="right"
         width="w-full sm:max-w-2xl"
         title="Profile variables"
-        description="Reusable values referenced anywhere as {{profile.<key>}} — prompt, workflow nodes, and more. Update once, applied everywhere on the next call."
+        description={PROFILE_VARIABLES_DESCRIPTION}
       >
         <ProfileVariablesPanel agentId={agentId} />
       </CustomDrawer>
