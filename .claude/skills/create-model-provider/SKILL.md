@@ -444,9 +444,14 @@ opening a PR are outward-facing actions.
 
 ## Gotchas — all verified here, all fail silently
 
-1. **Metadata names must match Pipecat `InputParams` exactly.** `build_input_params()`
-   filters to `InputParams.model_fields` and drops the rest without warning. Some classes
-   take `settings=` and have no `InputParams` at all — then every field is dropped.
+1. **Metadata names must match Pipecat `InputParams` / `Settings` exactly.**
+   `build_input_params()` filters to `InputParams.model_fields` and drops the rest without
+   warning. Worse: where a class accepts **both** `params=` and `settings=`, `settings` wins
+   and `params` is skipped entirely — so passing `params=` to a class that exposes `Settings`
+   (Groq, OpenRouter, Sarvam) silently discards every user setting even though `InputParams`
+   exists. Configure those through `build_settings` / `build_llm_settings`. An LLM request
+   knob the `Settings` class does not declare (`reasoning_effort`, `reasoning_format`,
+   `reasoning_enabled`) needs an `LLM_REQUEST_EXTRAS` adapter to reach the request at all.
 2. **The base-URL kwarg name varies.** `_url_kwargs(metadata, kwarg)` takes the name
    because Pipecat is inconsistent — `base_url`, `url`, `api_endpoint_base_url`, `server`
    are all in use. Wrong name → the URL is ignored and the SDK uses its own default.
