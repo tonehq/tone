@@ -611,7 +611,13 @@ def cmd_turn_report(args):
     total = {"turns": 0, "llm_requests": 0, "interrupted": 0}
     print(f"{'started':16} {'dur':>5} {'turns':>5} {'llm req':>7} {'cancel%':>7} {'interr':>6} {'e2e med':>7}")
     for c in rows:
-        stats = _turn_stats(call("GET", f"/call-metrics/{c['id']}", token, base=base) or {})
+        try:
+            metrics = call("GET", f"/call-metrics/{c['id']}", token, base=base) or {}
+        except SystemExit:
+            print(f"{(c.get('started_at') or '')[:16]:16} {str(c.get('duration_seconds') or ''):>5} "
+                  f"no metrics yet (in progress or failed before the first turn)")
+            continue
+        stats = _turn_stats(metrics)
         for key in total:
             total[key] += stats[key]
         e2e = "" if stats["e2e_median"] is None else stats["e2e_median"]
