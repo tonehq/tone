@@ -2,23 +2,28 @@
 
 import { useMemo, useState } from 'react';
 
-import { CustomButton } from '@/components/shared';
+import { CustomButton, CustomTable } from '@/components/shared';
+import type { CustomTableColumn } from '@/types/components';
 import type {
   EvaluationConfig,
   EvaluationConfigResult,
   EvaluationConfigRunSummary,
 } from '@/types/evaluationConfig';
+import { formatMetricScore } from '@/utils/evalFormat';
 
+import { metricLabel } from './evalMetricsConstants';
 import {
-  averageMetricScores,
+  bestInRow,
+  buildCompareMatrix,
   configById,
   configNameById,
   verdictSummary,
+  type CompareMatrixRow,
 } from './evalConfigHelpers';
 import JudgePromptModal from './JudgePromptModal';
 
 interface EvaluationConfigCompareProps {
-  passes: EvaluationConfigRunSummary[]; // up to 3, already selected
+  passes: EvaluationConfigRunSummary[]; // up to 3, already selected (col order)
   results: EvaluationConfigResult[];
   configs: EvaluationConfig[];
 }
@@ -28,8 +33,18 @@ interface PromptView {
   prompt: string | null;
 }
 
-// Side-by-side columns (up to 3) — only the judge changed across them, so
-// scores are directly comparable. The prompt is hidden behind a modal.
+const OVERALL_ROW = '__overall__';
+
+// Signed delta vs the baseline column, e.g. "+0.12" / "−0.08".
+function formatDelta(value: number, baseline: number): string {
+  const d = value - baseline;
+  const sign = d >= 0 ? '+' : '−';
+  return `${sign}${Math.abs(d).toFixed(2)}`;
+}
+
+// Aligned side-by-side comparison: metrics as rows, config passes as columns
+// (only the judge changed across them). The best score per row is highlighted;
+// non-baseline columns show a delta vs the left-most (baseline) pass.
 export default function EvaluationConfigCompare({
   passes,
   results,
@@ -37,15 +52,82 @@ export default function EvaluationConfigCompare({
 }: EvaluationConfigCompareProps) {
   const [promptView, setPromptView] = useState<PromptView | null>(null);
 
-  const resultsByPass = useMemo(() => {
-    const map = new Map<string, EvaluationConfigResult[]>();
-    for (const row of results) {
-      const list = map.get(row.config_run_id) ?? [];
-      list.push(row);
-      map.set(row.config_run_id, list);
-    }
-    return map;
-  }, [results]);
+  const baselineId = passes[0]?.config_run_id ?? null;
+
+  const rows = useMemo<CompareMatrixRow[]>(() => {
+    const overall: CompareMatrixRow = {
+      metric: OVERALL_ROW,
+      byPass: Object.fromEntries(passes.map((p) => [p.config_run_id, p.average_score])),
+    };
+    return [overall, ...buildCompareMatrix(passes, results)];
+  }, [passes, results]);
+
+  const columns = useMemo<CustomTableColumn<CompareMatrixRow>[]>(() => {
+    const passColumns: CustomTableColumn<CompareMatrixRow>[] = passes.map((pass) => {
+      const config = configById(configs, pass.evaluation_config_id);
+      const name = configNameById(configs, pass.evaluation_config_id);
+      const isBaseline = pass.config_run_id === baselineId;
+      return {
+        key: pass.config_run_id,
+        align: 'center',
+        title: (
+          <div className="flex flex-col items-center gap-1">
+            <span className="font-medium text-foreground">
+              {name} #{pass.config_run_number}
+              {isBaseline && <span className="ml-1 text-xs text-muted-foreground">(baseline)</span>}
+            </span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {pass.judge_model ?? '—'}
+            </span>
+            <span className="text-xs font-normal text-muted-foreground">
+              {verdictSummary(pass.verdicts)}
+            </span>
+            <CustomButton
+              type="text"
+              size="xs"
+              onClick={() => setPromptView({ name, prompt: config?.judge_prompt ?? null })}
+            >
+              View prompt
+            </CustomButton>
+          </div>
+        ),
+        render: (_v, r) => {
+          const value = r.byPass[pass.config_run_id];
+          if (typeof value !== 'number') return <span className="text-muted-foreground">—</span>;
+          const best = bestInRow(r.byPass);
+          const isWinner = best !== null && value >= best && passes.length > 1;
+          const baseline = baselineId ? r.byPass[baselineId] : null;
+          const showDelta = !isBaseline && typeof baseline === 'number';
+          return (
+            <div className="flex flex-col items-center">
+              <span className={isWinner ? 'font-semibold text-primary' : 'text-foreground'}>
+                {formatMetricScore(value)}
+              </span>
+              {showDelta && (
+                <span className="text-xs text-muted-foreground">
+                  {formatDelta(value, baseline as number)}
+                </span>
+              )}
+            </div>
+          );
+        },
+      };
+    });
+
+    return [
+      {
+        key: 'metric',
+        title: 'Metric',
+        render: (_v, r) =>
+          r.metric === OVERALL_ROW ? (
+            <span className="font-semibold text-foreground">Overall</span>
+          ) : (
+            <span className="text-foreground">{metricLabel(r.metric)}</span>
+          ),
+      },
+      ...passColumns,
+    ];
+  }, [passes, configs, baselineId]);
 
   if (passes.length === 0) {
     return (
@@ -57,51 +139,7 @@ export default function EvaluationConfigCompare({
 
   return (
     <>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {passes.map((pass) => {
-          const config = configById(configs, pass.evaluation_config_id);
-          const name = configNameById(configs, pass.evaluation_config_id);
-          const rows = resultsByPass.get(pass.config_run_id) ?? [];
-          const averages = averageMetricScores(rows);
-          return (
-            <div
-              key={pass.config_run_id}
-              className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4"
-            >
-              <div>
-                <div className="text-sm font-semibold text-foreground">{name}</div>
-                <div className="text-xs text-muted-foreground">
-                  Run #{pass.config_run_number} · {config?.judge_model ?? '—'}
-                </div>
-              </div>
-              <div className="text-xs text-muted-foreground">{verdictSummary(pass.verdicts)}</div>
-              <div className="flex flex-col gap-1">
-                {averages.length === 0 ? (
-                  <div className="text-xs text-muted-foreground">No metric scores.</div>
-                ) : (
-                  averages.map((m) => (
-                    <div
-                      key={m.metric}
-                      className="flex items-center justify-between text-xs text-foreground"
-                    >
-                      <span className="text-muted-foreground">{m.metric}</span>
-                      <span className="font-medium">{m.average.toFixed(2)}</span>
-                    </div>
-                  ))
-                )}
-              </div>
-              <CustomButton
-                type="default"
-                size="sm"
-                onClick={() => setPromptView({ name, prompt: config?.judge_prompt ?? null })}
-              >
-                View prompt
-              </CustomButton>
-            </div>
-          );
-        })}
-      </div>
-
+      <CustomTable columns={columns} dataSource={rows} rowKey="metric" pagination={false} />
       <JudgePromptModal
         open={promptView !== null}
         onClose={() => setPromptView(null)}
