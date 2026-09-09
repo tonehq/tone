@@ -173,6 +173,28 @@ export async function listProviderModels(
   return pagedListRequest<ProviderModel>(`/services/providers/${providerId}/models`, body);
 }
 
+const PROVIDER_MODELS_PAGE_SIZE = 200;
+const PROVIDER_MODELS_MAX_PAGES = 10;
+
+export async function listAllProviderModels(
+  providerId: string,
+  serviceType: 'llm' | 'stt' | 'tts',
+): Promise<{ rows: ProviderModel[]; total: number }> {
+  const rows: ProviderModel[] = [];
+  let total = 0;
+  for (let page = 1; page <= PROVIDER_MODELS_MAX_PAGES; page += 1) {
+    const res = await listProviderModels(providerId, {
+      service_type: serviceType,
+      page,
+      page_size: PROVIDER_MODELS_PAGE_SIZE,
+    });
+    rows.push(...res.rows);
+    total = res.total;
+    if (rows.length >= total || res.rows.length === 0) break;
+  }
+  return { rows, total };
+}
+
 // ─── model CRUD ────────────────────────────────────────────────────────────
 export interface ModelUpsertPayload {
   name: string;
