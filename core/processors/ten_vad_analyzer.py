@@ -1,3 +1,5 @@
+from functools import lru_cache
+
 import numpy as np
 from loguru import logger
 from pipecat.audio.vad.vad_analyzer import VADAnalyzer, VADParams
@@ -6,6 +8,17 @@ from ten_vad import TenVad
 MODEL_SAMPLE_RATE = 16000
 SUPPORTED_SAMPLE_RATES = (8000, 16000)
 FLAG_THRESHOLD = 0.5
+PROBE_HOP_SIZE = 256
+
+
+@lru_cache(maxsize=1)
+def library_loads() -> bool:
+    try:
+        TenVad(PROBE_HOP_SIZE, FLAG_THRESHOLD)
+    except OSError as e:
+        logger.warning(f"TEN VAD native library cannot load on this host, provider hidden: {e}")
+        return False
+    return True
 
 
 class TENVADAnalyzer(VADAnalyzer):
