@@ -1716,6 +1716,16 @@ class EvalService:
         joined = q.order_by(Eval.question_ord.asc()).all()
         return [_result_row_to_dict(r, e) for r, e in joined]
 
+    def get_scored_rows_for_run(
+        self, db: Session, *, run_id: Any, org_id: Optional[Any] = None
+    ) -> List[dict]:
+        """Public accessor for a run's frozen answers — the source the
+        evaluation-config re-judge reuses. Each dict carries ``question`` /
+        ``expected_answer`` / ``actual_answer`` / ``retrieved_chunks`` +
+        ``eval_id``, exactly the judge's input tuple. Delegates to the private
+        joiner so there is one implementation."""
+        return self._scored_rows_for_run(db, run_id=run_id, org_id=org_id)
+
 
 def _default_r2_service():
     # Lazy import so the eval service module has no boto3 side-effect on import

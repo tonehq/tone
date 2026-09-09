@@ -192,7 +192,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **bucharest** (20129 symbols, 51459 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **stockholm** (20295 symbols, 51925 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -208,7 +208,7 @@ This project is indexed by GitNexus as **bucharest** (20129 symbols, 51459 relat
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/bucharest/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/stockholm/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -247,10 +247,10 @@ This project is indexed by GitNexus as **bucharest** (20129 symbols, 51459 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/bucharest/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/bucharest/clusters` | All functional areas |
-| `gitnexus://repo/bucharest/processes` | All execution flows |
-| `gitnexus://repo/bucharest/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/stockholm/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/stockholm/clusters` | All functional areas |
+| `gitnexus://repo/stockholm/processes` | All execution flows |
+| `gitnexus://repo/stockholm/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
