@@ -21,7 +21,9 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "b2e8f4a1c9d5"
-down_revision = "a1c7e5b93d20"
+# Chained after dev's drop-crm-lookup migration (merged from dev) so there is a
+# single linear head — both are additive/independent, so order is irrelevant.
+down_revision = "b4d2f7c1a9e3"
 branch_labels = None
 depends_on = None
 

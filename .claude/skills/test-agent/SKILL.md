@@ -97,10 +97,21 @@ with the thing being measured.
 
 ```bash
 .../test_agents.py swap --layer stt --provider <slug> --model <name>
+.../test_agents.py swap --layer llm --provider groq --model openai/gpt-oss-120b --set reasoning_effort=low
+.../test_agents.py swap --layer stt --provider groq --model whisper-large-v3-turbo --agent swap-llm
 ```
 
 Repoints that layer on the matching agent and prints before/after. The other two agents
 are untouched.
+
+`--set FIELD=VALUE` (repeatable) writes model settings in the same call as the swap, so a
+model that needs a knob to be comparable — a reasoning effort, a temperature — gets it
+atomically. Values are coerced to bool, int or float where they parse. The field must be
+in the model's `meta_data_schema`; the resolver drops anything else before the call.
+
+`--agent <name>` writes the layer on a different swap agent. Use it once, to pin a
+held-constant layer — for example giving `swap-llm` an open-weight STT so every LLM run
+shares it — and then leave it alone. It is not for varying two layers at once.
 
 The model's `kind` must match the layer — swapping a TTS model into `--layer stt` is
 rejected, because it would leave the agent with no working STT and fail at the first
