@@ -38,6 +38,7 @@ export interface AgentTurnDetectionSettings {
 }
 
 export interface AgentVadSettings {
+  provider?: string | null;
   [key: string]: unknown;
 }
 
@@ -59,9 +60,13 @@ export interface TurnDetectorOption {
   meta_data_schema: MetaDataSchemaField[];
 }
 
+export type VadProviderOption = TurnDetectorOption;
+
 export interface TurnSettingsOptions {
   turn_detectors: TurnDetectorOption[];
   default_turn_detector: string;
+  vad_providers: VadProviderOption[];
+  default_vad_provider: string;
   vad_schema: MetaDataSchemaField[];
 }
 

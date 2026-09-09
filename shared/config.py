@@ -432,6 +432,8 @@ class Settings:
         self.TEN_TURN_DETECTION_API_KEY: str = get_secret("TEN_TURN_DETECTION_API_KEY")
         self.TEN_TURN_DETECTION_MODEL: str = get_secret("TEN_TURN_DETECTION_MODEL")
         self.TURN_DETECTION_PRELOAD: str = get_secret("TURN_DETECTION_PRELOAD")
+        self.KRISP_VIVA_VAD_MODEL_PATH: str = get_secret("KRISP_VIVA_VAD_MODEL_PATH")
+        self.AIC_LICENSE_KEY: str = get_secret("AIC_LICENSE_KEY")
 
         # ── RAG evaluation harness ──────────────────────────────────────────
         # Auto-runs after every successful ingestion (IngestionRunService.complete_run

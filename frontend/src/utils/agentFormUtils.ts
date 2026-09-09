@@ -10,6 +10,7 @@ import type {
 const DEFAULT_VOICE_SPEED = 1.0;
 const DEFAULT_MAX_DURATION = 600;
 export const DEFAULT_TURN_DETECTOR = 'smart_turn';
+export const DEFAULT_VAD_PROVIDER = 'silero';
 
 export const defaultFormState = (agentType: AgentDirection): AgentFormState => ({
   name: agentType === 'outbound' ? 'My Outbound Assistant' : 'My Inbound Assistant',
@@ -32,7 +33,10 @@ export const defaultFormState = (agentType: AgentDirection): AgentFormState => (
     },
     stt_settings: {},
     conversation_settings: { max_duration_seconds: DEFAULT_MAX_DURATION },
-    turn_settings: { turn_detection: { provider: DEFAULT_TURN_DETECTOR }, vad: {} },
+    turn_settings: {
+      turn_detection: { provider: DEFAULT_TURN_DETECTOR },
+      vad: { provider: DEFAULT_VAD_PROVIDER },
+    },
   },
   tool_ids: [],
   mcp_server_ids: [],
