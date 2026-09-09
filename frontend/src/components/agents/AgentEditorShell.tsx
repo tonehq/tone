@@ -99,6 +99,8 @@ async function flushProfileVariableDrafts(
       key: draft.key,
       value: draft.value,
       description: draft.description ?? undefined,
+      source: draft.source,
+      source_path: draft.source_path,
     });
 
   for (const draft of drafts) {

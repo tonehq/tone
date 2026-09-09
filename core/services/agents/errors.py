@@ -23,3 +23,15 @@ class ProfileVariableKeyConflictError(ProfileVariableError):
 
 class ProfileVariableInvalidError(ProfileVariableError):
     """Payload failed validation: bad key format, reserved key, or oversize value."""
+
+
+class ProfileWebhookError(Exception):
+    """Base class for agent profile-webhook service errors."""
+
+
+class ProfileWebhookNotFoundError(ProfileWebhookError):
+    """No webhook data source is configured for this agent/org."""
+
+
+class ProfileWebhookInvalidError(ProfileWebhookError):
+    """Payload failed validation: bad URL/SSRF, unsupported method, bad identifier, etc."""
