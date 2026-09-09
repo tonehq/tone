@@ -9,7 +9,7 @@ from pipecat.audio.vad.vad_analyzer import VADParams
 
 from core.config import settings
 from core.services.pipeline import vad as vad_registry
-from core.services.pipeline.vad import aic_quail, krisp, silero, ten
+from core.services.pipeline.vad import aic_quail, silero, ten
 
 
 class _Recorder:
@@ -20,12 +20,11 @@ class _Recorder:
 @pytest.fixture
 def all_sdks_present(monkeypatch):
     monkeypatch.setattr(ten, "TENVADAnalyzer", _Recorder)
-    monkeypatch.setattr(krisp, "KrispVivaVadAnalyzer", _Recorder)
     monkeypatch.setattr(aic_quail, "AICQuailVADAnalyzer", _Recorder)
 
 
 def test_registry_and_catalog():
-    assert set(vad_registry.VAD_PROVIDERS) == {"silero", "ten", "krisp_viva", "aic_quail"}
+    assert set(vad_registry.VAD_PROVIDERS) == {"silero", "ten", "aic_quail"}
     assert vad_registry.DEFAULT_VAD_PROVIDER == "silero"
     for cls in vad_registry.VAD_PROVIDERS.values():
         assert cls.display_name and cls.description
@@ -46,14 +45,11 @@ def test_unknown_provider_fails_fast():
 
 
 def test_catalog_offers_only_providers_whose_sdk_and_config_are_present(all_sdks_present):
-    with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", ""), \
-            mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
+    with mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
         assert [c["id"] for c in vad_registry.list_vad_providers()] == ["silero", "ten"]
-    with mock.patch.object(settings, "KRISP_VIVA_API_KEY", "krisp-key"), \
-            mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"), \
-            mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
+    with mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         catalog = vad_registry.list_vad_providers()
-    assert [c["id"] for c in catalog] == ["silero", "ten", "krisp_viva", "aic_quail"]
+    assert [c["id"] for c in catalog] == ["silero", "ten", "aic_quail"]
     assert catalog[1]["meta_data_schema"][0]["name"] == "hop_size"
 
 
@@ -72,18 +68,14 @@ def test_ten_settings_are_coerced_and_forwarded(all_sdks_present):
     assert analyzer.kwargs["hop_size"] == 256
 
 
-def test_krisp_and_aic_take_their_credentials_from_server_config(all_sdks_present):
+def test_aic_takes_its_licence_from_server_config(all_sdks_present):
     params = VADParams()
-    with mock.patch.object(settings, "KRISP_VIVA_API_KEY", "krisp-key"), \
-            mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", "/models/vad.kef"):
-        analyzer = vad_registry.build_vad_analyzer({"provider": "krisp_viva", "frame_duration": "20"}, params)
-    assert analyzer.kwargs == {"model_path": "/models/vad.kef", "frame_duration": 20, "params": params}
     with mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         analyzer = vad_registry.build_vad_analyzer({"provider": "aic_quail", "model_id": ""}, params)
     assert analyzer.kwargs == {"license_key": "key", "model_id": "quail-vad-2.0-xxs-16khz", "params": params}
-    with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", ""):
-        with pytest.raises(ValueError, match="KRISP_VIVA_VAD_MODEL_PATH"):
-            vad_registry.build_vad_analyzer({"provider": "krisp_viva"}, params)
+    with mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
+        with pytest.raises(ValueError, match="AIC_SDK_LICENSE"):
+            vad_registry.build_vad_analyzer({"provider": "aic_quail"}, params)
 
 
 def test_validate_vad_provider(all_sdks_present):
@@ -92,8 +84,8 @@ def test_validate_vad_provider(all_sdks_present):
     assert "provider" in vad_registry.validate_vad_provider({"provider": "nope"})
     assert "provider" in vad_registry.validate_vad_provider("silero")
     assert "hop_size" in vad_registry.validate_vad_provider({"provider": "ten", "hop_size": "100"})
-    with mock.patch.object(settings, "KRISP_VIVA_VAD_MODEL_PATH", ""):
-        assert "provider" in vad_registry.validate_vad_provider({"provider": "krisp_viva"})
+    with mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
+        assert "provider" in vad_registry.validate_vad_provider({"provider": "aic_quail"})
 
 
 def _load_ten_analyzer_with_fake_sdk(monkeypatch, probability):
