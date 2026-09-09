@@ -448,6 +448,17 @@ def test_groq_routes_reasoning_effort_into_settings_extra():
     assert not hasattr(svc.settings, "reasoning_effort")
 
 
+def test_groq_routes_reasoning_format_into_extra_body():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="qwen/qwen3.8-27b", metadata={
+            "reasoning_effort": "none", "reasoning_format": "hidden",
+        }))
+    assert svc.settings.extra == {
+        "reasoning_effort": "none",
+        "extra_body": {"reasoning_format": "hidden"},
+    }
+
+
 def test_groq_leaves_extra_unset_without_reasoning_effort():
     with _patched_modules():
         svc = build_llm(_spec("groq", model="llama-3.3-70b-versatile",
@@ -471,8 +482,23 @@ def test_openrouter_forwards_settings_and_reasoning_effort():
     assert svc.params is None
     assert svc.settings.model == "qwen/qwen3-32b"
     assert svc.settings.temperature == 0.2
-    assert svc.settings.extra == {"reasoning_effort": "medium"}
+    assert svc.settings.extra == {"extra_body": {"reasoning": {"effort": "medium"}}}
     assert svc.base_url == "https://openrouter.ai/api/v1"
+
+
+def test_openrouter_disables_thinking_through_reasoning_enabled():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="z-ai/glm-4.7",
+                              metadata={"reasoning_enabled": "false", "temperature": 0.7}))
+    assert svc.settings.extra == {"extra_body": {"reasoning": {"enabled": False}}}
+    assert svc.settings.temperature == 0.7
+
+
+def test_openrouter_leaves_extra_unset_without_reasoning_fields():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="meta-llama/llama-3.3-70b-instruct",
+                              metadata={"temperature": 0.7, "reasoning_effort": ""}))
+    assert svc.settings.extra is None
 
 
 if __name__ == "__main__":
