@@ -167,16 +167,55 @@ def build_settings(settings_class, metadata: dict, **overrides):
     return settings_class(**filtered) if filtered else None
 
 
-LLM_REQUEST_EXTRA_FIELDS = ("reasoning_effort",)
+LLM_REQUEST_EXTRA_FIELDS = ("reasoning_effort", "reasoning_format", "reasoning_enabled")
 
 
-def build_llm_settings(settings_class, metadata: dict, **overrides):
+def _request_value(metadata: dict, key: str):
+    value = metadata.get(key)
+    return None if value in (None, "", "None") else value
+
+
+def _as_bool(value) -> bool:
+    return value if isinstance(value, bool) else str(value).strip().lower() == "true"
+
+
+def _groq_request_extra(metadata: dict) -> dict:
+    extra = {}
+    effort = _request_value(metadata, "reasoning_effort")
+    if effort is not None:
+        extra["reasoning_effort"] = effort
+    reasoning_format = _request_value(metadata, "reasoning_format")
+    if reasoning_format is not None:
+        extra["extra_body"] = {"reasoning_format": reasoning_format}
+    return extra
+
+
+def _openrouter_request_extra(metadata: dict) -> dict:
+    reasoning = {}
+    effort = _request_value(metadata, "reasoning_effort")
+    if effort is not None:
+        reasoning["effort"] = effort
+    enabled = _request_value(metadata, "reasoning_enabled")
+    if enabled is not None:
+        reasoning["enabled"] = _as_bool(enabled)
+    return {"extra_body": {"reasoning": reasoning}} if reasoning else {}
+
+
+def _generic_request_extra(metadata: dict) -> dict:
+    effort = _request_value(metadata, "reasoning_effort")
+    return {"reasoning_effort": effort} if effort is not None else {}
+
+
+LLM_REQUEST_EXTRAS = {
+    "groq": _groq_request_extra,
+    "openrouter": _openrouter_request_extra,
+}
+
+
+def build_llm_settings(settings_class, metadata: dict, provider_name: str, **overrides):
     declared = {f.name for f in dataclasses.fields(settings_class)}
-    extra = {
-        key: metadata[key]
-        for key in LLM_REQUEST_EXTRA_FIELDS
-        if key not in declared and metadata.get(key) not in (None, "", "None")
-    }
+    build_extra = LLM_REQUEST_EXTRAS.get(provider_name, _generic_request_extra)
+    extra = {key: value for key, value in build_extra(metadata).items() if key not in declared}
     return build_settings(settings_class, metadata, extra=extra or None, **overrides)
 
 
@@ -317,6 +356,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 settings=build_llm_settings(
                     GroqLLMService.Settings,
                     metadata,
+                    provider_name,
                     model=model or "llama-3.3-70b-versatile",
                 ),
                 **_url_kwargs(metadata),
@@ -328,6 +368,7 @@ def build_llm(spec: dict) -> Optional[Any]:
                 settings=build_llm_settings(
                     OpenRouterLLMService.Settings,
                     metadata,
+                    provider_name,
                     model=model or "openai/gpt-4o-2024-11-20",
                 ),
                 **_url_kwargs(metadata),
