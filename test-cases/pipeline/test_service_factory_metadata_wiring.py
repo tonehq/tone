@@ -143,6 +143,35 @@ class _FakeSarvam:
         self.base_url = base_url
 
 
+class _FakeGroq:
+
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        temperature: float = None
+        top_p: float = None
+        seed: int = None
+        max_completion_tokens: int = None
+        extra: dict = None
+
+    class InputParams(_FakeParams):
+        model_fields = {
+            "temperature": None, "top_p": None, "seed": None,
+            "max_completion_tokens": None, "extra": None,
+        }
+
+    def __init__(self, api_key=None, settings=None, model=None, params=None, base_url=None):
+        self.api_key = api_key
+        self.settings = settings
+        self.model = model
+        self.params = params
+        self.base_url = base_url
+
+
+class _FakeOpenRouter(_FakeGroq):
+    pass
+
+
 class _FakeNvidia:
     """Stand-in for NvidiaSTTService, which selects models via `model_function_map`.
 
@@ -226,6 +255,12 @@ def _patched_modules():
         ),
         "pipecat.services.sarvam.llm": _module(
             "pipecat.services.sarvam.llm", SarvamLLMService=_FakeSarvam,
+        ),
+        "pipecat.services.groq.llm": _module(
+            "pipecat.services.groq.llm", GroqLLMService=_FakeGroq,
+        ),
+        "pipecat.services.openrouter.llm": _module(
+            "pipecat.services.openrouter.llm", OpenRouterLLMService=_FakeOpenRouter,
         ),
         "pipecat.services.nvidia.stt": _module(
             "pipecat.services.nvidia.stt",
@@ -387,6 +422,57 @@ def test_sarvam_ai_drops_unknown_metadata_fields():
         }))
     assert svc is not None                        # one stray key must not kill the service
     assert svc.settings.temperature == 0.2
+
+
+def test_groq_forwards_model_and_settings_not_params():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="openai/gpt-oss-120b", metadata={
+            "temperature": 0.3, "top_p": 0.9, "seed": 7, "max_completion_tokens": 4096,
+        }))
+    assert isinstance(svc, _FakeGroq)
+    assert svc.params is None
+    assert svc.model is None
+    assert svc.settings.model == "openai/gpt-oss-120b"
+    assert svc.settings.temperature == 0.3
+    assert svc.settings.top_p == 0.9
+    assert svc.settings.seed == 7
+    assert svc.settings.max_completion_tokens == 4096
+
+
+def test_groq_routes_reasoning_effort_into_settings_extra():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="openai/gpt-oss-120b",
+                              metadata={"temperature": 0.3, "reasoning_effort": "low"}))
+    assert svc.settings.extra == {"reasoning_effort": "low"}
+    assert svc.settings.temperature == 0.3
+    assert not hasattr(svc.settings, "reasoning_effort")
+
+
+def test_groq_leaves_extra_unset_without_reasoning_effort():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="llama-3.3-70b-versatile",
+                              metadata={"temperature": 0.5, "reasoning_effort": ""}))
+    assert svc.settings.model == "llama-3.3-70b-versatile"
+    assert svc.settings.extra is None
+
+
+def test_groq_falls_back_to_default_model():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="", metadata={}))
+    assert svc.settings.model == "llama-3.3-70b-versatile"
+
+
+def test_openrouter_forwards_settings_and_reasoning_effort():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="qwen/qwen3-32b", metadata={
+            "temperature": 0.2, "reasoning_effort": "medium", "base_url": "https://openrouter.ai/api/v1",
+        }))
+    assert isinstance(svc, _FakeOpenRouter)
+    assert svc.params is None
+    assert svc.settings.model == "qwen/qwen3-32b"
+    assert svc.settings.temperature == 0.2
+    assert svc.settings.extra == {"reasoning_effort": "medium"}
+    assert svc.base_url == "https://openrouter.ai/api/v1"
 
 
 if __name__ == "__main__":

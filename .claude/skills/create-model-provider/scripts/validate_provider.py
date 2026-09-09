@@ -17,7 +17,10 @@ import os
 import sys
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from analyze import SEED, derive_schema, seed_buckets  # noqa: E402
+from analyze import ROOT, SEED, derive_schema, seed_buckets  # noqa: E402
+
+sys.path.insert(0, ROOT)
+from core.services.pipeline.service_factory import LLM_REQUEST_EXTRA_FIELDS  # noqa: E402
 
 # Keys the factory consumes directly rather than through InputParams, so they are
 # legitimate metadata names even when absent from a service's InputParams.
@@ -109,6 +112,8 @@ def validate(prov, layer, schema, service_path=None):
                 # over the deprecated params=/model= kwargs wherever both are accepted.
                 valid |= {f.name for f in dataclasses.fields(settings_cls)}
                 contract = "InputParams/Settings" if ip is not None else "Settings"
+            if "extra" in valid:
+                valid |= set(LLM_REQUEST_EXTRA_FIELDS)
             if not valid:
                 if declared - FACTORY_KEYS:
                     errors.append(
