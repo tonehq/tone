@@ -5,9 +5,12 @@ from pipecat.audio.vad.vad_analyzer import VADAnalyzer, VADParams
 from core.services.pipeline.vad.base import VADProvider
 
 if find_spec("ten_vad"):
-    from core.processors.ten_vad_analyzer import TENVADAnalyzer
+    from core.processors.ten_vad_analyzer import TENVADAnalyzer, library_loads
 else:
     TENVADAnalyzer = None
+
+    def library_loads() -> bool:
+        return False
 
 
 class TENVADProvider(VADProvider):
@@ -33,9 +36,9 @@ class TENVADProvider(VADProvider):
 
     @classmethod
     def available(cls) -> bool:
-        return TENVADAnalyzer is not None
+        return TENVADAnalyzer is not None and library_loads()
 
     def build(self, params: VADParams) -> VADAnalyzer:
         if not self.available():
-            raise ValueError("TEN VAD requires the ten-vad package on the call worker")
+            raise ValueError("TEN VAD requires the ten-vad package and its native library on the call worker")
         return TENVADAnalyzer(hop_size=self.settings["hop_size"], params=params)

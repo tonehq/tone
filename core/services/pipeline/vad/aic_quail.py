@@ -6,9 +6,10 @@ from core.config import settings
 from core.services.pipeline.vad.base import VADProvider
 
 if find_spec("aic_sdk"):
-    from pipecat.audio.vad.aic_quail_vad import AICQuailVADAnalyzer
+    from pipecat.audio.vad.aic_quail_vad import DEFAULT_QUAIL_VAD_MODEL_ID, AICQuailVADAnalyzer
 else:
     AICQuailVADAnalyzer = None
+    DEFAULT_QUAIL_VAD_MODEL_ID = None
 
 
 class AICQuailVADProvider(VADProvider):
@@ -26,8 +27,10 @@ class AICQuailVADProvider(VADProvider):
             "format": "string",
             "validator": None,
             "required": 0,
-            "default": "vad-ms-2.1-xxs-16khz",
-            "description": "ai-coustics VAD model identifier, e.g. vad-ms-2.1-xxs-16khz or vad-vf-2.0-s-16khz",
+            "default": DEFAULT_QUAIL_VAD_MODEL_ID,
+            "description": (
+                "ai-coustics VAD model identifier; the default matches the SDK version the worker image ships"
+            ),
         },
     ]
 

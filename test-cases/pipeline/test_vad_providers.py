@@ -20,6 +20,7 @@ class _Recorder:
 @pytest.fixture
 def all_sdks_present(monkeypatch):
     monkeypatch.setattr(ten, "TENVADAnalyzer", _Recorder)
+    monkeypatch.setattr(ten, "library_loads", lambda: True)
     monkeypatch.setattr(aic_quail, "AICQuailVADAnalyzer", _Recorder)
 
 
@@ -61,6 +62,15 @@ def test_missing_sdk_hides_the_provider(monkeypatch):
         vad_registry.build_vad_analyzer({"provider": "ten"}, VADParams())
 
 
+def test_ten_is_hidden_when_its_native_library_cannot_load(monkeypatch):
+    monkeypatch.setattr(ten, "TENVADAnalyzer", _Recorder)
+    monkeypatch.setattr(ten, "library_loads", lambda: False)
+    monkeypatch.setattr(aic_quail, "AICQuailVADAnalyzer", None)
+    assert [c["id"] for c in vad_registry.list_vad_providers()] == ["silero"]
+    with pytest.raises(ValueError, match="native library"):
+        vad_registry.build_vad_analyzer({"provider": "ten"}, VADParams())
+
+
 def test_ten_settings_are_coerced_and_forwarded(all_sdks_present):
     params = VADParams()
     analyzer = vad_registry.build_vad_analyzer({"provider": "ten", "hop_size": "160"}, params)
@@ -73,7 +83,8 @@ def test_aic_takes_its_licence_from_server_config(all_sdks_present):
     params = VADParams()
     with mock.patch.object(settings, "AIC_SDK_LICENSE", "key"):
         analyzer = vad_registry.build_vad_analyzer({"provider": "aic_quail", "model_id": ""}, params)
-    assert analyzer.kwargs == {"license_key": "key", "model_id": "vad-ms-2.1-xxs-16khz", "params": params}
+    assert analyzer.kwargs == {"license_key": "key", "model_id": aic_quail.DEFAULT_QUAIL_VAD_MODEL_ID, "params": params}
+    assert analyzer.kwargs["model_id"]
     with mock.patch.object(settings, "AIC_SDK_LICENSE", ""):
         with pytest.raises(ValueError, match="AIC_SDK_LICENSE"):
             vad_registry.build_vad_analyzer({"provider": "aic_quail"}, params)
@@ -130,6 +141,19 @@ def test_ten_analyzer_upsamples_telephony_audio_to_the_model_rate(monkeypatch):
     assert frame.dtype == np.int16
     assert frame[2] == ramp[1]
     assert frame[1] == (ramp[0] + ramp[1]) // 2
+
+
+def test_library_probe_reports_dlopen_failures(monkeypatch):
+    module = _load_ten_analyzer_with_fake_sdk(monkeypatch, 0.5)
+    assert module.library_loads() is True
+
+    class Broken:
+        def __init__(self, hop_size, threshold):
+            raise OSError("libc++.so.1: cannot open shared object file")
+
+    monkeypatch.setattr(module, "TenVad", Broken)
+    module.library_loads.cache_clear()
+    assert module.library_loads() is False
 
 
 def test_ten_analyzer_rejects_unsupported_sample_rates(monkeypatch):
