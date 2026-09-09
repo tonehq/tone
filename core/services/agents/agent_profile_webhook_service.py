@@ -19,6 +19,7 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 from urllib.parse import quote
 from uuid import UUID
@@ -289,7 +290,7 @@ class AgentProfileWebhookService(BaseService):
         ):
             execution["status"] = "cancelled"
             execution["result"] = "skipped (not applicable for this call)"
-            return EnrichOutcome({}, execution)
+            return self._finalize({}, execution)
 
         started = time.monotonic()
         try:
@@ -313,7 +314,7 @@ class AgentProfileWebhookService(BaseService):
                 error="request failed",
                 duration_ms=int((time.monotonic() - started) * 1000),
             )
-            return EnrichOutcome({}, execution)
+            return self._finalize({}, execution)
 
         execution["duration_ms"] = int((time.monotonic() - started) * 1000)
         execution["status_code"] = status
@@ -326,12 +327,12 @@ class AgentProfileWebhookService(BaseService):
                 status,
             )
             execution.update(status="error", error=f"HTTP {status}")
-            return EnrichOutcome({}, execution)
+            return self._finalize({}, execution)
 
         record = _first_record(parsed)
         if not isinstance(record, dict):
             execution.update(status="error", error="response has no usable record")
-            return EnrichOutcome({}, execution)
+            return self._finalize({}, execution)
 
         filled: dict[str, str] = {}
         for key, source_path in plan.fill_plan:
@@ -339,7 +340,13 @@ class AgentProfileWebhookService(BaseService):
             if value is not None:
                 filled[f"{PROFILE_PREFIX}{key}"] = value
         execution["status"] = "success"
-        return EnrichOutcome(filled, execution)
+        return self._finalize(filled, execution)
+
+    def _finalize(self, values: dict[str, str], execution: dict) -> EnrichOutcome:
+        """Stamp ``completed_at`` on the execution record (parity with the tool
+        handlers' ``finalize_and_record``) and package the outcome."""
+        execution["completed_at"] = datetime.now(timezone.utc).isoformat()
+        return EnrichOutcome(values, execution)
 
     def _base_execution(self, plan: WebhookPlan, caller_phone: Optional[str]) -> dict:
         """A ``tool_executions``-shaped entry skeleton for this webhook call
@@ -368,6 +375,7 @@ class AgentProfileWebhookService(BaseService):
             error=f"timed out after {secs}s",
             result=f"error: timed out after {secs}s",
             duration_ms=int(secs * 1000),
+            completed_at=datetime.now(timezone.utc).isoformat(),
         )
         return execution
 
