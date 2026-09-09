@@ -467,7 +467,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
                         current_turn=current_turn,
                         end_reason_holder=end_reason_holder,
                         call_id_holder=call_id_holder,
-                        transcript_entries=transcript_entries,
                     ),
                 )
             except Exception:
