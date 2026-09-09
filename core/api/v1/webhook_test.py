@@ -141,3 +141,16 @@ async def webhook_test_match_post(allowed: str, request: Request):
         logger.debug("[webhook-test] no JSON body on POST")
     phone = str(body.get("phone") or body.get("caller_number") or "")
     return _match_response(allowed, phone)
+
+
+# ── Phone-in-the-path (tests the "URL path" identifier location) ──────────
+# Configure the webhook URL as …/webhook-test/by-path/{phone} with the phone
+# identifier set to location "URL path"; the caller's number is substituted
+# into the path. Returns a record for any non-empty phone, else 404.
+
+
+@router.get("/webhook-test/by-path/{phone}")
+async def webhook_test_by_path(phone: str):
+    if not _digits(phone):
+        return JSONResponse(status_code=404, content={"error": "no phone in path"})
+    return JSONResponse(content=_fake_record(phone))
