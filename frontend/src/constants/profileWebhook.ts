@@ -8,6 +8,7 @@ export const HTTP_METHOD_OPTIONS: SelectOption[] = [
 export const REQUEST_IDENTIFIER_IN_OPTIONS: SelectOption[] = [
   { value: 'query', label: 'Query param' },
   { value: 'body', label: 'Request body' },
+  { value: 'path', label: 'URL path ({param})' },
 ];
 
 export const PROFILE_VARIABLE_SOURCE_OPTIONS: SelectOption[] = [

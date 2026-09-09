@@ -24,7 +24,7 @@ from core.services.base import BaseService
 # to probe arbitrary column values. ``proposed`` / ``cancelled`` capture LLM
 # proposals that never ran (unregistered tool name / user interrupted).
 _VALID_STATUSES = {"proposed", "cancelled", "success", "error"}
-_VALID_TOOL_TYPES = {"custom", "send_sms", "google_calendar", "read_document", "mcp", "built_in"}
+_VALID_TOOL_TYPES = {"custom", "send_sms", "google_calendar", "read_document", "mcp", "built_in", "webhook"}
 
 # Hard cap on rows returned by ``list_for_call`` — a sane call rarely has >50
 # invocations, so 500 leaves plenty of headroom while protecting the response
