@@ -17,6 +17,7 @@ and header values are NEVER logged.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from typing import Any, Optional
 from urllib.parse import quote
@@ -117,6 +118,16 @@ class WebhookPlan:
     @property
     def is_actionable(self) -> bool:
         return bool(self.enabled and self.endpoint_url and self.fill_plan)
+
+
+@dataclass
+class EnrichOutcome:
+    """Result of a call-start enrichment: the ``{"profile.<key>": value}`` map to
+    merge into the prompt, plus a ``tool_executions``-shaped record (``tool_type
+    = "webhook"``) persisted for call debugging."""
+
+    values: dict[str, str]
+    execution: dict
 
 
 class AgentProfileWebhookService(BaseService):
@@ -265,15 +276,22 @@ class AgentProfileWebhookService(BaseService):
         plan: WebhookPlan,
         caller_phone: Optional[str],
         direction: Optional[str],
-    ) -> dict[str, str]:
-        """Call the endpoint and return ``{"profile.<key>": value}`` for the
-        plan's fill targets. Any failure → ``{}`` (the call continues; inbound
-        variables fall back to their defaults)."""
-        if not plan.is_actionable or not _direction_enabled(plan.directions, direction):
-            return {}
-        if not (caller_phone or "").strip():
-            return {}
+    ) -> EnrichOutcome:
+        """Call the endpoint and return the filled ``{"profile.<key>": value}``
+        map plus a ``webhook`` tool-execution record for call debugging. Any
+        failure → empty values (the call continues; inbound variables fall back
+        to their defaults); the record captures the status/response/error."""
+        execution = self._base_execution(plan, caller_phone)
+        if (
+            not plan.is_actionable
+            or not _direction_enabled(plan.directions, direction)
+            or not (caller_phone or "").strip()
+        ):
+            execution["status"] = "cancelled"
+            execution["result"] = "skipped (not applicable for this call)"
+            return EnrichOutcome({}, execution)
 
+        started = time.monotonic()
         try:
             status, parsed = await self._call_endpoint(
                 endpoint_url=plan.endpoint_url,
@@ -289,7 +307,17 @@ class AgentProfileWebhookService(BaseService):
                 self.org_id,
                 direction,
             )
-            return {}
+            execution.update(
+                status="error",
+                result="error: request failed",
+                error="request failed",
+                duration_ms=int((time.monotonic() - started) * 1000),
+            )
+            return EnrichOutcome({}, execution)
+
+        execution["duration_ms"] = int((time.monotonic() - started) * 1000)
+        execution["status_code"] = status
+        execution["result"] = parsed
 
         if not (200 <= status < 300):
             logger.warning(
@@ -297,18 +325,51 @@ class AgentProfileWebhookService(BaseService):
                 self.org_id,
                 status,
             )
-            return {}
+            execution.update(status="error", error=f"HTTP {status}")
+            return EnrichOutcome({}, execution)
 
         record = _first_record(parsed)
         if not isinstance(record, dict):
-            return {}
+            execution.update(status="error", error="response has no usable record")
+            return EnrichOutcome({}, execution)
 
         filled: dict[str, str] = {}
         for key, source_path in plan.fill_plan:
             value = _resolve_scalar(record, source_path)
             if value is not None:
                 filled[f"{PROFILE_PREFIX}{key}"] = value
-        return filled
+        execution["status"] = "success"
+        return EnrichOutcome(filled, execution)
+
+    def _base_execution(self, plan: WebhookPlan, caller_phone: Optional[str]) -> dict:
+        """A ``tool_executions``-shaped entry skeleton for this webhook call
+        (``tool_type = "webhook"``). ``arguments`` is the request summary; the
+        caller fills status/result/status_code/duration_ms. Same list the tool
+        handlers use — persisted by ``record_executions`` at call end."""
+        return {
+            "tool": "Profile Webhook",
+            "tool_type": "webhook",
+            "arguments": {
+                "method": plan.http_method,
+                "url": plan.endpoint_url,
+                "phone": caller_phone or "",
+            },
+            "turn": 0,
+            "timestamp": int(time.time()),
+        }
+
+    def timeout_execution(self, plan: WebhookPlan, caller_phone: Optional[str]) -> dict:
+        """The execution record for the timeout path (the task is cancelled by
+        the runner's ``asyncio.wait_for``, so ``enrich`` never returns one)."""
+        execution = self._base_execution(plan, caller_phone)
+        secs = plan.timeout_seconds or DEFAULT_TIMEOUT_SECONDS
+        execution.update(
+            status="error",
+            error=f"timed out after {secs}s",
+            result=f"error: timed out after {secs}s",
+            duration_ms=int(secs * 1000),
+        )
+        return execution
 
     # ── Test (config-time) ────────────────────────────────────────────────
 

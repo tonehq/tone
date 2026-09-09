@@ -110,43 +110,73 @@ class TestPlanActionable:
 class TestEnrich:
     def test_fills_from_2xx_response(self):
         svc = _svc_with_endpoint((200, {"properties": {"name": "John"}}))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+15551234", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+15551234", direction="inbound")).values
         assert out == {"profile.customer_name": "John"}
 
     def test_list_response_uses_first(self):
         svc = _svc_with_endpoint((200, [{"properties": {"name": "Jane"}}]))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).values
         assert out == {"profile.customer_name": "Jane"}
 
     def test_non_2xx_returns_empty(self):
         svc = _svc_with_endpoint((404, {"properties": {"name": "John"}}))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).values
         assert out == {}
 
     def test_missing_path_skips_variable(self):
         svc = _svc_with_endpoint((200, {"other": "x"}))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).values
         assert out == {}
 
     def test_disabled_direction_returns_empty(self):
         svc = _svc_with_endpoint((200, {"properties": {"name": "John"}}))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="outbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="outbound")).values
         assert out == {}
 
     def test_blank_phone_returns_empty(self):
         svc = _svc_with_endpoint((200, {"properties": {"name": "John"}}))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="   ", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="   ", direction="inbound")).values
         assert out == {}
 
     def test_endpoint_exception_degrades_to_empty(self):
         svc = _svc_with_endpoint(raises=RuntimeError("boom"))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).values
         assert out == {}
 
     def test_non_dict_record_returns_empty(self):
         svc = _svc_with_endpoint((200, "plain text"))
-        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).values
         assert out == {}
+
+
+class TestExecutionRecord:
+    def test_success_execution(self):
+        svc = _svc_with_endpoint((200, {"properties": {"name": "John"}}))
+        out = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound"))
+        ex = out.execution
+        assert ex["tool_type"] == "webhook"
+        assert ex["status"] == "success"
+        assert ex["status_code"] == 200
+        assert ex["arguments"]["method"] == "POST"
+        assert "duration_ms" in ex
+
+    def test_error_execution(self):
+        svc = _svc_with_endpoint((404, {"error": "nope"}))
+        ex = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="inbound")).execution
+        assert ex["status"] == "error"
+        assert ex["status_code"] == 404
+
+    def test_skipped_execution_for_disabled_direction(self):
+        svc = _svc_with_endpoint((200, {"properties": {"name": "John"}}))
+        ex = asyncio.run(svc.enrich(plan=_plan(), caller_phone="+1", direction="outbound")).execution
+        assert ex["status"] == "cancelled"
+
+    def test_timeout_execution_shape(self):
+        svc = _svc_with_endpoint((200, {}))
+        ex = svc.timeout_execution(_plan(), "+1")
+        assert ex["tool_type"] == "webhook"
+        assert ex["status"] == "error"
+        assert "timed out" in ex["error"]
 
 
 class TestFailureStrategies:
