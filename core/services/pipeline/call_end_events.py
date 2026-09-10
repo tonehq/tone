@@ -34,6 +34,10 @@ REASON_INACTIVITY_TIMEOUT = "inactivity_timeout"
 # Stamped by the runner's MaxDurationGuard when a call exceeds MAX_CALL_DURATION_SECS
 # — the hard ceiling backstop for a runaway call that never goes silent.
 REASON_MAX_DURATION = "max_call_duration"
+# Stamped when the assistant spoke a clear farewell but never fired end_call —
+# a model-independent backstop (see core/services/pipeline/farewell_detection.py)
+# so a dropped tool call after "goodbye" still ends the call promptly.
+REASON_SPOKEN_FAREWELL = "spoken_farewell"
 
 
 def _fmt_value(value: Any) -> str:

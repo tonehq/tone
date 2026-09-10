@@ -418,6 +418,13 @@ class Settings:
             get_secret("MAX_CALL_DURATION_SECS")
         )
 
+        # Spoken-farewell backstop: end the call when the assistant speaks a clear
+        # farewell but never fired end_call (model-independent — see
+        # farewell_detection.py). ON by default; set to "false" to disable.
+        self.CALL_FAREWELL_END_ENABLED: bool = (
+            get_secret("CALL_FAREWELL_END_ENABLED") or "true"
+        ).strip().lower() == "true"
+
         # ── RAG ingestion defaults ──────────────────────────────────────────
         # Baseline parser / tokeniser / embedder / vector-store used when a
         # caller doesn't supply an override. Every value maps to a registry
