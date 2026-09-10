@@ -28,7 +28,7 @@ The caller and called numbers travel on the websocket query string; the transpor
 
 Outbound calls and scheduled batches select the Plivo engine automatically when the from-number belongs to a Plivo channel, or explicitly with the trigger provider `plivo`. The engine calls `POST /v1/Account/{auth_id}/Call/` with `answer_url = {BASE_CALL_URL}/plivo/outbound?agent_id=...&direction=outbound&from=...&to=...` and, for scheduled calls, `hangup_url = {BASE_CALL_URL}/plivo/outbound-status?scheduled_call_id=...`. Plivo returns a `request_uuid`, which is stored as the provider call id; the status callback maps `RequestUUID`, `CallStatus` and `Duration` onto the shared scheduled-call state machine.
 
-Hang-up uses `DELETE /Call/{uuid}/` for a live call and `DELETE /Request/{uuid}/` for one still ringing; the Pipecat serializer's own hang-up on `EndFrame` stays enabled as well.
+Hang-up uses `DELETE /Call/{uuid}/` for a live call and `DELETE /Request/{uuid}/` for one still ringing; the Pipecat serializer's own hang-up on `EndFrame` stays enabled as well, so the terminator usually finds the call already gone and confirms that through the call detail record: an answered record is `completed`, an unanswered one maps its `hangup_cause_name` onto `busy`, `no-answer`, `canceled` or `failed`.
 
 ## Adding a provider
 
