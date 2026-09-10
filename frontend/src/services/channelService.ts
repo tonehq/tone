@@ -70,3 +70,10 @@ export const listTelnyxPhoneNumbers = async (channelId: string): Promise<Channel
   });
   return data ?? [];
 };
+
+export const listPlivoPhoneNumbers = async (channelId: string): Promise<ChannelPhoneNumber[]> => {
+  const { data } = await axiosInstance.get<ChannelPhoneNumber[]>('/channel/plivo_phone_numbers', {
+    params: { channel_id: channelId },
+  });
+  return data ?? [];
+};

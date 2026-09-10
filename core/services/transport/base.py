@@ -87,6 +87,9 @@ class TelephonyTransport(CallTransport):
 
             # Resolve from/to (provider-specific; no-op for most). Twilio backfills here.
             await provider.resolve_from_to(call_data)
+            for key in ("from", "to"):
+                if not call_data.get(key) and body.get(key):
+                    call_data[key] = body[key]
 
             from_number = call_data.get("from", "")
             to_number = call_data.get("to", "")

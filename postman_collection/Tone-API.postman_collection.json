@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "tone-api-v2-2026-05-27",
     "name": "Tone API",
-    "description": "Comprehensive Postman collection for the Tone voice-agent platform API (Core edition). Reverse-engineered from `core/api/v1/*.py` on 2026-05-27. Supersedes the legacy `postman_collection/` directory which targets the pre-v2 schema.\n\n**Auth**: most endpoints require a Bearer JWT. Run `Authentication > Login` first; the test script captures `access_token` into the collection variable.\n\n**Variables**:\n- `base_url` \u2014 defaults to `http://localhost:8000`\n- `access_token`, `refresh_token` \u2014 populated by Login/Refresh\n- `org_id`, `user_id`, `agent_id`, `channel_id`, `tool_id`, `mcp_server_id` \u2014 example UUIDs\n\nFolders mirror the 13 mounted controllers. Each endpoint includes:\n- **Success** example (200/201/204)\n- **Validation** errors (400 / 422)\n- **Auth** errors (401 / 403) where applicable\n- **Not found** (404), **Conflict** (409), and other controller-specific raises\n\n\u26a0 Flagged in folder descriptions: `Call Logs` router is disabled in `main.py:19`; three Organizations endpoints call non-existent service methods; `Tools > update_tool` has a `NameError` bug.",
+    "description": "Comprehensive Postman collection for the Tone voice-agent platform API (Core edition). Reverse-engineered from `core/api/v1/*.py` on 2026-05-27. Supersedes the legacy `postman_collection/` directory which targets the pre-v2 schema.\n\n**Auth**: most endpoints require a Bearer JWT. Run `Authentication > Login` first; the test script captures `access_token` into the collection variable.\n\n**Variables**:\n- `base_url` — defaults to `http://localhost:8000`\n- `access_token`, `refresh_token` — populated by Login/Refresh\n- `org_id`, `user_id`, `agent_id`, `channel_id`, `tool_id`, `mcp_server_id` — example UUIDs\n\nFolders mirror the 13 mounted controllers. Each endpoint includes:\n- **Success** example (200/201/204)\n- **Validation** errors (400 / 422)\n- **Auth** errors (401 / 403) where applicable\n- **Not found** (404), **Conflict** (409), and other controller-specific raises\n\n⚠ Flagged in folder descriptions: `Call Logs` router is disabled in `main.py:19`; three Organizations endpoints call non-existent service methods; `Tools > update_tool` has a `NameError` bug.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "auth": {
@@ -802,7 +802,7 @@
               "body": "{\"detail\": \"email is required\"}"
             },
             {
-              "name": "400 Already verified \u26a0 leaks existence",
+              "name": "400 Already verified ⚠ leaks existence",
               "code": 400,
               "status": "Bad Request",
               "body": "{\"detail\": \"Email is already verified\"}"
@@ -1048,7 +1048,7 @@
           ]
         },
         {
-          "name": "POST /auth/change-password \u26a0 no current_password check",
+          "name": "POST /auth/change-password ⚠ no current_password check",
           "request": {
             "method": "POST",
             "header": [
@@ -1410,13 +1410,13 @@
           },
           "response": [
             {
-              "name": "200 OK \u2014 new account",
+              "name": "200 OK — new account",
               "code": 200,
               "status": "OK",
               "body": "{\n  \"access_token\": \"eyJ...\",\n  \"refresh_token\": \"eyJ...\",\n  \"token_type\": \"bearer\",\n  \"user\": {\"id\": \"{{user_id}}\", \"email\": \"invitee@acme.com\", \"role\": \"developer\"},\n  \"organization\": {\"id\": \"{{org_id}}\"}\n}"
             },
             {
-              "name": "200 OK \u2014 existing user, requires_login",
+              "name": "200 OK — existing user, requires_login",
               "code": 200,
               "status": "OK",
               "body": "{\n  \"message\": \"You have been added to the organization. Please sign in to continue.\",\n  \"account_exists\": true,\n  \"email\": \"invitee@acme.com\",\n  \"requires_login\": true\n}"
@@ -2081,7 +2081,7 @@
           },
           "response": [
             {
-              "name": "200 OK \u2014 new tokens for target org",
+              "name": "200 OK — new tokens for target org",
               "code": 200,
               "status": "OK",
               "body": "{\"access_token\": \"eyJhbGciOi...\", \"refresh_token\": \"eyJhbGciOi...\", \"organization\": {\"id\": \"{{org_id}}\", \"name\": \"Acme Inc\", \"role\": \"admin\"}}"
@@ -2112,7 +2112,7 @@
       "name": "Generated API Keys",
       "item": [
         {
-          "name": "POST /generated-api-keys/create_api_key (admin/owner) \u2014 never expires",
+          "name": "POST /generated-api-keys/create_api_key (admin/owner) — never expires",
           "request": {
             "method": "POST",
             "header": [
@@ -2142,11 +2142,11 @@
                 "create_api_key"
               ]
             },
-            "description": "Mint a new API key that never expires. The response's `key` field is the ONLY time the plaintext is available \u2014 copy it into the `api_key` collection variable to run the 'Use the API Key' example below."
+            "description": "Mint a new API key that never expires. The response's `key` field is the ONLY time the plaintext is available — copy it into the `api_key` collection variable to run the 'Use the API Key' example below."
           },
           "response": [
             {
-              "name": "201 Created \u2014 one-time key payload",
+              "name": "201 Created — one-time key payload",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2183,7 +2183,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n  \"name\": \"Production\",\n  \"key_prefix\": \"tone_sk_a1B\",\n  \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"active\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": null,\n  \"last_used_at\": null,\n  \"revoked_at\": null,\n  \"created_at\": \"2026-07-24T12:34:56.000000+00:00\",\n  \"key\": \"tone_sk_a1B2c3D4e5F6g7H8i9J0kLmNoPqRsTuVwXyZaBcDeFg\"\n}"
             },
             {
-              "name": "409 Conflict \u2014 duplicate active name",
+              "name": "409 Conflict — duplicate active name",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2220,7 +2220,7 @@
               "body": "{\n  \"detail\": \"An active API key with this name already exists.\"\n}"
             },
             {
-              "name": "422 Unprocessable \u2014 empty name",
+              "name": "422 Unprocessable — empty name",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2257,7 +2257,7 @@
               "body": "{\n  \"detail\": [\n    {\n      \"type\": \"string_too_short\",\n      \"loc\": [\"body\", \"name\"],\n      \"msg\": \"String should have at least 1 character\",\n      \"input\": \"\"\n    }\n  ]\n}"
             },
             {
-              "name": "403 Forbidden \u2014 regular member",
+              "name": "403 Forbidden — regular member",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2296,7 +2296,7 @@
           ]
         },
         {
-          "name": "POST /generated-api-keys/create_api_key (admin/owner) \u2014 30-day expiry",
+          "name": "POST /generated-api-keys/create_api_key (admin/owner) — 30-day expiry",
           "request": {
             "method": "POST",
             "header": [
@@ -2330,7 +2330,7 @@
           },
           "response": [
             {
-              "name": "201 Created \u2014 with expiry",
+              "name": "201 Created — with expiry",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2367,7 +2367,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\",\n  \"name\": \"CI job\",\n  \"key_prefix\": \"tone_sk_x7Y\",\n  \"masked\": \"tone_sk_x7Y\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n  \"status\": \"active\",\n  \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n  \"expires_at\": \"2026-08-23T00:00:00+00:00\",\n  \"last_used_at\": null,\n  \"revoked_at\": null,\n  \"created_at\": \"2026-07-24T12:34:56.000000+00:00\",\n  \"key\": \"tone_sk_x7Y2c3D4e5F6g7H8i9J0kLmNoPqRsTuVwXyZaBcDeFg\"\n}"
             },
             {
-              "name": "422 Unprocessable \u2014 past expiry",
+              "name": "422 Unprocessable — past expiry",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2440,7 +2440,7 @@
           },
           "response": [
             {
-              "name": "200 OK \u2014 paginated list",
+              "name": "200 OK — paginated list",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2477,7 +2477,7 @@
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"name\": \"Production\",\n      \"key_prefix\": \"tone_sk_a1B\",\n      \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": null,\n      \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:34:56+00:00\"\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\",\n      \"name\": \"CI job\",\n      \"key_prefix\": \"tone_sk_x7Y\",\n      \"masked\": \"tone_sk_x7Y\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": \"2026-08-23T00:00:00+00:00\",\n      \"last_used_at\": null,\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:30:00+00:00\"\n    }\n  ],\n  \"total\": 2,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 empty",
+              "name": "200 OK — empty",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2514,7 +2514,7 @@
               "body": "{\n  \"data\": [],\n  \"total\": 0,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 filtered by search",
+              "name": "200 OK — filtered by search",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2575,7 +2575,7 @@
                 }
               ]
             },
-            "description": "Fetch a single key by id. Response never contains the plaintext key \u2014 only the masked value."
+            "description": "Fetch a single key by id. Response never contains the plaintext key — only the masked value."
           },
           "response": [
             {
@@ -2671,11 +2671,11 @@
                 }
               ]
             },
-            "description": "Soft-revoke \u2014 key stops authenticating immediately but stays visible in the list as `status: revoked`. Idempotent (re-revoking is a no-op)."
+            "description": "Soft-revoke — key stops authenticating immediately but stays visible in the list as `status: revoked`. Idempotent (re-revoking is a no-op)."
           },
           "response": [
             {
-              "name": "200 OK \u2014 revoked",
+              "name": "200 OK — revoked",
               "originalRequest": {
                 "method": "POST",
                 "header": [],
@@ -2773,7 +2773,7 @@
           ]
         },
         {
-          "name": "Use the API Key \u2014 POST /generated-api-keys/list (Bearer tone_sk_...)",
+          "name": "Use the API Key — POST /generated-api-keys/list (Bearer tone_sk_...)",
           "request": {
             "auth": {
               "type": "bearer",
@@ -2817,7 +2817,7 @@
           },
           "response": [
             {
-              "name": "200 OK \u2014 key authenticated",
+              "name": "200 OK — key authenticated",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2858,7 +2858,7 @@
               "body": "{\n  \"data\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"name\": \"Production\",\n      \"key_prefix\": \"tone_sk_a1B\",\n      \"masked\": \"tone_sk_a1B\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\\u2022\",\n      \"status\": \"active\",\n      \"created_by_user_id\": \"11111111-1111-1111-1111-111111111111\",\n      \"expires_at\": null,\n      \"last_used_at\": \"2026-07-24T13:22:10+00:00\",\n      \"revoked_at\": null,\n      \"created_at\": \"2026-07-24T12:34:56+00:00\"\n    }\n  ],\n  \"total\": 1,\n  \"page_no\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 revoked or expired key",
+              "name": "401 Unauthorized — revoked or expired key",
               "originalRequest": {
                 "method": "POST",
                 "header": [
@@ -2904,7 +2904,7 @@
     },
     {
       "name": "Users & Account",
-      "description": "Profile + org member directory. Prefix: `/api/v1/user`. Requires Bearer. \u26a0 `UPDATABLE_PROFILE_FIELDS` whitelist silently drops `phone_number` / `profile` etc.; `avatar_url` cannot be cleared via PATCH (null is treated as omitted).",
+      "description": "Profile + org member directory. Prefix: `/api/v1/user`. Requires Bearer. ⚠ `UPDATABLE_PROFILE_FIELDS` whitelist silently drops `phone_number` / `profile` etc.; `avatar_url` cannot be cleared via PATCH (null is treated as omitted).",
       "item": [
         {
           "name": "GET /user/me",
@@ -3114,7 +3114,7 @@
     },
     {
       "name": "Organizations & Members",
-      "description": "Org info, member roster, invite/accept/cancel/resend, role updates, org settings. Prefix: `/api/v1/organization`. \u26a0 Three Core endpoints (`accept_invitation`, `validate_invitation`, `accept_invitation_with_password`) call non-existent `AuthService` methods \u2014 they 500 at runtime. The `/auth/accept-invitation` route in the Authentication folder is the working v2 path. \u26a0 `require_admin_or_owner` middleware is a name-only stub \u2014 no actual role check.",
+      "description": "Org info, member roster, invite/accept/cancel/resend, role updates, org settings. Prefix: `/api/v1/organization`. ⚠ Three Core endpoints (`accept_invitation`, `validate_invitation`, `accept_invitation_with_password`) call non-existent `AuthService` methods — they 500 at runtime. The `/auth/accept-invitation` route in the Authentication folder is the working v2 path. ⚠ `require_admin_or_owner` middleware is a name-only stub — no actual role check.",
       "item": [
         {
           "name": "GET /organization/me",
@@ -3215,7 +3215,7 @@
           ]
         },
         {
-          "name": "GET /organization/accept_invitation \u26a0 BROKEN",
+          "name": "GET /organization/accept_invitation ⚠ BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -3247,10 +3247,10 @@
           },
           "response": [
             {
-              "name": "500 AttributeError \u26a0",
+              "name": "500 AttributeError ⚠",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.accept_invitation(email, code) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead \u2014 that's the v2 working path."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.accept_invitation(email, code) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead — that's the v2 working path."
             },
             {
               "name": "401 Unauthorized",
@@ -3291,7 +3291,7 @@
           ]
         },
         {
-          "name": "GET /organization/validate_invitation \u26a0 BROKEN",
+          "name": "GET /organization/validate_invitation ⚠ BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -3323,10 +3323,10 @@
           },
           "response": [
             {
-              "name": "500 AttributeError \u26a0",
+              "name": "500 AttributeError ⚠",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.validate_invitation_token(email, code) which does NOT exist.\n# Use GET /auth/validate-invitation?token=... instead \u2014 that's the v2 working path."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.validate_invitation_token(email, code) which does NOT exist.\n# Use GET /auth/validate-invitation?token=... instead — that's the v2 working path."
             },
             {
               "name": "400 Bad Request",
@@ -3367,7 +3367,7 @@
           ]
         },
         {
-          "name": "POST /organization/accept_invitation_with_password \u26a0 BROKEN",
+          "name": "POST /organization/accept_invitation_with_password ⚠ BROKEN",
           "request": {
             "auth": {
               "type": "noauth"
@@ -3409,10 +3409,10 @@
               "body": "{\"detail\": \"Email, code, and password are required\"}"
             },
             {
-              "name": "500 AttributeError \u26a0",
+              "name": "500 AttributeError ⚠",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Calls AuthService.accept_invitation_with_password(email, code, password) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Calls AuthService.accept_invitation_with_password(email, code, password) which does NOT exist.\n# Use POST /auth/accept-invitation (with token) instead."
             }
           ]
         },
@@ -3944,7 +3944,7 @@
           },
           "response": [
             {
-              "name": "200 OK \u2014 request submitted",
+              "name": "200 OK — request submitted",
               "code": 200,
               "status": "OK",
               "body": "{\"status\": \"pending\", \"request_id\": \"550e8400-e29b-41d4-a716-446655440000\"}"
@@ -4219,7 +4219,7 @@
     },
     {
       "name": "Agents",
-      "description": "Voice agent CRUD with embedded config + tools + MCP servers + knowledge base + phone numbers. Prefix: `/api/v1/agent`. \u26a0 `phone_numbers[]` is a declarative replace \u2014 omitting a number on update DELETES it. \u26a0 Reassigning a phone number across agents returns 409. \u26a0 `delete_agent` hard-deletes despite `deleted_at` column existing.",
+      "description": "Voice agent CRUD with embedded config + tools + MCP servers + knowledge base + phone numbers. Prefix: `/api/v1/agent`. ⚠ `phone_numbers[]` is a declarative replace — omitting a number on update DELETES it. ⚠ Reassigning a phone number across agents returns 409. ⚠ `delete_agent` hard-deletes despite `deleted_at` column existing.",
       "item": [
         {
           "name": "GET /agent/get_all_agents (dropdown)",
@@ -5583,7 +5583,7 @@
                 }
               }
             },
-            "description": "**Readiness gate**: this endpoint runs `ReadinessService.gate_publish()` before flipping the FK.\n- Blockers \u2192 400 with `detail.reason = readiness_blocked` (report attached)\n- Warnings-only \u2192 400 with `detail.reason = readiness_warnings` unless `force_warnings=true`"
+            "description": "**Readiness gate**: this endpoint runs `ReadinessService.gate_publish()` before flipping the FK.\n- Blockers → 400 with `detail.reason = readiness_blocked` (report attached)\n- Warnings-only → 400 with `detail.reason = readiness_warnings` unless `force_warnings=true`"
           },
           "response": [
             {
@@ -6190,7 +6190,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"text\": \"You are Bookings Bot \u2014 a friendly inbound agent that helps callers book service appointments...\"\n}"
+              "body": "{\n  \"text\": \"You are Bookings Bot — a friendly inbound agent that helps callers book service appointments...\"\n}"
             },
             {
               "name": "400 Bad Request",
@@ -6226,7 +6226,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"text\": \"You are Max, an outbound SDR for Acme calling fresh inbound leads.\\n\\nTone: friendly, low-pressure, confident.\\n\\nOpen: 'Hi, this is Max from Acme \u2014 do you have a quick minute?'\\n\\nDo:\\n- Confirm you're speaking with the right person.\\n- Qualify with BANT in 2-3 short questions.\\n- Book a 20-minute demo if qualified.\\n\\nDon't:\\n- Pitch features before you understand the use case.\\n- Push if the prospect declines twice.\"}"
+              "body": "{\"text\": \"You are Max, an outbound SDR for Acme calling fresh inbound leads.\\n\\nTone: friendly, low-pressure, confident.\\n\\nOpen: 'Hi, this is Max from Acme — do you have a quick minute?'\\n\\nDo:\\n- Confirm you're speaking with the right person.\\n- Qualify with BANT in 2-3 short questions.\\n- Book a 20-minute demo if qualified.\\n\\nDon't:\\n- Pitch features before you understand the use case.\\n- Push if the prospect declines twice.\"}"
             },
             {
               "name": "200 Chatbot prompt generated",
@@ -6238,7 +6238,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"text\": \"You are Docs Helper, a chatbot that answers product questions using ONLY the attached documentation.\\n\\nDo:\\n- Quote or paraphrase from docs.\\n- Cite the doc title when you can.\\n- Say 'I don't know \u2014 please contact support' when docs don't cover it.\\n\\nDon't:\\n- Invent features or pricing.\\n- Discuss anything outside the docs.\"}"
+              "body": "{\"text\": \"You are Docs Helper, a chatbot that answers product questions using ONLY the attached documentation.\\n\\nDo:\\n- Quote or paraphrase from docs.\\n- Cite the doc title when you can.\\n- Say 'I don't know — please contact support' when docs don't cover it.\\n\\nDon't:\\n- Invent features or pricing.\\n- Discuss anything outside the docs.\"}"
             },
             {
               "name": "400 No OpenAI API key configured",
@@ -6393,7 +6393,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"text\": \"You are Ava, an inbound support agent for {{company_name}}.\\n\\nGoal: resolve the caller's issue on the first call.\\n\\nGreet: 'Hi, thanks for calling {{company_name}} support \u2014 how can I help?'\\n\\nDo:\\n- Verify the caller's identity before discussing account details.\\n- Restate the problem before proposing a fix.\\n- Hand off to a human if the issue is billing-related.\\n\\nDon't:\\n- Read out internal account IDs.\\n- Promise refunds or timelines you cannot guarantee.\"}"
+              "body": "{\"text\": \"You are Ava, an inbound support agent for {{company_name}}.\\n\\nGoal: resolve the caller's issue on the first call.\\n\\nGreet: 'Hi, thanks for calling {{company_name}} support — how can I help?'\\n\\nDo:\\n- Verify the caller's identity before discussing account details.\\n- Restate the problem before proposing a fix.\\n- Hand off to a human if the issue is billing-related.\\n\\nDon't:\\n- Read out internal account IDs.\\n- Promise refunds or timelines you cannot guarantee.\"}"
             },
             {
               "name": "400 No OpenAI API key configured",
@@ -6561,7 +6561,7 @@
                 }
               }
             },
-            "description": "Runs a readiness check for the agent.\n\n**depth**: `shallow` (DB reads only \u2014 fast, safe on every render) or `deep` (also probes live providers; rate-limited to 1/min per agent).\n\n**config_id** (optional): pin the check to a specific config version. Omit to use the agent's active/published config.\n\n**trigger** (optional): free-form analytics label \u2014 e.g. `editor_load`, `field_change`, `publish_gate`, `test_button`, `list_page`.\n\nReturns a full `ReadinessReport` (overall status + counts + per-check rows). Deep responses may return 429 if rate-limited."
+            "description": "Runs a readiness check for the agent.\n\n**depth**: `shallow` (DB reads only — fast, safe on every render) or `deep` (also probes live providers; rate-limited to 1/min per agent).\n\n**config_id** (optional): pin the check to a specific config version. Omit to use the agent's active/published config.\n\n**trigger** (optional): free-form analytics label — e.g. `editor_load`, `field_change`, `publish_gate`, `test_button`, `list_page`.\n\nReturns a full `ReadinessReport` (overall status + counts + per-check rows). Deep responses may return 429 if rate-limited."
           },
           "response": [
             {
@@ -6661,7 +6661,7 @@
                   "key": "config_id",
                   "value": "",
                   "disabled": true,
-                  "description": "Optional \u2014 pin to a specific config version"
+                  "description": "Optional — pin to a specific config version"
                 },
                 {
                   "key": "trigger",
@@ -6670,7 +6670,7 @@
                 }
               ]
             },
-            "description": "Cheap Shallow badge shape for the agent list page. Returns overall status + blocker / warning / info counts. Always Shallow \u2014 no deep probes."
+            "description": "Cheap Shallow badge shape for the agent list page. Returns overall status + blocker / warning / info counts. Always Shallow — no deep probes."
           },
           "response": [
             {
@@ -6739,7 +6739,7 @@
     },
     {
       "name": "Agent Configs",
-      "description": "Per-agent LLM/STT/TTS configuration upsert. Prefix: `/api/v1/agent_config`. Frontend agent form does NOT call this directly \u2014 it bundles config inside `/agent/create_agent` and `/agent/update_agent`. \u26a0 Schema drift: model declares v2 (`llm_settings` etc.) but service writes legacy columns (`llm_metadata` etc.). \u26a0 `UPSERT_DEBUG` INFO logs leak `system_prompt`.",
+      "description": "Per-agent LLM/STT/TTS configuration upsert. Prefix: `/api/v1/agent_config`. Frontend agent form does NOT call this directly — it bundles config inside `/agent/create_agent` and `/agent/update_agent`. ⚠ Schema drift: model declares v2 (`llm_settings` etc.) but service writes legacy columns (`llm_metadata` etc.). ⚠ `UPSERT_DEBUG` INFO logs leak `system_prompt`.",
       "item": [
         {
           "name": "POST /agent_config/upsert_agent_config",
@@ -6820,7 +6820,7 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"id\": 12, \"uuid\": \"b9d4e6f1-2a8c-4b5d-9e3f-7c1a5b8d2e4f\", \"agent_id\": 7, \"system_prompt\": \"You are Ava \u2014 now with a refined tone.\", \"first_message\": \"Hi, thanks for calling support.\", \"end_call_message\": \"Thanks, talk soon!\", \"voicemail_message\": \"Please leave a message after the tone.\", \"html_prompt\": \"<p>You are Ava.</p>\", \"llm_account_id\": 3, \"tts_account_id\": 4, \"stt_account_id\": 5, \"llm_model_instance_id\": 11, \"tts_model_instance_id\": 12, \"stt_model_instance_id\": 13, \"llm_metadata\": {\"model_id\": \"gpt-4o\", \"temperature\": 0.4}, \"tts_metadata\": {\"model_id\": \"eleven_turbo_v2\"}, \"stt_metadata\": {\"model_id\": \"nova-2\"}, \"agent_metadata\": {\"language\": \"en\", \"call_recording\": true, \"voice_speed\": 1.0}, \"status\": \"active\", \"created_at\": 1750155332, \"updated_at\": 1750157891}"
+              "body": "{\"id\": 12, \"uuid\": \"b9d4e6f1-2a8c-4b5d-9e3f-7c1a5b8d2e4f\", \"agent_id\": 7, \"system_prompt\": \"You are Ava — now with a refined tone.\", \"first_message\": \"Hi, thanks for calling support.\", \"end_call_message\": \"Thanks, talk soon!\", \"voicemail_message\": \"Please leave a message after the tone.\", \"html_prompt\": \"<p>You are Ava.</p>\", \"llm_account_id\": 3, \"tts_account_id\": 4, \"stt_account_id\": 5, \"llm_model_instance_id\": 11, \"tts_model_instance_id\": 12, \"stt_model_instance_id\": 13, \"llm_metadata\": {\"model_id\": \"gpt-4o\", \"temperature\": 0.4}, \"tts_metadata\": {\"model_id\": \"eleven_turbo_v2\"}, \"stt_metadata\": {\"model_id\": \"nova-2\"}, \"agent_metadata\": {\"language\": \"en\", \"call_recording\": true, \"voice_speed\": 1.0}, \"status\": \"active\", \"created_at\": 1750155332, \"updated_at\": 1750157891}"
             },
             {
               "name": "400 agent_id is required",
@@ -6900,7 +6900,7 @@
     },
     {
       "name": "Channels",
-      "description": "Telephony/transport provider integrations (Twilio, Telnyx, Exotel, Plivo, Daily, WebSocket). Prefix: `/api/v1/channel`. Credentials AES-encrypted in `encrypted_config`. \u26a0 `delete_channel` does not catch `IntegrityError` from `phone_numbers.channel_id ON DELETE RESTRICT` \u2014 channels with attached numbers raise 500. \u26a0 Frontend hard-codes only Twilio.",
+      "description": "Telephony/transport provider integrations (Twilio, Telnyx, Exotel, Plivo, Daily, WebSocket). Prefix: `/api/v1/channel`. Credentials AES-encrypted in `encrypted_config`. ⚠ `delete_channel` does not catch `IntegrityError` from `phone_numbers.channel_id ON DELETE RESTRICT` — channels with attached numbers raise 500. ⚠ Frontend hard-codes only Twilio.",
       "item": [
         {
           "name": "POST /channel/upsert",
@@ -7678,10 +7678,10 @@
               "body": "{\"detail\": \"Channel not found\"}"
             },
             {
-              "name": "500 IntegrityError (attached phone numbers) \u26a0",
+              "name": "500 IntegrityError (attached phone numbers) ⚠",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 Channel has phone_numbers attached and FK is ON DELETE RESTRICT.\n# Should ideally return 409 with a friendly message \u2014 current code doesn't catch the IntegrityError."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ Channel has phone_numbers attached and FK is ON DELETE RESTRICT.\n# Should ideally return 409 with a friendly message — current code doesn't catch the IntegrityError."
             },
             {
               "name": "400 channel_id must be a valid UUID",
@@ -8113,12 +8113,456 @@
               }
             }
           ]
+        },
+        {
+          "name": "GET /channel/telnyx_phone_numbers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/channel/telnyx_phone_numbers?channel_id={{channel_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "channel",
+                "telnyx_phone_numbers"
+              ],
+              "query": [
+                {
+                  "key": "channel_id",
+                  "value": "{{channel_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"phone_number\": \"+14155550100\",\n    \"friendly_name\": \"Main line\",\n    \"sid\": \"PN...\",\n    \"assigned_agent_id\": null,\n    \"is_assigned\": false\n  }\n]"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\"detail\": \"Channel not found\"}"
+            },
+            {
+              "name": "200 OK - live Telnyx numbers merged with local assignments",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": [
+                {
+                  "id": "PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "number": "+15551234567",
+                  "label": "My Telnyx Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": {
+                    "agent_id": "22222222-2222-2222-2222-222222222222",
+                    "agent_name": "Sales Agent"
+                  }
+                },
+                {
+                  "id": "PNyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+                  "number": "+15557654321",
+                  "label": "Unassigned Telnyx Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": null
+                }
+              ]
+            },
+            {
+              "name": "400 channel_id must be a valid UUID",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "channel_id must be a valid UUID"
+              }
+            },
+            {
+              "name": "404 Channel not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel not found"
+              }
+            },
+            {
+              "name": "400 Channel is not a Telnyx channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel is not a Telnyx channel"
+              }
+            },
+            {
+              "name": "400 Telnyx credentials are not configured for this channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Telnyx credentials are not configured for this channel"
+              }
+            },
+            {
+              "name": "400 Telnyx API error",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Telnyx API error: Authentication Error - invalid username"
+              }
+            },
+            {
+              "name": "500 Telnyx integration is unavailable on this server",
+              "code": 500,
+              "status": "Internal Server Error",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Telnyx integration is unavailable on this server"
+              }
+            },
+            {
+              "name": "502 Failed to fetch phone numbers from Telnyx",
+              "code": 502,
+              "status": "Bad Gateway",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Failed to fetch phone numbers from Telnyx"
+              }
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid token"
+              }
+            },
+            {
+              "name": "422 Unprocessable Entity (missing channel_id query param)",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": [
+                  {
+                    "type": "missing",
+                    "loc": [
+                      "query",
+                      "channel_id"
+                    ],
+                    "msg": "Field required",
+                    "input": null
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /channel/plivo_phone_numbers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/channel/plivo_phone_numbers?channel_id={{channel_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "channel",
+                "plivo_phone_numbers"
+              ],
+              "query": [
+                {
+                  "key": "channel_id",
+                  "value": "{{channel_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"phone_number\": \"+14155550100\",\n    \"friendly_name\": \"Main line\",\n    \"sid\": \"PN...\",\n    \"assigned_agent_id\": null,\n    \"is_assigned\": false\n  }\n]"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\"detail\": \"Channel not found\"}"
+            },
+            {
+              "name": "200 OK - live Plivo numbers merged with local assignments",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": [
+                {
+                  "id": "PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "number": "+15551234567",
+                  "label": "My Plivo Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": {
+                    "agent_id": "22222222-2222-2222-2222-222222222222",
+                    "agent_name": "Sales Agent"
+                  }
+                },
+                {
+                  "id": "PNyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+                  "number": "+15557654321",
+                  "label": "Unassigned Plivo Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": null
+                }
+              ]
+            },
+            {
+              "name": "400 channel_id must be a valid UUID",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "channel_id must be a valid UUID"
+              }
+            },
+            {
+              "name": "404 Channel not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel not found"
+              }
+            },
+            {
+              "name": "400 Channel is not a Plivo channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel is not a Plivo channel"
+              }
+            },
+            {
+              "name": "400 Plivo credentials are not configured for this channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Plivo credentials are not configured for this channel"
+              }
+            },
+            {
+              "name": "400 Plivo API error",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Plivo API error: Authentication Error - invalid username"
+              }
+            },
+            {
+              "name": "500 Plivo integration is unavailable on this server",
+              "code": 500,
+              "status": "Internal Server Error",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Plivo integration is unavailable on this server"
+              }
+            },
+            {
+              "name": "502 Failed to fetch phone numbers from Plivo",
+              "code": 502,
+              "status": "Bad Gateway",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Failed to fetch phone numbers from Plivo"
+              }
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid token"
+              }
+            },
+            {
+              "name": "422 Unprocessable Entity (missing channel_id query param)",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": [
+                  {
+                    "type": "missing",
+                    "loc": [
+                      "query",
+                      "channel_id"
+                    ],
+                    "msg": "Field required",
+                    "input": null
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },
     {
       "name": "Knowledge Base",
-      "description": "Document upload + chunking + embedding for agent RAG. Prefix: `/api/v1/knowledge-base`. Pipeline: R2 upload \u2192 PyPDF2/docx text extract \u2192 LangChain RecursiveCharacterTextSplitter (1000/200) \u2192 OpenAI text-embedding-3-small in batches of 100 \u2192 pgvector chunks. \u26a0 EE controller skips processing \u2014 uploads stay un-RAG'd. \u26a0 R2 leak on 409 path.",
+      "description": "Document upload + chunking + embedding for agent RAG. Prefix: `/api/v1/knowledge-base`. Pipeline: R2 upload → PyPDF2/docx text extract → LangChain RecursiveCharacterTextSplitter (1000/200) → OpenAI text-embedding-3-small in batches of 100 → pgvector chunks. ⚠ EE controller skips processing — uploads stay un-RAG'd. ⚠ R2 leak on 409 path.",
       "item": [
         {
           "name": "POST /knowledge-base/list",
@@ -8328,7 +8772,7 @@
               "body": "{\"detail\": \"Agent has no configuration yet. Save the agent before uploading knowledge base documents.\"}"
             },
             {
-              "name": "201 Created \u2014 status: processing (queued for ingestion)",
+              "name": "201 Created — status: processing (queued for ingestion)",
               "code": 201,
               "status": "Created",
               "header": [
@@ -8351,7 +8795,7 @@
               }
             },
             {
-              "name": "201 Created \u2014 status: ready (ingestion completed)",
+              "name": "201 Created — status: ready (ingestion completed)",
               "code": 201,
               "status": "Created",
               "header": [
@@ -8380,7 +8824,7 @@
               }
             },
             {
-              "name": "201 Created \u2014 status: failed (with meta_data.error)",
+              "name": "201 Created — status: failed (with meta_data.error)",
               "code": 201,
               "status": "Created",
               "header": [
@@ -8723,7 +9167,7 @@
               "body": "{\"detail\": \"Upload not found\"}"
             },
             {
-              "name": "200 Replaced \u2014 status reset to processing",
+              "name": "200 Replaced — status reset to processing",
               "code": 200,
               "status": "OK",
               "header": [
@@ -8997,7 +9441,7 @@
               "body": "{\"detail\": \"Document not found\"}"
             },
             {
-              "name": "202 Accepted \u2014 status: processing, stale error cleared",
+              "name": "202 Accepted — status: processing, stale error cleared",
               "code": 202,
               "status": "Accepted",
               "header": [
@@ -10081,7 +10525,7 @@
     },
     {
       "name": "MCP Servers",
-      "description": "Model Context Protocol external tool servers. Prefix: `/api/v1/mcp-server`. Servers attach to agents many-to-many via `agent_mcp_servers`. \u26a0 `selected_tools` parameter is currently a no-op \u2014 all tools always exposed.",
+      "description": "Model Context Protocol external tool servers. Prefix: `/api/v1/mcp-server`. Servers attach to agents many-to-many via `agent_mcp_servers`. ⚠ `selected_tools` parameter is currently a no-op — all tools always exposed.",
       "item": [
         {
           "name": "POST /mcp-server/list",
@@ -10788,7 +11232,7 @@
     },
     {
       "name": "Tools",
-      "description": "Custom function-calling tools (webhooks, built-ins like send_sms / google_calendar). Prefix: `/api/v1/tool`. Distinct from MCP servers. \u26a0 `PUT /update_tool` raises NameError \u2014 `time.time()` used without `import time`. \u26a0 Template tools cannot be edited or deleted. \u26a0 MCP tools cannot be deleted via this surface.",
+      "description": "Custom function-calling tools (webhooks, built-ins like send_sms / google_calendar). Prefix: `/api/v1/tool`. Distinct from MCP servers. ⚠ `PUT /update_tool` raises NameError — `time.time()` used without `import time`. ⚠ Template tools cannot be edited or deleted. ⚠ MCP tools cannot be deleted via this surface.",
       "item": [
         {
           "name": "POST /tool/create_tool",
@@ -11121,7 +11565,7 @@
           ]
         },
         {
-          "name": "PUT /tool/update_tool \u26a0 BUGGY",
+          "name": "PUT /tool/update_tool ⚠ BUGGY",
           "request": {
             "method": "PUT",
             "header": [
@@ -11166,10 +11610,10 @@
               "body": "{\"id\": \"{{tool_id}}\", \"description\": \"Updated description\", \"is_active\": false}"
             },
             {
-              "name": "500 NameError \u26a0",
+              "name": "500 NameError ⚠",
               "code": 500,
               "status": "Internal Server Error",
-              "body": "{\"detail\": \"Internal Server Error\"}\n\n# \u26a0 KNOWN BUG: tool_service.py uses time.time() without import time. Fix: add `import time` at top of file."
+              "body": "{\"detail\": \"Internal Server Error\"}\n\n# ⚠ KNOWN BUG: tool_service.py uses time.time() without import time. Fix: add `import time` at top of file."
             },
             {
               "name": "400 Template cannot be edited",
@@ -11542,7 +11986,7 @@
     },
     {
       "name": "Model Providers",
-      "description": "LLM / STT / TTS provider catalog + per-org encrypted API keys + TTS voice catalog. Prefix: `/api/v1/services`. \u26a0 `JWT_SECRET` doubles as the encryption master key \u2014 rotating it invalidates every stored API key. \u26a0 Static PBKDF2 salt. \u26a0 `agent_configs` has no FK to `models` \u2014 orphan possible.",
+      "description": "LLM / STT / TTS provider catalog + per-org encrypted API keys + TTS voice catalog. Prefix: `/api/v1/services`. ⚠ `JWT_SECRET` doubles as the encryption master key — rotating it invalidates every stored API key. ⚠ Static PBKDF2 salt. ⚠ `agent_configs` has no FK to `models` — orphan possible.",
       "item": [
         {
           "name": "POST /services/list (org API keys)",
@@ -14210,7 +14654,7 @@
     },
     {
       "name": "OAuth Integrations",
-      "description": "3-legged OAuth flow for Google Calendar / Google Sheets. Prefix: `/api/v1/oauth`. Tokens AES-encrypted at rest; auto-refresh via OAuthService.get_valid_access_token_for_connection. \u26a0 State parameter is plaintext `<org>:<user>:<provider>` \u2014 no CSRF protection. \u26a0 `disconnect` and `get_connection` are NOT org-scoped \u2014 cross-org leak by UUID.",
+      "description": "3-legged OAuth flow for Google Calendar / Google Sheets. Prefix: `/api/v1/oauth`. Tokens AES-encrypted at rest; auto-refresh via OAuthService.get_valid_access_token_for_connection. ⚠ State parameter is plaintext `<org>:<user>:<provider>` — no CSRF protection. ⚠ `disconnect` and `get_connection` are NOT org-scoped — cross-org leak by UUID.",
       "item": [
         {
           "name": "GET /oauth/providers (public)",
@@ -14306,7 +14750,7 @@
           ]
         },
         {
-          "name": "POST /oauth/list (org-wide \u26a0 not user-scoped)",
+          "name": "POST /oauth/list (org-wide ⚠ not user-scoped)",
           "request": {
             "method": "POST",
             "header": [
@@ -14422,7 +14866,7 @@
           ]
         },
         {
-          "name": "DELETE /oauth/disconnect \u26a0 not org-scoped",
+          "name": "DELETE /oauth/disconnect ⚠ not org-scoped",
           "request": {
             "method": "DELETE",
             "header": [],
@@ -15014,7 +15458,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Read and write CRM data \u2014 contacts, companies, deals, and tickets \u2014 during calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\n    \"crm.objects.contacts.read\",\n    \"crm.objects.contacts.write\",\n    \"crm.objects.companies.read\",\n    \"crm.objects.deals.read\",\n    \"tickets\"\n  ],\n  \"extra_auth_params\": {},\n  \"client_id\": \"hubspot-app-client-id\",\n  \"client_secret\": \"hubspot-app-client-secret\",\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"sort_order\": 30\n}",
+              "raw": "{\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Read and write CRM data — contacts, companies, deals, and tickets — during calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\n    \"crm.objects.contacts.read\",\n    \"crm.objects.contacts.write\",\n    \"crm.objects.companies.read\",\n    \"crm.objects.deals.read\",\n    \"tickets\"\n  ],\n  \"extra_auth_params\": {},\n  \"client_id\": \"hubspot-app-client-id\",\n  \"client_secret\": \"hubspot-app-client-secret\",\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"sort_order\": 30\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -15033,11 +15477,11 @@
                 "create_app_integration"
               ]
             },
-            "description": "Add a new integration to the global catalog. Admin/owner only.\n\n**Required** (enforced by Pydantic + service): `slug` (2\u201364 chars, lowercase `[a-z0-9_-]`), `display_name` (1\u2013120 chars), `auth_type` (one of `oauth`, `api_key`, `bearer_token`, `none`).\n\n**Optional**: every other field. `client_id` / `client_secret` are encrypted and stored on the row; never returned. `is_default` is silently ignored \u2014 only seeds may be default."
+            "description": "Add a new integration to the global catalog. Admin/owner only.\n\n**Required** (enforced by Pydantic + service): `slug` (2–64 chars, lowercase `[a-z0-9_-]`), `display_name` (1–120 chars), `auth_type` (one of `oauth`, `api_key`, `bearer_token`, `none`).\n\n**Optional**: every other field. `client_id` / `client_secret` are encrypted and stored on the row; never returned. `is_default` is silently ignored — only seeds may be default."
           },
           "response": [
             {
-              "name": "201 Created \u2014 OAuth provider",
+              "name": "201 Created — OAuth provider",
               "code": 201,
               "status": "Created",
               "header": [
@@ -15046,10 +15490,10 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Read and write CRM data \u2014 contacts, companies, deals, and tickets \u2014 during calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"crm.objects.contacts.read\", \"crm.objects.contacts.write\", \"crm.objects.companies.read\", \"crm.objects.deals.read\", \"tickets\"],\n  \"extra_auth_params\": {},\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 30,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
+              "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Read and write CRM data — contacts, companies, deals, and tickets — during calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"crm.objects.contacts.read\", \"crm.objects.contacts.write\", \"crm.objects.companies.read\", \"crm.objects.deals.read\", \"tickets\"],\n  \"extra_auth_params\": {},\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 30,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
             },
             {
-              "name": "201 Created \u2014 API key provider (Twilio)",
+              "name": "201 Created — API key provider (Twilio)",
               "code": 201,
               "status": "Created",
               "header": [
@@ -15061,7 +15505,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440ccc\",\n  \"slug\": \"twilio\",\n  \"display_name\": \"Twilio\",\n  \"description\": \"Cloud communications platform for voice, SMS, and phone numbers.\",\n  \"category\": \"telephony\",\n  \"icon_url\": null,\n  \"auth_type\": \"api_key\",\n  \"auth_url\": null,\n  \"token_url\": null,\n  \"userinfo_url\": null,\n  \"scopes\": [],\n  \"extra_auth_params\": {},\n  \"has_credentials\": false,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": false,\n  \"sort_order\": 100,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
             },
             {
-              "name": "201 Created \u2014 bearer_token provider",
+              "name": "201 Created — bearer_token provider",
               "code": 201,
               "status": "Created",
               "header": [
@@ -15073,7 +15517,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440ddd\",\n  \"slug\": \"linear\",\n  \"display_name\": \"Linear\",\n  \"description\": \"Issue tracking integration.\",\n  \"category\": \"dev_crm\",\n  \"icon_url\": null,\n  \"auth_type\": \"bearer_token\",\n  \"auth_url\": null,\n  \"token_url\": null,\n  \"userinfo_url\": null,\n  \"scopes\": [],\n  \"extra_auth_params\": {},\n  \"has_credentials\": false,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": false,\n  \"sort_order\": 100,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
             },
             {
-              "name": "201 Created \u2014 auth_type=none",
+              "name": "201 Created — auth_type=none",
               "code": 201,
               "status": "Created",
               "header": [
@@ -15085,7 +15529,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440eee\",\n  \"slug\": \"public_webhook\",\n  \"display_name\": \"Public Webhook\",\n  \"description\": \"Unauthenticated webhook receiver.\",\n  \"category\": \"other\",\n  \"icon_url\": null,\n  \"auth_type\": \"none\",\n  \"auth_url\": null,\n  \"token_url\": null,\n  \"userinfo_url\": null,\n  \"scopes\": [],\n  \"extra_auth_params\": {},\n  \"has_credentials\": false,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 100,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
             },
             {
-              "name": "400 \u2014 slug pattern invalid",
+              "name": "400 — slug pattern invalid",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15094,10 +15538,10 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"detail\": \"slug must be 2\u201364 chars of lowercase letters, digits, '-' or '_'\"}"
+              "body": "{\"detail\": \"slug must be 2–64 chars of lowercase letters, digits, '-' or '_'\"}"
             },
             {
-              "name": "400 \u2014 display_name is whitespace",
+              "name": "400 — display_name is whitespace",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15109,7 +15553,7 @@
               "body": "{\"detail\": \"display_name cannot be empty\"}"
             },
             {
-              "name": "400 \u2014 auth_type not in allow-list",
+              "name": "400 — auth_type not in allow-list",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15121,7 +15565,7 @@
               "body": "{\"detail\": \"auth_type must be one of: ['api_key', 'bearer_token', 'none', 'oauth']\"}"
             },
             {
-              "name": "400 \u2014 scopes must be a list",
+              "name": "400 — scopes must be a list",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15133,7 +15577,7 @@
               "body": "{\"detail\": \"scopes must be a list of strings\"}"
             },
             {
-              "name": "400 \u2014 extra_auth_params must be an object",
+              "name": "400 — extra_auth_params must be an object",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15145,7 +15589,7 @@
               "body": "{\"detail\": \"extra_auth_params must be an object\"}"
             },
             {
-              "name": "400 \u2014 client_id must be a string",
+              "name": "400 — client_id must be a string",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15157,7 +15601,7 @@
               "body": "{\"detail\": \"client_id must be a string\"}"
             },
             {
-              "name": "409 \u2014 duplicate slug",
+              "name": "409 — duplicate slug",
               "code": 409,
               "status": "Conflict",
               "header": [
@@ -15169,7 +15613,7 @@
               "body": "{\"detail\": \"An integration with slug 'hubspot' already exists\"}"
             },
             {
-              "name": "422 \u2014 missing required `slug`",
+              "name": "422 — missing required `slug`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15181,7 +15625,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"body\", \"slug\"], \"msg\": \"Field required\", \"input\": {} }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 missing required `display_name`",
+              "name": "422 — missing required `display_name`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15193,7 +15637,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"body\", \"display_name\"], \"msg\": \"Field required\", \"input\": {} }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 missing required `auth_type`",
+              "name": "422 — missing required `auth_type`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15205,7 +15649,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"body\", \"auth_type\"], \"msg\": \"Field required\", \"input\": {} }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 slug below min_length=2",
+              "name": "422 — slug below min_length=2",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15217,7 +15661,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"string_too_short\", \"loc\": [\"body\", \"slug\"], \"msg\": \"String should have at least 2 characters\" }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 slug above max_length=64",
+              "name": "422 — slug above max_length=64",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15229,7 +15673,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"string_too_long\", \"loc\": [\"body\", \"slug\"], \"msg\": \"String should have at most 64 characters\" }\n  ]\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 no bearer token",
+              "name": "401 Unauthorized — no bearer token",
               "code": 401,
               "status": "Unauthorized",
               "header": [
@@ -15241,7 +15685,7 @@
               "body": "{\"detail\": \"Could not validate credentials\"}"
             },
             {
-              "name": "403 Forbidden \u2014 member role rejected",
+              "name": "403 Forbidden — member role rejected",
               "code": 403,
               "status": "Forbidden",
               "header": [
@@ -15266,7 +15710,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"description\": \"Updated description \u2014 sync contacts and deals from voice calls.\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot-v2.svg\",\n  \"scopes\": [\n    \"crm.objects.contacts.read\",\n    \"crm.objects.contacts.write\"\n  ],\n  \"extra_auth_params\": { \"prompt\": \"consent\" },\n  \"sort_order\": 25,\n  \"is_enabled\": true\n}",
+              "raw": "{\n  \"description\": \"Updated description — sync contacts and deals from voice calls.\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot-v2.svg\",\n  \"scopes\": [\n    \"crm.objects.contacts.read\",\n    \"crm.objects.contacts.write\"\n  ],\n  \"extra_auth_params\": { \"prompt\": \"consent\" },\n  \"sort_order\": 25,\n  \"is_enabled\": true\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -15292,11 +15736,11 @@
                 }
               ]
             },
-            "description": "Patch persistable columns on an existing integration. All body fields are optional (true PATCH semantics \u2014 only supplied keys are written).\n\n`is_default` and `created_by_user_id` are intentionally NOT patchable. Slugs may change but must stay unique. Supplying `client_id` or `client_secret` overwrites the corresponding key in the encrypted credentials blob; omitting them leaves the stored value untouched."
+            "description": "Patch persistable columns on an existing integration. All body fields are optional (true PATCH semantics — only supplied keys are written).\n\n`is_default` and `created_by_user_id` are intentionally NOT patchable. Slugs may change but must stay unique. Supplying `client_id` or `client_secret` overwrites the corresponding key in the encrypted credentials blob; omitting them leaves the stored value untouched."
           },
           "response": [
             {
-              "name": "200 OK \u2014 patch description / scopes",
+              "name": "200 OK — patch description / scopes",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15305,10 +15749,10 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Updated description \u2014 sync contacts and deals from voice calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot-v2.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"crm.objects.contacts.read\", \"crm.objects.contacts.write\"],\n  \"extra_auth_params\": { \"prompt\": \"consent\" },\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 25,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751302800\n}"
+              "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"Updated description — sync contacts and deals from voice calls.\",\n  \"category\": \"crm\",\n  \"icon_url\": \"https://cdn.example.com/icons/hubspot-v2.svg\",\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"crm.objects.contacts.read\", \"crm.objects.contacts.write\"],\n  \"extra_auth_params\": { \"prompt\": \"consent\" },\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 25,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751302800\n}"
             },
             {
-              "name": "200 OK \u2014 rotate client_secret only",
+              "name": "200 OK — rotate client_secret only",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15320,7 +15764,7 @@
               "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"...\",\n  \"category\": \"crm\",\n  \"icon_url\": null,\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://app.hubspot.com/oauth/authorize\",\n  \"token_url\": \"https://api.hubapi.com/oauth/v1/token\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"...\"],\n  \"extra_auth_params\": {},\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": true,\n  \"sort_order\": 30,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751302800\n}"
             },
             {
-              "name": "200 OK \u2014 disable seeded integration (is_enabled=false)",
+              "name": "200 OK — disable seeded integration (is_enabled=false)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15332,7 +15776,7 @@
               "body": "{\n  \"id\": \"{{default_app_integration_id}}\",\n  \"slug\": \"google_calendar\",\n  \"display_name\": \"Google Calendar\",\n  \"description\": \"Create events, check availability, and manage schedules from voice calls.\",\n  \"category\": \"google\",\n  \"icon_url\": null,\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://accounts.google.com/o/oauth2/v2/auth\",\n  \"token_url\": \"https://oauth2.googleapis.com/token\",\n  \"userinfo_url\": \"https://www.googleapis.com/oauth2/v2/userinfo\",\n  \"scopes\": [\"https://www.googleapis.com/auth/calendar\", \"https://www.googleapis.com/auth/userinfo.email\"],\n  \"extra_auth_params\": { \"access_type\": \"offline\", \"prompt\": \"consent\" },\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": false,\n  \"is_default\": true,\n  \"is_configured\": true,\n  \"sort_order\": 10,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751302800\n}"
             },
             {
-              "name": "200 OK \u2014 empty body (no-op, still returns the row)",
+              "name": "200 OK — empty body (no-op, still returns the row)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15344,7 +15788,7 @@
               "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"hubspot\",\n  \"display_name\": \"HubSpot\",\n  \"description\": \"...\",\n  \"category\": \"crm\",\n  \"icon_url\": null,\n  \"auth_type\": \"oauth\",\n  \"...\": \"unchanged\"\n}"
             },
             {
-              "name": "400 \u2014 slug pattern invalid",
+              "name": "400 — slug pattern invalid",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15353,10 +15797,10 @@
                   "value": "application/json"
                 }
               ],
-              "body": "{\"detail\": \"slug must be 2\u201364 chars of lowercase letters, digits, '-' or '_'\"}"
+              "body": "{\"detail\": \"slug must be 2–64 chars of lowercase letters, digits, '-' or '_'\"}"
             },
             {
-              "name": "400 \u2014 auth_type not in allow-list",
+              "name": "400 — auth_type not in allow-list",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15368,7 +15812,7 @@
               "body": "{\"detail\": \"auth_type must be one of: ['api_key', 'bearer_token', 'none', 'oauth']\"}"
             },
             {
-              "name": "400 \u2014 display_name whitespace only",
+              "name": "400 — display_name whitespace only",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15380,7 +15824,7 @@
               "body": "{\"detail\": \"display_name cannot be empty\"}"
             },
             {
-              "name": "404 \u2014 integration id not found",
+              "name": "404 — integration id not found",
               "code": 404,
               "status": "Not Found",
               "header": [
@@ -15392,7 +15836,7 @@
               "body": "{\"detail\": \"App integration not found\"}"
             },
             {
-              "name": "409 \u2014 new slug collides with another integration",
+              "name": "409 — new slug collides with another integration",
               "code": 409,
               "status": "Conflict",
               "header": [
@@ -15404,7 +15848,7 @@
               "body": "{\"detail\": \"An integration with slug 'google_calendar' already exists\"}"
             },
             {
-              "name": "422 \u2014 missing query param `id`",
+              "name": "422 — missing query param `id`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15416,7 +15860,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Field required\" }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 `id` is not a UUID",
+              "name": "422 — `id` is not a UUID",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15428,7 +15872,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"uuid_parsing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Input should be a valid UUID\" }\n  ]\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 no bearer token",
+              "name": "401 Unauthorized — no bearer token",
               "code": 401,
               "status": "Unauthorized",
               "header": [
@@ -15440,7 +15884,7 @@
               "body": "{\"detail\": \"Could not validate credentials\"}"
             },
             {
-              "name": "403 Forbidden \u2014 member role rejected",
+              "name": "403 Forbidden — member role rejected",
               "code": 403,
               "status": "Forbidden",
               "header": [
@@ -15477,11 +15921,11 @@
                 }
               ]
             },
-            "description": "Fetch a single integration by id. Any org member may read. Secrets (`client_id`, `client_secret`, encrypted blob) are NEVER returned \u2014 only `has_credentials` + `is_configured` flags."
+            "description": "Fetch a single integration by id. Any org member may read. Secrets (`client_id`, `client_secret`, encrypted blob) are NEVER returned — only `has_credentials` + `is_configured` flags."
           },
           "response": [
             {
-              "name": "200 OK \u2014 OAuth integration",
+              "name": "200 OK — OAuth integration",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15493,7 +15937,7 @@
               "body": "{\n  \"id\": \"{{app_integration_id}}\",\n  \"slug\": \"google_calendar\",\n  \"display_name\": \"Google Calendar\",\n  \"description\": \"Create events, check availability, and manage schedules from voice calls.\",\n  \"category\": \"google\",\n  \"icon_url\": null,\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://accounts.google.com/o/oauth2/v2/auth\",\n  \"token_url\": \"https://oauth2.googleapis.com/token\",\n  \"userinfo_url\": \"https://www.googleapis.com/oauth2/v2/userinfo\",\n  \"scopes\": [\"https://www.googleapis.com/auth/calendar\", \"https://www.googleapis.com/auth/userinfo.email\"],\n  \"extra_auth_params\": { \"access_type\": \"offline\", \"prompt\": \"consent\" },\n  \"has_credentials\": true,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": true,\n  \"is_configured\": true,\n  \"sort_order\": 10,\n  \"created_at\": 1751299200,\n  \"updated_at\": 1751299200\n}"
             },
             {
-              "name": "200 OK \u2014 admin-created (not seeded, no creds)",
+              "name": "200 OK — admin-created (not seeded, no creds)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15505,7 +15949,7 @@
               "body": "{\n  \"id\": \"550e8400-e29b-41d4-a716-446655440fff\",\n  \"slug\": \"slack\",\n  \"display_name\": \"Slack\",\n  \"description\": \"Send notifications to Slack channels from voice agents.\",\n  \"category\": \"productivity\",\n  \"icon_url\": null,\n  \"auth_type\": \"oauth\",\n  \"auth_url\": \"https://slack.com/oauth/v2/authorize\",\n  \"token_url\": \"https://slack.com/api/oauth.v2.access\",\n  \"userinfo_url\": null,\n  \"scopes\": [\"chat:write\", \"channels:read\"],\n  \"extra_auth_params\": {},\n  \"has_credentials\": false,\n  \"pkce_required\": true,\n  \"is_enabled\": true,\n  \"is_default\": false,\n  \"is_configured\": false,\n  \"sort_order\": 100,\n  \"created_at\": 1751302800,\n  \"updated_at\": 1751302800\n}"
             },
             {
-              "name": "404 \u2014 integration id not found",
+              "name": "404 — integration id not found",
               "code": 404,
               "status": "Not Found",
               "header": [
@@ -15517,7 +15961,7 @@
               "body": "{\"detail\": \"App integration not found\"}"
             },
             {
-              "name": "422 \u2014 missing query param `id`",
+              "name": "422 — missing query param `id`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15529,7 +15973,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Field required\" }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 `id` is not a UUID",
+              "name": "422 — `id` is not a UUID",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15541,7 +15985,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"uuid_parsing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Input should be a valid UUID\" }\n  ]\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 no bearer token",
+              "name": "401 Unauthorized — no bearer token",
               "code": 401,
               "status": "Unauthorized",
               "header": [
@@ -15585,11 +16029,11 @@
                 "list"
               ]
             },
-            "description": "List integrations with optional search, filters, sort, and pagination. All body fields are optional.\n\n**Body shape:**\n```\n{\n  \"search\":     \"hub\",          // ILIKE against slug, display_name, description\n  \"category\":   \"crm\",          // exact match\n  \"auth_type\":  \"oauth\",        // exact match\n  \"is_enabled\": true,           // bool or string ('true'/'false') \u2014 coerced by _optional_bool\n  \"is_default\": true,           // bool or string\n  \"sort_by\":    \"sort_order\",   // one of slug, display_name, category, sort_order, created_at, updated_at\n  \"sort_order\": \"asc\",          // asc | desc\n  \"page\":       1,\n  \"page_size\":  20\n}\n```\n\nLegacy `sort: \"-display_name\"` form is also accepted. Invalid `sort_by` silently falls back to `sort_order` (no error)."
+            "description": "List integrations with optional search, filters, sort, and pagination. All body fields are optional.\n\n**Body shape:**\n```\n{\n  \"search\":     \"hub\",          // ILIKE against slug, display_name, description\n  \"category\":   \"crm\",          // exact match\n  \"auth_type\":  \"oauth\",        // exact match\n  \"is_enabled\": true,           // bool or string ('true'/'false') — coerced by _optional_bool\n  \"is_default\": true,           // bool or string\n  \"sort_by\":    \"sort_order\",   // one of slug, display_name, category, sort_order, created_at, updated_at\n  \"sort_order\": \"asc\",          // asc | desc\n  \"page\":       1,\n  \"page_size\":  20\n}\n```\n\nLegacy `sort: \"-display_name\"` form is also accepted. Invalid `sort_by` silently falls back to `sort_order` (no error)."
           },
           "response": [
             {
-              "name": "200 OK \u2014 paginated list, filtered",
+              "name": "200 OK — paginated list, filtered",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15601,7 +16045,7 @@
               "body": "{\n  \"items\": [\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\",\n      \"slug\": \"google_calendar\",\n      \"display_name\": \"Google Calendar\",\n      \"description\": \"Create events, check availability, and manage schedules from voice calls.\",\n      \"category\": \"google\",\n      \"icon_url\": null,\n      \"auth_type\": \"oauth\",\n      \"auth_url\": \"https://accounts.google.com/o/oauth2/v2/auth\",\n      \"token_url\": \"https://oauth2.googleapis.com/token\",\n      \"userinfo_url\": \"https://www.googleapis.com/oauth2/v2/userinfo\",\n      \"scopes\": [\"https://www.googleapis.com/auth/calendar\", \"https://www.googleapis.com/auth/userinfo.email\"],\n      \"extra_auth_params\": { \"access_type\": \"offline\", \"prompt\": \"consent\" },\n      \"has_credentials\": true,\n      \"pkce_required\": true,\n      \"is_enabled\": true,\n      \"is_default\": true,\n      \"is_configured\": true,\n      \"sort_order\": 10,\n      \"created_at\": 1751299200,\n      \"updated_at\": 1751299200\n    },\n    {\n      \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\",\n      \"slug\": \"google_sheets\",\n      \"display_name\": \"Google Sheets\",\n      \"description\": \"Read and write spreadsheet data during conversations.\",\n      \"category\": \"google\",\n      \"icon_url\": null,\n      \"auth_type\": \"oauth\",\n      \"auth_url\": \"https://accounts.google.com/o/oauth2/v2/auth\",\n      \"token_url\": \"https://oauth2.googleapis.com/token\",\n      \"userinfo_url\": \"https://www.googleapis.com/oauth2/v2/userinfo\",\n      \"scopes\": [\"https://www.googleapis.com/auth/spreadsheets\", \"https://www.googleapis.com/auth/userinfo.email\"],\n      \"extra_auth_params\": { \"access_type\": \"offline\", \"prompt\": \"consent\" },\n      \"has_credentials\": true,\n      \"pkce_required\": true,\n      \"is_enabled\": true,\n      \"is_default\": true,\n      \"is_configured\": true,\n      \"sort_order\": 20,\n      \"created_at\": 1751299200,\n      \"updated_at\": 1751299200\n    }\n  ],\n  \"total\": 2,\n  \"page\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 no body (returns all, unpaginated)",
+              "name": "200 OK — no body (returns all, unpaginated)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15613,7 +16057,7 @@
               "body": "{\n  \"items\": [\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440aaa\", \"slug\": \"google_calendar\", \"display_name\": \"Google Calendar\", \"category\": \"google\", \"auth_type\": \"oauth\", \"is_enabled\": true, \"is_default\": true, \"is_configured\": true, \"has_credentials\": true, \"sort_order\": 10, \"...\": \"...\" },\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\", \"slug\": \"google_sheets\", \"display_name\": \"Google Sheets\", \"category\": \"google\", \"auth_type\": \"oauth\", \"is_enabled\": true, \"is_default\": true, \"is_configured\": true, \"has_credentials\": true, \"sort_order\": 20, \"...\": \"...\" },\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440ccc\", \"slug\": \"hubspot\",         \"display_name\": \"HubSpot\",         \"category\": \"crm\",    \"auth_type\": \"oauth\", \"is_enabled\": true, \"is_default\": true, \"is_configured\": true, \"has_credentials\": true, \"sort_order\": 30, \"...\": \"...\" }\n  ],\n  \"total\": 3,\n  \"page\": 1,\n  \"page_size\": 3\n}"
             },
             {
-              "name": "200 OK \u2014 search only",
+              "name": "200 OK — search only",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15625,7 +16069,7 @@
               "body": "{\n  \"items\": [\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440ccc\", \"slug\": \"hubspot\", \"display_name\": \"HubSpot\", \"category\": \"crm\", \"auth_type\": \"oauth\", \"...\": \"...\" }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"page_size\": 1\n}"
             },
             {
-              "name": "200 OK \u2014 category filter (`category=crm`)",
+              "name": "200 OK — category filter (`category=crm`)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15637,7 +16081,7 @@
               "body": "{\n  \"items\": [\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440ccc\", \"slug\": \"hubspot\", \"category\": \"crm\", \"...\": \"...\" }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"page_size\": 1\n}"
             },
             {
-              "name": "200 OK \u2014 auth_type filter (`auth_type=api_key`)",
+              "name": "200 OK — auth_type filter (`auth_type=api_key`)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15649,7 +16093,7 @@
               "body": "{\n  \"items\": [\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440ddd\", \"slug\": \"twilio\", \"auth_type\": \"api_key\", \"...\": \"...\" }\n  ],\n  \"total\": 1,\n  \"page\": 1,\n  \"page_size\": 1\n}"
             },
             {
-              "name": "200 OK \u2014 string-coerced is_enabled (`\"true\"`)",
+              "name": "200 OK — string-coerced is_enabled (`\"true\"`)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15661,7 +16105,7 @@
               "body": "{\n  \"items\": [ { \"slug\": \"google_calendar\", \"is_enabled\": true, \"...\": \"...\" } ],\n  \"total\": 1,\n  \"page\": 1,\n  \"page_size\": 1\n}"
             },
             {
-              "name": "200 OK \u2014 sorted by display_name desc",
+              "name": "200 OK — sorted by display_name desc",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15673,7 +16117,7 @@
               "body": "{\n  \"items\": [\n    { \"slug\": \"hubspot\",         \"display_name\": \"HubSpot\",         \"...\": \"...\" },\n    { \"slug\": \"google_sheets\",   \"display_name\": \"Google Sheets\",   \"...\": \"...\" },\n    { \"slug\": \"google_calendar\", \"display_name\": \"Google Calendar\", \"...\": \"...\" }\n  ],\n  \"total\": 3,\n  \"page\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 legacy sort string (`sort: \"-display_name\"`)",
+              "name": "200 OK — legacy sort string (`sort: \"-display_name\"`)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15685,7 +16129,7 @@
               "body": "{\n  \"items\": [ { \"display_name\": \"HubSpot\", \"...\": \"...\" }, { \"display_name\": \"Google Sheets\", \"...\": \"...\" } ],\n  \"total\": 2,\n  \"page\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 paginated (page=2, page_size=1)",
+              "name": "200 OK — paginated (page=2, page_size=1)",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15697,7 +16141,7 @@
               "body": "{\n  \"items\": [\n    { \"id\": \"550e8400-e29b-41d4-a716-446655440bbb\", \"slug\": \"google_sheets\", \"sort_order\": 20, \"...\": \"...\" }\n  ],\n  \"total\": 3,\n  \"page\": 2,\n  \"page_size\": 1\n}"
             },
             {
-              "name": "200 OK \u2014 empty result set",
+              "name": "200 OK — empty result set",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15709,7 +16153,7 @@
               "body": "{\n  \"items\": [],\n  \"total\": 0,\n  \"page\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "200 OK \u2014 invalid sort_by silently falls back to sort_order",
+              "name": "200 OK — invalid sort_by silently falls back to sort_order",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15721,7 +16165,7 @@
               "body": "{\n  \"items\": [ { \"sort_order\": 10, \"...\": \"...\" }, { \"sort_order\": 20, \"...\": \"...\" } ],\n  \"total\": 2,\n  \"page\": 1,\n  \"page_size\": 20\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 no bearer token",
+              "name": "401 Unauthorized — no bearer token",
               "code": 401,
               "status": "Unauthorized",
               "header": [
@@ -15758,11 +16202,11 @@
                 }
               ]
             },
-            "description": "Hard-delete a non-default integration. Admin/owner only.\n\nDefault (seeded) integrations have `is_default = true` and cannot be deleted \u2014 disable them via `update_app_integration` with `{\"is_enabled\": false}` instead. This preserves the seed contract and any FK references from `oauth_connections`."
+            "description": "Hard-delete a non-default integration. Admin/owner only.\n\nDefault (seeded) integrations have `is_default = true` and cannot be deleted — disable them via `update_app_integration` with `{\"is_enabled\": false}` instead. This preserves the seed contract and any FK references from `oauth_connections`."
           },
           "response": [
             {
-              "name": "200 OK \u2014 deleted",
+              "name": "200 OK — deleted",
               "code": 200,
               "status": "OK",
               "header": [
@@ -15774,7 +16218,7 @@
               "body": "{\"detail\": \"App integration deleted\"}"
             },
             {
-              "name": "400 \u2014 attempt to delete a default (seeded) integration",
+              "name": "400 — attempt to delete a default (seeded) integration",
               "code": 400,
               "status": "Bad Request",
               "header": [
@@ -15786,7 +16230,7 @@
               "body": "{\"detail\": \"Default integrations cannot be deleted; disable them instead\"}"
             },
             {
-              "name": "404 \u2014 integration id not found",
+              "name": "404 — integration id not found",
               "code": 404,
               "status": "Not Found",
               "header": [
@@ -15798,7 +16242,7 @@
               "body": "{\"detail\": \"App integration not found\"}"
             },
             {
-              "name": "422 \u2014 missing query param `id`",
+              "name": "422 — missing query param `id`",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15810,7 +16254,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"missing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Field required\" }\n  ]\n}"
             },
             {
-              "name": "422 \u2014 `id` is not a UUID",
+              "name": "422 — `id` is not a UUID",
               "code": 422,
               "status": "Unprocessable Entity",
               "header": [
@@ -15822,7 +16266,7 @@
               "body": "{\n  \"detail\": [\n    { \"type\": \"uuid_parsing\", \"loc\": [\"query\", \"id\"], \"msg\": \"Input should be a valid UUID\" }\n  ]\n}"
             },
             {
-              "name": "401 Unauthorized \u2014 no bearer token",
+              "name": "401 Unauthorized — no bearer token",
               "code": 401,
               "status": "Unauthorized",
               "header": [
@@ -15834,7 +16278,7 @@
               "body": "{\"detail\": \"Could not validate credentials\"}"
             },
             {
-              "name": "403 Forbidden \u2014 member role rejected",
+              "name": "403 Forbidden — member role rejected",
               "code": 403,
               "status": "Forbidden",
               "header": [
@@ -15851,7 +16295,7 @@
     },
     {
       "name": "Dashboard",
-      "description": "Org-wide aggregate KPIs for the home page. Prefix: `/api/v1/dashboard`. \u26a0 The voice pipeline does not yet write to the v2 `calls` table \u2014 `active_calls`, `minutes_used`, and `success_rate` may all report 0 until the pipeline cut-over lands. \u26a0 No index on `calls.started_at`. \u26a0 No caching.",
+      "description": "Org-wide aggregate KPIs for the home page. Prefix: `/api/v1/dashboard`. ⚠ The voice pipeline does not yet write to the v2 `calls` table — `active_calls`, `minutes_used`, and `success_rate` may all report 0 until the pipeline cut-over lands. ⚠ No index on `calls.started_at`. ⚠ No caching.",
       "item": [
         {
           "name": "GET /dashboard/stats",
@@ -16810,7 +17254,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"organization_id\": \"{{org_id}}\",\n  \"message\": \"Please add me to Acme \u2014 I work in support.\"\n}",
+              "raw": "{\n  \"organization_id\": \"{{org_id}}\",\n  \"message\": \"Please add me to Acme — I work in support.\"\n}",
               "options": {
                 "raw": {
                   "language": "json"

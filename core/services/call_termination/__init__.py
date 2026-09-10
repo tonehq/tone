@@ -16,6 +16,7 @@ from loguru import logger
 
 from core.services.call_termination.base import CallTerminator
 from core.services.call_termination.default import LogOnlyTerminator
+from core.services.call_termination.plivo import PlivoTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
 from core.services.pipeline.call_end_events import (
@@ -32,6 +33,8 @@ def get_call_terminator(transport_type: str) -> CallTerminator:
         return TwilioTerminator()
     if transport_type == "telnyx":
         return TelnyxTerminator()
+    if transport_type == "plivo":
+        return PlivoTerminator()
     return LogOnlyTerminator(transport_type)
 
 
