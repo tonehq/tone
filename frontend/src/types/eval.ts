@@ -202,12 +202,12 @@ export interface TriggerEvalRunPayload {
 }
 
 // Payload for POST /eval-versions/generate — generate into a new version or
-// overwrite an existing (un-run) one, with an optional custom prompt.
+// overwrite an existing (un-run) one, with an optional custom prompt. Questions
+// are drafted from the uploaded document (not any ingestion run's chunks).
 export interface GenerateEvalVersionPayload {
   mode: 'new' | 'overwrite';
   version_id?: string | null;
   instructions?: string | null;
-  ingestion_run_id?: string | null;
 }
 
 export interface GenerateEvalVersionResponse {
