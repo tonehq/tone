@@ -466,7 +466,9 @@ export default function EvaluationSettings() {
         <section className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-base font-semibold text-foreground">Scoring</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Which metrics run per question and the pass bar applied to each.
+            Which metrics run per question and the pass bar applied to each — the default judge for
+            every run. To re-grade results with other judges and compare, open Evaluation config in
+            a knowledge base.
           </p>
           <div className="mt-4 flex flex-col gap-4">
             <TextInput
