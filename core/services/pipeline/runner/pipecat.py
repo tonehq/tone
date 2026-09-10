@@ -19,10 +19,19 @@ from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED,
     EVENT_CALL_ENDED_ERROR,
     REASON_CLIENT_DISCONNECT,
+    REASON_INACTIVITY_TIMEOUT,
+    REASON_MAX_DURATION,
     log_call_event,
+)
+from core.services.pipeline.inactivity_monitor import (
+    InactivityMonitor,
+    MaxDurationGuard,
+    resolve_inactivity_timeout,
+    resolve_max_call_duration,
 )
 from core.services.pipeline.runner.base import PipelineRunner
 from core.services.pipeline.tool_call_timing import merge_and_synthesize
+from shared.config import settings
 
 # Different transport families announce connect/disconnect under different event names.
 # We map each (connect, disconnect) pair onto the SAME session start/end, so the runner has
@@ -78,7 +87,7 @@ class PipecatPipelineRunner(PipelineRunner):
     """Run a Pipecat pipeline built by `PipecatPipelineBuilder`."""
 
     async def run(self) -> None:
-        from pipecat.frames.frames import LLMRunFrame, TTSSpeakFrame
+        from pipecat.frames.frames import EndFrame, LLMRunFrame, TTSSpeakFrame
         from pipecat.pipeline.runner import PipelineRunner as PipecatRunner
         from pipecat.processors.audio.audio_buffer_processor import AudioBufferProcessor
         from pydub import AudioSegment
@@ -384,6 +393,64 @@ class PipecatPipelineRunner(PipelineRunner):
         latency_observer = build.latency_observer
         turn_observer = build.turn_observer
 
+        # Inactivity backstop: end the call after a stretch of complete silence
+        # so a dead line can't hang open forever (caller walked away, or the
+        # model spoke a farewell but never fired end_call). Model-independent —
+        # it reads no words, only turn boundaries. The LLM end_call tool remains
+        # the primary end path; this only fires when nothing else does.
+        inactivity_timeout = resolve_inactivity_timeout(
+            settings.CALL_INACTIVITY_TIMEOUT_SECS
+        )
+        # Hard max-duration ceiling: a runaway call that never goes silent (stuck
+        # loop, machine on the line) is invisible to the inactivity backstop, so
+        # this force-ends it. OFF unless MAX_CALL_DURATION_SECS is set.
+        max_call_duration = resolve_max_call_duration(settings.MAX_CALL_DURATION_SECS)
+
+        async def _end_call_from_backstop(reason: str, detail: str, source: str, **log_fields):
+            """Stamp the end reason (first-wins) and queue a graceful EndFrame.
+
+            Shared by the inactivity and max-duration watchdogs so both attribute
+            and end the call identically. First-wins so the terminator drops the
+            leg and the transport disconnect handler doesn't relabel it.
+            """
+            if end_reason_holder.get("reason") is None:
+                end_reason_holder["reason"] = reason
+                end_reason_holder["detail"] = detail
+                log_call_event(
+                    EVENT_CALL_ENDED,
+                    call_id=call_id_holder.get("id"),
+                    reason=reason,
+                    source=source,
+                    **log_fields,
+                )
+            try:
+                await task.queue_frame(EndFrame())
+            except Exception:
+                logger.bind(call_id=call_id_holder.get("id")).exception(
+                    "[runner] failed to queue EndFrame from %s", source
+                )
+
+        async def _on_inactivity_timeout():
+            await _end_call_from_backstop(
+                REASON_INACTIVITY_TIMEOUT,
+                f"no activity for {inactivity_timeout}s",
+                "inactivity_monitor",
+                timeout_secs=inactivity_timeout,
+            )
+
+        async def _on_max_duration():
+            await _end_call_from_backstop(
+                REASON_MAX_DURATION,
+                f"exceeded {max_call_duration}s",
+                "max_duration_guard",
+                max_secs=max_call_duration,
+            )
+
+        inactivity_monitor = InactivityMonitor(
+            inactivity_timeout, on_timeout=_on_inactivity_timeout
+        )
+        max_duration_guard = MaxDurationGuard(max_call_duration, on_timeout=_on_max_duration)
+
         def _assemble_metrics() -> dict:
             """Collected pipeline metrics plus per-call latency samples and turn entries.
 
@@ -472,12 +539,14 @@ class PipecatPipelineRunner(PipelineRunner):
             # Keep ``current_turn`` in sync so tool handlers stamp the right
             # turn on their entries (they hold the dict by reference).
             current_turn["number"] = turn_number
+            inactivity_monitor.turn_started()
             metrics_collector.on_turn_started(turn_number)
 
         @turn_observer.event_handler("on_turn_ended")
         async def on_turn_ended(observer, turn_number, duration, was_interrupted):
             status = "interrupted" if was_interrupted else "completed"
             logger.info("Turn {} {} after {:.2f}s", turn_number, status, duration)
+            inactivity_monitor.turn_ended()
             turn_entries.append({
                 "turn": turn_number,
                 "duration": round(duration, 3),
@@ -655,6 +724,12 @@ class PipecatPipelineRunner(PipelineRunner):
                 logger.debug("Client connected again — session already started, ignoring.")
                 return
             session_started["done"] = True
+            # Arm the inactivity backstop now the call is live (no-op when the
+            # timeout is disabled). Turn events pause/reset it from here on.
+            inactivity_monitor.start()
+            # Arm the hard max-duration ceiling from the same anchor (no-op when
+            # disabled). Unlike the inactivity monitor it never resets on turns.
+            max_duration_guard.start()
             if audio_buffer:
                 logger.info("Client connected — starting audio recording.")
                 await audio_buffer.start_recording()
@@ -747,6 +822,10 @@ class PipecatPipelineRunner(PipelineRunner):
                     )
             raise
         finally:
+            # Stop the watchdogs first so neither can queue an EndFrame into a
+            # pipeline that's already tearing down.
+            await inactivity_monitor.stop()
+            await max_duration_guard.stop()
             # Fallback hangup for ends where on_audio_data didn't run (no
             # recording buffer, or empty audio) — idempotent with the prompt
             # call above, so it's a no-op when the leg is already dropped. Never

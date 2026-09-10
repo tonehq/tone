@@ -65,6 +65,39 @@ def test_end_call_does_not_block_on_odd_phrasing():
     assert results == ["Call ending now."]
 
 
+def test_end_call_ends_without_a_reason():
+    # ``reason`` is optional now (the tool was liberated — an unquotable reason
+    # must never withhold the end). Omitting it still queues the EndFrame and
+    # stamps the end reason.
+    end_reason_holder = {"reason": None, "detail": None}
+    handler = create_end_call_handler(end_reason_holder=end_reason_holder)
+
+    queued = []
+    results = []
+
+    async def _queue_frame(frame):
+        queued.append(frame)
+
+    async def _result_callback(result, **kwargs):
+        results.append(result)
+
+    params = SimpleNamespace(
+        tool_call_id="tc-1",
+        function_name="end_call",
+        arguments={},  # no reason supplied
+        pipeline_worker=SimpleNamespace(queue_frame=_queue_frame),
+        result_callback=_result_callback,
+        context=None,
+        llm=None,
+    )
+
+    asyncio.run(handler(params))
+
+    assert any(isinstance(f, EndFrame) for f in queued), "should end even with no reason"
+    assert end_reason_holder["reason"] == "llm_end_call"
+    assert results == ["Call ending now."]
+
+
 def test_end_call_single_fire_ignores_second_call():
     handler = create_end_call_handler(end_reason_holder={"reason": None, "detail": None})
     params, queued, results = _make_params()
