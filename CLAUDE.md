@@ -194,7 +194,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **curitiba** (20537 symbols, 52657 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -210,7 +210,7 @@ This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relat
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/stockholm/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/curitiba/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -249,10 +249,10 @@ This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/stockholm/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/stockholm/clusters` | All functional areas |
-| `gitnexus://repo/stockholm/processes` | All execution flows |
-| `gitnexus://repo/stockholm/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/curitiba/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/curitiba/clusters` | All functional areas |
+| `gitnexus://repo/curitiba/processes` | All execution flows |
+| `gitnexus://repo/curitiba/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
