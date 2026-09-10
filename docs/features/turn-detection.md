@@ -73,8 +73,6 @@ TURN_DETECTION_PRELOAD=livekit
 
 Call workers need outbound access to `huggingface.co` the first time, or a pre-populated cache baked into the image.
 
-Memory: the multilingual INT8 model is 396 MB on disk and adds roughly 400 MiB to a call worker that already holds Silero, Smart Turn and the STT and TTS clients, so it needs a container memory limit of about 1.5 GiB (`CALL_MEM_LIMIT` in the environment files; staging runs 1 GiB, the DigitalOcean environment 2 GiB). The `en` model is 66 MB and runs within 1 GiB. The pipeline therefore refuses to build the multilingual model when the container limit is below `LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB` (default 1536), logging `LiveKit multilingual model unavailable` once; `en` is unaffected, and hosts without a cgroup limit, such as local development, are never gated.
-
 License: the model weights are published under the LiveKit Model License, which permits use only together with the LiveKit Agents framework. Running them inside this pipeline is outside that grant; confirm with LiveKit or legal before shipping this option to customers.
 
 ### TEN Turn Detection

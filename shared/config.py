@@ -432,7 +432,6 @@ class Settings:
         self.TEN_TURN_DETECTION_API_KEY: str = get_secret("TEN_TURN_DETECTION_API_KEY")
         self.TEN_TURN_DETECTION_MODEL: str = get_secret("TEN_TURN_DETECTION_MODEL")
         self.TURN_DETECTION_PRELOAD: str = get_secret("TURN_DETECTION_PRELOAD")
-        self.LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB: int = _int_env(get_secret("LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB"))
         self.AIC_SDK_LICENSE: str = get_secret("AIC_SDK_LICENSE")
 
         # ── RAG evaluation harness ──────────────────────────────────────────
