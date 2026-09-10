@@ -28,7 +28,7 @@ def test_plivo_resolve_from_to_falls_back_to_the_live_call_lookup(monkeypatch):
 
     async def _lookup(call_uuid, org_id=None):
         calls.append((call_uuid, org_id))
-        return {"from_number": "+15550001111", "to_number": "+15550002222"}
+        return {"from_number": "15550001111", "to_number": "15550002222"}
 
     monkeypatch.setattr(plivo_mod, "get_plivo_call_info", _lookup)
     call_data = {"stream_id": "S1", "call_id": "C1", "_org_id": "org-9"}

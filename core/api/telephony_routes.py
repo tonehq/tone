@@ -7,7 +7,7 @@ from fastapi.responses import Response
 from loguru import logger
 
 from core.database.session import get_db_context
-from core.utils.telephony import fallback_media_ws_url, pinned_ws_url
+from core.utils.telephony import fallback_media_ws_url, pinned_ws_url, to_e164
 
 router = APIRouter()
 
@@ -151,8 +151,8 @@ async def _plivo_status_fields(request: Request) -> Dict[str, Any]:
         "CallSid": form.get("RequestUUID") or form.get("CallUUID"),
         "CallStatus": form.get("CallStatus"),
         "CallDuration": form.get("Duration"),
-        "To": form.get("To"),
-        "From": form.get("From"),
+        "To": to_e164(form.get("To")),
+        "From": to_e164(form.get("From")),
     }
 
 
