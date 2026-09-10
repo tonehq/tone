@@ -1,8 +1,20 @@
 """Shared helpers for telephony call metadata."""
 
+import re
 from typing import Optional, Tuple
 
 from loguru import logger
+
+_DIAL_DIGITS_RE = re.compile(r"^\+?\d+$")
+
+
+def to_e164(number: Optional[str]) -> Optional[str]:
+    if not number:
+        return number
+    candidate = "".join(number.split())
+    if not _DIAL_DIGITS_RE.match(candidate):
+        return number.strip()
+    return f"+{candidate.lstrip('+')}"
 
 
 def provider_call_id(call_data: Optional[dict]) -> str:

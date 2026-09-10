@@ -6,6 +6,7 @@ philosophy of ``core/services/transport/registry.py``.
 """
 
 from core.services.call_engines.base import CallEngine, CallInfo
+from core.services.call_engines.plivo_engine import PlivoCallEngine
 from core.services.call_engines.sip_engine import SipCallEngine
 from core.services.call_engines.telnyx_engine import TelnyxCallEngine
 from core.services.call_engines.twilio_engine import TwilioCallEngine
@@ -18,6 +19,8 @@ def get_call_engine(provider: str = "twilio", org_id=None) -> CallEngine:
         return TwilioCallEngine(org_id=org_id)
     if provider == "telnyx":
         return TelnyxCallEngine(org_id=org_id)
+    if provider == "plivo":
+        return PlivoCallEngine(org_id=org_id)
     if provider == "sip":
         return SipCallEngine(org_id=org_id)
     if provider == "websocket":
@@ -28,6 +31,7 @@ def get_call_engine(provider: str = "twilio", org_id=None) -> CallEngine:
 __all__ = [
     "CallEngine",
     "CallInfo",
+    "PlivoCallEngine",
     "SipCallEngine",
     "TelnyxCallEngine",
     "TwilioCallEngine",

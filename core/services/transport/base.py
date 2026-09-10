@@ -85,6 +85,9 @@ class TelephonyTransport(CallTransport):
             # Raises ValueError for an unknown/unsupported transport_type.
             provider = get_telephony_provider(transport_type)
 
+            for key in ("from", "to"):
+                if not call_data.get(key) and body.get(key):
+                    call_data[key] = body[key]
             # Resolve from/to (provider-specific; no-op for most). Twilio backfills here.
             await provider.resolve_from_to(call_data)
 

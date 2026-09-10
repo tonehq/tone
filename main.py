@@ -453,10 +453,11 @@ app.include_router(monitoring_router)
 async def ws_endpoint(websocket: WebSocket) -> None:
     await websocket.accept()
     logger.info("[inbound] /ws connection accepted from {}", getattr(websocket.client, "host", "?"))
+    query = websocket.query_params
     body = {
         key: value
-        for key in ("agent_id", "direction", "scheduled_call_id")
-        if (value := (websocket.query_params.get(key) or "").strip())
+        for key in ("agent_id", "direction", "scheduled_call_id", "from", "to")
+        if (value := (query.get(key) or "").strip())
     }
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     try:

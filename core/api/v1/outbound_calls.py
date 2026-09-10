@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import List, Literal, Optional
+from typing import List, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from core.database.session import get_db
 from core.middleware.auth import JWTClaims, require_org_member
-from core.services.outbound_call_service import OutboundCallService
+from core.services.outbound_call_service import OutboundCallService, TriggerProvider
 from shared.config import settings
 
 router = APIRouter()
@@ -32,10 +32,10 @@ class CreateOutboundCallRequest(BaseModel):
     directory_id: Optional[UUID] = None
     # How many of this batch's calls run at once (UI selector). None/omitted → the env default.
     max_concurrency: Optional[int] = None
-    # Trigger engine: "twilio"/"telnyx" place a real PSTN call; "websocket" bridges the call
+    # Trigger engine: the PSTN members of TriggerProvider place a real call; "websocket" bridges the call
     # over a WebSocket to a remote /ws/test (agent-to-agent, no telephony). Omit to let the
     # from-number's channel decide which telephony engine dials.
-    provider: Optional[Literal["twilio", "telnyx", "websocket"]] = None
+    provider: Optional[TriggerProvider] = None
 
     def resolved_numbers(self) -> List[str]:
         nums = list(self.to_numbers or [])

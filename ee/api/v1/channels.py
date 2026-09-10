@@ -126,3 +126,12 @@ def list_telnyx_phone_numbers(
     local assignment info so the UI can flag numbers already bound to another
     agent in this org."""
     return _svc(claims, db).list_telnyx_phone_numbers(channel_id)
+
+
+@router.get("/plivo_phone_numbers")
+def list_plivo_phone_numbers(
+    channel_id: str = Query(..., description="The Plivo channel ID to fetch numbers for"),
+    claims: EEJWTClaims = Depends(require_ee_org_member),
+    db: Session = Depends(get_db),
+):
+    return _svc(claims, db).list_plivo_phone_numbers(channel_id)

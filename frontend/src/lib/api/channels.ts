@@ -4,6 +4,7 @@ import {
   getChannel,
   listChannelPhoneNumbers,
   listChannels,
+  listPlivoPhoneNumbers,
   listTelnyxPhoneNumbers,
   listTwilioPhoneNumbers,
 } from '@/services/channelService';
@@ -52,6 +53,15 @@ export function useChannels() {
  * serves them (Twilio / Telnyx / generic), so the provider type is part of the
  * cache key. Only fetches once a channel is selected.
  */
+const PROVIDER_NUMBER_FETCHERS: Record<
+  string,
+  (channelId: string) => Promise<ChannelPhoneNumber[]>
+> = {
+  twilio: listTwilioPhoneNumbers,
+  telnyx: listTelnyxPhoneNumbers,
+  plivo: listPlivoPhoneNumbers,
+};
+
 export function useChannelPhoneNumbers(
   channelId: string | null | undefined,
   providerType: string | null | undefined,
@@ -60,12 +70,7 @@ export function useChannelPhoneNumbers(
   return useQuery<ChannelPhoneNumber[]>({
     queryKey: channelKeys.phoneNumbers(channelId ?? '', providerType ?? ''),
     queryFn: () => {
-      const fetcher =
-        providerType === 'twilio'
-          ? listTwilioPhoneNumbers
-          : providerType === 'telnyx'
-            ? listTelnyxPhoneNumbers
-            : listChannelPhoneNumbers;
+      const fetcher = PROVIDER_NUMBER_FETCHERS[providerType ?? ''] ?? listChannelPhoneNumbers;
       return fetcher(channelId as string);
     },
     enabled: (options?.enabled ?? true) && !!channelId,
