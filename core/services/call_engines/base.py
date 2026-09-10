@@ -42,6 +42,9 @@ class CallInfo:
 class CallEngine(ABC):
     """Provider adapter for outbound call origination + TwiML rendering."""
 
+    answer_media_type = "application/xml"
+    hangup_answer = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>'
+
     @property
     @abstractmethod
     def provider_name(self) -> str:

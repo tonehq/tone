@@ -15,7 +15,8 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from loguru import logger
@@ -77,6 +78,7 @@ _TWILIO_STATUS_MAP = {
     "no-answer": "no_answer",
     "failed": "failed",
     "canceled": "canceled",
+    "cancel": "canceled",
 }
 
 # Best-effort OUTBOUND background thread pools, created LAZILY on first use (not at import), so
@@ -187,6 +189,21 @@ _ORPHAN_GRACE = timedelta(minutes=2)
 _PROCESSING_RECLAIM_GRACE = timedelta(seconds=90)
 
 
+
+
+class TriggerProvider(str, Enum):
+    TWILIO = "twilio"
+    TELNYX = "telnyx"
+    PLIVO = "plivo"
+    SIP = "sip"
+    WEBSOCKET = "websocket"
+
+
+PSTN_TRIGGER_PROVIDERS = tuple(
+    provider.value
+    for provider in (TriggerProvider.TWILIO, TriggerProvider.TELNYX, TriggerProvider.PLIVO, TriggerProvider.SIP)
+)
+SUPPORTED_TRIGGER_PROVIDERS = PSTN_TRIGGER_PROVIDERS + (TriggerProvider.WEBSOCKET.value,)
 
 
 class OutboundCallService(BaseService):
@@ -312,8 +329,8 @@ class OutboundCallService(BaseService):
         # (used?, last_use): never-used (False, epoch) sort first; among used, oldest first.
         return min(numbers, key=lambda n: (n in last_used, last_used.get(n) or epoch))
 
-    _PSTN_PROVIDERS = ("twilio", "telnyx", "sip")
-    _SUPPORTED_PROVIDERS = ("twilio", "telnyx", "sip", "websocket")
+    _PSTN_PROVIDERS = PSTN_TRIGGER_PROVIDERS
+    _SUPPORTED_PROVIDERS = SUPPORTED_TRIGGER_PROVIDERS
 
     def _validate_provider(self, provider: Optional[str]) -> str:
         """Normalize + validate the trigger provider. Empty means auto — the engine is
@@ -339,7 +356,9 @@ class OutboundCallService(BaseService):
             )
         return provider
 
-    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = ""):
+    def _validate_agent_and_from(
+        self, agent_id, from_number: Optional[str] = None, *, provider: str = ""
+    ) -> Tuple[Any, Any, str, str]:
         """Validate the agent and resolve the from-number once (shared across a bulk
         batch). ``from_number`` may be None/blank — it is then auto-selected via
         ``select_from_number``. Returns (agent, channel_id, from_number, provider), where
@@ -387,7 +406,7 @@ class OutboundCallService(BaseService):
         if channel_type not in self._PSTN_PROVIDERS:
             raise HTTPException(
                 status_code=400,
-                detail="from_number must belong to a Twilio, Telnyx or SIP trunk channel.",
+                detail=f"from_number must belong to a telephony channel ({', '.join(self._PSTN_PROVIDERS)}).",
             )
         if requested and channel_type != requested:
             raise HTTPException(

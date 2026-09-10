@@ -12,10 +12,13 @@ import pytest
 
 import core.services.call_termination as ct
 from core.services.call_termination import get_call_terminator, terminate_call
+from core.services.call_termination import sip as sip_mod
 from core.services.call_termination import telnyx as telnyx_mod
 from core.services.call_termination import twilio as twilio_mod
 from core.services.call_termination.base import CallTerminator
 from core.services.call_termination.default import LogOnlyTerminator
+from core.services.call_termination.sip import SipTerminator
+from core.services.call_termination.plivo import PlivoTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
 
@@ -43,8 +46,12 @@ class TestGetCallTerminator:
     def test_known_providers(self):
         assert isinstance(get_call_terminator("twilio"), TwilioTerminator)
         assert isinstance(get_call_terminator("telnyx"), TelnyxTerminator)
+        assert isinstance(get_call_terminator("plivo"), PlivoTerminator)
+        # SIP trunk calls run on the LiveKit transport.
+        assert isinstance(get_call_terminator("livekit"), SipTerminator)
+        assert isinstance(get_call_terminator("sip"), SipTerminator)
 
-    @pytest.mark.parametrize("tt", ["exotel", "plivo", "websocket", "test", "unknown"])
+    @pytest.mark.parametrize("tt", ["exotel", "websocket", "test", "unknown"])
     def test_unknown_falls_back_to_log_only(self, tt):
         term = get_call_terminator(tt)
         assert isinstance(term, LogOnlyTerminator)
@@ -89,6 +96,27 @@ class TestTelnyxTerminator:
         ok = asyncio.run(TelnyxTerminator().hangup({}, "org-1"))
         assert ok is False
         engine.end_call.assert_not_called()
+
+
+# ---- SIP terminator -------------------------------------------------------------
+
+class TestSipTerminator:
+    def test_deletes_livekit_room_by_call_id(self, monkeypatch):
+        # SIP hangs up by deleting the LiveKit room (call_data["call_id"] == room),
+        # which disconnects the caller regardless of participant identity.
+        engine = MagicMock()
+        engine.end_room.return_value = True
+        monkeypatch.setattr(sip_mod, "get_call_engine", lambda provider, org_id=None: engine)
+        ok = asyncio.run(SipTerminator().hangup({"call_id": "sip-out-abc123"}, "org-1"))
+        assert ok is True
+        engine.end_room.assert_called_once_with("sip-out-abc123")
+
+    def test_skips_when_no_room(self, monkeypatch):
+        engine = MagicMock()
+        monkeypatch.setattr(sip_mod, "get_call_engine", lambda provider, org_id=None: engine)
+        ok = asyncio.run(SipTerminator().hangup({}, "org-1"))
+        assert ok is False
+        engine.end_room.assert_not_called()
 
 
 # ---- terminate_call orchestration ----------------------------------------------

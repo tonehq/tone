@@ -427,6 +427,83 @@ class ChannelService(BaseService):
             )
         return results
 
+    def list_plivo_phone_numbers(self, channel_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        record = self._provider_record(channel_id, "plivo")
+        config = decrypt_json(record.encrypted_config)
+        auth_id = (config.get("auth_id") or "").strip()
+        auth_token = (config.get("auth_token") or "").strip()
+        if not auth_id or not auth_token:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Plivo credentials are not configured for this channel",
+            )
+        payload = self._provider_get(
+            "Plivo",
+            f"https://api.plivo.com/v1/Account/{auth_id}/Number/",
+            auth=(auth_id, auth_token),
+            params={"limit": 20},
+        )
+        return self._merge_provider_numbers(
+            record,
+            [
+                {"id": n.get("number"), "number": f"+{n['number']}", "label": n.get("alias") or n.get("number_type")}
+                for n in payload.get("objects", [])
+                if n.get("number")
+            ],
+        )
+
+    def _provider_record(self, channel_id: Union[str, UUID], channel_type: str) -> Channel:
+        record = self._get_record(channel_id)
+        if (record.channel_type or "").lower() != channel_type:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Channel is not a {channel_type.capitalize()} channel",
+            )
+        return record
+
+    def _provider_get(self, provider_label: str, url: str, **request_kwargs) -> Dict[str, Any]:
+        try:
+            response = requests.get(url, timeout=15, **request_kwargs)
+            response.raise_for_status()
+            return response.json()
+        except requests.HTTPError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{provider_label} API error ({e.response.status_code})",
+            ) from e
+        except Exception as e:
+            logger.exception("Unexpected error fetching {} phone numbers", provider_label)
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Failed to fetch phone numbers from {provider_label}",
+            ) from e
+
+    def _merge_provider_numbers(self, record: Channel, numbers: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        local_rows = (
+            self.db.query(PhoneNumber, Agent.name.label("agent_name"))
+            .outerjoin(Agent, Agent.id == PhoneNumber.agent_id)
+            .filter(
+                PhoneNumber.channel_id == record.id,
+                PhoneNumber.organization_id == self.org_id,
+            )
+            .all()
+        )
+        assignments_by_number: Dict[str, Dict[str, Any]] = {
+            pn.number: {"agent_id": str(pn.agent_id), "agent_name": agent_name}
+            for pn, agent_name in local_rows
+            if pn.agent_id
+        }
+        return [
+            {
+                "id": n["id"],
+                "number": n["number"],
+                "label": n.get("label"),
+                "channel_id": str(record.id),
+                "assigned_to": assignments_by_number.get(n["number"]),
+            }
+            for n in numbers
+        ]
+
     # ──────────────────────────────────────────────────────────────────────
     # Internal
     # ──────────────────────────────────────────────────────────────────────

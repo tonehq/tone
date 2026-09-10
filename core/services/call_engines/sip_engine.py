@@ -179,6 +179,21 @@ class SipCallEngine(CallEngine):
             logger.exception("[outbound] sip end_call failed call_id={}", call_id)
             return False
 
+    def end_room(self, room_name: str) -> bool:
+        """Hang up an in-flight SIP call by deleting its LiveKit room.
+
+        Deleting the room disconnects every participant — the SIP/PSTN caller
+        included — regardless of the caller's participant identity (which differs
+        inbound vs outbound). Used by the call-termination terminator at pipeline
+        teardown; best-effort (never raises)."""
+        try:
+            self._termination().delete_room(room_name)
+            logger.info("[sip] end_room deleted room={}", room_name)
+            return True
+        except Exception:
+            logger.exception("[sip] end_room failed room={}", room_name)
+            return False
+
     def get_call_status(self, call_id: str) -> Dict[str, Any]:
         return {"status": None, "duration": None, "price": None, "answered_by": None}
 

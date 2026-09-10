@@ -27,6 +27,13 @@ EVENT_CALL_TERMINATED = "call_terminated"
 
 REASON_LLM_END_CALL = "llm_end_call"
 REASON_CLIENT_DISCONNECT = "client_disconnect"
+# Stamped by the runner's InactivityMonitor when a call goes silent for longer
+# than CALL_INACTIVITY_TIMEOUT_SECS — the model-independent backstop that keeps
+# a dead line from hanging open forever (see core/services/pipeline/inactivity_monitor.py).
+REASON_INACTIVITY_TIMEOUT = "inactivity_timeout"
+# Stamped by the runner's MaxDurationGuard when a call exceeds MAX_CALL_DURATION_SECS
+# — the hard ceiling backstop for a runaway call that never goes silent.
+REASON_MAX_DURATION = "max_call_duration"
 
 
 def _fmt_value(value: Any) -> str:

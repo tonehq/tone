@@ -399,6 +399,25 @@ class Settings:
         # pin an explicit ceiling. Kept as a knob for future tuning.
         self.OUTBOUND_BG_WORKERS: int = _int_env(get_secret("OUTBOUND_BG_WORKERS"))
 
+        # Inactivity backstop — end a call after this many seconds of complete
+        # silence (no user turn, no assistant turn), so a dead line (caller
+        # walked away, or the model spoke a farewell but never fired end_call)
+        # can't hang open forever. 0 / unset → a safe built-in default; a
+        # NEGATIVE value disables it. Resolved via
+        # core/services/pipeline/inactivity_monitor.resolve_inactivity_timeout.
+        self.CALL_INACTIVITY_TIMEOUT_SECS: int = _int_env(
+            get_secret("CALL_INACTIVITY_TIMEOUT_SECS")
+        )
+
+        # Hard ceiling on total call length (seconds) — a backstop for a runaway
+        # call that never goes silent (stuck loop, or a machine talking forever).
+        # OFF by default (0 / unset / negative → disabled) because it force-ends
+        # even an active call; opt in per environment, e.g. 1800 = 30 minutes.
+        # Resolved via inactivity_monitor.resolve_max_call_duration.
+        self.MAX_CALL_DURATION_SECS: int = _int_env(
+            get_secret("MAX_CALL_DURATION_SECS")
+        )
+
         # ── RAG ingestion defaults ──────────────────────────────────────────
         # Baseline parser / tokeniser / embedder / vector-store used when a
         # caller doesn't supply an override. Every value maps to a registry

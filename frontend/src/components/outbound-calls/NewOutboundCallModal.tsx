@@ -52,11 +52,12 @@ interface OutboundCallForm {
 const TRIGGER_PROVIDER_OPTIONS: { value: OutboundTriggerProvider; label: string }[] = [
   { value: 'twilio', label: 'Twilio (phone call)' },
   { value: 'telnyx', label: 'Telnyx (phone call)' },
+  { value: 'plivo', label: 'Plivo (phone call)' },
   { value: 'sip', label: 'SIP trunk (phone call)' },
   { value: 'websocket', label: 'WebSocket (test bridge)' },
 ];
 
-const PSTN_CHANNEL_TYPES = ['twilio', 'telnyx', 'sip'];
+const PSTN_CHANNEL_TYPES = ['twilio', 'telnyx', 'plivo', 'sip'];
 
 interface NewOutboundCallModalProps {
   open: boolean;

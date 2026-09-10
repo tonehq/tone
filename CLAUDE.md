@@ -129,6 +129,7 @@ Registered so future work discovers them (paths are import targets):
 - **`ContactSchemaService.build_sample_file(schema_id, fmt)`** (`core/services/contacts/contact_schema_service.py`) — server-side schema-shaped sample import file (CSV or `.xlsx` via openpyxl); served by `GET /contact-schemas/{id}/sample?format=`. Sample content (incl. example values) is built here, NOT in the client.
 - **`ContactSchemaService.apply_scheduled_at_from_column(records, schema_id, column)`** (`core/services/contacts/contact_schema_service.py`) — for an uploaded outbound file, map a user-named column into each `ParsedContact.metadata["scheduled_at"]`, parsed with the matching date/datetime schema field's `datetime_format` and timezone (field tz → org `get_scheduling_timezone` → UTC), so the schedule column and stored metadata resolve to the SAME instant. Per-row time overrides the request `scheduled_at` (fallback for empty cells). Returns `(record, reason)` for cells that are unparseable or in the PAST so the caller drops them to `invalid` instead of dialing ASAP. Used by `POST /outbound-call/create-from-file` (the past→invalid seam is gated to the file path; `_resolve_contact_when` is unchanged for manual/API scheduling).
 
+- **Telephony provider registries** — `core/services/transport/registry.py` (`register_telephony_provider`, one `TelephonyProvider` per media protocol: twilio, telnyx, plivo, exotel, test), `core/services/call_engines/get_call_engine` (outbound origination: twilio, telnyx, plivo, sip, websocket; each engine owns `generate_twiml`, `answer_media_type` and `hangup_answer` so `core/api/telephony_routes.py` never branches on the provider) and `core/services/call_termination/get_call_terminator` (runtime hang-up). Credentials come from the org channel through `telephony_credentials.get_provider_credentials`, readiness from `_TRANSPORT_PROBES`, number listing from `ChannelService.list_<provider>_phone_numbers` behind `GET /channel/<provider>_phone_numbers`. `from`/`to` on the `/ws` query string backfill the call data for every provider. Add a provider = one file in each of the three packages + registry lines + credential loader + probe + channel fields; guide: `docs/features/telephony-providers.md`.
 - **`build_user_turn_stop_strategies(settings, TurnDetectionContext)` / `TURN_DETECTORS`** (`core/services/pipeline/turn_detection/`) — the ONE place a per-agent turn-detection choice (`agent_configs.turn_settings.turn_detection = {provider, …params}`; the same JSONB column carries `vad = {provider, confidence, start_secs, stop_secs, min_volume, speaking_max_secs}`, resolved by `core/services/pipeline/turn_settings.py` → `resolve_vad()` / `validate_turn_settings()` / `turn_settings_options()` behind `GET /agent/turn-settings/options`; the VAD model itself comes from `core/services/pipeline/vad/` (`VAD_PROVIDERS` / `build_vad_analyzer(raw, VADParams)`: `silero` default, `ten`, `aic_quail`, one `VADProvider` file per kind, each gated by `available()` on its SDK import plus `AIC_SDK_LICENSE`; Krisp VIVA is intentionally not registered until Krisp enables VIVA for the org; TEN's analyzer is `core/processors/ten_vad_analyzer.py`)) becomes Pipecat user-turn stop strategies. `TurnDetector` (ABC, one file per kind: `smart_turn` / `ten` / `livekit`) owns its slug, `meta_data_schema`, defaults and `fallback_timeout_secs`; `factory.py` registers kinds, coerces + defaults settings, and exposes `list_turn_detectors()` and `validate_turn_detection()` (called through `AgentService._validate_turn_settings` on every config write); both only offer detectors whose `available()` is true (TEN needs `TEN_TURN_DETECTION_BASE_URL`). Operator guide: `docs/features/turn-detection.md`. The builder (`_build_turn_detection`) appends the telephony `TranscriptionTimeoutUserTurnStopStrategy` only when the detector asks for it. Add a detector = new `TurnDetector` subclass + registry entry, a VAD = new `VADProvider` subclass + `VAD_PROVIDERS` entry; never branch on either provider slug in the builder.
 
 - **`VECTOR_STORES` / `get_vector_store` / `DB_BACKED_STORES`** (`core/services/rag/factory.py`) — the ONE registry of ingestion vector stores (`pgvector`, `turbopuffer`). Every store implements `VectorStore` and reuses **`chunk_rows.insert_chunk_rows` / `chunk_rows_query`** (`core/services/rag/vector_stores/chunk_rows.py`) for the Postgres chunk rows and **`run_scope.scoped_runs` / `resolve_active_run_id`** (`core/services/rag/run_scope.py`) for retrieval scoping (explicit run → agent pin → KB default → legacy `is_active`, plus the published-config join for `agent_id`). **`IngestionRunService.purge_remote_vectors(db, runs)`** is the ONE hook that deletes vectors held outside Postgres; every path that drops run rows (delete run, replace file, re-ingest with `delete_existing`, delete document) calls it before the cascade. Operator guide: `docs/VECTOR_STORES.md`.
@@ -194,7 +195,7 @@ New behavior needs tests; bug fixes need a regression test.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
+This project is indexed by GitNexus as **curitiba** (20537 symbols, 52657 relationships, 300 execution flows). Use the GitNexus MCP tools to understand code, assess impact, and navigate safely.
 
 > If any GitNexus tool warns the index is stale, run `npx gitnexus analyze` in terminal first.
 
@@ -210,7 +211,7 @@ This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relat
 
 1. `gitnexus_query({query: "<error or symptom>"})` — find execution flows related to the issue
 2. `gitnexus_context({name: "<suspect function>"})` — see all callers, callees, and process participation
-3. `READ gitnexus://repo/stockholm/process/{processName}` — trace the full execution flow step by step
+3. `READ gitnexus://repo/curitiba/process/{processName}` — trace the full execution flow step by step
 4. For regressions: `gitnexus_detect_changes({scope: "compare", base_ref: "main"})` — see what your branch changed
 
 ## When Refactoring
@@ -249,10 +250,10 @@ This project is indexed by GitNexus as **stockholm** (20513 symbols, 52529 relat
 
 | Resource | Use for |
 |----------|---------|
-| `gitnexus://repo/stockholm/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/stockholm/clusters` | All functional areas |
-| `gitnexus://repo/stockholm/processes` | All execution flows |
-| `gitnexus://repo/stockholm/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/curitiba/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/curitiba/clusters` | All functional areas |
+| `gitnexus://repo/curitiba/processes` | All execution flows |
+| `gitnexus://repo/curitiba/process/{name}` | Step-by-step execution trace |
 
 ## Self-Check Before Finishing
 
