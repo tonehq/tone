@@ -11,6 +11,7 @@ from core.services.pipeline.turn_detection.base import TurnDetectionContext, Tur
 from core.utils.pod_resources import memory_usage
 
 MIN_MEMORY_MIB_DEFAULT = 1536
+LARGE_MODEL_TYPE = "multilingual"
 
 
 def minimum_memory_mib() -> int:
@@ -23,7 +24,7 @@ def _host_has_memory(minimum_mib: int) -> bool:
     if limit_mib is None or limit_mib >= minimum_mib:
         return True
     logger.warning(
-        "LiveKit turn detector hidden: container memory limit {:.0f} MiB is below the {} MiB it needs",
+        "LiveKit multilingual model unavailable: container memory limit {:.0f} MiB is below the {} MiB it needs",
         limit_mib, minimum_mib,
     )
     return False
@@ -33,8 +34,8 @@ class LiveKitTurnDetector(TurnDetector):
     slug = "livekit"
     display_name = "LiveKit Turn Detector"
     description = (
-        "LiveKit's end-of-utterance language model. Runs locally on CPU, downloads from "
-        "Hugging Face on first use and needs about 1.5 GB of memory on the call worker."
+        "LiveKit's end-of-utterance language model. Runs locally on CPU and downloads from "
+        "Hugging Face on first use; the multilingual model needs about 1.5 GB of call worker memory."
     )
     schema = [
         {
@@ -46,7 +47,10 @@ class LiveKitTurnDetector(TurnDetector):
             "required": 0,
             "default": "multilingual",
             "options": ["multilingual", "en"],
-            "description": "Multilingual covers 14 languages including English. The en variant is deprecated",
+            "description": (
+                "Multilingual covers 14 languages including English but needs about 1.5 GB of call worker "
+                "memory; en is the 66 MB English-only model LiveKit has deprecated"
+            ),
         },
         {
             "name": "threshold",
@@ -88,15 +92,11 @@ class LiveKitTurnDetector(TurnDetector):
         },
     ]
 
-    @classmethod
-    def available(cls) -> bool:
-        return _host_has_memory(minimum_memory_mib())
-
     def build(self, context: TurnDetectionContext) -> list:
-        if not self.available():
+        if self.settings["model_type"] == LARGE_MODEL_TYPE and not _host_has_memory(minimum_memory_mib()):
             raise ValueError(
-                f"LiveKit turn detector needs at least {minimum_memory_mib()} MiB of container memory; "
-                "raise the call worker memory limit or lower LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB"
+                f"LiveKit {LARGE_MODEL_TYPE} model needs at least {minimum_memory_mib()} MiB of container memory; "
+                "raise the call worker memory limit, lower LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB, or use model_type en"
             )
         params = LiveKitTurnDetectorParams(
             model_type=self.settings["model_type"],
