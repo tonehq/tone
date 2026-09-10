@@ -15,7 +15,8 @@ import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, List, Optional, Tuple
 
 from fastapi import HTTPException
 from loguru import logger
@@ -190,8 +191,19 @@ _PROCESSING_RECLAIM_GRACE = timedelta(seconds=90)
 
 
 
-PSTN_TRIGGER_PROVIDERS = ("twilio", "telnyx", "plivo", "sip")
-SUPPORTED_TRIGGER_PROVIDERS = PSTN_TRIGGER_PROVIDERS + ("websocket",)
+class TriggerProvider(str, Enum):
+    TWILIO = "twilio"
+    TELNYX = "telnyx"
+    PLIVO = "plivo"
+    SIP = "sip"
+    WEBSOCKET = "websocket"
+
+
+PSTN_TRIGGER_PROVIDERS = tuple(
+    provider.value
+    for provider in (TriggerProvider.TWILIO, TriggerProvider.TELNYX, TriggerProvider.PLIVO, TriggerProvider.SIP)
+)
+SUPPORTED_TRIGGER_PROVIDERS = PSTN_TRIGGER_PROVIDERS + (TriggerProvider.WEBSOCKET.value,)
 
 
 class OutboundCallService(BaseService):
@@ -344,7 +356,9 @@ class OutboundCallService(BaseService):
             )
         return provider
 
-    def _validate_agent_and_from(self, agent_id, from_number: Optional[str] = None, *, provider: str = ""):
+    def _validate_agent_and_from(
+        self, agent_id, from_number: Optional[str] = None, *, provider: str = ""
+    ) -> Tuple[Any, Any, str, str]:
         """Validate the agent and resolve the from-number once (shared across a bulk
         batch). ``from_number`` may be None/blank — it is then auto-selected via
         ``select_from_number``. Returns (agent, channel_id, from_number, provider), where
