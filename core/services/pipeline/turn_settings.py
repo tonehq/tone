@@ -6,6 +6,12 @@ from core.services.pipeline.turn_detection import (
     list_turn_detectors,
     validate_turn_detection,
 )
+from core.services.pipeline.vad import (
+    DEFAULT_VAD_PROVIDER,
+    PROVIDER_KEY,
+    list_vad_providers,
+    validate_vad_provider,
+)
 
 TURN_DETECTION_KEY = "turn_detection"
 VAD_KEY = "vad"
@@ -16,7 +22,7 @@ VAD_SCHEMA: List[dict] = [
         "data_type": "float",
         "type": "input number",
         "format": "float",
-        "validator": {"min": 0.1, "max": 1},
+        "validator": {"min": 0.3, "max": 1},
         "required": 0,
         "default": 0.7,
         "description": "Speech probability above which audio counts as the caller talking",
@@ -26,7 +32,7 @@ VAD_SCHEMA: List[dict] = [
         "data_type": "float",
         "type": "input number",
         "format": "float",
-        "validator": {"min": 0.05, "max": 2},
+        "validator": {"min": 0.1, "max": 2},
         "required": 0,
         "default": 0.2,
         "description": "Seconds of continuous speech before the caller counts as speaking",
@@ -36,7 +42,7 @@ VAD_SCHEMA: List[dict] = [
         "data_type": "float",
         "type": "input number",
         "format": "float",
-        "validator": {"min": 0.05, "max": 3},
+        "validator": {"min": 0.1, "max": 3},
         "required": 0,
         "default": 0.2,
         "description": "Seconds of silence before the caller counts as done speaking",
@@ -56,7 +62,7 @@ VAD_SCHEMA: List[dict] = [
         "data_type": "float",
         "type": "input number",
         "format": "float",
-        "validator": {"min": 1, "max": 60},
+        "validator": {"min": 3, "max": 60},
         "required": 0,
         "default": 8.0,
         "description": "Longest continuous speech before the pipeline forces a stop on noisy lines",
@@ -65,15 +71,29 @@ VAD_SCHEMA: List[dict] = [
 
 
 def resolve_vad(raw: Optional[dict]) -> dict:
-    return coerce_settings(VAD_SCHEMA, raw if isinstance(raw, dict) else {})
+    source = raw if isinstance(raw, dict) else {}
+    return {
+        PROVIDER_KEY: source.get(PROVIDER_KEY) or DEFAULT_VAD_PROVIDER,
+        **coerce_settings(VAD_SCHEMA, source),
+    }
 
 
 def turn_settings_options() -> dict:
     return {
         "turn_detectors": list_turn_detectors(),
         "default_turn_detector": DEFAULT_TURN_DETECTOR,
+        "vad_providers": list_vad_providers(),
+        "default_vad_provider": DEFAULT_VAD_PROVIDER,
         "vad_schema": VAD_SCHEMA,
     }
+
+
+def _validate_vad(raw: Any) -> Dict[str, List[str]]:
+    if not isinstance(raw, dict):
+        return {VAD_KEY: ["vad must be an object"]}
+    errors = MetaDataSchemaValidator().validate_settings(VAD_SCHEMA, raw)
+    errors.update(validate_vad_provider(raw))
+    return errors
 
 
 def validate_turn_settings(raw: Any) -> Dict[str, Any]:
@@ -87,10 +107,7 @@ def validate_turn_settings(raw: Any) -> Dict[str, Any]:
             errors[TURN_DETECTION_KEY] = detection_errors
     vad = raw.get(VAD_KEY)
     if vad is not None:
-        if isinstance(vad, dict):
-            vad_errors = MetaDataSchemaValidator().validate_settings(VAD_SCHEMA, vad)
-        else:
-            vad_errors = {VAD_KEY: ["vad must be an object"]}
+        vad_errors = _validate_vad(vad)
         if vad_errors:
             errors[VAD_KEY] = vad_errors
     return errors

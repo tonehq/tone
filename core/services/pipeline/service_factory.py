@@ -528,11 +528,11 @@ def build_stt(spec: dict) -> Optional[Any]:
 
     try:
         if provider_name == "deepgram":
-            from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
+            from pipecat.services.deepgram.stt import DeepgramSTTService
             dg_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
-            # Forward the selected model + Deepgram transcription options into LiveOptions.
+            # Forward the selected model + Deepgram transcription options into Settings.
             # Previously only `language` was passed, so the user's model tier
             # (nova-3 / nova-2-phonecall / nova-2-medical / …) and every option toggle
             # below were silently dropped. Only keys present in the config are sent, so
@@ -548,12 +548,14 @@ def build_stt(spec: dict) -> Optional[Any]:
                 _val = metadata.get(_opt)
                 if _val is not None and _val != "":
                     lo_kwargs[_opt] = _val
-            live_options = LiveOptions(**lo_kwargs) if lo_kwargs else None
+            declared = {f.name for f in dataclasses.fields(DeepgramSTTService.Settings)}
+            extra = {key: value for key, value in lo_kwargs.items() if key not in declared}
+            dg_settings = build_settings(DeepgramSTTService.Settings, lo_kwargs, extra=extra or None)
             dg_url = _url_kwargs(metadata)
             _dg_host = (dg_url.get("base_url") or "").split("://")[-1].split("/")[0]
             if not _dg_host or "." not in _dg_host:
                 dg_url.pop("base_url", None)
-            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **dg_url)
+            return DeepgramSTTService(api_key=api_key, settings=dg_settings, **dg_kwargs, **dg_url)
         if provider_name in ("openai", "openrouter", "together", "fireworks"):
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
@@ -715,8 +717,13 @@ def build_stt(spec: dict) -> Optional[Any]:
                 **_url_kwargs(metadata, "server"),
             )
         if provider_name == "nvidia_sage":
-            from pipecat.services.stt_service import WebsocketSTTService
-            return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
+            from pipecat.services.nvidia.sagemaker.stt import NvidiaSageMakerSTTService
+            sage_kwargs = {key: metadata[key] for key in ("region", "sample_rate") if metadata.get(key) is not None}
+            return NvidiaSageMakerSTTService(
+                endpoint_name=metadata.get("endpoint_name") or model,
+                settings=build_settings(NvidiaSageMakerSTTService.Settings, metadata, model=model),
+                **sage_kwargs,
+            )
         if provider_name == "sarvam":
             from pipecat.services.sarvam.stt import SarvamSTTService
             return SarvamSTTService(
@@ -889,11 +896,8 @@ def build_tts(spec: dict) -> Optional[Any]:
         if provider_name == "cartesia":  # In code but class is different
             from pipecat.services.cartesia.tts import (CartesiaTTSService,
                                                        GenerationConfig)
-            voice_kwargs = {}
-            voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
-            if tts_language is not None:
-                voice_kwargs["language"] = tts_language or "en"
-            params = build_input_params(CartesiaTTSService, metadata)
+            voice = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+            language = (tts_language or "en") if tts_language is not None else None
             # Sonic-3 speed/emotion are numeric and live under `generation_config`, not
             # flat InputParams fields, so build_input_params can't map the schema's
             # `speed`/`emotion` — wire them explicitly or the user's speed had no effect.
@@ -903,10 +907,18 @@ def build_tts(spec: dict) -> Optional[Any]:
                 gen_kwargs["speed"] = speed_value
             if isinstance(metadata.get("emotion"), str) and metadata["emotion"]:
                 gen_kwargs["emotion"] = metadata["emotion"]
-            if gen_kwargs and params is not None:
-                params = params.model_copy(update={"generation_config": GenerationConfig(**gen_kwargs)})
-            logger.debug("[TTS {}] voice_kwargs: {} generation_config: {}", provider_name, voice_kwargs, gen_kwargs)
-            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=params, **voice_kwargs, **_url_kwargs(metadata, "url"))
+            cartesia_settings = build_settings(
+                CartesiaTTSService.Settings,
+                metadata,
+                model=model or "sonic-3",
+                voice=voice,
+                language=language,
+                generation_config=GenerationConfig(**gen_kwargs) if gen_kwargs else None,
+            )
+            logger.debug(
+                "[TTS {}] voice={} language={} generation_config: {}", provider_name, voice, language, gen_kwargs,
+            )
+            return CartesiaTTSService(api_key=api_key, settings=cartesia_settings, **_url_kwargs(metadata, "url"))
         if provider_name == "openai":  # In code
             from pipecat.services.openai.tts import OpenAITTSService
             voice_kwargs = {}

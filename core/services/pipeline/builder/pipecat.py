@@ -23,6 +23,7 @@ from core.services.pipeline.turn_detection import (
     build_user_turn_stop_strategies,
 )
 from core.services.pipeline.turn_settings import TURN_DETECTION_KEY, VAD_KEY, resolve_vad
+from core.services.pipeline.vad import build_vad_analyzer
 
 def _llm_safe_schema(node, mutations=None):
     """Coerce a JSON-schema node so every current LLM provider accepts it.
@@ -258,7 +259,6 @@ class PipecatPipelineBuilder(PipelineBuilder):
         from pipecat.processors.aggregators.llm_response_universal import (
             LLMContextAggregatorPair, LLMUserAggregatorParams)
         from pipecat.turns.user_turn_strategies import UserTurnStrategies
-        from pipecat.audio.vad.silero import SileroVADAnalyzer
         from pipecat.audio.vad.vad_analyzer import VADParams
         from pipecat.processors.aggregators.llm_text_processor import LLMTextProcessor
         from pipecat.processors.frameworks.rtvi import (RTVIObserver, RTVIProcessor)
@@ -591,8 +591,9 @@ class PipecatPipelineBuilder(PipelineBuilder):
             context_aggregator = LLMContextAggregatorPair(
                 context,
                 user_params=LLMUserAggregatorParams(
-                    vad_analyzer=SileroVADAnalyzer(
-                        params=VADParams(
+                    vad_analyzer=build_vad_analyzer(
+                        turn_settings.get(VAD_KEY),
+                        VADParams(
                             confidence=vad["confidence"],
                             start_secs=vad["start_secs"],
                             stop_secs=vad["stop_secs"],

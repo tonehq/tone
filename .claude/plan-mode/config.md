@@ -46,3 +46,11 @@ paths:
 # - docs/architecture/
 # - packages/*/STRUCTURE.md
 # - ../shared-standards/plan-mode/
+
+prd-repo: tonehq/tone-docs
+
+jira:
+# Jira Cloud via its REST API v3 (HTTP Basic email:token from the JIRA_BASE_URL + JIRA_EMAIL +
+# JIRA_API_TOKEN env vars in .claude/settings.local.json — see "Connect Jira" in the plan-mode README).
+- base-url: https://tonehq.atlassian.net
+- project: KAN
