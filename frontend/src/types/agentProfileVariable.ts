@@ -3,6 +3,10 @@
  * user can insert into prompts / workflow nodes. Backend model lives at
  * `core/models/agent_profile_variable.py`; keep this in sync with `to_dict()`.
  */
+/** A variable is either a literal `value` (static) or filled from the agent's
+ * webhook response at `source_path` (webhook; `value` is the fallback). */
+export type ProfileVariableSource = 'static' | 'webhook';
+
 export interface AgentProfileVariable {
   id: string;
   organization_id: string;
@@ -10,9 +14,8 @@ export interface AgentProfileVariable {
   key: string;
   value: string;
   description: string | null;
-  /** CRM response field-path (e.g. `properties.firstname`) that fills this
-   * variable when `value` is empty and CRM enrichment is enabled. */
-  crm_field: string | null;
+  source: ProfileVariableSource;
+  source_path: string | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -22,7 +25,8 @@ export interface ProfileVariableInput {
   key: string;
   value: string;
   description?: string | null;
-  crm_field?: string | null;
+  source?: ProfileVariableSource;
+  source_path?: string | null;
 }
 
 /** PATCH-style body for PUT /agents/{id}/profile-variables/{variableId}. */
@@ -30,7 +34,8 @@ export interface ProfileVariablePatch {
   key?: string;
   value?: string;
   description?: string | null;
-  crm_field?: string | null;
+  source?: ProfileVariableSource;
+  source_path?: string | null;
 }
 
 export interface ListProfileVariablesResponse {

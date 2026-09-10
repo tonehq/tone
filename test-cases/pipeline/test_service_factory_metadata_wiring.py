@@ -76,14 +76,20 @@ class _FakeGenerationConfig:
 
 
 class _FakeCartesia:
-    class InputParams(_FakeParams):
-        model_fields = {"generation_config": None}
 
-    def __init__(self, api_key=None, model=None, params=None, **voice_kwargs):
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        voice: str = None
+        language: str = None
+        generation_config: object = None
+        pronunciation_dict_id: str = None
+        extra: dict = None
+
+    def __init__(self, api_key=None, settings=None, **kwargs):
         self.api_key = api_key
-        self.model = model
-        self.params = params
-        self.voice_kwargs = voice_kwargs
+        self.settings = settings
+        self.kwargs = kwargs
 
 
 class _FakeLiveOptions:
@@ -92,9 +98,19 @@ class _FakeLiveOptions:
 
 
 class _FakeDeepgram:
-    def __init__(self, api_key=None, live_options=None, **kwargs):
+
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        language: str = None
+        smart_format: bool = None
+        diarize: bool = None
+        utterance_end_ms: int = None
+        extra: dict = None
+
+    def __init__(self, api_key=None, settings=None, **kwargs):
         self.api_key = api_key
-        self.live_options = live_options
+        self.settings = settings
         self.kwargs = kwargs
 
 
@@ -141,6 +157,35 @@ class _FakeSarvam:
         self.model = model
         self.params = params
         self.base_url = base_url
+
+
+class _FakeGroq:
+
+    @dataclasses.dataclass
+    class Settings:
+        model: str = None
+        temperature: float = None
+        top_p: float = None
+        seed: int = None
+        max_completion_tokens: int = None
+        extra: dict = None
+
+    class InputParams(_FakeParams):
+        model_fields = {
+            "temperature": None, "top_p": None, "seed": None,
+            "max_completion_tokens": None, "extra": None,
+        }
+
+    def __init__(self, api_key=None, settings=None, model=None, params=None, base_url=None):
+        self.api_key = api_key
+        self.settings = settings
+        self.model = model
+        self.params = params
+        self.base_url = base_url
+
+
+class _FakeOpenRouter(_FakeGroq):
+    pass
 
 
 class _FakeNvidia:
@@ -227,6 +272,12 @@ def _patched_modules():
         "pipecat.services.sarvam.llm": _module(
             "pipecat.services.sarvam.llm", SarvamLLMService=_FakeSarvam,
         ),
+        "pipecat.services.groq.llm": _module(
+            "pipecat.services.groq.llm", GroqLLMService=_FakeGroq,
+        ),
+        "pipecat.services.openrouter.llm": _module(
+            "pipecat.services.openrouter.llm", OpenRouterLLMService=_FakeOpenRouter,
+        ),
         "pipecat.services.nvidia.stt": _module(
             "pipecat.services.nvidia.stt",
             NvidiaSTTService=_FakeNvidia,
@@ -267,20 +318,19 @@ def test_deepgram_forwards_model_and_options():
             "filler_words": True, "utterance_end_ms": 1000,
         }))
     assert isinstance(svc, _FakeDeepgram)
-    lo = svc.live_options.kwargs
-    assert lo["model"] == "nova-2-phonecall"      # was ignored before the fix
-    assert lo["language"] == "en"
-    assert lo["smart_format"] is True
-    assert lo["diarize"] is False                 # False must survive (not treated as unset)
-    assert lo["filler_words"] is True
-    assert lo["utterance_end_ms"] == 1000
+    assert svc.settings.model == "nova-2-phonecall"
+    assert svc.settings.language == "en"
+    assert svc.settings.smart_format is True
+    assert svc.settings.diarize is False
+    assert svc.settings.utterance_end_ms == 1000
+    assert svc.settings.extra == {"filler_words": True}
 
 
-def test_deepgram_no_options_yields_no_live_options():
+def test_deepgram_no_options_yields_no_settings():
     with _patched_modules():
         svc = build_stt(_spec("deepgram", model="", metadata={}))
     assert isinstance(svc, _FakeDeepgram)
-    assert svc.live_options is None               # unchanged behavior when nothing is set
+    assert svc.settings is None
 
 
 def test_anthropic_enables_thinking_from_budget():
@@ -308,16 +358,18 @@ def test_cartesia_wires_speed_and_emotion_into_generation_config():
             "speed": 1.1, "emotion": "happy",
         }))
     assert isinstance(svc, _FakeCartesia)
-    assert isinstance(svc.params.generation_config, _FakeGenerationConfig)
-    assert svc.params.generation_config.speed == 1.1
-    assert svc.params.generation_config.emotion == "happy"
+    assert svc.settings.model == "sonic-3"
+    assert svc.settings.voice == "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+    assert isinstance(svc.settings.generation_config, _FakeGenerationConfig)
+    assert svc.settings.generation_config.speed == 1.1
+    assert svc.settings.generation_config.emotion == "happy"
 
 
 def test_cartesia_without_speed_leaves_generation_config_unset():
     with _patched_modules():
         svc = build_tts(_spec("cartesia", model="sonic-3", metadata={}))
     assert isinstance(svc, _FakeCartesia)
-    assert getattr(svc.params, "generation_config", None) is None
+    assert svc.settings.generation_config is None
 
 
 def test_assemblyai_parses_comma_separated_keyterms():
@@ -387,6 +439,83 @@ def test_sarvam_ai_drops_unknown_metadata_fields():
         }))
     assert svc is not None                        # one stray key must not kill the service
     assert svc.settings.temperature == 0.2
+
+
+def test_groq_forwards_model_and_settings_not_params():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="openai/gpt-oss-120b", metadata={
+            "temperature": 0.3, "top_p": 0.9, "seed": 7, "max_completion_tokens": 4096,
+        }))
+    assert isinstance(svc, _FakeGroq)
+    assert svc.params is None
+    assert svc.model is None
+    assert svc.settings.model == "openai/gpt-oss-120b"
+    assert svc.settings.temperature == 0.3
+    assert svc.settings.top_p == 0.9
+    assert svc.settings.seed == 7
+    assert svc.settings.max_completion_tokens == 4096
+
+
+def test_groq_routes_reasoning_effort_into_settings_extra():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="openai/gpt-oss-120b",
+                              metadata={"temperature": 0.3, "reasoning_effort": "low"}))
+    assert svc.settings.extra == {"reasoning_effort": "low"}
+    assert svc.settings.temperature == 0.3
+    assert not hasattr(svc.settings, "reasoning_effort")
+
+
+def test_groq_routes_reasoning_format_into_extra_body():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="qwen/qwen3.8-27b", metadata={
+            "reasoning_effort": "none", "reasoning_format": "hidden",
+        }))
+    assert svc.settings.extra == {
+        "reasoning_effort": "none",
+        "extra_body": {"reasoning_format": "hidden"},
+    }
+
+
+def test_groq_leaves_extra_unset_without_reasoning_effort():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="llama-3.3-70b-versatile",
+                              metadata={"temperature": 0.5, "reasoning_effort": ""}))
+    assert svc.settings.model == "llama-3.3-70b-versatile"
+    assert svc.settings.extra is None
+
+
+def test_groq_falls_back_to_default_model():
+    with _patched_modules():
+        svc = build_llm(_spec("groq", model="", metadata={}))
+    assert svc.settings.model == "llama-3.3-70b-versatile"
+
+
+def test_openrouter_forwards_settings_and_reasoning_effort():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="qwen/qwen3-32b", metadata={
+            "temperature": 0.2, "reasoning_effort": "medium", "base_url": "https://openrouter.ai/api/v1",
+        }))
+    assert isinstance(svc, _FakeOpenRouter)
+    assert svc.params is None
+    assert svc.settings.model == "qwen/qwen3-32b"
+    assert svc.settings.temperature == 0.2
+    assert svc.settings.extra == {"extra_body": {"reasoning": {"effort": "medium"}}}
+    assert svc.base_url == "https://openrouter.ai/api/v1"
+
+
+def test_openrouter_disables_thinking_through_reasoning_enabled():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="z-ai/glm-4.7",
+                              metadata={"reasoning_enabled": "false", "temperature": 0.7}))
+    assert svc.settings.extra == {"extra_body": {"reasoning": {"enabled": False}}}
+    assert svc.settings.temperature == 0.7
+
+
+def test_openrouter_leaves_extra_unset_without_reasoning_fields():
+    with _patched_modules():
+        svc = build_llm(_spec("openrouter", model="meta-llama/llama-3.3-70b-instruct",
+                              metadata={"temperature": 0.7, "reasoning_effort": ""}))
+    assert svc.settings.extra is None
 
 
 if __name__ == "__main__":
@@ -491,6 +620,34 @@ def test_hosted_tts_returns_none_without_base_url():
     with _patched_modules():
         svc = build_tts(_spec("maya1", "maya1-3b"))
     assert svc is None
+
+
+def test_hosted_tts_voxtral_uses_base64_audio_field():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "voxtral-hosted", "voxtral-mini-tts-2603", metadata={"voice_id": "en_paul_neutral"},
+            model_meta={"base_url": "https://api.mistral.ai/v1/audio/speech",
+                        "model_field": "model", "text_field": "input", "voice_field": "voice",
+                        "audio_field": "audio_data", "strip_wav_header": True,
+                        "extra_body": {"response_format": "wav"}},
+        ))
+    assert svc.base_url == "https://api.mistral.ai/v1/audio/speech"
+    assert svc.kwargs["text_field"] == "input"
+    assert svc.kwargs["audio_field"] == "audio_data"
+    assert svc.kwargs["strip_wav_header"] is True
+    assert svc.kwargs["extra_body"] == {"response_format": "wav"}
+    assert svc.voice_id == "en_paul_neutral"
+
+
+def test_hosted_tts_covers_deepinfra_qwen3():
+    with _patched_modules():
+        svc = build_tts(_spec(
+            "qwen3-tts-hosted", "Qwen/Qwen3-TTS",
+            model_meta={"base_url": "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-TTS",
+                        "audio_field": "audio"},
+        ))
+    assert svc.base_url == "https://api.deepinfra.com/v1/inference/Qwen/Qwen3-TTS"
+    assert svc.kwargs["audio_field"] == "audio"
 
 
 def test_openai_compatible_stt_covers_aggregators_with_base_url():

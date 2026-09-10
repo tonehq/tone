@@ -167,6 +167,68 @@ def build_settings(settings_class, metadata: dict, **overrides):
     return settings_class(**filtered) if filtered else None
 
 
+LLM_REQUEST_EXTRA_FIELDS = ("reasoning_effort", "reasoning_format", "reasoning_enabled")
+
+
+def _request_value(metadata: dict, key: str):
+    value = metadata.get(key)
+    return None if value in (None, "", "None") else value
+
+
+def _as_bool(value) -> bool:
+    return value if isinstance(value, bool) else str(value).strip().lower() == "true"
+
+
+def _groq_request_extra(metadata: dict) -> dict:
+    extra = {}
+    effort = _request_value(metadata, "reasoning_effort")
+    if effort is not None:
+        extra["reasoning_effort"] = effort
+    reasoning_format = _request_value(metadata, "reasoning_format")
+    if reasoning_format is not None:
+        extra["extra_body"] = {"reasoning_format": reasoning_format}
+    return extra
+
+
+def _openrouter_request_extra(metadata: dict) -> dict:
+    reasoning = {}
+    effort = _request_value(metadata, "reasoning_effort")
+    if effort is not None:
+        reasoning["effort"] = effort
+    enabled = _request_value(metadata, "reasoning_enabled")
+    if enabled is not None:
+        reasoning["enabled"] = _as_bool(enabled)
+    return {"extra_body": {"reasoning": reasoning}} if reasoning else {}
+
+
+def _generic_request_extra(metadata: dict) -> dict:
+    effort = _request_value(metadata, "reasoning_effort")
+    return {"reasoning_effort": effort} if effort is not None else {}
+
+
+LLM_REQUEST_EXTRAS = {
+    "groq": _groq_request_extra,
+    "openrouter": _openrouter_request_extra,
+}
+
+HOSTED_TTS_PROVIDERS = (
+    "maya1",
+    "higgs-audio",
+    "indextts",
+    "chatterbox-hosted",
+    "cosyvoice-hosted",
+    "voxtral-hosted",
+    "qwen3-tts-hosted",
+)
+
+
+def build_llm_settings(settings_class, metadata: dict, provider_name: str, **overrides):
+    declared = {f.name for f in dataclasses.fields(settings_class)}
+    build_extra = LLM_REQUEST_EXTRAS.get(provider_name, _generic_request_extra)
+    extra = {key: value for key, value in build_extra(metadata).items() if key not in declared}
+    return build_settings(settings_class, metadata, extra=extra or None, **overrides)
+
+
 _CARTESIA_SPEED_MIN = 0.6
 _CARTESIA_SPEED_MAX = 1.5
 _CARTESIA_SPEED_WORDS = {
@@ -299,10 +361,28 @@ def build_llm(spec: dict) -> Optional[Any]:
             return AnthropicLLMService(api_key=api_key, model=model or "claude-haiku-4-5-20251001", params=params)
         if provider_name == "groq":  # done
             from pipecat.services.groq.llm import GroqLLMService
-            return GroqLLMService(api_key=api_key, model=model or "llama-3.3-70b-versatile", params=build_input_params(GroqLLMService, metadata), **_url_kwargs(metadata))
+            return GroqLLMService(
+                api_key=api_key,
+                settings=build_llm_settings(
+                    GroqLLMService.Settings,
+                    metadata,
+                    provider_name,
+                    model=model or "llama-3.3-70b-versatile",
+                ),
+                **_url_kwargs(metadata),
+            )
         if provider_name == "openrouter":  # done
             from pipecat.services.openrouter.llm import OpenRouterLLMService
-            return OpenRouterLLMService(api_key=api_key, model=model or "openai/gpt-4o-2024-11-20", params=build_input_params(OpenRouterLLMService, metadata), **_url_kwargs(metadata))
+            return OpenRouterLLMService(
+                api_key=api_key,
+                settings=build_llm_settings(
+                    OpenRouterLLMService.Settings,
+                    metadata,
+                    provider_name,
+                    model=model or "openai/gpt-4o-2024-11-20",
+                ),
+                **_url_kwargs(metadata),
+            )
         if provider_name == "aws_bedrock":  # done
             from pipecat.services.aws.llm import AWSBedrockLLMService
             return AWSBedrockLLMService(api_key=api_key, model=model or "amazon.nova-pro-v1:0", params=build_input_params(AWSBedrockLLMService, metadata))
@@ -448,11 +528,11 @@ def build_stt(spec: dict) -> Optional[Any]:
 
     try:
         if provider_name == "deepgram":
-            from pipecat.services.deepgram.stt import DeepgramSTTService, LiveOptions
+            from pipecat.services.deepgram.stt import DeepgramSTTService
             dg_kwargs = {}
             if metadata.get("sample_rate") is not None:
                 dg_kwargs["sample_rate"] = metadata["sample_rate"]
-            # Forward the selected model + Deepgram transcription options into LiveOptions.
+            # Forward the selected model + Deepgram transcription options into Settings.
             # Previously only `language` was passed, so the user's model tier
             # (nova-3 / nova-2-phonecall / nova-2-medical / …) and every option toggle
             # below were silently dropped. Only keys present in the config are sent, so
@@ -468,12 +548,14 @@ def build_stt(spec: dict) -> Optional[Any]:
                 _val = metadata.get(_opt)
                 if _val is not None and _val != "":
                     lo_kwargs[_opt] = _val
-            live_options = LiveOptions(**lo_kwargs) if lo_kwargs else None
+            declared = {f.name for f in dataclasses.fields(DeepgramSTTService.Settings)}
+            extra = {key: value for key, value in lo_kwargs.items() if key not in declared}
+            dg_settings = build_settings(DeepgramSTTService.Settings, lo_kwargs, extra=extra or None)
             dg_url = _url_kwargs(metadata)
             _dg_host = (dg_url.get("base_url") or "").split("://")[-1].split("/")[0]
             if not _dg_host or "." not in _dg_host:
                 dg_url.pop("base_url", None)
-            return DeepgramSTTService(api_key=api_key, live_options=live_options, **dg_kwargs, **dg_url)
+            return DeepgramSTTService(api_key=api_key, settings=dg_settings, **dg_kwargs, **dg_url)
         if provider_name in ("openai", "openrouter", "together", "fireworks"):
             from pipecat.services.openai.stt import OpenAISTTService
             return OpenAISTTService(
@@ -635,8 +717,13 @@ def build_stt(spec: dict) -> Optional[Any]:
                 **_url_kwargs(metadata, "server"),
             )
         if provider_name == "nvidia_sage":
-            from pipecat.services.stt_service import WebsocketSTTService
-            return NvidiaSageMakerSTTService(api_key=api_key, params=build_input_params(NvidiaSageMakerSTTService, metadata))
+            from pipecat.services.nvidia.sagemaker.stt import NvidiaSageMakerSTTService
+            sage_kwargs = {key: metadata[key] for key in ("region", "sample_rate") if metadata.get(key) is not None}
+            return NvidiaSageMakerSTTService(
+                endpoint_name=metadata.get("endpoint_name") or model,
+                settings=build_settings(NvidiaSageMakerSTTService.Settings, metadata, model=model),
+                **sage_kwargs,
+            )
         if provider_name == "sarvam":
             from pipecat.services.sarvam.stt import SarvamSTTService
             return SarvamSTTService(
@@ -809,11 +896,8 @@ def build_tts(spec: dict) -> Optional[Any]:
         if provider_name == "cartesia":  # In code but class is different
             from pipecat.services.cartesia.tts import (CartesiaTTSService,
                                                        GenerationConfig)
-            voice_kwargs = {}
-            voice_kwargs["voice_id"] = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
-            if tts_language is not None:
-                voice_kwargs["language"] = tts_language or "en"
-            params = build_input_params(CartesiaTTSService, metadata)
+            voice = tts_voice_id or "e07c00bc-4134-4eae-9ea4-1a55fb45746b"
+            language = (tts_language or "en") if tts_language is not None else None
             # Sonic-3 speed/emotion are numeric and live under `generation_config`, not
             # flat InputParams fields, so build_input_params can't map the schema's
             # `speed`/`emotion` — wire them explicitly or the user's speed had no effect.
@@ -823,10 +907,18 @@ def build_tts(spec: dict) -> Optional[Any]:
                 gen_kwargs["speed"] = speed_value
             if isinstance(metadata.get("emotion"), str) and metadata["emotion"]:
                 gen_kwargs["emotion"] = metadata["emotion"]
-            if gen_kwargs and params is not None:
-                params = params.model_copy(update={"generation_config": GenerationConfig(**gen_kwargs)})
-            logger.debug("[TTS {}] voice_kwargs: {} generation_config: {}", provider_name, voice_kwargs, gen_kwargs)
-            return CartesiaTTSService(api_key=api_key, model=model or "sonic-3", params=params, **voice_kwargs, **_url_kwargs(metadata, "url"))
+            cartesia_settings = build_settings(
+                CartesiaTTSService.Settings,
+                metadata,
+                model=model or "sonic-3",
+                voice=voice,
+                language=language,
+                generation_config=GenerationConfig(**gen_kwargs) if gen_kwargs else None,
+            )
+            logger.debug(
+                "[TTS {}] voice={} language={} generation_config: {}", provider_name, voice, language, gen_kwargs,
+            )
+            return CartesiaTTSService(api_key=api_key, settings=cartesia_settings, **_url_kwargs(metadata, "url"))
         if provider_name == "openai":  # In code
             from pipecat.services.openai.tts import OpenAITTSService
             voice_kwargs = {}
@@ -1113,7 +1205,7 @@ def build_tts(spec: dict) -> Optional[Any]:
                 **xai_kwargs,
             )
 
-        if provider_name in ("maya1", "higgs-audio", "indextts", "chatterbox-hosted", "cosyvoice-hosted"):
+        if provider_name in HOSTED_TTS_PROVIDERS:
             from core.services.pipeline.hosted_tts_service import HostedTTSService
             from core.logging import get_trace_id
             endpoint = model_meta.get("base_url") or metadata.get("base_url")

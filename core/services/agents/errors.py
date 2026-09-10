@@ -25,10 +25,13 @@ class ProfileVariableInvalidError(ProfileVariableError):
     """Payload failed validation: bad key format, reserved key, or oversize value."""
 
 
-class ProfileCrmConfigError(Exception):
-    """Base class for agent profile-CRM-config service errors."""
+class ProfileWebhookError(Exception):
+    """Base class for agent profile-webhook service errors."""
 
 
-class ProfileCrmConfigInvalidError(ProfileCrmConfigError):
-    """CRM config payload failed validation (e.g. MCP server not attached to
-    the agent, or a field exceeds its length cap)."""
+class ProfileWebhookNotFoundError(ProfileWebhookError):
+    """No webhook data source is configured for this agent/org."""
+
+
+class ProfileWebhookInvalidError(ProfileWebhookError):
+    """Payload failed validation: bad URL/SSRF, unsupported method, bad identifier, etc."""

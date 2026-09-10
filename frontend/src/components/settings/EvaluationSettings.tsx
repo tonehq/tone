@@ -15,17 +15,14 @@ import {
   useEvalSettings,
   useUpdateEvalSettings,
 } from '@/lib/api/evalSettings';
-import type {
-  EvalSettingsPatch,
-  LlmEvalPatch,
-  RagEvalPatch,
-} from '@/services/evalSettingsService';
+import type { EvalSettingsPatch, LlmEvalPatch, RagEvalPatch } from '@/services/evalSettingsService';
 import type { EvalSettings, LlmEvalOrgSettings, RagEvalOrgSettings } from '@/types/evalSettings';
 import {
   AGENT_LLM_EVAL_METRIC_NAMES,
   EVAL_JUDGE_ENGINES,
   EVAL_METRIC_NAMES,
 } from '@/types/evalSettings';
+import { buildEvalModelOptions } from '@/utils/evalFormat';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
 
@@ -256,19 +253,10 @@ export default function EvaluationSettings() {
   // silently dropped from the options list when the user clicks around.
   const USE_DEFAULT_SENTINEL = '__use_default__';
   const { data: modelCatalog } = useEvalModelOptions();
-  const buildModelOptions = (serverValue: string | undefined) => {
-    const opts: { value: string; label: string }[] = [
-      { value: USE_DEFAULT_SENTINEL, label: 'Use default (env fallback)' },
-      ...(modelCatalog?.models ?? []).map((m) => ({
-        value: m.name,
-        label: `${m.display_name} — ${m.provider_display_name}`,
-      })),
-    ];
-    if (serverValue && !opts.some((o) => o.value === serverValue)) {
-      opts.splice(1, 0, { value: serverValue, label: `${serverValue} (unavailable)` });
-    }
-    return opts;
-  };
+  const buildModelOptions = (serverValue: string | undefined) => [
+    { value: USE_DEFAULT_SENTINEL, label: 'Use default (env fallback)' },
+    ...buildEvalModelOptions(modelCatalog?.models, serverValue),
+  ];
   const generationModelOptions = useMemo(
     () => buildModelOptions(serverSettings?.rag_evals?.generation_model),
     [modelCatalog, serverSettings?.rag_evals?.generation_model],
@@ -478,7 +466,9 @@ export default function EvaluationSettings() {
         <section className="rounded-xl border border-border bg-card p-6">
           <h2 className="text-base font-semibold text-foreground">Scoring</h2>
           <p className="mt-0.5 text-xs text-muted-foreground">
-            Which metrics run per question and the pass bar applied to each.
+            Which metrics run per question and the pass bar applied to each — the default judge for
+            every run. To re-grade results with other judges and compare, open Evaluation config in
+            a knowledge base.
           </p>
           <div className="mt-4 flex flex-col gap-4">
             <TextInput

@@ -8,7 +8,7 @@ full router is built here and parameterized with those two concerns, so there
 is a single source of truth for the route logic.
 """
 
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, Literal, Optional
 from uuid import UUID
 
 from fastapi import (
@@ -34,7 +34,11 @@ from core.schemas.knowledge_base_requests import (PipelineRunRequest,
                                                    RenameDocumentRequest)
 from core.models.upload import Upload
 from core.services.evals.eval_service import EvalRunSummary, EvalService
-from core.services.evals.errors import EvalGenerationError, EvalNotFoundError
+from core.services.evals.errors import (
+    EvalGenerationError,
+    EvalNotFoundError,
+    EvalRunError,
+)
 from core.services.ingestion_errors import (
     AgentHasNoPublishedConfigError,
     AgentKnowledgeBaseNotFoundError,
@@ -120,13 +124,13 @@ class AddManualQuestionsRequest(BaseModel):
 
 class GenerateEvalVersionRequest(BaseModel):
     """Body for ``POST /{upload_id}/eval-versions/generate`` — generate an LLM
-    eval set into a NEW version, or OVERWRITE an existing (un-run) one.
+    eval set into a NEW version, or OVERWRITE an existing (un-run) one. Questions
+    are drafted from the uploaded document (not any ingestion run's chunks).
     ``instructions`` is the user's optional custom generation prompt."""
 
     mode: str = Field(default="new", pattern="^(new|overwrite)$")
     version_id: Optional[UUID] = None
     instructions: Optional[str] = Field(default=None, max_length=8000)
-    ingestion_run_id: Optional[UUID] = None
 
 
 class ListEvalRunsRequest(BaseModel):
@@ -135,6 +139,14 @@ class ListEvalRunsRequest(BaseModel):
 
     ingestion_run_id: Optional[UUID] = None
     eval_version_id: Optional[UUID] = None
+
+
+class SetHumanVerdictRequest(BaseModel):
+    """Body for ``POST /{upload_id}/eval-runs/{run_id}/label`` — the human
+    Accept/Reject mark on one scored answer. ``verdict=null`` clears the mark."""
+
+    eval_id: UUID
+    verdict: Optional[Literal["accept", "reject"]] = None
 
 
 class UpdateQuestionRequest(BaseModel):
@@ -893,6 +905,42 @@ def build_knowledge_base_router(
             "questions": detail["questions"],
         }
 
+    @router.post("/{upload_id}/eval-runs/{run_id}/label")
+    def set_eval_run_label(
+        upload_id: str,
+        run_id: str,
+        body: SetHumanVerdictRequest,
+        claims=Depends(auth_dependency),
+        db: Session = Depends(get_db),
+    ):
+        """Set (or clear) the human Accept/Reject label on one scored answer —
+        config-independent ground truth reused for judge-agreement %. Org-scoped
+        in the service, so a caller from another tenant gets 404 even with a
+        valid ``run_id``."""
+        org_id = resolve_org_id(claims)
+        _resolve_upload(db, org_id, upload_id)
+        try:
+            rid = UUID(run_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid run_id"
+            )
+        user_id = UUID(claims.user_id) if claims.user_id else None
+        try:
+            row = EvalService().set_human_verdict(
+                db,
+                org_id=org_id,
+                run_id=rid,
+                eval_id=body.eval_id,
+                verdict=body.verdict,
+                user_id=user_id,
+            )
+        except EvalNotFoundError as e:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e)) from e
+        except EvalRunError as e:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+        return row
+
     # ── Manual eval question authoring ─────────────────────────────────
     # Users author their own Q&A pairs (typed in the UI) in addition to the
     # LLM-generated set. All four routes below are org-scoped and delegate to
@@ -1000,7 +1048,6 @@ def build_knowledge_base_router(
                 mode=body.mode,
                 version_id=body.version_id,
                 instructions=body.instructions or "",
-                ingestion_run_id=body.ingestion_run_id,
             )
         except Exception as exc:
             logger.exception(

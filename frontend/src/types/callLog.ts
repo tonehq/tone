@@ -205,7 +205,8 @@ export type ToolExecutionType =
   | 'google_calendar'
   | 'read_document'
   | 'built_in'
-  | 'mcp';
+  | 'mcp'
+  | 'webhook';
 
 /** One row from `tool_executions` — one tool/MCP invocation during a call.
  *  The `tool_*` and `mcp_server_*` fields are joined in at read time from the

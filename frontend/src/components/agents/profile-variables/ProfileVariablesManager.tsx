@@ -20,6 +20,7 @@ import {
 } from '@/lib/api/agentProfileVariables';
 import { createAgentProfileVariable } from '@/services/agentProfileVariableService';
 import type { AgentFormState, ProfileVariableDraft } from '@/types/agent';
+import type { ProfileVariableSource } from '@/types/agentProfileVariable';
 import type { CustomTableColumn } from '@/types/components';
 import { handleApiError } from '@/utils/helpers';
 import { showToast } from '@/utils/toast';
@@ -53,7 +54,8 @@ interface PanelRow {
   key: string;
   value: string;
   description: string | null;
-  crm_field: string | null;
+  source: ProfileVariableSource;
+  source_path: string | null;
 }
 
 // ── EDIT mode (API-backed) ──────────────────────────────────────────────
@@ -73,7 +75,8 @@ function EditModePanel({ agentId }: { agentId: string }) {
         key: v.key,
         value: v.value,
         description: v.description,
-        crm_field: v.crm_field,
+        source: v.source,
+        source_path: v.source_path,
       })),
     [variables],
   );
@@ -84,7 +87,8 @@ function EditModePanel({ agentId }: { agentId: string }) {
         key: input.key,
         value: input.value,
         description: input.description?.trim() || null,
-        crm_field: input.crm_field?.trim() || null,
+        source: input.source,
+        source_path: input.source === 'webhook' ? input.source_path.trim() : null,
       });
     },
     [createMutation],
@@ -100,7 +104,8 @@ function EditModePanel({ agentId }: { agentId: string }) {
           // normalises whitespace-only / empty to NULL. Sending `null` would be
           // treated as "leave unchanged" by the PATCH-style update route.
           description: patch.description?.trim() ?? '',
-          crm_field: patch.crm_field?.trim() ?? '',
+          source: patch.source,
+          source_path: patch.source === 'webhook' ? patch.source_path.trim() : null,
         },
       });
     },
@@ -140,7 +145,8 @@ function CreateModePanel() {
         key: d.key,
         value: d.value,
         description: d.description,
-        crm_field: d.crm_field,
+        source: d.source,
+        source_path: d.source_path,
       })),
     [drafts],
   );
@@ -162,7 +168,8 @@ function CreateModePanel() {
           key: input.key,
           value: input.value,
           description: input.description?.trim() || null,
-          crm_field: input.crm_field?.trim() || null,
+          source: input.source,
+          source_path: input.source === 'webhook' ? input.source_path.trim() : null,
         },
       ]);
     },
@@ -182,7 +189,8 @@ function CreateModePanel() {
                 // normalises whitespace-only / empty to NULL. Sending `null` would be
                 // treated as "leave unchanged" by the PATCH-style update route.
                 description: patch.description?.trim() ?? '',
-                crm_field: patch.crm_field?.trim() || null,
+                source: patch.source,
+                source_path: patch.source === 'webhook' ? patch.source_path.trim() : null,
               }
             : d,
         ),
@@ -251,7 +259,8 @@ function useFlushRetryOnMount(agentId: string) {
             key: draft.key,
             value: draft.value,
             description: draft.description ?? undefined,
-            crm_field: draft.crm_field ?? undefined,
+            source: draft.source,
+            source_path: draft.source_path,
           });
         } catch (err) {
           console.error(
@@ -382,23 +391,30 @@ function VariablesPanel({
         },
       },
       {
+        key: 'source',
+        title: 'Source',
+        dataIndex: 'source',
+        render: (_v, row) =>
+          row.source === 'webhook' ? (
+            <span className="inline-flex items-center gap-1 text-xs">
+              <span className="rounded bg-primary/10 px-1.5 py-0.5 font-medium text-primary">
+                Webhook
+              </span>
+              {row.source_path && (
+                <span className="font-mono text-muted-foreground">{row.source_path}</span>
+              )}
+            </span>
+          ) : (
+            <span className="text-xs text-muted-foreground">Static</span>
+          ),
+      },
+      {
         key: 'description',
         title: 'Description',
         dataIndex: 'description',
         render: (_v, row) =>
           row.description ? (
             <span className="text-sm text-muted-foreground">{row.description}</span>
-          ) : (
-            <span className="text-muted-foreground">—</span>
-          ),
-      },
-      {
-        key: 'crm_field',
-        title: 'CRM field',
-        dataIndex: 'crm_field',
-        render: (_v, row) =>
-          row.crm_field ? (
-            <span className="font-mono text-xs text-muted-foreground">{row.crm_field}</span>
           ) : (
             <span className="text-muted-foreground">—</span>
           ),
@@ -475,7 +491,8 @@ function VariablesPanel({
                 key: editTarget.key,
                 value: editTarget.value,
                 description: editTarget.description,
-                crm_field: editTarget.crm_field,
+                source: editTarget.source,
+                source_path: editTarget.source_path,
                 created_at: null,
                 updated_at: null,
               }

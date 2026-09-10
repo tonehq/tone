@@ -380,7 +380,6 @@ def eval_ingestion_run(
                     db,
                     upload_id=run.upload_id,
                     org_id=run.organization_id,
-                    ingestion_run_id=run.id,
                 )
                 target_version_id = eval_set.eval_version_id
             logger.info(
@@ -423,6 +422,9 @@ def generate_eval_version(
     mode: str = "new",
     version_id: str = "",
     instructions: str = "",
+    # Accepted-and-ignored: generation now always reads the uploaded document,
+    # not an ingestion run's chunks. Kept only so jobs enqueued before this
+    # change (which still carry the arg) don't fail to deserialize.
     ingestion_run_id: str = "",
 ) -> None:
     """On-demand LLM eval-question generation into a VERSION (the reviewed
@@ -449,7 +451,6 @@ def generate_eval_version(
                 mode=mode,
                 version_id=_UUID(version_id) if version_id else None,
                 instructions=instructions or None,
-                ingestion_run_id=_UUID(ingestion_run_id) if ingestion_run_id else None,
                 approval_status="pending",
                 source="generated",
             )
@@ -468,7 +469,6 @@ async def enqueue_eval_version_generation(
     mode: str = "new",
     version_id=None,
     instructions: str = "",
-    ingestion_run_id=None,
 ) -> int:
     async with app.open_async():
         return await generate_eval_version.defer_async(
@@ -477,7 +477,59 @@ async def enqueue_eval_version_generation(
             mode=mode,
             version_id=str(version_id) if version_id else "",
             instructions=instructions or "",
-            ingestion_run_id=str(ingestion_run_id) if ingestion_run_id else "",
+        )
+
+
+@app.task(name="evaluation_config_run", queue="eval", pass_context=True)
+@_with_job_logging
+def evaluation_config_run(
+    source_run_id: str,
+    evaluation_config_id: str,
+    triggered_by: str = "manual",
+) -> None:
+    """Re-judge a frozen eval run's answers with one evaluation config.
+
+    Runs on the ``eval`` queue (same reasons as ``eval_ingestion_run``): the
+    judge loop is LLM-heavy and must not compete with ingestion slots, and an
+    older worker that doesn't know this task can't grab it off a different
+    queue. ``EvaluationConfigService.run_config`` reuses the source run's frozen
+    answers (no retrieval / answer generation) and writes
+    ``evaluation_config_results`` rows tagged with a fresh ``config_run_id``.
+
+    Failures are logged with a full traceback but NEVER re-raised — a bad
+    re-judge must not crash the worker; the user can retry."""
+    from uuid import UUID as _UUID
+
+    from core.database.session import get_db_context
+    from core.services.evals.evaluation_config_service import EvaluationConfigService
+
+    try:
+        with get_db_context() as db:
+            EvaluationConfigService(db).run_config(
+                db,
+                source_run_id=_UUID(source_run_id),
+                evaluation_config_id=_UUID(evaluation_config_id),
+                triggered_by=triggered_by,
+            )
+        logger.info(
+            "[eval-config] worker task done source_run={} config={}",
+            source_run_id, evaluation_config_id,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception(
+            "[eval-config] run failed source_run={} config={} (swallowed)",
+            source_run_id, evaluation_config_id,
+        )
+
+
+async def enqueue_evaluation_config_run(
+    *, source_run_id, evaluation_config_id, triggered_by: str = "manual",
+) -> int:
+    async with app.open_async():
+        return await evaluation_config_run.defer_async(
+            source_run_id=str(source_run_id),
+            evaluation_config_id=str(evaluation_config_id),
+            triggered_by=triggered_by,
         )
 
 

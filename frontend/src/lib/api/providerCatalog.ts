@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 
-import { listProviderCatalog, listProviderModels } from '@/services/servicesService';
+import { listAllProviderModels, listProviderCatalog } from '@/services/servicesService';
 import type { ProviderModel } from '@/types/service';
 
 /**
@@ -31,12 +31,7 @@ export function useLlmProviderCatalog() {
 export function useLlmModels(providerId: string | null | undefined) {
   return useQuery({
     queryKey: providerCatalogKeys.models(providerId ?? '', 'llm'),
-    queryFn: () =>
-      listProviderModels(providerId as string, {
-        service_type: 'llm',
-        page: 1,
-        page_size: 100,
-      }),
+    queryFn: () => listAllProviderModels(providerId as string, 'llm'),
     enabled: !!providerId,
     select: selectActiveModels,
     retry: false,

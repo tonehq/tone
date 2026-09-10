@@ -23,6 +23,9 @@ from concurrent.futures import ThreadPoolExecutor
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 LAYERS = {"stt": "stt_settings", "llm": "llm_settings", "tts": "voice_settings"}
 AGENT_FOR = {"stt": "swap-stt", "llm": "swap-llm", "tts": "swap-tts"}
+TURN_SETTINGS_KEY = "turn_settings"
+TURN_DETECTION_KEY = "turn_detection"
+VAD_KEY = "vad"
 
 
 DEFAULT_FIRST_MESSAGE = (
@@ -484,7 +487,26 @@ def main():
     p.add_argument("--layer", choices=sorted(LAYERS), required=True)
     p.add_argument("--provider", required=True, help="provider slug, from `catalogue`")
     p.add_argument("--model", required=True, help="model name, from `catalogue`")
+    p.add_argument("--agent", choices=sorted(AGENT_FOR.values()),
+                   help="write the layer on this agent instead of the one that varies it")
+    p.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE",
+                   help="model setting to write with the swap, e.g. reasoning_effort=low (repeatable)")
     p.add_argument("--org", help=ORG_HELP)
+    u = sub.add_parser("turn", help="set one agent's VAD model and turn detector for a run")
+    u.add_argument("--agent", default="swap-llm", help="agent name in the org; any agent, not only the swap trio")
+    u.add_argument("--vad", help="VAD provider slug from the options endpoint, e.g. silero, ten, aic_quail")
+    u.add_argument("--detector",
+                   help="turn detector slug, e.g. smart_turn or livekit; keeps the current one when omitted")
+    u.add_argument("--set", action="append", default=[], metavar="FIELD=VALUE",
+                   help="VAD threshold to write, e.g. stop_secs=0.3 (repeatable)")
+    u.add_argument("--keep-thresholds", action="store_true",
+                   help="keep the stored thresholds instead of resetting them to the server defaults")
+    u.add_argument("--org", help=ORG_HELP)
+    r = sub.add_parser("turn-report", help="turn-taking numbers for an agent's recent calls")
+    r.add_argument("--agent", default="swap-llm", help="agent name in the org; any agent, not only the swap trio")
+    r.add_argument("--last", type=int, default=5, help="most recent calls to include; 0 means every call in the window")
+    r.add_argument("--since", help="only calls started at or after this ISO time, e.g. 2026-09-09T16:00")
+    r.add_argument("--org", help=ORG_HELP)
     args = ap.parse_args()
     if args.cmd == "status":
         return cmd_status(args)
@@ -496,13 +518,144 @@ def main():
         return cmd_teardown(args)
     if args.cmd == "swap":
         return cmd_swap(args)
+    if args.cmd == "turn":
+        return cmd_turn(args)
+    if args.cmd == "turn-report":
+        return cmd_turn_report(args)
     return 1
+
+
+def turn_options(token, base):
+    out = call("GET", "/agent/turn-settings/options", token, base=base) or {}
+    return (
+        {d["id"] for d in out.get("turn_detectors", [])},
+        {p["id"] for p in out.get("vad_providers", [])},
+        out.get("default_turn_detector"),
+        out.get("default_vad_provider"),
+    )
+
+
+def cmd_turn(args):
+    base = base_url()
+    token, _ = session(base, getattr(args, "org", None))
+    found = agents(token, base)
+    if args.agent not in found:
+        raise SystemExit(f"{args.agent} is not provisioned. Run provision first.")
+    detectors, vads, default_detector, default_vad = turn_options(token, base)
+    vad = args.vad or default_vad
+    if vad not in vads:
+        raise SystemExit(f"No VAD provider {vad!r} on this server. Offered: {', '.join(sorted(vads))}")
+    if args.detector and args.detector not in detectors:
+        raise SystemExit(
+            f"No turn detector {args.detector!r} on this server. Offered: {', '.join(sorted(detectors))}"
+        )
+    agent = found[args.agent]
+    cfg = call("GET", f"/agent/get_agent?agent_id={agent['id']}", token, base=base) or {}
+    cfg = cfg.get("config") or cfg
+    current = dict(cfg.get(TURN_SETTINGS_KEY) or {})
+    before = json.dumps(current, sort_keys=True)
+    if args.detector:
+        detection = {"provider": args.detector}
+    else:
+        detection = dict(current.get(TURN_DETECTION_KEY) or {"provider": default_detector})
+    vad_blob = dict(current.get(VAD_KEY) or {}) if args.keep_thresholds else {}
+    vad_blob.update(_parse_settings(args.set))
+    vad_blob["provider"] = vad
+    turn_settings = {TURN_DETECTION_KEY: detection, VAD_KEY: vad_blob}
+    call("PUT", f"/agent/update_agent?agent_id={agent['id']}", token,
+         {"config": {TURN_SETTINGS_KEY: turn_settings}}, base)
+    print(f"{args.agent}.{TURN_SETTINGS_KEY}")
+    print(f"  before: {before}")
+    print(f"  after : {json.dumps(turn_settings, sort_keys=True)}")
+    print("\nThresholds not listed fall back to the server defaults; the other agents are unchanged.")
+    return 0
+
+
+def _recent_calls(token, base, agent_id, last, since):
+    out = call("POST", "/call-log/list", token, {"page": 1, "page_size": 100}, base) or {}
+    rows = [c for c in (out.get("data") or []) if c.get("agent_id") == agent_id]
+    if since:
+        rows = [c for c in rows if (c.get("started_at") or "") >= since]
+    rows.sort(key=lambda c: c.get("started_at") or "", reverse=True)
+    return rows[:last] if last else rows
+
+
+def _turn_stats(metrics):
+    turns = metrics.get("turn_metrics") or []
+    requests = sum(len(t.get("llm_ttfb_all") or []) for t in turns)
+    e2e = sorted(t["end_to_end"] for t in turns if isinstance(t.get("end_to_end"), (int, float)))
+    return {
+        "turns": len(turns),
+        "llm_requests": requests,
+        "cancelled_pct": round((1 - len(turns) / requests) * 100) if requests else 0,
+        "interrupted": sum(1 for t in turns if t.get("status") == "interrupted"),
+        "e2e_median": e2e[len(e2e) // 2] if e2e else None,
+    }
+
+
+def cmd_turn_report(args):
+    base = base_url()
+    token, _ = session(base, getattr(args, "org", None))
+    found = agents(token, base)
+    if args.agent not in found:
+        raise SystemExit(f"{args.agent} is not provisioned. Run provision first.")
+    agent = found[args.agent]
+    cfg = call("GET", f"/agent/get_agent?agent_id={agent['id']}", token, base=base) or {}
+    cfg = cfg.get("config") or cfg
+    print(f"{args.agent} {TURN_SETTINGS_KEY} now: "
+          f"{json.dumps(cfg.get(TURN_SETTINGS_KEY) or {}, sort_keys=True)}\n")
+    rows = _recent_calls(token, base, agent["id"], args.last, args.since)
+    if not rows:
+        print("No calls found for that window.")
+        return 0
+    total = {"turns": 0, "llm_requests": 0, "interrupted": 0}
+    print(f"{'started':16} {'dur':>5} {'turns':>5} {'llm req':>7} {'cancel%':>7} {'interr':>6} {'e2e med':>7}")
+    for c in rows:
+        try:
+            metrics = call("GET", f"/call-metrics/{c['id']}", token, base=base) or {}
+        except SystemExit:
+            print(f"{(c.get('started_at') or '')[:16]:16} {str(c.get('duration_seconds') or ''):>5} "
+                  f"no metrics yet (in progress or failed before the first turn)")
+            continue
+        stats = _turn_stats(metrics)
+        for key in total:
+            total[key] += stats[key]
+        e2e = "" if stats["e2e_median"] is None else stats["e2e_median"]
+        print(f"{(c.get('started_at') or '')[:16]:16} {str(c.get('duration_seconds') or ''):>5} "
+              f"{stats['turns']:>5} {stats['llm_requests']:>7} {stats['cancelled_pct']:>7} "
+              f"{stats['interrupted']:>6} {str(e2e):>7}")
+    cancelled = round((1 - total["turns"] / total["llm_requests"]) * 100) if total["llm_requests"] else 0
+    print(f"\nTOTAL calls={len(rows)} turns={total['turns']} llm_requests={total['llm_requests']} "
+          f"cancelled={cancelled}% interrupted_turns={total['interrupted']}")
+    return 0
+
+
+def _coerce_setting(raw):
+    lowered = raw.lower()
+    if lowered in ("true", "false"):
+        return lowered == "true"
+    for cast in (int, float):
+        try:
+            return cast(raw)
+        except ValueError:
+            continue
+    return raw
+
+
+def _parse_settings(pairs):
+    settings = {}
+    for pair in pairs:
+        if "=" not in pair:
+            raise SystemExit(f"--set expects FIELD=VALUE, got {pair!r}")
+        key, raw = pair.split("=", 1)
+        settings[key.strip()] = _coerce_setting(raw.strip())
+    return settings
 
 
 def cmd_swap(args):
     base = base_url()
     token, _ = session(base, getattr(args, "org", None))
-    name = AGENT_FOR[args.layer]
+    name = args.agent or AGENT_FOR[args.layer]
     found = agents(token, base)
     if name not in found:
         raise SystemExit(f"{name} is not provisioned. Run provision first.")
@@ -526,6 +679,8 @@ def cmd_swap(args):
     before = (blob.get("provider_id"), blob.get("model_id"))
     blob["provider_id"] = prov["id"]
     blob["model_id"] = model["id"]
+    settings = _parse_settings(args.set)
+    blob.update(settings)
     # Partial config write: _apply_config_fields only touches keys present in the
     # payload, so the other two layers and the prompt are left exactly as they were.
     call("PUT", f"/agent/update_agent?agent_id={agent['id']}", token,
@@ -534,6 +689,8 @@ def cmd_swap(args):
     print(f"  before: provider_id={before[0]} model_id={before[1]}")
     print(f"  after : provider_id={prov['id']} model_id={model['id']}  "
           f"({args.provider}/{args.model})")
+    if settings:
+        print("  settings: " + ", ".join(f"{k}={v!r}" for k, v in settings.items()))
     print("\nThe other two agents are unchanged — any difference on a call is this swap.")
     return 0
 

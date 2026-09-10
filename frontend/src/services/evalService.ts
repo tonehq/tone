@@ -13,6 +13,7 @@ import type {
   GenerateEvalVersionPayload,
   GenerateEvalVersionResponse,
   ManualQuestionInput,
+  SetHumanVerdictPayload,
   TriggerEvalRunPayload,
   TriggerEvalRunResponse,
   UpdateQuestionPatch,
@@ -35,6 +36,20 @@ export const listEvalSummariesByIngestion = async (
 export const getEvalRunDetail = async (uploadId: string, runId: string): Promise<EvalRunDetail> => {
   const res = await axiosInstance.get<EvalRunDetail>(
     `/knowledge-base/${uploadId}/eval-runs/${runId}`,
+  );
+  return res.data;
+};
+
+// Set (or clear, verdict=null) the human Accept/Reject label on one scored
+// answer. Returns the updated eval_results row.
+export const setEvalRunLabel = async (
+  uploadId: string,
+  runId: string,
+  payload: SetHumanVerdictPayload,
+): Promise<Record<string, unknown>> => {
+  const res = await axiosInstance.post<Record<string, unknown>>(
+    `/knowledge-base/${uploadId}/eval-runs/${runId}/label`,
+    payload,
   );
   return res.data;
 };

@@ -1,3 +1,4 @@
+import type { ProfileVariableSource } from '@/types/agentProfileVariable';
 import type { MetaDataSchemaField } from '@/types/provider';
 import type { ReadinessOverallStatus } from '@/types/readiness';
 
@@ -37,6 +38,7 @@ export interface AgentTurnDetectionSettings {
 }
 
 export interface AgentVadSettings {
+  provider?: string | null;
   [key: string]: unknown;
 }
 
@@ -58,9 +60,13 @@ export interface TurnDetectorOption {
   meta_data_schema: MetaDataSchemaField[];
 }
 
+export type VadProviderOption = TurnDetectorOption;
+
 export interface TurnSettingsOptions {
   turn_detectors: TurnDetectorOption[];
   default_turn_detector: string;
+  vad_providers: VadProviderOption[];
+  default_vad_provider: string;
   vad_schema: MetaDataSchemaField[];
 }
 
@@ -301,7 +307,8 @@ export interface ProfileVariableDraft {
   key: string;
   value: string;
   description: string | null;
-  crm_field: string | null;
+  source: ProfileVariableSource;
+  source_path: string | null;
 }
 
 /** Single source of truth for the agent create/edit form. Mirrors the

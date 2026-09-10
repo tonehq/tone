@@ -15,6 +15,7 @@ import ContactsStep from '@/components/agents/agent-form/steps/ContactsStep';
 import ScheduleStep from '@/components/agents/agent-form/steps/ScheduleStep';
 import CallHistoryStep from '@/components/agents/agent-form/steps/CallHistoryStep';
 import LlmEvalsStep from '@/components/agents/agent-form/steps/LlmEvalsStep';
+import AdvancedStep from '@/components/agents/agent-form/steps/AdvancedStep';
 
 // Maps a URL section segment to its body. Shared by the edit and create
 // section routes; the editor's form state + chrome live in the layout
@@ -37,6 +38,10 @@ export default function AgentSectionBody({
     section === 'tools' ||
     section === 'knowledge' ||
     section === 'channels' ||
+    // Advanced (profile variables) renders in both modes — the variables CRUD
+    // uses RHF drafts in create mode; the webhook config shows a "save first"
+    // hint until the agent is persisted.
+    section === 'advanced' ||
     // LLM Evals renders in both modes — an empty "save the agent first"
     // state in create mode, real UI once agent_id is persisted.
     section === 'llm-evals';
@@ -85,6 +90,8 @@ export default function AgentSectionBody({
       return <KnowledgePhoneStep agentId={agentId} />;
     case 'channels':
       return <ChannelsStep />;
+    case 'advanced':
+      return <AdvancedStep agentId={agentId} />;
     case 'contacts':
       return <ContactsStep agentId={agentId} />;
     case 'schedule':

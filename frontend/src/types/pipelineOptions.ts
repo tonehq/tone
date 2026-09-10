@@ -24,6 +24,7 @@ export interface PipelineOptions {
 // from the saved IngestionConfig and ignores individual field overrides
 // (per product decision — a saved config is a fixed recipe).
 export interface CreateIngestionRunPayload {
+  name?: string;
   ingestion_config_id?: string;
   parser?: string;
   tokeniser?: string;

@@ -34,10 +34,12 @@ class AgentProfileVariable(OrgScopedModel):
     key = Column(String(64), nullable=False)
     value = Column(Text, nullable=False, default="")
     description = Column(Text, nullable=True)
-    # Dot-path into the CRM lookup response that fills this variable when
-    # ``value`` is empty (e.g. ``properties.firstname``). NULL = never
-    # CRM-filled. Resolved at call start by the profile-CRM enrichment step.
-    crm_field = Column(String(200), nullable=True)
+    # "static" (value used verbatim) | "webhook" (value filled from the agent's
+    # webhook response at ``source_path``; ``value`` is the fallback default).
+    source = Column(String(20), nullable=False, default="static")
+    # Dot-path into the webhook JSON response (e.g. ``properties.name``).
+    # Required when ``source == "webhook"``; NULL for static variables.
+    source_path = Column(String(200), nullable=True)
 
     def to_dict(self) -> dict:
         return {
@@ -47,7 +49,8 @@ class AgentProfileVariable(OrgScopedModel):
             "key": self.key,
             "value": self.value or "",
             "description": self.description,
-            "crm_field": self.crm_field,
+            "source": self.source or "static",
+            "source_path": self.source_path,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -7,7 +7,7 @@ import ProtocolCard from '@/components/mcp/form/ProtocolCard';
 import RailRow from '@/components/mcp/form/RailRow';
 import StatusPill from '@/components/mcp/form/StatusPill';
 import TimeoutDial from '@/components/mcp/form/TimeoutDial';
-import HttpHeadersBuilder from '@/components/mcp/HttpHeadersBuilder';
+import HttpHeadersBuilder from '@/components/shared/HttpHeadersBuilder';
 import { finalizeAttachmentAndRedirect } from '@/services/agentAttachmentService';
 import { readAttachContext } from '@/utils/agentAttachmentContext';
 import {

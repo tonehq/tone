@@ -97,10 +97,21 @@ with the thing being measured.
 
 ```bash
 .../test_agents.py swap --layer stt --provider <slug> --model <name>
+.../test_agents.py swap --layer llm --provider groq --model openai/gpt-oss-120b --set reasoning_effort=low
+.../test_agents.py swap --layer stt --provider groq --model whisper-large-v3-turbo --agent swap-llm
 ```
 
 Repoints that layer on the matching agent and prints before/after. The other two agents
 are untouched.
+
+`--set FIELD=VALUE` (repeatable) writes model settings in the same call as the swap, so a
+model that needs a knob to be comparable — a reasoning effort, a temperature — gets it
+atomically. Values are coerced to bool, int or float where they parse. The field must be
+in the model's `meta_data_schema`; the resolver drops anything else before the call.
+
+`--agent <name>` writes the layer on a different swap agent. Use it once, to pin a
+held-constant layer — for example giving `swap-llm` an open-weight STT so every LLM run
+shares it — and then leave it alone. It is not for varying two layers at once.
 
 The model's `kind` must match the layer — swapping a TTS model into `--layer stt` is
 rejected, because it would leave the agent with no working STT and fail at the first
@@ -126,6 +137,39 @@ moves with load, so a swap measured an hour apart is measuring the hour.
 Without `--yes` it only prints. Deletes are not reversible.
 
 ---
+
+## Step 4: turn taking and VAD runs
+
+The VAD model and the turn detector are per-agent `turn_settings`, separate from the three
+layers. `turn` writes them for one agent and `turn-report` reads the turn-taking numbers
+back from the call metrics, so a VAD comparison is: set, call, report, repeat.
+
+```bash
+# Baseline: Silero with the server-default thresholds and Smart Turn (drops any stored thresholds)
+python3 .claude/skills/test-agent/scripts/test_agents.py turn --agent swap-llm --vad silero --detector smart_turn --org <org>
+
+# Next candidate; thresholds stay at the defaults so only the VAD model changes
+python3 .claude/skills/test-agent/scripts/test_agents.py turn --agent swap-llm --vad ten --org <org>
+python3 .claude/skills/test-agent/scripts/test_agents.py turn --agent swap-llm --vad aic_quail --org <org>
+
+# Tune one threshold without touching the rest
+python3 .claude/skills/test-agent/scripts/test_agents.py turn --agent swap-llm --vad ten --set stop_secs=0.3 --org <org>
+
+# Numbers for the last five calls of that agent (use --since to fence one run)
+python3 .claude/skills/test-agent/scripts/test_agents.py turn-report --agent swap-llm --last 5 --org <org>
+```
+
+`turn` only accepts VAD and detector slugs the server currently offers (the same list as
+`GET /agent/turn-settings/options`), so a provider whose package or licence is missing on
+the workers fails here instead of at call time. Every run of `turn` resets the thresholds to
+the server defaults unless `--keep-thresholds` is given; that is deliberate, because a stale
+aggressive threshold is the most common reason a VAD comparison is not a VAD comparison.
+
+`turn-report` columns, per call: `turns` completed, `llm req` LLM requests fired,
+`cancel%` share of requests cancelled before a reply (the caller was cut off by a false
+end-of-turn), `interr` turns whose status is `interrupted`, `e2e med` median end-to-end per
+turn. The reference to beat from 2026-09-09 with the old aggressive thresholds was 82 percent
+cancelled and 33 of 40 turns interrupted.
 
 ## Gotchas
 

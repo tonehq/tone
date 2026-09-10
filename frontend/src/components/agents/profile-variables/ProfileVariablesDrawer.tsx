@@ -3,23 +3,20 @@
 import { Braces } from 'lucide-react';
 import { useState } from 'react';
 
-import ProfileCrmConfigForm from '@/components/agents/profile-variables/ProfileCrmConfigForm';
-import ProfileVariablesManager from '@/components/agents/profile-variables/ProfileVariablesManager';
+import ProfileVariablesPanel from '@/components/agents/profile-variables/ProfileVariablesPanel';
 import CustomButton from '@/components/shared/CustomButton';
 import CustomDrawer from '@/components/shared/CustomDrawer';
+import { PROFILE_VARIABLES_DESCRIPTION } from '@/constants/profileWebhook';
 
 /**
- * "Profile variables" trigger button + right-side drawer.
- *
- * Replaces the old Profile editor tab: the same dual-mode
- * `ProfileVariablesManager` (API in edit mode, RHF drafts in create mode) now
- * opens inline from the Prompt / Workflow authoring surface, so the
- * `{{profile.<key>}}` values can be managed without leaving the page the user
- * is writing on.
+ * "Profile variables" trigger button + right-side drawer — a convenience entry
+ * point on the **workflow builder** canvas so the `{{profile.<key>}}` values
+ * can be managed without leaving the pathway being authored. The agent editor
+ * hosts the same feature in its **Advanced** tab; both render the shared
+ * `ProfileVariablesPanel`, so they never drift.
  *
  * Self-contained (owns its open state) so any authoring surface can drop it in
- * with just `agentId` — the Prompt step and the workflow builder toolbar both
- * reuse this one component instead of re-wiring a drawer each.
+ * with just `agentId`.
  */
 export default function ProfileVariablesDrawer({ agentId }: { agentId: string | null }) {
   const [open, setOpen] = useState(false);
@@ -41,12 +38,9 @@ export default function ProfileVariablesDrawer({ agentId }: { agentId: string | 
         side="right"
         width="w-full sm:max-w-2xl"
         title="Profile variables"
-        description="Reusable values referenced anywhere as {{profile.<key>}} — prompt, workflow nodes, and more. Update once, applied everywhere on the next call."
+        description={PROFILE_VARIABLES_DESCRIPTION}
       >
-        <div className="flex flex-col gap-4">
-          {agentId && <ProfileCrmConfigForm agentId={agentId} />}
-          <ProfileVariablesManager agentId={agentId} />
-        </div>
+        <ProfileVariablesPanel agentId={agentId} />
       </CustomDrawer>
     </>
   );

@@ -29,7 +29,9 @@ from core.services.evals.eval_service import (
     EvalService,
     _diff_scored_rows,
     _summarize_scored_rows,
+    judge_accepts,
 )
+from core.services.evals.errors import EvalNotFoundError, EvalRunError
 
 
 def _make_upload(upload_id):
@@ -706,3 +708,79 @@ def test_delete_results_for_ingestion_run_deletes_and_returns_count():
         synchronize_session=False
     )
     db.commit.assert_called_once()
+
+
+# ── Human acceptance labels (Accept / Reject ground truth) ─────────────────
+
+
+def _label_db(row):
+    """A db whose eval_results lookup resolves to ``row`` (or None)."""
+    db = MagicMock()
+    chain = MagicMock()
+    chain.filter.return_value = chain
+    chain.first.return_value = row
+    db.query.return_value = chain
+    return db
+
+
+def test_judge_accepts_maps_pass_to_accept_only():
+    """Agreement rule v1: only an overall PASS counts as a judge-accept."""
+    assert judge_accepts("PASS") is True
+    assert judge_accepts("pass") is True
+    assert judge_accepts("PARTIAL") is False
+    assert judge_accepts("FAIL") is False
+    assert judge_accepts(None) is False
+
+
+def test_set_human_verdict_updates_row_and_stamps_audit():
+    row = MagicMock()
+    row.to_dict.return_value = {"human_verdict": "accept"}
+    db = _label_db(row)
+    uid = uuid4()
+
+    out = EvalService().set_human_verdict(
+        db,
+        org_id=uuid4(),
+        run_id=uuid4(),
+        eval_id=uuid4(),
+        verdict="accept",
+        user_id=uid,
+    )
+
+    assert row.human_verdict == "accept"
+    assert row.human_labeled_by == uid
+    assert row.human_labeled_at is not None
+    db.commit.assert_called_once()
+    assert out == {"human_verdict": "accept"}
+
+
+def test_set_human_verdict_none_clears_the_mark():
+    row = MagicMock()
+    row.to_dict.return_value = {"human_verdict": None}
+    db = _label_db(row)
+
+    EvalService().set_human_verdict(
+        db, org_id=uuid4(), run_id=uuid4(), eval_id=uuid4(), verdict=None
+    )
+
+    assert row.human_verdict is None
+    db.commit.assert_called_once()
+
+
+def test_set_human_verdict_rejects_invalid_value():
+    with pytest.raises(EvalRunError):
+        EvalService().set_human_verdict(
+            db=MagicMock(),
+            org_id=uuid4(),
+            run_id=uuid4(),
+            eval_id=uuid4(),
+            verdict="maybe",
+        )
+
+
+def test_set_human_verdict_missing_row_raises_not_found():
+    db = _label_db(None)
+    with pytest.raises(EvalNotFoundError):
+        EvalService().set_human_verdict(
+            db, org_id=uuid4(), run_id=uuid4(), eval_id=uuid4(), verdict="reject"
+        )

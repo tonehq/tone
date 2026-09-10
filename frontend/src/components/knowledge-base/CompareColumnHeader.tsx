@@ -1,0 +1,81 @@
+'use client';
+
+import { Eye } from 'lucide-react';
+
+import { CustomButton } from '@/components/shared';
+import { formatRatioPercent } from '@/utils/evalFormat';
+
+import VerdictTally from './VerdictTally';
+
+interface CompareColumnHeaderProps {
+  name: string;
+  runNumber: number;
+  judgeModel: string | null;
+  verdicts: Record<string, number>;
+  isBaseline: boolean;
+  // How often this judge agreed with the human labels (0..1), and how many
+  // answers carry a mark. labeledCount === 0 ⇒ "no labels yet".
+  humanAgreement: number | null;
+  labeledCount: number;
+  onViewPrompt: () => void;
+}
+
+// One compare column's header: config name + run, an optional baseline badge, the
+// judge model as a mono chip, a verdict tally, and a subtle "View prompt" action.
+// Replaces the cramped stacked-text header so the hierarchy is legible.
+export default function CompareColumnHeader({
+  name,
+  runNumber,
+  judgeModel,
+  verdicts,
+  isBaseline,
+  humanAgreement,
+  labeledCount,
+  onViewPrompt,
+}: CompareColumnHeaderProps) {
+  return (
+    // Reset the shared table header's uppercase/tracking so model ids and stats
+    // read in their natural case inside this rich header cell.
+    <div className="flex flex-col items-center gap-2.5 py-1 normal-case tracking-normal whitespace-normal">
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-foreground">{name}</span>
+          <span className="text-xs font-normal text-muted-foreground">#{runNumber}</span>
+          {isBaseline && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              Baseline
+            </span>
+          )}
+        </div>
+        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs font-normal text-muted-foreground">
+          {judgeModel ?? '—'}
+        </span>
+      </div>
+
+      <div className="flex flex-col items-center gap-1.5">
+        <VerdictTally verdicts={verdicts} />
+        <span className="text-xs font-normal text-muted-foreground">
+          {labeledCount === 0 ? (
+            'No labels yet'
+          ) : (
+            <>
+              Agrees with you{' '}
+              <span className="font-semibold text-foreground">
+                {formatRatioPercent(humanAgreement)}
+              </span>
+            </>
+          )}
+        </span>
+      </div>
+
+      <CustomButton
+        type="text"
+        size="xs"
+        icon={<Eye className="size-3.5" />}
+        onClick={onViewPrompt}
+      >
+        View prompt
+      </CustomButton>
+    </div>
+  );
+}

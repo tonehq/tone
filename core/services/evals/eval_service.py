@@ -35,7 +35,6 @@ from core.models.eval_result import EvalResult
 from core.models.eval_version import EvalVersion
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
-from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.procrastinate import ProcrastinateJob
 from core.models.upload import Upload
 from core.services.evals.csv_import import (
@@ -80,6 +79,19 @@ _RESERVED_QUESTION_KEYS = {
     "expected_source_snippet",
     "category",
 }
+
+# Human acceptance labels — config-independent ground truth on the frozen
+# answer, reused by every judge to compute agreement %.
+HUMAN_ACCEPT = "accept"
+HUMAN_REJECT = "reject"
+_HUMAN_VERDICTS = frozenset({HUMAN_ACCEPT, HUMAN_REJECT})
+
+
+def judge_accepts(verdict: Optional[str]) -> bool:
+    """Agreement rule (v1): a judge "accepts" an answer when its overall verdict
+    is PASS; PARTIAL/FAIL count as reject. Documented in ONE place so every
+    agreement calculation (per run, per compare column) uses the same mapping."""
+    return (verdict or "").upper() == "PASS"
 
 
 @dataclass
@@ -163,11 +175,13 @@ class EvalService:
         instructions: Optional[str] = None,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
-        ingestion_run_id: Optional[Any] = None,
         approval_status: str = "pending",
         source: str = "generated",
     ) -> EvalSetSummary:
         """Generate an LLM Q&A set into an eval VERSION.
+
+        Questions are drafted from the ORIGINAL uploaded document (not any
+        ingestion run's chunks), so the set reflects the source knowledge base.
 
         ``mode='new'`` creates the next version for the upload; ``mode='overwrite'``
         reuses ``version_id`` (guarded — a version that already has results cannot
@@ -216,9 +230,7 @@ class EvalService:
         )
 
         api_key = _require_llm_key(db, org_id, model)
-        document_text = self._extract_document_text(
-            db, upload=upload, org_id=org_id, ingestion_run_id=ingestion_run_id
-        )
+        document_text = self._extract_document_text(upload=upload, org_id=org_id)
         payload = self._questions.generate(
             document_text=document_text,
             api_key=api_key,
@@ -245,7 +257,6 @@ class EvalService:
         org_id: Any,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
-        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         """Back-compat generation (CLI / benchmark tooling / auto path): create a
         fresh version whose questions are auto-approved so they are immediately
@@ -257,47 +268,25 @@ class EvalService:
             mode="new",
             model=model,
             max_chars=max_chars,
-            ingestion_run_id=ingestion_run_id,
             approval_status="approved",
             source="generated",
         )
 
     def _extract_document_text(
         self,
-        db: Session,
         *,
         upload: Upload,
         org_id: Any,
-        ingestion_run_id: Optional[Any],
     ) -> str:
-        """Assemble the source text the generator sees: the persisted KB chunks
-        for ``ingestion_run_id`` (so the generator sees exactly what retrieval
-        hits) or the R2 source file when no run is given (CLI / tests)."""
-        source_mode = "chunks" if ingestion_run_id is not None else "source_file"
+        """Assemble the source text the generator sees: the ORIGINAL uploaded
+        document (R2 source file), read via the shared reader. Questions are
+        generated from the whole document — NOT the persisted chunks — so the
+        eval set reflects the source knowledge base, independent of any single
+        ingestion run's chunking recipe."""
         logger.info(
-            "[eval] extract text upload={} org={} content_type={} source={}",
-            upload.id, org_id, upload.file_type, source_mode,
+            "[eval] extract text upload={} org={} content_type={} source=source_file",
+            upload.id, org_id, upload.file_type,
         )
-        if ingestion_run_id is not None:
-            chunks = (
-                db.query(KnowledgeBaseChunk)
-                .filter(
-                    KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id,
-                    KnowledgeBaseChunk.organization_id == org_id,
-                )
-                .order_by(KnowledgeBaseChunk.chunk_index.asc())
-                .all()
-            )
-            if not chunks:
-                raise EvalGenerationError(
-                    f"Ingestion run {ingestion_run_id} has no chunks — cannot generate eval"
-                )
-            document_text = "\n\n".join(c.chunk_text for c in chunks)
-            logger.info(
-                "[eval] extract assembled {} chunks ({} chars) upload={} run={}",
-                len(chunks), len(document_text), upload.id, ingestion_run_id,
-            )
-            return document_text
         try:
             file_bytes = self._download(upload.file_path)
         except Exception:
@@ -914,11 +903,11 @@ class EvalService:
         *,
         upload_id: Any,
         org_id: Any,
-        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         """Auto path: reuse the latest version that has approved questions; else
-        generate a fresh auto-approved version so scoring has something to run.
-        Returns a summary carrying ``eval_version_id`` for the run."""
+        generate a fresh auto-approved version (from the uploaded document) so
+        scoring has something to run. Returns a summary carrying
+        ``eval_version_id`` for the run."""
         latest = self._latest_version_with_approved(
             db, upload_id=upload_id, org_id=org_id
         )
@@ -946,7 +935,6 @@ class EvalService:
             upload_id=upload_id,
             org_id=org_id,
             mode="new",
-            ingestion_run_id=ingestion_run_id,
             approval_status="approved",
             source="generated",
         )
@@ -1306,6 +1294,52 @@ class EvalService:
         summary = _row_to_run_summary(summary_row)
         questions = self._scored_rows_for_run(db, run_id=run_id, org_id=org_id)
         return {"summary": summary, "questions": questions}
+
+    def set_human_verdict(
+        self,
+        db: Session,
+        *,
+        org_id: Any,
+        run_id: Any,
+        eval_id: Any,
+        verdict: Optional[str],
+        user_id: Optional[Any] = None,
+    ) -> dict:
+        """Set (or clear) the human Accept/Reject label on one frozen answer.
+
+        Ground truth lives on the ``eval_results`` row matched by
+        ``(run_id, eval_id, organization_id)`` — config-independent, so every
+        judge reuses it for agreement %. ``verdict=None`` clears the mark.
+        Org-scoped: a caller from another tenant gets ``EvalNotFoundError`` even
+        with a valid ``run_id``/``eval_id``. Returns the updated row dict."""
+        if verdict is not None and verdict not in _HUMAN_VERDICTS:
+            raise EvalRunError(
+                f"human verdict must be one of {sorted(_HUMAN_VERDICTS)} or null; "
+                f"got {verdict!r}"
+            )
+        row = (
+            db.query(EvalResult)
+            .filter(
+                EvalResult.run_id == run_id,
+                EvalResult.eval_id == eval_id,
+                EvalResult.organization_id == org_id,
+            )
+            .first()
+        )
+        if row is None:
+            raise EvalNotFoundError(
+                f"No eval result for run_id={run_id} eval_id={eval_id}"
+            )
+        row.human_verdict = verdict
+        row.human_labeled_by = user_id
+        row.human_labeled_at = datetime.now(timezone.utc)
+        db.commit()
+        db.refresh(row)
+        logger.info(
+            "[eval] human verdict set run_id={} eval_id={} verdict={} by={}",
+            run_id, eval_id, verdict, user_id,
+        )
+        return row.to_dict()
 
     def compare_results(
         self,
@@ -1716,6 +1750,16 @@ class EvalService:
         joined = q.order_by(Eval.question_ord.asc()).all()
         return [_result_row_to_dict(r, e) for r, e in joined]
 
+    def get_scored_rows_for_run(
+        self, db: Session, *, run_id: Any, org_id: Optional[Any] = None
+    ) -> List[dict]:
+        """Public accessor for a run's frozen answers — the source the
+        evaluation-config re-judge reuses. Each dict carries ``question`` /
+        ``expected_answer`` / ``actual_answer`` / ``retrieved_chunks`` +
+        ``eval_id``, exactly the judge's input tuple. Delegates to the private
+        joiner so there is one implementation."""
+        return self._scored_rows_for_run(db, run_id=run_id, org_id=org_id)
+
 
 def _default_r2_service():
     # Lazy import so the eval service module has no boto3 side-effect on import
@@ -1915,6 +1959,7 @@ def _result_row_to_dict(result: EvalResult, question: Eval) -> dict:
         "retrieval_error": result.retrieval_error,
         "answer_error": result.answer_error,
         "status": result.status,
+        "human_verdict": result.human_verdict,
     }
 
 

@@ -8,6 +8,11 @@
 export type EvalVerdict = 'PASS' | 'PARTIAL' | 'FAIL';
 export type EvalBatchStatus = 'completed' | 'failed';
 
+// Human acceptance mark on a frozen answer (ground truth). Single source for the
+// literal union — mirrors the backend HUMAN_ACCEPT / HUMAN_REJECT constants.
+// Nullable (`HumanVerdict | null`) at each use site, where null = unlabeled.
+export type HumanVerdict = 'accept' | 'reject';
+
 // A question is 'pending' (generated, awaiting review) or 'approved' (kept —
 // scored on run). Rejected questions are deleted, so there is no 'rejected'.
 export type EvalApprovalStatus = 'pending' | 'approved';
@@ -108,6 +113,15 @@ export interface EvalScoredQuestion {
   retrieval_error: string | null;
   answer_error: string | null;
   status: string;
+  // Human acceptance label on this frozen answer (ground truth). null = unlabeled.
+  human_verdict: HumanVerdict | null;
+}
+
+// Payload for POST /eval-runs/{runId}/label — set/clear the human mark on one
+// scored answer. verdict=null clears it.
+export interface SetHumanVerdictPayload {
+  eval_id: string;
+  verdict: HumanVerdict | null;
 }
 
 export interface EvalRunDetail {
@@ -188,12 +202,12 @@ export interface TriggerEvalRunPayload {
 }
 
 // Payload for POST /eval-versions/generate — generate into a new version or
-// overwrite an existing (un-run) one, with an optional custom prompt.
+// overwrite an existing (un-run) one, with an optional custom prompt. Questions
+// are drafted from the uploaded document (not any ingestion run's chunks).
 export interface GenerateEvalVersionPayload {
   mode: 'new' | 'overwrite';
   version_id?: string | null;
   instructions?: string | null;
-  ingestion_run_id?: string | null;
 }
 
 export interface GenerateEvalVersionResponse {

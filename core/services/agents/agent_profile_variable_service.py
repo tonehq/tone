@@ -43,11 +43,17 @@ _KEY_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]{0,63}$")
 # consistently between backend + frontend.
 MAX_VALUE_BYTES = 10_240
 MAX_DESCRIPTION_LEN = 1000
-MAX_CRM_FIELD_LEN = 200
 
 # Placeholders are always referenced as ``{{profile.<key>}}`` — this prefix
 # lives in ONE place so no call site re-derives it.
 PROFILE_PREFIX = "profile."
+
+# A variable is either a literal ``value`` (static) or filled from the agent's
+# webhook response at ``source_path`` (webhook; ``value`` is the fallback).
+VALID_SOURCES = frozenset({"static", "webhook"})
+MAX_SOURCE_PATH_LEN = 200
+# Dot-path like ``properties.name`` / ``data.customer.tier`` (no array syntax).
+_SOURCE_PATH_RE = re.compile(r"^[a-zA-Z_][\w]*(\.[a-zA-Z_][\w]*)*$")
 
 
 def _validate_key(key: str) -> str:
@@ -86,21 +92,31 @@ def _validate_description(description: Optional[str]) -> Optional[str]:
     return description
 
 
-def _validate_crm_field(crm_field: Optional[str]) -> Optional[str]:
-    """Normalize the optional CRM response field-path. Empty → ``None`` (not
-    CRM-filled). No format rule beyond a length cap — it is a free-text
-    dot-path (e.g. ``properties.firstname``) resolved best-effort at call time.
-    """
-    if crm_field is None:
+def _validate_source(source: Optional[str]) -> str:
+    source = (source or "static").strip().lower()
+    if source not in VALID_SOURCES:
+        raise ProfileVariableInvalidError("Source must be 'static' or 'webhook'.")
+    return source
+
+
+def _validate_source_path(source: str, source_path: Optional[str]) -> Optional[str]:
+    """A webhook variable REQUIRES a dot-path; a static one never has one."""
+    if source != "webhook":
         return None
-    crm_field = crm_field.strip()
-    if not crm_field:
-        return None
-    if len(crm_field) > MAX_CRM_FIELD_LEN:
+    path = (source_path or "").strip()
+    if not path:
         raise ProfileVariableInvalidError(
-            f"CRM field is too long (max {MAX_CRM_FIELD_LEN} characters)."
+            "A source path is required when the source is 'webhook'."
         )
-    return crm_field
+    if len(path) > MAX_SOURCE_PATH_LEN:
+        raise ProfileVariableInvalidError(
+            f"Source path is too long (max {MAX_SOURCE_PATH_LEN} characters)."
+        )
+    if not _SOURCE_PATH_RE.match(path):
+        raise ProfileVariableInvalidError(
+            "Source path must be a dot-path like 'properties.name'."
+        )
+    return path
 
 
 class AgentProfileVariableService(BaseService):
@@ -129,21 +145,6 @@ class AgentProfileVariableService(BaseService):
         rows = self.list_variables(agent_id)
         return {f"{PROFILE_PREFIX}{r.key}": (r.value or "") for r in rows}
 
-    def get_crm_fill_plan(self, agent_id: UUID) -> list[tuple[str, str]]:
-        """``[(profile_key, crm_field), ...]`` for variables that are EMPTY and
-        mapped to a CRM field — the exact set the enrichment step should fill.
-
-        A variable with a user-set ``value`` is skipped (never overwritten), and
-        one without a ``crm_field`` is skipped (nothing to fetch). Keys are the
-        raw variable keys (no ``profile.`` prefix); the caller adds it when
-        merging into the substitution context.
-        """
-        plan: list[tuple[str, str]] = []
-        for r in self.list_variables(agent_id):
-            if (r.value or "") == "" and (r.crm_field or "").strip():
-                plan.append((r.key, r.crm_field.strip()))
-        return plan
-
     # ── Writes ───────────────────────────────────────────────────────────
 
     def create_variable(
@@ -153,12 +154,14 @@ class AgentProfileVariableService(BaseService):
         key: str,
         value: Optional[str] = "",
         description: Optional[str] = None,
-        crm_field: Optional[str] = None,
+        source: Optional[str] = "static",
+        source_path: Optional[str] = None,
     ) -> AgentProfileVariable:
         clean_key = _validate_key(key)
         clean_value = _validate_value(value)
         clean_desc = _validate_description(description)
-        clean_crm_field = _validate_crm_field(crm_field)
+        clean_source = _validate_source(source)
+        clean_source_path = _validate_source_path(clean_source, source_path)
 
         if self._exists_for_key(agent_id, clean_key):
             raise ProfileVariableKeyConflictError(
@@ -171,7 +174,8 @@ class AgentProfileVariableService(BaseService):
             key=clean_key,
             value=clean_value,
             description=clean_desc,
-            crm_field=clean_crm_field,
+            source=clean_source,
+            source_path=clean_source_path,
         )
         self.db.add(row)
         try:
@@ -193,14 +197,15 @@ class AgentProfileVariableService(BaseService):
         key: Optional[str] = None,
         value: Optional[str] = None,
         description: Optional[str] = None,
-        crm_field: Optional[str] = None,
+        source: Optional[str] = None,
+        source_path: Optional[str] = None,
     ) -> AgentProfileVariable:
         """PATCH-style: only fields passed as non-``None`` are touched.
 
-        Note: ``description`` and ``crm_field`` are nullable, so to *clear*
-        either callers pass an empty string (normalized to ``None`` in the
-        validators). ``key`` and ``value`` never accept ``None`` as a "clear" —
-        clearing the key is nonsensical and value defaults to empty on create.
+        Note: ``description`` is nullable, so to *clear* it callers can pass
+        an empty string (normalized to ``None`` in ``_validate_description``).
+        ``key`` and ``value`` never accept ``None`` as a "clear" — clearing
+        the key is nonsensical and value defaults to empty string on create.
         """
         row = self._get_or_raise(agent_id, variable_id)
 
@@ -218,8 +223,15 @@ class AgentProfileVariableService(BaseService):
         if description is not None:
             row.description = _validate_description(description)
 
-        if crm_field is not None:
-            row.crm_field = _validate_crm_field(crm_field)
+        # Source + path move together: changing to "static" clears the path;
+        # changing to / staying "webhook" requires a path (new or existing).
+        if source is not None or source_path is not None:
+            effective_source = (
+                _validate_source(source) if source is not None else row.source
+            )
+            effective_path = source_path if source_path is not None else row.source_path
+            row.source = effective_source
+            row.source_path = _validate_source_path(effective_source, effective_path)
 
         try:
             self.db.commit()

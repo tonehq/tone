@@ -2,23 +2,37 @@
 
 import { useEffect, useMemo, useState } from 'react';
 
+import HumanVerdictControl from '@/components/knowledge-base/HumanVerdictControl';
 import MetricScoreCell from '@/components/knowledge-base/MetricScoreCell';
 import TruncatedCell from '@/components/knowledge-base/TruncatedCell';
 import VerdictChip from '@/components/knowledge-base/VerdictChip';
 import { metricLabel, orderMetricNames } from '@/components/knowledge-base/evalMetricsConstants';
 import { CustomTable } from '@/components/shared';
+import { useSetHumanVerdict } from '@/lib/api/evals';
 import type { CustomTableColumn } from '@/types/components';
-import type { EvalScoredQuestion } from '@/types/eval';
+import type { EvalScoredQuestion, HumanVerdict } from '@/types/eval';
+import { handleApiError } from '@/utils/helpers';
 
 const PAGE_SIZE_OPTIONS = [10, 20, 50];
+
+interface EvalResultsTableProps {
+  uploadId: string;
+  runId: string;
+  questions: EvalScoredQuestion[];
+}
 
 // One row per scored question. Metric columns are derived dynamically from the
 // `metric_scores` keys present across the batch, so the table always matches
 // exactly which DeepEval metrics were run. Paginated client-side (the batch
-// detail is already loaded in full).
-export default function EvalResultsTable({ questions }: { questions: EvalScoredQuestion[] }) {
+// detail is already loaded in full). The leading "Your call" column captures the
+// human Accept/Reject ground-truth mark used for judge-agreement %.
+export default function EvalResultsTable({ uploadId, runId, questions }: EvalResultsTableProps) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(PAGE_SIZE_OPTIONS[0]);
+
+  const labelMutation = useSetHumanVerdict(uploadId, runId);
+  const setLabel = (evalId: string, verdict: HumanVerdict | null) =>
+    labelMutation.mutate({ eval_id: evalId, verdict }, { onError: handleApiError });
 
   // Reset to the first page when the batch changes.
   useEffect(() => {
@@ -48,6 +62,19 @@ export default function EvalResultsTable({ questions }: { questions: EvalScoredQ
     }));
 
     return [
+      {
+        key: 'human_verdict',
+        title: 'Your call',
+        align: 'center',
+        width: 'w-[96px]',
+        render: (_v, r) => (
+          <HumanVerdictControl
+            value={r.human_verdict}
+            disabled={labelMutation.isPending}
+            onSet={(verdict) => setLabel(r.eval_id, verdict)}
+          />
+        ),
+      },
       {
         key: 'verdict',
         title: 'Verdict',
@@ -79,7 +106,7 @@ export default function EvalResultsTable({ questions }: { questions: EvalScoredQ
       },
       ...metricColumns,
     ];
-  }, [metricNames]);
+  }, [metricNames, labelMutation.isPending, setLabel]);
 
   return (
     <CustomTable
