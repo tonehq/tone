@@ -73,6 +73,8 @@ TURN_DETECTION_PRELOAD=livekit
 
 Call workers need outbound access to `huggingface.co` the first time, or a pre-populated cache baked into the image.
 
+Memory: loading the INT8 model adds about 400 MiB to a call worker that already holds Silero, Smart Turn and the STT and TTS clients. On staging (2026-09-10) two LiveKit calls in a row OOM-killed the worker at its 1 GiB limit (`CALL_MEM_LIMIT` in `build/kubernetes/envs/staging.env`; the DigitalOcean env already uses 2 GiB), dropping every call on the pod. The detector is therefore offered only when the container memory limit is at least `LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB` (default 1536); below that it is hidden from the editor, validation rejects it, and the worker logs `LiveKit turn detector hidden` once. Hosts without a cgroup limit, such as local development, always offer it.
+
 License: the model weights are published under the LiveKit Model License, which permits use only together with the LiveKit Agents framework. Running them inside this pipeline is outside that grant; confirm with LiveKit or legal before shipping this option to customers.
 
 ### TEN Turn Detection

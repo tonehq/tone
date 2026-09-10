@@ -1,16 +1,40 @@
+from functools import lru_cache
+
+from loguru import logger
+
+from core.config import settings
 from core.processors.livekit_turn_detector_turn_stop import (
     LiveKitTurnDetectorParams,
     LiveKitTurnDetectorUserTurnStopStrategy,
 )
 from core.services.pipeline.turn_detection.base import TurnDetectionContext, TurnDetector
+from core.utils.pod_resources import memory_usage
+
+MIN_MEMORY_MIB_DEFAULT = 1536
+
+
+def minimum_memory_mib() -> int:
+    return settings.LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB or MIN_MEMORY_MIB_DEFAULT
+
+
+@lru_cache(maxsize=1)
+def _host_has_memory(minimum_mib: int) -> bool:
+    _, limit_mib = memory_usage()
+    if limit_mib is None or limit_mib >= minimum_mib:
+        return True
+    logger.warning(
+        "LiveKit turn detector hidden: container memory limit {:.0f} MiB is below the {} MiB it needs",
+        limit_mib, minimum_mib,
+    )
+    return False
 
 
 class LiveKitTurnDetector(TurnDetector):
     slug = "livekit"
     display_name = "LiveKit Turn Detector"
     description = (
-        "LiveKit's end-of-utterance language model. Runs locally on CPU and downloads "
-        "from Hugging Face on first use."
+        "LiveKit's end-of-utterance language model. Runs locally on CPU, downloads from "
+        "Hugging Face on first use and needs about 1.5 GB of memory on the call worker."
     )
     schema = [
         {
@@ -64,7 +88,16 @@ class LiveKitTurnDetector(TurnDetector):
         },
     ]
 
+    @classmethod
+    def available(cls) -> bool:
+        return _host_has_memory(minimum_memory_mib())
+
     def build(self, context: TurnDetectionContext) -> list:
+        if not self.available():
+            raise ValueError(
+                f"LiveKit turn detector needs at least {minimum_memory_mib()} MiB of container memory; "
+                "raise the call worker memory limit or lower LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB"
+            )
         params = LiveKitTurnDetectorParams(
             model_type=self.settings["model_type"],
             threshold=self.settings.get("threshold"),

@@ -196,3 +196,25 @@ def test_agent_service_rejects_invalid_turn_settings():
         "turn_detection": {"max_history_turns": ["max_history_turns must be at most 20"]},
         "vad": {"confidence": ["confidence must be at most 1"]},
     }
+
+
+def test_livekit_is_hidden_when_the_container_memory_limit_is_too_small(monkeypatch):
+    monkeypatch.setattr(livekit, "memory_usage", lambda: (300.0, 1024.0))
+    livekit._host_has_memory.cache_clear()
+    with mock.patch.object(settings, "TEN_TURN_DETECTION_BASE_URL", ""):
+        assert [c["id"] for c in td.list_turn_detectors()] == ["smart_turn"]
+    assert "provider" in td.validate_turn_detection({"provider": "livekit"})
+    with pytest.raises(ValueError, match="1536 MiB"):
+        td.get_turn_detector({"provider": "livekit"}).build(td.TurnDetectionContext())
+    livekit._host_has_memory.cache_clear()
+
+
+def test_livekit_memory_gate_respects_the_configured_minimum_and_unlimited_hosts(monkeypatch):
+    monkeypatch.setattr(livekit, "memory_usage", lambda: (300.0, 1024.0))
+    with mock.patch.object(settings, "LIVEKIT_TURN_DETECTOR_MIN_MEMORY_MIB", 1000):
+        livekit._host_has_memory.cache_clear()
+        assert livekit.LiveKitTurnDetector.available() is True
+    monkeypatch.setattr(livekit, "memory_usage", lambda: (None, None))
+    livekit._host_has_memory.cache_clear()
+    assert livekit.LiveKitTurnDetector.available() is True
+    livekit._host_has_memory.cache_clear()
