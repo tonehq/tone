@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { PlayCircle, SlidersHorizontal } from 'lucide-react';
 
-import { CustomTab, type TabItem } from '@/components/shared';
+import { CustomLink, CustomTab, type TabItem } from '@/components/shared';
 
 import EvalRunsPanel from './EvalRunsPanel';
 import EvaluatorsPanel from './EvaluatorsPanel';
@@ -34,5 +34,17 @@ export default function EvaluationConfigTab({ uploadId }: EvaluationConfigTabPro
     [uploadId],
   );
 
-  return <CustomTab items={tabs} defaultActiveKey="evaluators" />;
+  return (
+    <div className="flex flex-col gap-3 py-1">
+      <p className="text-xs text-muted-foreground">
+        Grade the eval results for this document with alternative judges, then compare them. The
+        models, retrieval, and default scoring behind those results are set in{' '}
+        <CustomLink href="/settings/evaluations" className="font-medium">
+          Settings → Evaluations
+        </CustomLink>
+        .
+      </p>
+      <CustomTab items={tabs} defaultActiveKey="evaluators" />
+    </div>
+  );
 }
