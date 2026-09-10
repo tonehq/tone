@@ -22,7 +22,7 @@ In the Plivo console create a Voice application whose answer URL is `{BASE_CALL_
 </Response>
 ```
 
-The caller and called numbers travel on the websocket query string; the transport backfills them into the call data, and falls back to a live-call lookup on the Plivo API when they are absent. The agent is resolved by the called number as for every other provider.
+The caller and called numbers travel on the websocket query string; the transport backfills them into the call data, and falls back to a live-call lookup on the Plivo API when they are absent. Plivo sends bare digits (`13474282218`), so both paths normalise them to E.164 (`+13474282218`) before the number-to-agent lookup, and outbound dials strip the plus again for the Plivo API. The agent is resolved by the called number as for every other provider.
 
 ### Outbound
 
