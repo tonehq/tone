@@ -1,5 +1,7 @@
 from xml.sax.saxutils import escape as _xml_escape
 
+from typing import Any, Awaitable, Callable, Dict
+
 from fastapi import APIRouter, Request
 from fastapi.responses import Response
 from loguru import logger
@@ -16,13 +18,9 @@ async def _resolve_stream(request: Request, tag: str):
     from_number = ""
     to_number = ""
     try:
-        if request.method == "POST":
-            form = await request.form()
-            from_number = (form.get("From") or "").strip()
-            to_number = (form.get("To") or "").strip()
-        else:
-            from_number = (request.query_params.get("From") or "").strip()
-            to_number = (request.query_params.get("To") or "").strip()
+        source = await request.form() if request.method == "POST" else request.query_params
+        from_number = (source.get("From") or source.get("from") or "").strip()
+        to_number = (source.get("To") or source.get("to") or "").strip()
     except Exception:
         # Non-fatal: a malformed form/query just means no from/to to log; the
         # call still proceeds. Capture the traceback rather than swallowing silently.
@@ -97,16 +95,17 @@ async def telnyx_texml(request: Request) -> Response:
 _HANGUP_TWIML = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>'
 
 
-async def _outbound_answer_xml(request: Request, provider: str, tag: str) -> Response:
+async def _outbound_answer_xml(request: Request, provider: str, tag: str, call_id: str = "") -> Response:
     from core.services.call_engines import get_call_engine
 
+    engine = get_call_engine(provider)
     qp = request.query_params
     agent_id = (qp.get("agent_id") or "").strip()
     to_number = (qp.get("to") or "").strip()
     scheduled_call_id = (qp.get("scheduled_call_id") or "").strip()
     if not agent_id:
         logger.warning("[{}] missing agent_id", tag)
-        return Response(content=_HANGUP_TWIML, media_type="application/xml")
+        return Response(content=engine.hangup_answer, media_type=engine.answer_media_type)
 
     default_ws_url = fallback_media_ws_url(request.url.hostname)
     ws_url, pod_name, pod_ordinal, node_name = pinned_ws_url(default_ws_url, tag)
@@ -118,13 +117,15 @@ async def _outbound_answer_xml(request: Request, provider: str, tag: str) -> Res
     }
     if scheduled_call_id:
         params["scheduled_call_id"] = scheduled_call_id
-    xml = get_call_engine(provider).generate_twiml(ws_url, params)
+    if call_id:
+        params["call_id"] = call_id.strip()
+    answer = engine.generate_twiml(ws_url, params)
 
     logger.info(
         "[{}] RESPONSE agent={} to={} scheduled_call_id={} pod={} node={} handshake_url={}",
         tag, agent_id, to_number, scheduled_call_id, pod_name, node_name, ws_url,
     )
-    return Response(content=xml, media_type="application/xml")
+    return Response(content=answer, media_type=engine.answer_media_type)
 
 
 @router.post("/twiml/outbound")
@@ -139,14 +140,33 @@ async def telnyx_texml_outbound(request: Request) -> Response:
     return await _outbound_answer_xml(request, "telnyx", "/telnyx/texml/outbound")
 
 
-async def _outbound_status_callback(request: Request, tag: str) -> Response:
+async def _twiml_status_fields(request: Request) -> Dict[str, Any]:
+    form = await request.form()
+    return {k: form.get(k) for k in ("CallSid", "CallStatus", "CallDuration", "To", "From")}
+
+
+async def _plivo_status_fields(request: Request) -> Dict[str, Any]:
+    form = await request.form()
+    return {
+        "CallSid": form.get("RequestUUID") or form.get("CallUUID"),
+        "CallStatus": form.get("CallStatus"),
+        "CallDuration": form.get("Duration"),
+        "To": form.get("To"),
+        "From": form.get("From"),
+    }
+
+
+async def _outbound_status_callback(
+    request: Request,
+    tag: str,
+    fields: Callable[[Request], Awaitable[Dict[str, Any]]] = _twiml_status_fields,
+) -> Response:
     from core.models.scheduled_call import ScheduledCall
     from core.services.outbound_call_service import OutboundCallService
 
     scheduled_call_id = (request.query_params.get("scheduled_call_id") or "").strip()
     try:
-        form = await request.form()
-        form_dict = {k: form.get(k) for k in ("CallSid", "CallStatus", "CallDuration", "To", "From")}
+        form_dict = await fields(request)
         logger.info(
             "[{}] scheduled_call_id={} sid={} status={}",
             tag, scheduled_call_id, form_dict.get("CallSid"), form_dict.get("CallStatus"),
@@ -172,3 +192,41 @@ async def twilio_outbound_status(request: Request) -> Response:
 @router.post("/telnyx/outbound-status")
 async def telnyx_outbound_status(request: Request) -> Response:
     return await _outbound_status_callback(request, "/telnyx/outbound-status")
+
+
+async def _inbound_answer(request: Request, provider: str, tag: str) -> Response:
+    from core.services.call_engines import get_call_engine
+
+    engine = get_call_engine(provider)
+    try:
+        ws_url, from_number, to_number, pod_name, node_name = await _resolve_stream(request, tag)
+        params = {"from": from_number, "to": to_number}
+        call_id = (request.query_params.get("uuid") or "").strip()
+        if call_id:
+            params["call_id"] = call_id
+        answer = engine.generate_twiml(ws_url, params)
+        logger.info(
+            "[{}] RESPONSE from={} to={} call_id={} pod={} node={} handshake_url={}",
+            tag, from_number, to_number, call_id, pod_name, node_name, ws_url,
+        )
+        return Response(content=answer, media_type=engine.answer_media_type)
+    except Exception:
+        logger.exception("[{}] failed to build stream response — returning hangup", tag)
+        return Response(content=engine.hangup_answer, media_type=engine.answer_media_type)
+
+
+@router.post("/plivo/answer")
+@router.get("/plivo/answer")
+async def plivo_answer(request: Request) -> Response:
+    return await _inbound_answer(request, "plivo", "/plivo/answer")
+
+
+@router.post("/plivo/outbound")
+@router.get("/plivo/outbound")
+async def plivo_outbound(request: Request) -> Response:
+    return await _outbound_answer_xml(request, "plivo", "/plivo/outbound")
+
+
+@router.post("/plivo/outbound-status")
+async def plivo_outbound_status(request: Request) -> Response:
+    return await _outbound_status_callback(request, "/plivo/outbound-status", _plivo_status_fields)

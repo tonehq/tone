@@ -18,6 +18,7 @@ from core.services.call_termination import twilio as twilio_mod
 from core.services.call_termination.base import CallTerminator
 from core.services.call_termination.default import LogOnlyTerminator
 from core.services.call_termination.sip import SipTerminator
+from core.services.call_termination.plivo import PlivoTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
 
@@ -45,11 +46,12 @@ class TestGetCallTerminator:
     def test_known_providers(self):
         assert isinstance(get_call_terminator("twilio"), TwilioTerminator)
         assert isinstance(get_call_terminator("telnyx"), TelnyxTerminator)
+        assert isinstance(get_call_terminator("plivo"), PlivoTerminator)
         # SIP trunk calls run on the LiveKit transport.
         assert isinstance(get_call_terminator("livekit"), SipTerminator)
         assert isinstance(get_call_terminator("sip"), SipTerminator)
 
-    @pytest.mark.parametrize("tt", ["exotel", "plivo", "websocket", "test", "unknown"])
+    @pytest.mark.parametrize("tt", ["exotel", "websocket", "test", "unknown"])
     def test_unknown_falls_back_to_log_only(self, tt):
         term = get_call_terminator(tt)
         assert isinstance(term, LogOnlyTerminator)
