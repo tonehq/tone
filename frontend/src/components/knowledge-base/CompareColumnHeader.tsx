@@ -34,25 +34,40 @@ export default function CompareColumnHeader({
   onViewPrompt,
 }: CompareColumnHeaderProps) {
   return (
-    <div className="flex flex-col items-center gap-1.5 py-1">
-      <div className="flex items-center gap-1.5">
-        <span className="text-sm font-semibold text-foreground">{name}</span>
-        <span className="text-xs font-normal text-muted-foreground">#{runNumber}</span>
-        {isBaseline && (
-          <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[11px] font-medium text-primary">
-            Baseline
-          </span>
-        )}
+    // Reset the shared table header's uppercase/tracking so model ids and stats
+    // read in their natural case inside this rich header cell.
+    <div className="flex flex-col items-center gap-2.5 py-1 normal-case tracking-normal whitespace-normal">
+      <div className="flex flex-col items-center gap-1">
+        <div className="flex items-center gap-1.5">
+          <span className="text-sm font-semibold text-foreground">{name}</span>
+          <span className="text-xs font-normal text-muted-foreground">#{runNumber}</span>
+          {isBaseline && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary">
+              Baseline
+            </span>
+          )}
+        </div>
+        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs font-normal text-muted-foreground">
+          {judgeModel ?? '—'}
+        </span>
       </div>
-      <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] font-normal text-muted-foreground">
-        {judgeModel ?? '—'}
-      </span>
-      <VerdictTally verdicts={verdicts} />
-      <span className="text-[11px] text-muted-foreground">
-        {labeledCount === 0
-          ? 'no labels yet'
-          : `agrees with you: ${formatRatioPercent(humanAgreement)}`}
-      </span>
+
+      <div className="flex flex-col items-center gap-1.5">
+        <VerdictTally verdicts={verdicts} />
+        <span className="text-xs font-normal text-muted-foreground">
+          {labeledCount === 0 ? (
+            'No labels yet'
+          ) : (
+            <>
+              Agrees with you{' '}
+              <span className="font-semibold text-foreground">
+                {formatRatioPercent(humanAgreement)}
+              </span>
+            </>
+          )}
+        </span>
+      </div>
+
       <CustomButton
         type="text"
         size="xs"

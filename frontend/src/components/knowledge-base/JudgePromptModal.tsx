@@ -38,23 +38,23 @@ export default function JudgePromptModal({
       width="sm:max-w-2xl"
     >
       {prompt ? (
-        <div className="flex flex-col gap-2">
-          <div className="overflow-hidden rounded-lg border border-border bg-muted/40">
-            <div className="flex items-center justify-between border-b border-border px-3 py-1.5">
-              <span className="text-xs font-medium text-muted-foreground">Rubric criteria</span>
-              <CustomButton
-                type="text"
-                size="xs"
-                icon={<Copy className="size-3.5" />}
-                onClick={handleCopy}
-              >
-                Copy
-              </CustomButton>
-            </div>
-            <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap px-4 py-3 font-mono text-sm leading-relaxed text-foreground">
-              {prompt}
-            </pre>
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-medium text-foreground">Rubric criteria</span>
+            <CustomButton
+              type="text"
+              size="xs"
+              icon={<Copy className="size-3.5" />}
+              onClick={handleCopy}
+            >
+              Copy
+            </CustomButton>
           </div>
+          <blockquote className="max-h-[55vh] overflow-auto rounded-r-md border-l-2 border-primary/50 bg-muted/40 py-3 pl-4 pr-4">
+            <p className="max-w-prose whitespace-pre-wrap text-sm leading-relaxed text-foreground">
+              {prompt}
+            </p>
+          </blockquote>
           <p className="text-xs text-muted-foreground">
             Free-text criteria the judge grades against, run as the “correctness” metric.
           </p>
