@@ -21,8 +21,10 @@ from core.services.pipeline.call_end_events import (
     REASON_CLIENT_DISCONNECT,
     REASON_INACTIVITY_TIMEOUT,
     REASON_MAX_DURATION,
+    REASON_SPOKEN_FAREWELL,
     log_call_event,
 )
+from core.services.pipeline.farewell_detection import is_farewell
 from core.services.pipeline.inactivity_monitor import (
     InactivityMonitor,
     MaxDurationGuard,
@@ -545,6 +547,23 @@ class PipecatPipelineRunner(PipelineRunner):
                     turn_number, len(message.content), _preview,
                     "…" if _truncated else "",
                 )
+
+                # Spoken-farewell backstop: the bot said a clear goodbye but the
+                # LLM never fired end_call (a tool-call drop we see across models).
+                # The bot has already chosen to close, so end the call ourselves —
+                # right after the farewell was spoken. First-wins guard means this
+                # no-ops when end_call (or any other path) already claimed the end.
+                if (
+                    settings.CALL_FAREWELL_END_ENABLED
+                    and end_reason_holder.get("reason") is None
+                    and is_farewell(message.content)
+                ):
+                    await _end_call_from_backstop(
+                        REASON_SPOKEN_FAREWELL,
+                        f"assistant said farewell without end_call: {message.content[:80]!r}",
+                        "farewell_detector",
+                        turn=turn_number,
+                    )
 
         # Turn tracking — the same events drive (a) the simple ``turns``
         # log persisted alongside legacy metrics and (b) the per-turn
