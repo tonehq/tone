@@ -124,13 +124,13 @@ class AddManualQuestionsRequest(BaseModel):
 
 class GenerateEvalVersionRequest(BaseModel):
     """Body for ``POST /{upload_id}/eval-versions/generate`` — generate an LLM
-    eval set into a NEW version, or OVERWRITE an existing (un-run) one.
+    eval set into a NEW version, or OVERWRITE an existing (un-run) one. Questions
+    are drafted from the uploaded document (not any ingestion run's chunks).
     ``instructions`` is the user's optional custom generation prompt."""
 
     mode: str = Field(default="new", pattern="^(new|overwrite)$")
     version_id: Optional[UUID] = None
     instructions: Optional[str] = Field(default=None, max_length=8000)
-    ingestion_run_id: Optional[UUID] = None
 
 
 class ListEvalRunsRequest(BaseModel):
@@ -1048,7 +1048,6 @@ def build_knowledge_base_router(
                 mode=body.mode,
                 version_id=body.version_id,
                 instructions=body.instructions or "",
-                ingestion_run_id=body.ingestion_run_id,
             )
         except Exception as exc:
             logger.exception(

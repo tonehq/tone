@@ -35,7 +35,6 @@ from core.models.eval_result import EvalResult
 from core.models.eval_version import EvalVersion
 from core.models.ingestion_pipeline_run import IngestionPipelineRun
 from core.models.knowledge_base import KnowledgeBase
-from core.models.knowledge_base_chunk import KnowledgeBaseChunk
 from core.models.procrastinate import ProcrastinateJob
 from core.models.upload import Upload
 from core.services.evals.csv_import import (
@@ -176,11 +175,13 @@ class EvalService:
         instructions: Optional[str] = None,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
-        ingestion_run_id: Optional[Any] = None,
         approval_status: str = "pending",
         source: str = "generated",
     ) -> EvalSetSummary:
         """Generate an LLM Q&A set into an eval VERSION.
+
+        Questions are drafted from the ORIGINAL uploaded document (not any
+        ingestion run's chunks), so the set reflects the source knowledge base.
 
         ``mode='new'`` creates the next version for the upload; ``mode='overwrite'``
         reuses ``version_id`` (guarded — a version that already has results cannot
@@ -229,9 +230,7 @@ class EvalService:
         )
 
         api_key = _require_llm_key(db, org_id, model)
-        document_text = self._extract_document_text(
-            db, upload=upload, org_id=org_id, ingestion_run_id=ingestion_run_id
-        )
+        document_text = self._extract_document_text(upload=upload, org_id=org_id)
         payload = self._questions.generate(
             document_text=document_text,
             api_key=api_key,
@@ -258,7 +257,6 @@ class EvalService:
         org_id: Any,
         model: Optional[str] = None,
         max_chars: Optional[int] = None,
-        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         """Back-compat generation (CLI / benchmark tooling / auto path): create a
         fresh version whose questions are auto-approved so they are immediately
@@ -270,47 +268,25 @@ class EvalService:
             mode="new",
             model=model,
             max_chars=max_chars,
-            ingestion_run_id=ingestion_run_id,
             approval_status="approved",
             source="generated",
         )
 
     def _extract_document_text(
         self,
-        db: Session,
         *,
         upload: Upload,
         org_id: Any,
-        ingestion_run_id: Optional[Any],
     ) -> str:
-        """Assemble the source text the generator sees: the persisted KB chunks
-        for ``ingestion_run_id`` (so the generator sees exactly what retrieval
-        hits) or the R2 source file when no run is given (CLI / tests)."""
-        source_mode = "chunks" if ingestion_run_id is not None else "source_file"
+        """Assemble the source text the generator sees: the ORIGINAL uploaded
+        document (R2 source file), read via the shared reader. Questions are
+        generated from the whole document — NOT the persisted chunks — so the
+        eval set reflects the source knowledge base, independent of any single
+        ingestion run's chunking recipe."""
         logger.info(
-            "[eval] extract text upload={} org={} content_type={} source={}",
-            upload.id, org_id, upload.file_type, source_mode,
+            "[eval] extract text upload={} org={} content_type={} source=source_file",
+            upload.id, org_id, upload.file_type,
         )
-        if ingestion_run_id is not None:
-            chunks = (
-                db.query(KnowledgeBaseChunk)
-                .filter(
-                    KnowledgeBaseChunk.ingestion_run_id == ingestion_run_id,
-                    KnowledgeBaseChunk.organization_id == org_id,
-                )
-                .order_by(KnowledgeBaseChunk.chunk_index.asc())
-                .all()
-            )
-            if not chunks:
-                raise EvalGenerationError(
-                    f"Ingestion run {ingestion_run_id} has no chunks — cannot generate eval"
-                )
-            document_text = "\n\n".join(c.chunk_text for c in chunks)
-            logger.info(
-                "[eval] extract assembled {} chunks ({} chars) upload={} run={}",
-                len(chunks), len(document_text), upload.id, ingestion_run_id,
-            )
-            return document_text
         try:
             file_bytes = self._download(upload.file_path)
         except Exception:
@@ -927,11 +903,11 @@ class EvalService:
         *,
         upload_id: Any,
         org_id: Any,
-        ingestion_run_id: Optional[Any] = None,
     ) -> EvalSetSummary:
         """Auto path: reuse the latest version that has approved questions; else
-        generate a fresh auto-approved version so scoring has something to run.
-        Returns a summary carrying ``eval_version_id`` for the run."""
+        generate a fresh auto-approved version (from the uploaded document) so
+        scoring has something to run. Returns a summary carrying
+        ``eval_version_id`` for the run."""
         latest = self._latest_version_with_approved(
             db, upload_id=upload_id, org_id=org_id
         )
@@ -959,7 +935,6 @@ class EvalService:
             upload_id=upload_id,
             org_id=org_id,
             mode="new",
-            ingestion_run_id=ingestion_run_id,
             approval_status="approved",
             source="generated",
         )

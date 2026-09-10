@@ -380,7 +380,6 @@ def eval_ingestion_run(
                     db,
                     upload_id=run.upload_id,
                     org_id=run.organization_id,
-                    ingestion_run_id=run.id,
                 )
                 target_version_id = eval_set.eval_version_id
             logger.info(
@@ -423,6 +422,9 @@ def generate_eval_version(
     mode: str = "new",
     version_id: str = "",
     instructions: str = "",
+    # Accepted-and-ignored: generation now always reads the uploaded document,
+    # not an ingestion run's chunks. Kept only so jobs enqueued before this
+    # change (which still carry the arg) don't fail to deserialize.
     ingestion_run_id: str = "",
 ) -> None:
     """On-demand LLM eval-question generation into a VERSION (the reviewed
@@ -449,7 +451,6 @@ def generate_eval_version(
                 mode=mode,
                 version_id=_UUID(version_id) if version_id else None,
                 instructions=instructions or None,
-                ingestion_run_id=_UUID(ingestion_run_id) if ingestion_run_id else None,
                 approval_status="pending",
                 source="generated",
             )
@@ -468,7 +469,6 @@ async def enqueue_eval_version_generation(
     mode: str = "new",
     version_id=None,
     instructions: str = "",
-    ingestion_run_id=None,
 ) -> int:
     async with app.open_async():
         return await generate_eval_version.defer_async(
@@ -477,7 +477,6 @@ async def enqueue_eval_version_generation(
             mode=mode,
             version_id=str(version_id) if version_id else "",
             instructions=instructions or "",
-            ingestion_run_id=str(ingestion_run_id) if ingestion_run_id else "",
         )
 
 
