@@ -17,6 +17,7 @@ from loguru import logger
 from core.services.call_termination.base import CallTerminator
 from core.services.call_termination.default import LogOnlyTerminator
 from core.services.call_termination.plivo import PlivoTerminator
+from core.services.call_termination.sip import SipTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
 from core.services.pipeline.call_end_events import (
@@ -35,6 +36,10 @@ def get_call_terminator(transport_type: str) -> CallTerminator:
         return TelnyxTerminator()
     if transport_type == "plivo":
         return PlivoTerminator()
+    # SIP trunk calls run on the LiveKit transport (transport_type "livekit");
+    # accept "sip" too for safety.
+    if transport_type in ("livekit", "sip"):
+        return SipTerminator()
     return LogOnlyTerminator(transport_type)
 
 

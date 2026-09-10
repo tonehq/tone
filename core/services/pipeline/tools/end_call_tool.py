@@ -59,21 +59,14 @@ END_CALL_TOOL_SCHEMA = FunctionSchema(
         "reason": {
             "type": "string",
             "description": (
-                "Quote the user's exact confirmation, given as a DIRECT reply "
-                "to your \"Can I end the call?\" question — not to any other "
-                "question. Examples: \"user confirmed with 'yes'\" (after you "
-                "asked to end), \"user said 'goodbye' after your end-call "
-                "ask\", \"user said 'please go ahead' to end-call ask\". "
-                "DO NOT reuse task-level confirmations (e.g. \"user said "
-                "'confirm the booking'\", \"user said 'go ahead' about the "
-                "order\", \"user said 'that's correct' about the details\") "
-                "as reasons — those confirm the TASK, not ending the call. "
-                "If you cannot quote a direct call-end confirmation, do NOT "
-                "call this tool."
+                "Optional short note on why the call is ending — e.g. "
+                "\"user said 'hang up'\" or \"user confirmed after the "
+                "end-call ask\". Leave it empty if you're unsure; it is only "
+                "for logging and never gates the call."
             ),
         },
     },
-    required=["reason"],
+    required=[],
 )
 
 
@@ -158,9 +151,11 @@ END_CALL_SYSTEM_PROMPT = (
     "goodbye. Always ask for confirmation first.\n"
     "- Never skip Step 1, even if ending feels obvious.\n"
     "- Never call `end_call` before speaking a brief farewell sentence.\n"
-    "- The `reason` argument must quote the user's exact confirmation words. "
-    "Vague reasons like \"conversation complete\" are invalid and mean you "
-    "should not be calling the tool.\n"
+    "- Once the user has agreed to end (or directly asked to), calling "
+    "`end_call` is MANDATORY. A farewell sentence WITHOUT the tool call does "
+    "NOT end the call and leaves the caller stuck on a dead line — always emit "
+    "the `end_call` tool call in that same turn. A brief `reason` is optional; "
+    "never withhold the tool call just because you can't phrase one.\n"
     "- **Ask AT MOST ONCE per conversation.** If you have already asked "
     "\"Can I end the call?\" (or any variant) earlier in this conversation "
     "and the user did not clearly confirm, DO NOT ask again. Continue the "
@@ -295,6 +290,12 @@ def create_end_call_handler(
             end_reason_holder["reason"] = REASON_LLM_END_CALL
             end_reason_holder["detail"] = reason
 
+        # Resolve the LLM function call BEFORE queueing the end frame: pipecat's
+        # graceful EndFrame drains the queue on the way down, and a callback left
+        # until after can be dropped — leaving the tool call unresolved (per the
+        # Pipecat pipeline-termination guide).
+        await params.result_callback("Call ending now.")
+
         try:
             await params.pipeline_worker.queue_frame(EndFrame())
             entry["result"] = "ending"
@@ -309,7 +310,5 @@ def create_end_call_handler(
 
         entry["duration_ms"] = round((_time.monotonic() - _t_start) * 1000)
         finalize_and_record(entry, timer, tool_call_entries)
-
-        await params.result_callback("Call ending now.")
 
     return handle_end_call

@@ -37,6 +37,9 @@ interface FormState {
   description: string;
   is_default: boolean;
   is_active: boolean;
+  // Always starts blank — the stored secret is never fetched or shown. A blank
+  // value means "leave the current key unchanged"; a non-empty value rotates it.
+  api_key: string;
 }
 
 function initialFormState(editing: Service | null): FormState {
@@ -46,6 +49,7 @@ function initialFormState(editing: Service | null): FormState {
       description: '',
       is_default: false,
       is_active: true,
+      api_key: '',
     };
   }
   return {
@@ -53,6 +57,7 @@ function initialFormState(editing: Service | null): FormState {
     description: editing.description ?? '',
     is_default: editing.is_default,
     is_active: editing.is_active,
+    api_key: '',
   };
 }
 
@@ -60,7 +65,7 @@ export default function ApiKeyEditDrawer({
   open,
   editing,
   title = 'Edit API key',
-  description = 'Update key details. To rotate the secret, delete this key and add a new one.',
+  description = 'Update key details, or rotate the secret when your provider issues a new key.',
   loading = false,
   onClose,
   onSubmit,
@@ -86,6 +91,9 @@ export default function ApiKeyEditDrawer({
       description: form.description.trim() || undefined,
       is_default: form.is_default,
       is_active: form.is_active,
+      // Only send api_key when the user typed a new one — a blank field leaves
+      // the existing encrypted key untouched on the backend.
+      ...(form.api_key.trim() ? { api_key: form.api_key.trim() } : {}),
     };
 
     try {
@@ -154,6 +162,15 @@ export default function ApiKeyEditDrawer({
             onChange={(e) => update('description', e.target.value)}
             rows={2}
             placeholder="Optional notes for your team."
+          />
+          <TextInput
+            name="api_key"
+            label="API key"
+            type="password"
+            value={form.api_key}
+            onChange={(e) => update('api_key', e.target.value)}
+            placeholder="sk-..."
+            helperText="Leave blank to keep the current key. Enter a new value to rotate it."
           />
           <div className="flex flex-wrap items-center gap-6">
             <CheckboxField

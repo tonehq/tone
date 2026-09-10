@@ -291,6 +291,16 @@ class LiveKitTermination:
 
         self._run(_hangup)
 
+    def delete_room(self, room_name: str) -> None:
+        """Delete the room — disconnects EVERY participant, including the SIP
+        caller. Identity-independent (works for inbound and outbound, where the
+        caller's participant identity differs), so it reliably ends the call."""
+
+        async def _delete(client):
+            await client.room.delete_room(api.DeleteRoomRequest(room=room_name))
+
+        self._run(_delete)
+
     def transfer(
         self,
         room_name: str,
