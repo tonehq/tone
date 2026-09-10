@@ -24,10 +24,40 @@ _STATUS_MAP = {
     "cancel": "canceled",
     "canceled": "canceled",
 }
+_HANGUP_CAUSE_STATUSES = {
+    "Busy Line": "busy",
+    "Busy everywhere": "busy",
+    "No Answer": "no-answer",
+    "Ring Timeout Reached": "no-answer",
+    "Canceled": "canceled",
+    "Canceled (Out Of Credits)": "canceled",
+    "Canceled (Simultaneous dial limit reached)": "canceled",
+}
 
 
 def _dial_digits(number: str) -> str:
     return (to_e164(number) or "").lstrip("+")
+
+
+def _call_status_payload(status: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "status": status,
+        "duration": data.get("call_duration") or data.get("bill_duration"),
+        "price": data.get("total_amount"),
+        "answered_by": None,
+    }
+
+
+def _live_call_status(data: Dict[str, Any]) -> Dict[str, Any]:
+    raw = (data.get("call_status") or "").lower()
+    return _call_status_payload(_STATUS_MAP.get(raw, raw), data)
+
+
+def _ended_call_status(record: Dict[str, Any]) -> Dict[str, Any]:
+    if record.get("answer_time"):
+        return _call_status_payload("completed", record)
+    cause = record.get("hangup_cause_name") or ""
+    return _call_status_payload(_HANGUP_CAUSE_STATUSES.get(cause, "failed"), record)
 
 
 class PlivoCallEngine(CallEngine):
@@ -93,10 +123,11 @@ class PlivoCallEngine(CallEngine):
             response = requests.post(self._url("Call/"), json=payload, auth=self._auth(), timeout=HTTP_TIMEOUT)
             response.raise_for_status()
             data = response.json()
-        except (requests.RequestException, ValueError):
+        except (requests.RequestException, ValueError) as exc:
+            body = (getattr(getattr(exc, "response", None), "text", None) or "")[:200]
             logger.exception(
-                "[outbound] plivo call create failed agent={} to={} scheduled_call_id={}",
-                agent_id, to_number, scheduled_call_id,
+                "[outbound] plivo call create failed agent={} to={} scheduled_call_id={} body={}",
+                agent_id, to_number, scheduled_call_id, body,
             )
             raise
         request_uuid = data.get("request_uuid") or ""
@@ -137,15 +168,10 @@ class PlivoCallEngine(CallEngine):
         response = requests.get(url, params={"status": "live"}, auth=self._auth(), timeout=HTTP_TIMEOUT)
         if response.status_code == 404:
             response = requests.get(url, auth=self._auth(), timeout=HTTP_TIMEOUT)
+            response.raise_for_status()
+            return _ended_call_status(response.json())
         response.raise_for_status()
-        data = response.json()
-        raw = (data.get("call_status") or data.get("call_state") or "").lower()
-        return {
-            "status": _STATUS_MAP.get(raw, raw),
-            "duration": data.get("call_duration") or data.get("bill_duration"),
-            "price": data.get("total_amount"),
-            "answered_by": None,
-        }
+        return _live_call_status(response.json())
 
     def generate_twiml(self, ws_url: str, params: Dict[str, str]) -> str:
         query = {name: value for name, value in params.items() if value not in (None, "")}

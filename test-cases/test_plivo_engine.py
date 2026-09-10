@@ -87,11 +87,34 @@ class TestPlivoInitiateAndEnd:
                 patch.object(plivo_engine.requests, "get", return_value=_response(200, {"call_status": "completed"})):
             assert PlivoCallEngine().end_call("uuid-1") is True
 
-    def test_get_call_status_maps_plivo_states(self, plivo_creds):
-        responses = [_response(404), _response(200, {"call_status": "cancel", "call_duration": 12})]
+    def test_get_call_status_reads_the_live_call(self, plivo_creds):
+        live = _response(200, {"call_status": "in-progress", "call_duration": 12})
+        with patch.object(plivo_engine.requests, "get", return_value=live):
+            status = PlivoCallEngine().get_call_status("uuid-1")
+        assert status == {"status": "in-progress", "duration": 12, "price": None, "answered_by": None}
+
+    @pytest.mark.parametrize(
+        ("record", "expected"),
+        [
+            ({"answer_time": "2026-09-10 08:45:15+00:00", "hangup_cause_name": "Normal Hangup"}, "completed"),
+            ({"answer_time": "2026-09-10 08:45:15+00:00", "hangup_cause_name": "Network Error"}, "completed"),
+            ({"answer_time": None, "hangup_cause_name": "Busy Line"}, "busy"),
+            ({"answer_time": None, "hangup_cause_name": "Ring Timeout Reached"}, "no-answer"),
+            ({"answer_time": None, "hangup_cause_name": "Canceled"}, "canceled"),
+            ({"answer_time": None, "hangup_cause_name": "Unallocated number"}, "failed"),
+        ],
+    )
+    def test_get_call_status_derives_a_finished_call_from_its_record(self, plivo_creds, record, expected):
+        responses = [_response(404), _response(200, {**record, "bill_duration": 7, "total_amount": "0.01"})]
         with patch.object(plivo_engine.requests, "get", side_effect=responses):
             status = PlivoCallEngine().get_call_status("uuid-1")
-        assert status == {"status": "canceled", "duration": 12, "price": None, "answered_by": None}
+        assert status == {"status": expected, "duration": 7, "price": "0.01", "answered_by": None}
+
+    def test_end_call_confirms_a_finished_call_through_its_record(self, plivo_creds):
+        record = _response(200, {"call_state": "ANSWER", "answer_time": "2026-09-10 08:45:15+00:00"})
+        with patch.object(plivo_engine.requests, "delete", return_value=_response(404)), \
+                patch.object(plivo_engine.requests, "get", side_effect=[_response(404), record]):
+            assert PlivoCallEngine().end_call("uuid-1") is True
 
     def test_missing_credentials_raise(self, monkeypatch):
         monkeypatch.setattr(plivo_engine, "get_plivo_credentials", lambda org_id=None: {})
