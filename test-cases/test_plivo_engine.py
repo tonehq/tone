@@ -38,7 +38,7 @@ class TestFactory:
 class TestPlivoAnswerXml:
     def test_stream_points_at_ws_with_params_on_the_query_string(self):
         xml = get_call_engine("plivo").generate_twiml(
-            "wss://pod-1.example/ws", {"agent_id": "a1", "direction": "outbound", "from": "+1 5", "to": ""},
+            "wss://pod-1.example/ws", {"agent_id": "a1", "direction": "outbound", "from": "15550001111", "to": ""},
         )
         root = ElementTree.fromstring(xml)
         stream = root.find("Stream")
@@ -48,7 +48,7 @@ class TestPlivoAnswerXml:
         parsed = urlparse(stream.text)
         assert parsed.scheme == "wss" and parsed.path == "/ws"
         query = parse_qs(parsed.query)
-        assert query == {"agent_id": ["a1"], "direction": ["outbound"], "from": ["+1 5"]}
+        assert query == {"agent_id": ["a1"], "direction": ["outbound"], "from": ["+15550001111"]}
 
 
 class TestPlivoInitiateAndEnd:
@@ -64,7 +64,7 @@ class TestPlivoInitiateAndEnd:
         assert url == "https://api.plivo.com/v1/Account/MA123/Call/"
         assert kwargs["auth"] == ("MA123", "tok")
         payload = kwargs["json"]
-        assert payload["from"] == "+15550001111" and payload["to"] == "+15550002222"
+        assert payload["from"] == "15550001111" and payload["to"] == "15550002222"
         answer = urlparse(payload["answer_url"])
         assert answer.path == "/plivo/outbound"
         assert parse_qs(answer.query)["scheduled_call_id"] == ["sc-1"]

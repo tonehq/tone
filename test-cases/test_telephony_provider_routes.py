@@ -32,6 +32,12 @@ def test_plivo_inbound_answer_streams_with_from_and_to(client):
     assert _ws_query(stream.text) == {"from": ["+15550001111"], "to": ["+15550002222"]}
 
 
+def test_plivo_inbound_answer_normalises_bare_digit_numbers(client):
+    response = client.post("/plivo/answer", data={"From": "917981332723", "To": "13474282218", "CallUUID": "c1"})
+    stream = ElementTree.fromstring(response.text).find("Stream")
+    assert _ws_query(stream.text) == {"from": ["+917981332723"], "to": ["+13474282218"]}
+
+
 def test_plivo_outbound_answer_carries_agent_and_direction(client):
     response = client.post("/plivo/outbound?agent_id=a1&from=%2B1&to=%2B2&scheduled_call_id=sc1")
     stream = ElementTree.fromstring(response.text).find("Stream")
@@ -79,7 +85,7 @@ def test_status_callbacks_map_provider_fields_onto_the_shared_handler(client, mo
         "/plivo/outbound-status?scheduled_call_id=sc1",
         data={
             "RequestUUID": "req-1", "CallUUID": "c1", "CallStatus": "no-answer",
-            "Duration": "0", "To": "+2", "From": "+1",
+            "Duration": "0", "To": "2", "From": "+1",
         },
     )
     assert seen[0] == (

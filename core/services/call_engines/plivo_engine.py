@@ -7,6 +7,7 @@ from loguru import logger
 
 from core.services.call_engines.base import TERMINAL_CALL_STATUSES, CallEngine, CallInfo
 from core.services.transport.telephony_credentials import get_plivo_credentials
+from core.utils.telephony import to_e164
 
 PLIVO_API_BASE = "https://api.plivo.com/v1/Account"
 DEFAULT_RING_TIMEOUT = 45
@@ -23,6 +24,10 @@ _STATUS_MAP = {
     "cancel": "canceled",
     "canceled": "canceled",
 }
+
+
+def _dial_digits(number: str) -> str:
+    return (to_e164(number) or "").lstrip("+")
 
 
 class PlivoCallEngine(CallEngine):
@@ -70,8 +75,8 @@ class PlivoCallEngine(CallEngine):
         if scheduled_call_id:
             query["scheduled_call_id"] = str(scheduled_call_id)
         payload: Dict[str, Any] = {
-            "from": from_number,
-            "to": to_number,
+            "from": _dial_digits(from_number),
+            "to": _dial_digits(to_number),
             "answer_url": f"{base}/plivo/outbound?{urlencode(query)}",
             "answer_method": "POST",
             "ring_timeout": DEFAULT_RING_TIMEOUT,
@@ -144,6 +149,9 @@ class PlivoCallEngine(CallEngine):
 
     def generate_twiml(self, ws_url: str, params: Dict[str, str]) -> str:
         query = {name: value for name, value in params.items() if value not in (None, "")}
+        for name in ("from", "to"):
+            if query.get(name):
+                query[name] = to_e164(query[name])
         stream_url = f"{ws_url}?{urlencode(query)}" if query else ws_url
         return (
             '<?xml version="1.0" encoding="UTF-8"?>'

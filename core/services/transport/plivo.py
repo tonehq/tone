@@ -5,6 +5,7 @@ from pipecat.serializers.plivo import PlivoFrameSerializer
 
 from core.services.transport.base import TelephonyProvider
 from core.services.transport.telephony_credentials import get_plivo_credentials
+from core.utils.telephony import to_e164
 
 PLIVO_API_BASE = "https://api.plivo.com/v1/Account"
 
@@ -47,5 +48,5 @@ class PlivoTransport(TelephonyProvider):
             return
         call_info = await get_plivo_call_info(call_data.get("call_id", ""), org_id=call_data.get("_org_id"))
         if call_info:
-            call_data["from"] = call_info.get("from_number") or ""
-            call_data["to"] = call_info.get("to_number") or ""
+            call_data["from"] = to_e164(call_info.get("from_number")) or ""
+            call_data["to"] = to_e164(call_info.get("to_number")) or ""
