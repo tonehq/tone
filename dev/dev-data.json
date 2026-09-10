@@ -983,18 +983,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1025 (must exceed thinking budget when thinking is enabled)"
-            },
-            {
-              "name": "thinking_budget_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1024,
-                "max": 127999
-              },
-              "required": 0,
-              "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
             }
           ]
         },
@@ -1209,11 +1197,10 @@
           ]
         },
         {
-          "name": "claude-opus-4-1",
+          "name": "claude-opus-4-8",
           "meta_data": {
-            "model": "claude-opus-4-1",
-            "max_tokens": 32000,
-            "thinking_budget_tokens": 31999
+            "model": "claude-opus-4-8",
+            "max_tokens": 32000
           },
           "supports_tool_calling": true,
           "meta_data_schema": [
@@ -1263,18 +1250,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1025 (must exceed thinking budget when thinking is enabled)"
-            },
-            {
-              "name": "thinking_budget_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1024,
-                "max": 31999
-              },
-              "required": 0,
-              "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
             }
           ]
         },
@@ -1403,18 +1378,6 @@
               },
               "required": 0,
               "description": "Maximum number of tokens to generate. Min: 1025 (must exceed thinking budget when thinking is enabled)"
-            },
-            {
-              "name": "thinking_budget_tokens",
-              "data_type": "integer",
-              "type": "input number",
-              "format": "integer",
-              "validator": {
-                "min": 1024,
-                "max": 127999
-              },
-              "required": 0,
-              "description": "Enable extended thinking with a token budget. The model will think before responding. Min: 1024"
             }
           ]
         }
@@ -10940,54 +10903,6 @@
           "supports_tool_calling": false,
           "meta_data_schema": [
             {
-              "name": "temperature",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Controls randomness in output. Range: 0.0 to 2.0"
-            },
-            {
-              "name": "top_p",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 1.0
-              },
-              "required": 0,
-              "description": "Nucleus sampling threshold. Range: 0.0 to 1.0"
-            },
-            {
-              "name": "frequency_penalty",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": -2.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Penalizes new tokens based on their frequency in the text so far. Range: -2.0 to 2.0"
-            },
-            {
-              "name": "presence_penalty",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": -2.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Penalizes new tokens based on whether they appear in the text so far. Range: -2.0 to 2.0"
-            },
-            {
               "name": "seed",
               "data_type": "integer",
               "type": "input number",
@@ -12280,18 +12195,6 @@
           "supports_tool_calling": false,
           "meta_data_schema": [
             {
-              "name": "temperature",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Controls randomness in output. Range: 0.0 to 2.0"
-            },
-            {
               "name": "max_completion_tokens",
               "data_type": "integer",
               "type": "input number",
@@ -12316,18 +12219,6 @@
           "supports_tool_calling": false,
           "meta_data_schema": [
             {
-              "name": "temperature",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Controls randomness in output. Range: 0.0 to 2.0"
-            },
-            {
               "name": "max_completion_tokens",
               "data_type": "integer",
               "type": "input number",
@@ -12351,18 +12242,6 @@
           },
           "supports_tool_calling": false,
           "meta_data_schema": [
-            {
-              "name": "temperature",
-              "data_type": "float",
-              "type": "input number",
-              "format": "float",
-              "validator": {
-                "min": 0.0,
-                "max": 2.0
-              },
-              "required": 0,
-              "description": "Controls randomness in output. Range: 0.0 to 2.0"
-            },
             {
               "name": "max_completion_tokens",
               "data_type": "integer",
@@ -12396,18 +12275,6 @@
           ],
           "required": 0,
           "description": "Voice for the realtime model response"
-        },
-        {
-          "name": "temperature",
-          "data_type": "float",
-          "type": "input number",
-          "format": "float",
-          "validator": {
-            "min": 0.6,
-            "max": 1.2
-          },
-          "required": 0,
-          "description": "Sampling temperature. Range: 0.6 to 1.2"
         }
       ],
       "status": "active"
@@ -14573,10 +14440,10 @@
       "api_key_env": "SONIOX_API_KEY",
       "models": [
         {
-          "name": "stt-rt-v4",
+          "name": "stt-rt-v5",
           "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
-            "model": "stt-rt-v4"
+            "model": "stt-rt-v5"
           },
           "meta_data_schema": [
             {
@@ -14591,46 +14458,10 @@
           ]
         },
         {
-          "name": "stt-async-v4",
+          "name": "stt-async-v5",
           "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
           "meta_data": {
-            "model": "stt-async-v4"
-          },
-          "meta_data_schema": [
-            {
-              "name": "language_hints",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language hints for transcription"
-            }
-          ]
-        },
-        {
-          "name": "stt-rt-v3",
-          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
-          "meta_data": {
-            "model": "stt-rt-v3"
-          },
-          "meta_data_schema": [
-            {
-              "name": "language_hints",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Language hints for transcription"
-            }
-          ]
-        },
-        {
-          "name": "stt-async-v3",
-          "base_url": "wss://stt-rt.soniox.com/transcribe-websocket",
-          "meta_data": {
-            "model": "stt-async-v3"
+            "model": "stt-async-v5"
           },
           "meta_data_schema": [
             {
@@ -37814,10 +37645,10 @@
       "api_key_env": "RIME_API_KEY",
       "models": [
         {
-          "name": "arcana",
+          "name": "coda",
           "base_url": "wss://users.rime.ai/ws2",
           "meta_data": {
-            "model": "arcana"
+            "model": "coda"
           },
           "meta_data_schema": [
             {
@@ -37904,7 +37735,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "alfhild",
@@ -37917,7 +37748,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "alzira",
@@ -37930,7 +37761,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "amarante",
@@ -37943,7 +37774,7 @@
           "language_list": [
             "French"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anaya",
@@ -37956,7 +37787,7 @@
           "language_list": [
             "Hindi"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anil",
@@ -37969,7 +37800,7 @@
           "language_list": [
             "Hindi"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "arcade",
@@ -37982,7 +37813,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "arya",
@@ -37995,7 +37826,7 @@
           "language_list": [
             "Hindi"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "astra",
@@ -38008,7 +37839,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "astra",
@@ -38021,7 +37852,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "atrium",
@@ -38034,7 +37865,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "aurelie",
@@ -38047,7 +37878,7 @@
           "language_list": [
             "French"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "aurelio",
@@ -38060,7 +37891,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "aviva",
@@ -38073,7 +37904,7 @@
           "language_list": [
             "Hebrew"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "baldur",
@@ -38086,7 +37917,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "baltasar",
@@ -38099,7 +37930,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "batin",
@@ -38112,7 +37943,7 @@
           "language_list": [
             "Arabic"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "bond",
@@ -38125,7 +37956,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "celeste",
@@ -38138,7 +37969,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "celestino",
@@ -38151,7 +37982,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "celso",
@@ -38164,7 +37995,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "cove",
@@ -38190,7 +38021,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "destin",
@@ -38203,7 +38034,7 @@
           "language_list": [
             "French"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "eliphas",
@@ -38216,7 +38047,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "estelle",
@@ -38229,7 +38060,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "eucalyptus",
@@ -38242,7 +38073,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "eucalyptus",
@@ -38255,7 +38086,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "fern",
@@ -38268,7 +38099,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "isa",
@@ -38294,7 +38125,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kumara",
@@ -38307,7 +38138,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "lagoon",
@@ -38333,7 +38164,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "layla",
@@ -38346,7 +38177,7 @@
           "language_list": [
             "Arabic"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "liesel",
@@ -38359,7 +38190,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "lintel",
@@ -38372,7 +38203,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "lorelei",
@@ -38385,7 +38216,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "lucia",
@@ -38398,7 +38229,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "luna",
@@ -38411,7 +38242,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "luz",
@@ -38424,7 +38255,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "lyra",
@@ -38437,7 +38268,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mar",
@@ -38450,7 +38281,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mari",
@@ -38476,7 +38307,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "marlu",
@@ -38489,7 +38320,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "masonry",
@@ -38502,7 +38333,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mesa_extra",
@@ -38554,7 +38385,7 @@
           "language_list": [
             "French"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "moss",
@@ -38567,7 +38398,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "nova",
@@ -38580,7 +38411,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "oculus",
@@ -38593,7 +38424,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "ori",
@@ -38606,7 +38437,7 @@
           "language_list": [
             "Hebrew"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "parapet",
@@ -38619,7 +38450,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "peak",
@@ -38645,7 +38476,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "pola",
@@ -38658,7 +38489,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "qadir",
@@ -38671,7 +38502,7 @@
           "language_list": [
             "Arabic"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "raiden",
@@ -38684,7 +38515,7 @@
           "language_list": [
             "Japanese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "ren",
@@ -38697,7 +38528,7 @@
           "language_list": [
             "Japanese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "runa",
@@ -38710,7 +38541,7 @@
           "language_list": [
             "German"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sakina",
@@ -38723,7 +38554,7 @@
           "language_list": [
             "Arabic"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "seraphina",
@@ -38736,7 +38567,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sirius",
@@ -38749,7 +38580,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sol",
@@ -38762,7 +38593,7 @@
           "language_list": [
             "Portugese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "solstice",
@@ -38775,7 +38606,7 @@
           "language_list": [
             "French"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "stucco",
@@ -38788,7 +38619,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "summit",
@@ -38840,7 +38671,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "truss",
@@ -38853,7 +38684,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tundra",
@@ -38879,7 +38710,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "walnut",
@@ -38892,7 +38723,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wildflower",
@@ -38918,7 +38749,7 @@
           "language_list": [
             "Japanese"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "abbie",
@@ -38957,7 +38788,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "alexis",
@@ -39165,7 +38996,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anderson_emily",
@@ -39178,7 +39009,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anderson_jake",
@@ -39191,7 +39022,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anderson_james",
@@ -39204,7 +39035,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "anderson_kevin",
@@ -39217,7 +39048,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "andromeda",
@@ -39230,7 +39061,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "antoine",
@@ -39295,7 +39126,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "bayou",
@@ -39347,7 +39178,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "bennett_ryan",
@@ -39360,7 +39191,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "biondi_paul",
@@ -39373,7 +39204,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "blaze",
@@ -39568,7 +39399,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "brown_alex",
@@ -39581,7 +39412,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "brown_joshua",
@@ -39594,7 +39425,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "brown_madison",
@@ -39607,7 +39438,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "brown_matthew",
@@ -39620,7 +39451,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "brown_steven",
@@ -39633,7 +39464,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "bruno_katie",
@@ -39646,7 +39477,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "carol",
@@ -39685,7 +39516,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "cedar",
@@ -39724,7 +39555,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "chen_david",
@@ -39737,7 +39568,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "chen_mei",
@@ -39750,7 +39581,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "clark_tyler",
@@ -39763,7 +39594,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "cohen_emily",
@@ -39776,7 +39607,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "cohen_jared",
@@ -39789,7 +39620,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "colin",
@@ -39828,7 +39659,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "cooper_logan",
@@ -39841,7 +39672,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "courtney",
@@ -39932,7 +39763,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "davies_james",
@@ -39945,7 +39776,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "dela_cristina",
@@ -39958,7 +39789,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "dew",
@@ -39997,7 +39828,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "diego",
@@ -40036,7 +39867,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "duncan_colin",
@@ -40049,7 +39880,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "duval_pierre",
@@ -40062,7 +39893,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "elena",
@@ -40153,7 +39984,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "eva",
@@ -40192,7 +40023,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "falcon",
@@ -40231,7 +40062,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "fjord",
@@ -40413,7 +40244,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gomez_daniela",
@@ -40426,7 +40257,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gomez_diego",
@@ -40439,7 +40270,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gomez_isabel",
@@ -40452,7 +40283,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gomez_isabella",
@@ -40465,7 +40296,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gomez_javon",
@@ -40478,7 +40309,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gonzalez_maya",
@@ -40491,7 +40322,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gonzalez_michael",
@@ -40504,7 +40335,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "gonzalez_ryan",
@@ -40517,7 +40348,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "granite",
@@ -40556,7 +40387,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "grove",
@@ -40673,7 +40504,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "harris_luke",
@@ -40686,7 +40517,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "harris_lynette",
@@ -40699,7 +40530,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "harrison_brianna",
@@ -40712,7 +40543,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "harrison_joey",
@@ -40725,7 +40556,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "harrison_mary",
@@ -40738,7 +40569,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "hassan_omar",
@@ -40751,7 +40582,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "hawk",
@@ -40816,7 +40647,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "hera",
@@ -40855,7 +40686,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "holliday_jewel",
@@ -40868,7 +40699,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "iris",
@@ -40933,7 +40764,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "jen",
@@ -40972,7 +40803,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "joe",
@@ -41011,7 +40842,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_angela",
@@ -41024,7 +40855,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_asha",
@@ -41037,7 +40868,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_avery",
@@ -41050,7 +40881,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_brianna",
@@ -41063,7 +40894,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_cynthia",
@@ -41076,7 +40907,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_elijah",
@@ -41089,7 +40920,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_james",
@@ -41102,7 +40933,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_joshua",
@@ -41115,7 +40946,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_latisha",
@@ -41128,7 +40959,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_lisa",
@@ -41141,7 +40972,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_madison",
@@ -41154,7 +40985,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_malachi",
@@ -41167,7 +40998,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_marcel",
@@ -41180,7 +41011,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_mary",
@@ -41193,7 +41024,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_matthew",
@@ -41206,7 +41037,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_melissa",
@@ -41219,7 +41050,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_monique",
@@ -41232,7 +41063,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_nia",
@@ -41245,7 +41076,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_tasha",
@@ -41258,7 +41089,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_tia",
@@ -41271,7 +41102,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "johnson_walter",
@@ -41284,7 +41115,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "jose",
@@ -41440,7 +41271,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kelly_jennifer",
@@ -41453,7 +41284,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kelly_john",
@@ -41466,7 +41297,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kelly_maureen",
@@ -41479,7 +41310,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kendra",
@@ -41596,7 +41427,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "khan_umar",
@@ -41609,7 +41440,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kim_ashley",
@@ -41622,7 +41453,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kim_daniel",
@@ -41635,7 +41466,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kim_sunny",
@@ -41648,7 +41479,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "kima",
@@ -41661,7 +41492,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "klaus",
@@ -41726,7 +41557,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "levi_david",
@@ -41739,7 +41570,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "levine_emily",
@@ -41752,7 +41583,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "levine_joshua",
@@ -41765,7 +41596,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "levy_hannah",
@@ -41778,7 +41609,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "li_xiao",
@@ -41791,7 +41622,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "linda",
@@ -41882,7 +41713,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "madison",
@@ -41921,7 +41752,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "malik_ahmad",
@@ -41934,7 +41765,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "marge",
@@ -42025,7 +41856,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "marissa",
@@ -42116,7 +41947,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_ana",
@@ -42129,7 +41960,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_dylan",
@@ -42142,7 +41973,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_jaime",
@@ -42155,7 +41986,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_leticia",
@@ -42168,7 +41999,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_rosa",
@@ -42181,7 +42012,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "martinez_ryan",
@@ -42194,7 +42025,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mateo",
@@ -42259,7 +42090,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mccarthy_james",
@@ -42272,7 +42103,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mccarthy_teresa",
@@ -42285,7 +42116,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mcdowell_peter",
@@ -42298,7 +42129,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mckinley_robert",
@@ -42311,7 +42142,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mendoza_alonzo",
@@ -42324,7 +42155,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mendoza_jesus",
@@ -42337,7 +42168,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mendoza_luz",
@@ -42350,7 +42181,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "merritt_jimmy",
@@ -42363,7 +42194,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "mesa",
@@ -42402,7 +42233,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "miller_judy",
@@ -42415,7 +42246,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "miller_kelsey",
@@ -42428,7 +42259,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "miller_lisa",
@@ -42441,7 +42272,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "miller_logan",
@@ -42454,7 +42285,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "miyamoto_akari",
@@ -42467,7 +42298,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "montgomery_elise",
@@ -42480,7 +42311,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "montgomery_emily",
@@ -42493,7 +42324,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "moon",
@@ -42532,7 +42363,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morgan_charles",
@@ -42545,7 +42376,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morris_colin",
@@ -42558,7 +42389,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morris_james",
@@ -42571,7 +42402,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morris_leticia",
@@ -42584,7 +42415,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morris_melvin",
@@ -42597,7 +42428,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "morton_daine",
@@ -42610,7 +42441,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "moyo_david",
@@ -42623,7 +42454,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_colin",
@@ -42636,7 +42467,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_emily",
@@ -42649,7 +42480,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_grace",
@@ -42662,7 +42493,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_hannah",
@@ -42675,7 +42506,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_liam",
@@ -42688,7 +42519,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "murphy_nolan",
@@ -42701,7 +42532,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "neal_colin",
@@ -42714,7 +42545,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "nicholas",
@@ -42753,7 +42584,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "nowak_joanna",
@@ -42766,7 +42597,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "nowak_michal",
@@ -42779,7 +42610,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "nyles",
@@ -42818,7 +42649,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "orion",
@@ -42831,7 +42662,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "pablo",
@@ -42870,7 +42701,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "park_sumin",
@@ -42883,7 +42714,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "patel_amit",
@@ -42896,7 +42727,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "patel_asha",
@@ -42909,7 +42740,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "peak",
@@ -42987,7 +42818,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "phil",
@@ -43026,7 +42857,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rain",
@@ -43091,7 +42922,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "ramos_raul",
@@ -43104,7 +42935,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "reba",
@@ -43143,7 +42974,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "reddy_sunil",
@@ -43156,7 +42987,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rex",
@@ -43195,7 +43026,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "ricci_lorenzo",
@@ -43208,7 +43039,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rick",
@@ -43351,7 +43182,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rodriguez_carla",
@@ -43364,7 +43195,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rodriguez_carlos",
@@ -43377,7 +43208,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rodriguez_eduardo",
@@ -43390,7 +43221,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rodriguez_isabela",
@@ -43403,7 +43234,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rodriguez_miguel",
@@ -43416,7 +43247,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "rohan",
@@ -43481,7 +43312,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "runton",
@@ -43559,7 +43390,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "schmidt_joshua",
@@ -43572,7 +43403,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "schmidt_julia",
@@ -43585,7 +43416,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "schmidt_sophie",
@@ -43598,7 +43429,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "schneider_eric",
@@ -43611,7 +43442,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "schneider_jack",
@@ -43624,7 +43455,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "selena",
@@ -43689,7 +43520,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sharon",
@@ -43728,7 +43559,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "simone",
@@ -43754,7 +43585,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sirius",
@@ -43767,7 +43598,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "smith_heather",
@@ -43780,7 +43611,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "smith_lisa",
@@ -43793,7 +43624,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "smith_michael",
@@ -43806,7 +43637,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "smith_mike",
@@ -43819,7 +43650,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "sofia",
@@ -44079,7 +43910,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "thalassa",
@@ -44092,7 +43923,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "thomas_sarah",
@@ -44105,7 +43936,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "thompson_kevin",
@@ -44118,7 +43949,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "thunder",
@@ -44196,7 +44027,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tran_david",
@@ -44209,7 +44040,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tran_jessica",
@@ -44222,7 +44053,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tran_tu",
@@ -44235,7 +44066,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tundra",
@@ -44261,7 +44092,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "tyler",
@@ -44300,7 +44131,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "ursa",
@@ -44313,7 +44144,7 @@
           "language_list": [
             "Spanish"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "vespera",
@@ -44326,7 +44157,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "violet",
@@ -44391,7 +44222,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "watson_emily",
@@ -44404,7 +44235,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wildflower",
@@ -44430,7 +44261,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_brian",
@@ -44443,7 +44274,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_darnell",
@@ -44456,7 +44287,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_jennifer",
@@ -44469,7 +44300,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_jordan",
@@ -44482,7 +44313,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_ryan",
@@ -44495,7 +44326,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_terence",
@@ -44508,7 +44339,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "williams_tiffany",
@@ -44521,7 +44352,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "willow",
@@ -44560,7 +44391,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wolf",
@@ -44599,7 +44430,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wright_cooper",
@@ -44612,7 +44443,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wright_jason",
@@ -44625,7 +44456,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wright_julianne",
@@ -44638,7 +44469,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "wright_michael",
@@ -44651,7 +44482,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "yadira",
@@ -44716,7 +44547,7 @@
           "language_list": [
             "English"
           ],
-          "model_name": "arcana"
+          "model_name": "coda"
         },
         {
           "name": "zion",
@@ -51456,50 +51287,6 @@
           "base_url": "wss://api.fish.audio/v1/tts/live",
           "meta_data": {
             "model": "s1"
-          },
-          "meta_data_schema": [
-            {
-              "name": "latency",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Latency mode",
-              "options": [
-                "normal",
-                "balanced"
-              ]
-            }
-          ]
-        },
-        {
-          "name": "speech-1.6",
-          "base_url": "wss://api.fish.audio/v1/tts/live",
-          "meta_data": {
-            "model": "speech-1.6"
-          },
-          "meta_data_schema": [
-            {
-              "name": "latency",
-              "data_type": "string",
-              "type": "select",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Latency mode",
-              "options": [
-                "normal",
-                "balanced"
-              ]
-            }
-          ]
-        },
-        {
-          "name": "speech-1.5",
-          "base_url": "wss://api.fish.audio/v1/tts/live",
-          "meta_data": {
-            "model": "speech-1.5"
           },
           "meta_data_schema": [
             {
@@ -62309,33 +62096,6 @@
               "validator": null,
               "required": 0,
               "description": "Region for the service"
-            },
-            {
-              "name": "rate",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech rate (e.g., 1.0, slow, fast)"
-            },
-            {
-              "name": "volume",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Volume level (e.g., +20%, loud, x-soft)"
-            },
-            {
-              "name": "style",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speaking style (e.g., cheerful, sad, excited)"
             }
           ]
         },
@@ -62353,33 +62113,6 @@
               "validator": null,
               "required": 0,
               "description": "Region for the service"
-            },
-            {
-              "name": "rate",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech rate (e.g., 1.0, slow, fast)"
-            },
-            {
-              "name": "volume",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Volume level (e.g., +20%, loud, x-soft)"
-            },
-            {
-              "name": "style",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speaking style (e.g., cheerful, sad, excited)"
             }
           ]
         },
@@ -62397,33 +62130,6 @@
               "validator": null,
               "required": 0,
               "description": "Region for the service"
-            },
-            {
-              "name": "rate",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech rate (e.g., 1.0, slow, fast)"
-            },
-            {
-              "name": "volume",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Volume level (e.g., +20%, loud, x-soft)"
-            },
-            {
-              "name": "style",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speaking style (e.g., cheerful, sad, excited)"
             }
           ]
         },
@@ -62441,33 +62147,6 @@
               "validator": null,
               "required": 0,
               "description": "Region for the service"
-            },
-            {
-              "name": "rate",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speech rate (e.g., 1.0, slow, fast)"
-            },
-            {
-              "name": "volume",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Volume level (e.g., +20%, loud, x-soft)"
-            },
-            {
-              "name": "style",
-              "data_type": "string",
-              "type": "input text",
-              "format": "string",
-              "validator": null,
-              "required": 0,
-              "description": "Speaking style (e.g., cheerful, sad, excited)"
             }
           ]
         },
