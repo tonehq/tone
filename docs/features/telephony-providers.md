@@ -50,7 +50,7 @@ Vonage's first websocket message has no provider marker, so the `/ws` endpoint r
 
 ### Outbound
 
-The engine calls `POST https://api.nexmo.com/v1/calls` with the agent, direction and numbers on the answer URL and the scheduled call id on the event URL. Vonage returns the call `uuid`; event webhooks (`started`, `ringing`, `answered`, `completed`, `busy`, `unanswered`, `timeout`, `failed`, `rejected`, `cancelled`) map onto the scheduled-call state machine. Hang-up is `PUT /v1/calls/{uuid}` with `{"action": "hangup"}`; the Vonage serializer has no hang-up of its own, so the runtime terminator is the only hang-up path. Warm transfer to a phone number is available through the same endpoint with a `transfer` action.
+The engine calls `POST https://api.nexmo.com/v1/calls` with the agent, direction and numbers on the answer URL and the scheduled call id on the event URL. Vonage returns the call `uuid`; event webhooks (`started`, `ringing`, `answered`, `completed`, `busy`, `unanswered`, `timeout`, `failed`, `rejected`, `cancelled`) map onto the scheduled-call state machine. Hang-up is `PUT /v1/calls/{uuid}` with `{"action": "hangup"}`; the Vonage serializer has no hang-up of its own, so the runtime terminator is the only hang-up path. Once a call has ended Vonage answers both the hang-up and the call lookup with 404, which the terminator treats as already hung up. Warm transfer to a phone number is available through the same endpoint with a `transfer` action.
 
 ## Adding a provider
 

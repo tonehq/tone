@@ -103,6 +103,19 @@ class TestVonageInitiateAndEnd:
         assert put.call_args[0][0] == "https://api.nexmo.com/v1/calls/call-1"
         assert put.call_args[1]["json"] == {"action": "hangup"}
 
+    def test_end_call_treats_a_missing_call_as_already_ended(self, vonage_creds):
+        with patch.object(vonage_engine.requests, "put", return_value=_response(404)), \
+                patch.object(vonage_engine.requests, "get") as get:
+            assert VonageCallEngine().end_call("call-1") is True
+        assert get.call_count == 0
+
+    def test_end_call_treats_a_missing_record_as_already_ended(self, vonage_creds):
+        missing = _response(404)
+        missing.raise_for_status.side_effect = vonage_engine.requests.HTTPError(response=missing)
+        with patch.object(vonage_engine.requests, "put", return_value=_response(400)), \
+                patch.object(vonage_engine.requests, "get", return_value=missing):
+            assert VonageCallEngine().end_call("call-1") is True
+
     def test_end_call_accepts_already_completed(self, vonage_creds):
         with patch.object(vonage_engine.requests, "put", return_value=_response(400)), \
                 patch.object(vonage_engine.requests, "get", return_value=_response(200, {"status": "completed"})):
