@@ -36,6 +36,32 @@ export const CHANNEL_FIELDS: Record<string, ChannelField[]> = {
     { name: 'auth_id', label: 'Auth ID', placeholder: 'Enter auth ID' },
     { name: 'auth_token', label: 'Auth Token', type: 'password', placeholder: 'Enter auth token' },
   ],
+  vonage: [
+    { name: 'application_id', label: 'Application ID', placeholder: 'Enter Vonage application ID' },
+    {
+      name: 'private_key',
+      label: 'Private Key',
+      type: 'password',
+      placeholder: 'Paste the application private key (PEM)',
+      helperText:
+        'Signs the Voice API requests. Download it when you create the Vonage application.',
+    },
+    {
+      name: 'api_key',
+      label: 'API Key',
+      placeholder: 'Enter API key',
+      optional: true,
+      helperText: 'Required to list numbers and check the account balance.',
+    },
+    {
+      name: 'api_secret',
+      label: 'API Secret',
+      type: 'password',
+      placeholder: 'Enter API secret',
+      optional: true,
+      helperText: 'Required to list numbers and check the account balance.',
+    },
+  ],
   livekit: [
     { name: 'url', label: 'Server URL', placeholder: 'wss://your-project.livekit.cloud' },
     { name: 'api_key', label: 'API Key', placeholder: 'Enter API key' },
@@ -55,6 +81,7 @@ export const CHANNEL_TYPE_OPTIONS = [
   { label: 'Twilio', value: 'twilio' },
   { label: 'Telnyx', value: 'telnyx' },
   { label: 'Plivo', value: 'plivo' },
+  { label: 'Vonage', value: 'vonage' },
   { label: 'LiveKit', value: 'livekit' },
   { label: 'Daily', value: 'daily' },
 ];
@@ -63,6 +90,8 @@ export const ALL_FIELD_NAMES = [
   'name',
   'account_sid',
   'application_sid',
+  'application_id',
+  'private_key',
   'auth_token',
   'auth_id',
   'url',

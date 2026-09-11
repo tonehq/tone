@@ -78,7 +78,13 @@ _TWILIO_STATUS_MAP = {
     "no-answer": "no_answer",
     "failed": "failed",
     "canceled": "canceled",
+    "started": "dispatched",
+    "answered": "in_progress",
     "cancel": "canceled",
+    "cancelled": "canceled",
+    "unanswered": "no_answer",
+    "timeout": "no_answer",
+    "rejected": "failed",
 }
 
 # Best-effort OUTBOUND background thread pools, created LAZILY on first use (not at import), so
@@ -195,13 +201,16 @@ class TriggerProvider(str, Enum):
     TWILIO = "twilio"
     TELNYX = "telnyx"
     PLIVO = "plivo"
+    VONAGE = "vonage"
     SIP = "sip"
     WEBSOCKET = "websocket"
 
 
 PSTN_TRIGGER_PROVIDERS = tuple(
     provider.value
-    for provider in (TriggerProvider.TWILIO, TriggerProvider.TELNYX, TriggerProvider.PLIVO, TriggerProvider.SIP)
+    for provider in (
+        TriggerProvider.TWILIO, TriggerProvider.TELNYX, TriggerProvider.PLIVO, TriggerProvider.VONAGE, TriggerProvider.SIP,
+    )
 )
 SUPPORTED_TRIGGER_PROVIDERS = PSTN_TRIGGER_PROVIDERS + (TriggerProvider.WEBSOCKET.value,)
 

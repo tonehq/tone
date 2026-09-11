@@ -51,9 +51,27 @@ def test_plivo_outbound_answer_without_agent_hangs_up(client):
     assert "<Hangup/>" in response.text
 
 
+def test_vonage_inbound_answer_returns_ncco_with_e164_numbers(client):
+    response = client.get("/vonage/answer?from=15550001111&to=15550002222&uuid=u-1&conversation_uuid=cv-1")
+    assert response.status_code == 200 and response.headers["content-type"].startswith("application/json")
+    endpoint = response.json()[0]["endpoint"][0]
+    assert endpoint["type"] == "websocket" and endpoint["content-type"] == "audio/l16;rate=16000"
+    assert _ws_query(endpoint["uri"]) == {
+        "provider": ["vonage"], "from": ["+15550001111"], "to": ["+15550002222"], "call_id": ["u-1"],
+    }
+
+
+def test_vonage_outbound_answer_uses_the_dial_params(client):
+    response = client.get("/vonage/answer?agent_id=a1&direction=outbound&from=%2B1&to=%2B2&uuid=u-2")
+    query = _ws_query(response.json()[0]["endpoint"][0]["uri"])
+    assert query["agent_id"] == ["a1"] and query["direction"] == ["outbound"] and query["call_id"] == ["u-2"]
+    assert query["provider"] == ["vonage"]
+
+
 def test_status_callbacks_without_scheduled_id_ack_and_skip_the_db(client, monkeypatch):
     monkeypatch.setattr(routes, "get_db_context", lambda: (_ for _ in ()).throw(AssertionError("db touched")))
     assert client.post("/plivo/outbound-status", data={"CallUUID": "c1", "CallStatus": "completed"}).status_code == 204
+    assert client.post("/vonage/events", json={"uuid": "u1", "status": "completed"}).status_code == 204
 
 
 def test_status_callbacks_map_provider_fields_onto_the_shared_handler(client, monkeypatch):
@@ -91,9 +109,19 @@ def test_status_callbacks_map_provider_fields_onto_the_shared_handler(client, mo
     assert seen[0] == (
         "sc1", {"CallSid": "req-1", "CallStatus": "no-answer", "CallDuration": "0", "To": "+2", "From": "+1"},
     )
+    client.post(
+        "/vonage/events?scheduled_call_id=sc2",
+        json={"uuid": "u1", "status": "unanswered", "duration": "0", "to": "2", "from": "1"},
+    )
+    assert seen[1] == (
+        "sc2", {"CallSid": "u1", "CallStatus": "unanswered", "CallDuration": "0", "To": "+2", "From": "+1"},
+    )
 
 
 def test_provider_statuses_are_mapped_onto_the_scheduled_call_states():
     assert _TWILIO_STATUS_MAP["cancel"] == "canceled"
-    assert "plivo" in OutboundCallService._PSTN_PROVIDERS
-    assert "plivo" in OutboundCallService._SUPPORTED_PROVIDERS
+    assert _TWILIO_STATUS_MAP["unanswered"] == "no_answer"
+    assert _TWILIO_STATUS_MAP["answered"] == "in_progress"
+    assert _TWILIO_STATUS_MAP["rejected"] == "failed"
+    assert set(OutboundCallService._PSTN_PROVIDERS) >= {"plivo", "vonage"}
+    assert set(OutboundCallService._SUPPORTED_PROVIDERS) >= {"plivo", "vonage"}

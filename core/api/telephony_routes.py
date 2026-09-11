@@ -156,6 +156,17 @@ async def _plivo_status_fields(request: Request) -> Dict[str, Any]:
     }
 
 
+async def _vonage_status_fields(request: Request) -> Dict[str, Any]:
+    event = await request.json()
+    return {
+        "CallSid": event.get("uuid"),
+        "CallStatus": event.get("status"),
+        "CallDuration": event.get("duration"),
+        "To": to_e164(event.get("to")),
+        "From": to_e164(event.get("from")),
+    }
+
+
 async def _outbound_status_callback(
     request: Request,
     tag: str,
@@ -230,3 +241,18 @@ async def plivo_outbound(request: Request) -> Response:
 @router.post("/plivo/outbound-status")
 async def plivo_outbound_status(request: Request) -> Response:
     return await _outbound_status_callback(request, "/plivo/outbound-status", _plivo_status_fields)
+
+
+@router.post("/vonage/answer")
+@router.get("/vonage/answer")
+async def vonage_answer(request: Request) -> Response:
+    if (request.query_params.get("agent_id") or "").strip():
+        return await _outbound_answer_xml(
+            request, "vonage", "/vonage/answer", request.query_params.get("uuid") or ""
+        )
+    return await _inbound_answer(request, "vonage", "/vonage/answer")
+
+
+@router.post("/vonage/events")
+async def vonage_events(request: Request) -> Response:
+    return await _outbound_status_callback(request, "/vonage/events", _vonage_status_fields)

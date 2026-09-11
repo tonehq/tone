@@ -58,6 +58,15 @@ export const API_KEY_PROVIDERS: ProviderCardConfig[] = [
     accentColor: 'bg-emerald-500',
   },
   {
+    key: 'vonage',
+    name: 'Vonage',
+    description: 'Voice API for phone calls and numbers across 200+ countries.',
+    icon: <Phone size={18} className="text-purple-500" />,
+    iconBg: 'bg-purple-50 dark:bg-purple-500/10',
+    iconBorder: 'border-purple-200/50 dark:border-purple-500/20 shadow-sm dark:shadow-none',
+    accentColor: 'bg-purple-500',
+  },
+  {
     key: 'livekit',
     name: 'LiveKit',
     description: 'Real-time WebRTC platform for in-browser voice calls.',
