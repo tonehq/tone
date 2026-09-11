@@ -10,6 +10,7 @@ from core.services.call_engines.plivo_engine import PlivoCallEngine
 from core.services.call_engines.sip_engine import SipCallEngine
 from core.services.call_engines.telnyx_engine import TelnyxCallEngine
 from core.services.call_engines.twilio_engine import TwilioCallEngine
+from core.services.call_engines.vonage_engine import VonageCallEngine
 from core.services.call_engines.websocket_engine import WebSocketCallEngine
 
 
@@ -21,6 +22,8 @@ def get_call_engine(provider: str = "twilio", org_id=None) -> CallEngine:
         return TelnyxCallEngine(org_id=org_id)
     if provider == "plivo":
         return PlivoCallEngine(org_id=org_id)
+    if provider == "vonage":
+        return VonageCallEngine(org_id=org_id)
     if provider == "sip":
         return SipCallEngine(org_id=org_id)
     if provider == "websocket":
@@ -35,6 +38,7 @@ __all__ = [
     "SipCallEngine",
     "TelnyxCallEngine",
     "TwilioCallEngine",
+    "VonageCallEngine",
     "WebSocketCallEngine",
     "get_call_engine",
 ]

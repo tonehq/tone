@@ -143,3 +143,12 @@ def list_plivo_phone_numbers(
     db: Session = Depends(get_db),
 ):
     return _svc(claims, db).list_plivo_phone_numbers(channel_id)
+
+
+@router.get("/vonage_phone_numbers")
+def list_vonage_phone_numbers(
+    channel_id: str = Query(..., description="The Vonage channel ID to fetch numbers for"),
+    claims: JWTClaims = Depends(require_org_member),
+    db: Session = Depends(get_db),
+):
+    return _svc(claims, db).list_vonage_phone_numbers(channel_id)

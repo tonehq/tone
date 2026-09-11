@@ -20,6 +20,7 @@ from core.services.call_termination.plivo import PlivoTerminator
 from core.services.call_termination.sip import SipTerminator
 from core.services.call_termination.telnyx import TelnyxTerminator
 from core.services.call_termination.twilio import TwilioTerminator
+from core.services.call_termination.vonage import VonageTerminator
 from core.services.pipeline.call_end_events import (
     EVENT_CALL_ENDED_ERROR,
     EVENT_CALL_TERMINATED,
@@ -36,6 +37,8 @@ def get_call_terminator(transport_type: str) -> CallTerminator:
         return TelnyxTerminator()
     if transport_type == "plivo":
         return PlivoTerminator()
+    if transport_type == "vonage":
+        return VonageTerminator()
     # SIP trunk calls run on the LiveKit transport (transport_type "livekit");
     # accept "sip" too for safety.
     if transport_type in ("livekit", "sip"):

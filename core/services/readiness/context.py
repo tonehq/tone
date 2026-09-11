@@ -230,7 +230,7 @@ class ContextBuilder:
         types (``daily``, ``websocket``, ``livekit``) are excluded — they
         have no provider-side balance / credit surface to probe.
         """
-        telephony_types = ("twilio", "telnyx", "plivo", "exotel")
+        telephony_types = ("twilio", "telnyx", "plivo", "vonage", "exotel")
 
         via_agent_channel = (
             self.db.query(Channel)

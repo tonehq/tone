@@ -77,3 +77,10 @@ export const listPlivoPhoneNumbers = async (channelId: string): Promise<ChannelP
   });
   return data ?? [];
 };
+
+export const listVonagePhoneNumbers = async (channelId: string): Promise<ChannelPhoneNumber[]> => {
+  const { data } = await axiosInstance.get<ChannelPhoneNumber[]>('/channel/vonage_phone_numbers', {
+    params: { channel_id: channelId },
+  });
+  return data ?? [];
+};

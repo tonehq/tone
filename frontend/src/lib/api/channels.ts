@@ -7,6 +7,7 @@ import {
   listPlivoPhoneNumbers,
   listTelnyxPhoneNumbers,
   listTwilioPhoneNumbers,
+  listVonagePhoneNumbers,
 } from '@/services/channelService';
 import type { ChannelPhoneNumber } from '@/services/channelService';
 import type { Channel } from '@/types/integration';
@@ -60,6 +61,7 @@ const PROVIDER_NUMBER_FETCHERS: Record<
   twilio: listTwilioPhoneNumbers,
   telnyx: listTelnyxPhoneNumbers,
   plivo: listPlivoPhoneNumbers,
+  vonage: listVonagePhoneNumbers,
 };
 
 export function useChannelPhoneNumbers(
