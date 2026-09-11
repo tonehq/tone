@@ -134,8 +134,17 @@ class VonageCallEngine(CallEngine):
         if response.status_code in (200, 204):
             logger.info("[outbound] end_call hung up uuid={}", call_id)
             return True
+        if response.status_code == 404:
+            logger.debug("[outbound] end_call: call already gone uuid={}", call_id)
+            return True
         try:
             status = self.get_call_status(call_id).get("status")
+        except requests.HTTPError as exc:
+            if getattr(exc.response, "status_code", None) == 404:
+                logger.debug("[outbound] end_call: call already gone uuid={}", call_id)
+                return True
+            logger.exception("[outbound] end_call failed uuid={} http={}", call_id, response.status_code)
+            return False
         except Exception:
             logger.exception("[outbound] end_call failed uuid={} http={}", call_id, response.status_code)
             return False
