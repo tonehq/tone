@@ -452,6 +452,30 @@ class ChannelService(BaseService):
             ],
         )
 
+    def list_vonage_phone_numbers(self, channel_id: Union[str, UUID]) -> List[Dict[str, Any]]:
+        record = self._provider_record(channel_id, "vonage")
+        config = decrypt_json(record.encrypted_config)
+        api_key = (config.get("api_key") or "").strip()
+        api_secret = (config.get("api_secret") or "").strip()
+        if not api_key or not api_secret:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Vonage api_key and api_secret are not configured for this channel",
+            )
+        payload = self._provider_get(
+            "Vonage",
+            "https://rest.nexmo.com/account/numbers",
+            params={"api_key": api_key, "api_secret": api_secret, "size": 100},
+        )
+        return self._merge_provider_numbers(
+            record,
+            [
+                {"id": n.get("msisdn"), "number": f"+{n['msisdn']}", "label": n.get("country")}
+                for n in payload.get("numbers", [])
+                if n.get("msisdn")
+            ],
+        )
+
     def _provider_record(self, channel_id: Union[str, UUID], channel_type: str) -> Channel:
         record = self._get_record(channel_id)
         if (record.channel_type or "").lower() != channel_type:

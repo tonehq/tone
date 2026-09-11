@@ -69,6 +69,20 @@ def get_plivo_credentials(org_id=None) -> dict:
     return {}
 
 
+def get_vonage_credentials(org_id=None) -> dict:
+    cfg = channel_config("vonage", org_id)
+    application_id = (cfg.get("application_id") or "").strip()
+    private_key = (cfg.get("private_key") or "").strip()
+    if application_id and private_key:
+        return {
+            "application_id": application_id,
+            "private_key": private_key,
+            "api_key": (cfg.get("api_key") or "").strip(),
+            "api_secret": (cfg.get("api_secret") or "").strip(),
+        }
+    return {}
+
+
 def get_telnyx_api_key(org_id=None) -> str:
     """Fetch the Telnyx API key from the org's Telnyx channel."""
     return channel_config("telnyx", org_id).get("api_key") or ""
@@ -99,6 +113,7 @@ _CREDENTIAL_LOADERS = {
     "twilio": get_twilio_credentials,
     "telnyx": get_telnyx_credentials,
     "plivo": get_plivo_credentials,
+    "vonage": get_vonage_credentials,
     "sip": get_sip_credentials,
 }
 

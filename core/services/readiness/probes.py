@@ -837,6 +837,19 @@ _TRANSPORT_PROBES: Dict[str, _TransportProbe] = {
         ),
         ok_currency="USD",
     ),
+    "vonage": _TransportProbe(
+        cred_label="api_key / api_secret",
+        missing_reason=lambda c: (
+            None if _require(c, "api_key", "api_secret")
+            else "vonage: api_key / api_secret missing on the channel."
+        ),
+        build_request=lambda c: (
+            "https://rest.nexmo.com/account/get-balance",
+            {"params": {"api_key": (c.get("api_key") or "").strip(), "api_secret": (c.get("api_secret") or "").strip()}},
+        ),
+        parse_balance=lambda resp: (_to_float(_json_or_empty(resp).get("value")), "EUR"),
+        low_balance_message=_default_low_balance("vonage"),
+    ),
     "exotel": _TransportProbe(
         cred_label="api_key / api_token",
         missing_reason=lambda c: (

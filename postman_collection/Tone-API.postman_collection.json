@@ -8557,6 +8557,228 @@
               }
             }
           ]
+        },
+        {
+          "name": "GET /channel/vonage_phone_numbers",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/v1/channel/vonage_phone_numbers?channel_id={{channel_id}}",
+              "host": [
+                "{{base_url}}"
+              ],
+              "path": [
+                "api",
+                "v1",
+                "channel",
+                "vonage_phone_numbers"
+              ],
+              "query": [
+                {
+                  "key": "channel_id",
+                  "value": "{{channel_id}}"
+                }
+              ]
+            }
+          },
+          "response": [
+            {
+              "name": "200 Success",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "[\n  {\n    \"phone_number\": \"+14155550100\",\n    \"friendly_name\": \"Main line\",\n    \"sid\": \"PN...\",\n    \"assigned_agent_id\": null,\n    \"is_assigned\": false\n  }\n]"
+            },
+            {
+              "name": "404 Not Found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": "{\"detail\": \"Channel not found\"}"
+            },
+            {
+              "name": "200 OK - live Vonage numbers merged with local assignments",
+              "code": 200,
+              "status": "OK",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": [
+                {
+                  "id": "PNxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+                  "number": "+15551234567",
+                  "label": "My Vonage Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": {
+                    "agent_id": "22222222-2222-2222-2222-222222222222",
+                    "agent_name": "Sales Agent"
+                  }
+                },
+                {
+                  "id": "PNyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy",
+                  "number": "+15557654321",
+                  "label": "Unassigned Vonage Number",
+                  "channel_id": "f4d22a9c-1b6e-4f8c-9d2e-7e3b8a1f2c11",
+                  "assigned_to": null
+                }
+              ]
+            },
+            {
+              "name": "400 channel_id must be a valid UUID",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "channel_id must be a valid UUID"
+              }
+            },
+            {
+              "name": "404 Channel not found",
+              "code": 404,
+              "status": "Not Found",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel not found"
+              }
+            },
+            {
+              "name": "400 Channel is not a Vonage channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Channel is not a Vonage channel"
+              }
+            },
+            {
+              "name": "400 Vonage credentials are not configured for this channel",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Vonage credentials are not configured for this channel"
+              }
+            },
+            {
+              "name": "400 Vonage API error",
+              "code": 400,
+              "status": "Bad Request",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Vonage API error: Authentication Error - invalid username"
+              }
+            },
+            {
+              "name": "500 Vonage integration is unavailable on this server",
+              "code": 500,
+              "status": "Internal Server Error",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Vonage integration is unavailable on this server"
+              }
+            },
+            {
+              "name": "502 Failed to fetch phone numbers from Vonage",
+              "code": 502,
+              "status": "Bad Gateway",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Failed to fetch phone numbers from Vonage"
+              }
+            },
+            {
+              "name": "401 Unauthorized",
+              "code": 401,
+              "status": "Unauthorized",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": "Invalid token"
+              }
+            },
+            {
+              "name": "422 Unprocessable Entity (missing channel_id query param)",
+              "code": 422,
+              "status": "Unprocessable Entity",
+              "header": [
+                {
+                  "key": "Content-Type",
+                  "value": "application/json"
+                }
+              ],
+              "body": {
+                "detail": [
+                  {
+                    "type": "missing",
+                    "loc": [
+                      "query",
+                      "channel_id"
+                    ],
+                    "msg": "Field required",
+                    "input": null
+                  }
+                ]
+              }
+            }
+          ]
         }
       ]
     },

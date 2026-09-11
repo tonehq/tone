@@ -459,6 +459,17 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         for key in ("agent_id", "direction", "scheduled_call_id", "from", "to")
         if (value := (query.get(key) or "").strip())
     }
+    provider = (query.get("provider") or "").strip().lower()
+    if provider:
+        call_id = (query.get("call_id") or "").strip() or uuid4().hex
+        body["transport_type"] = provider
+        body["call_data"] = {
+            "call_id": call_id,
+            "stream_id": call_id,
+            "from": body.get("from", ""),
+            "to": body.get("to", ""),
+        }
+        logger.info("[inbound] /ws provider={} call_id={} pre-seeded from the query string", provider, call_id)
     runner_args = WebSocketRunnerArguments(websocket=websocket, body=body)
     try:
         active_calls_inc()
