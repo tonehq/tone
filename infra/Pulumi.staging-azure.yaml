@@ -1,0 +1,4 @@
+config:
+  azure-native:location: eastus
+  azure-native:subscriptionId:
+    secure: AAABAG+0nCko/Lq+lAY6AynmhmQV6YmZW+ed8cik3EXMucGzJyv5cd5+XQCKx6WpI1hisiSskJHUTeHZ9L2+3jDZ9aQ=

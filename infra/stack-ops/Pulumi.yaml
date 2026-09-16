@@ -1,0 +1,7 @@
+name: tone
+description: Start/stop orchestration for the Tone app stack - app node pool only; always-on infra (DOKS control plane, DO Postgres, DO Valkey) is untouched. up=start, destroy=stop.
+runtime:
+  name: python
+  options:
+    toolchain: pip
+    virtualenv: venv

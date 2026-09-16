@@ -1,0 +1,14 @@
+config:
+  # secret: pulumi config set --secret digitalocean:token <do-api-token>
+  tone:provider: digitalocean
+  tone:clusterName: tonedo-doks
+  tone:namespace: default
+  tone:appPool:
+    name: apppool
+    size: s-2vcpu-4gb
+    nodeCount: 2
+    autoScale: true
+    minNodes: 2
+    maxNodes: 3
+    labels:
+      pool: apppool
