@@ -1,0 +1,31 @@
+{
+  "env_name": "tone-staging",
+  "services": {
+    "kubernetes": {
+      "provider": "azure",
+      "config": {
+        "resource_group": "tone-staging",
+        "location": "eastus",
+        "kubernetes_version": "1.35",
+        "os_disk_size_gb": 128,
+        "availability_zones": [],
+        "node_pools": [
+          {
+            "name": "cpuapp",
+            "instance_type": "Standard_D2as_v7",
+            "min": 2,
+            "max": 3,
+            "desired": 2
+          },
+          {
+            "name": "workers",
+            "instance_type": "Standard_D2as_v7",
+            "min": 1,
+            "max": 2,
+            "desired": 1
+          }
+        ]
+      }
+    }
+  }
+}
