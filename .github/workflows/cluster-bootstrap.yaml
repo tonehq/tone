@@ -76,6 +76,10 @@ jobs:
           EXTRA=()
           [ -n "$LB_IP_NAME" ] && EXTRA+=(--set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-pip-name=$LB_IP_NAME")
           [ -n "$LB_RG" ] && EXTRA+=(--set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-resource-group=$LB_RG")
+          # Azure auto-generates HTTP(S) LB health probes on "/" from the service's appProtocol; ingress-nginx
+          # returns 404 there, so every backend is marked unhealthy and the LB drops traffic (Cloudflare 522).
+          # Point the probe at the controller's /healthz (200) so the backends stay healthy. Azure-only key.
+          [ -n "$LB_RG" ] && EXTRA+=(--set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-health-probe-request-path=/healthz")
           helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
             -n ingress-nginx --create-namespace --wait "${EXTRA[@]}"
 
