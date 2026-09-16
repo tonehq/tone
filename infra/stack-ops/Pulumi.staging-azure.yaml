@@ -1,0 +1,18 @@
+config:
+  # Azure tone-staging. secret: pulumi config set --secret azure-native:subscriptionId <subscription-id>
+  azure-native:location: eastus
+  tone:provider: azure
+  tone:resourceGroup: tone-staging
+  tone:clusterName: tone-staging-aks
+  tone:namespace: default
+  tone:appPool:
+    name: apppool
+    mode: User
+    vmSize: Standard_D2as_v7
+    count: 2
+    osDiskSizeGb: 128
+    enableAutoScaling: true
+    minCount: 2
+    maxCount: 3
+    labels:
+      pool: apppool

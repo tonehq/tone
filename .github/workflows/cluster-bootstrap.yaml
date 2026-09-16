@@ -64,12 +64,20 @@ jobs:
           helm repo update
           helm upgrade --install keda kedacore/keda -n keda --create-namespace --wait
 
-      - name: Install ingress-nginx (DigitalOcean Load Balancer)
+      - name: Install ingress-nginx
         run: |
           helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
           helm repo update
+          # Optional static-IP binding: set LB_IP_NAME (+ LB_RESOURCE_GROUP on Azure) in the env
+          # file to bind the ingress to a pre-created IP BY NAME (Azure resolves the address — no IP
+          # hard-coded). Empty (e.g. DO) -> provider default / dynamic IP.
+          LB_IP_NAME=$(grep -E '^LB_IP_NAME=' "$ENV_FILE" | cut -d= -f2)
+          LB_RG=$(grep -E '^LB_RESOURCE_GROUP=' "$ENV_FILE" | cut -d= -f2)
+          EXTRA=()
+          [ -n "$LB_IP_NAME" ] && EXTRA+=(--set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-pip-name=$LB_IP_NAME")
+          [ -n "$LB_RG" ] && EXTRA+=(--set-string "controller.service.annotations.service\.beta\.kubernetes\.io/azure-load-balancer-resource-group=$LB_RG")
           helm upgrade --install ingress-nginx ingress-nginx/ingress-nginx \
-            -n ingress-nginx --create-namespace --wait
+            -n ingress-nginx --create-namespace --wait "${EXTRA[@]}"
 
       # ── App namespace + its secrets ──
       # Each value is resolved from the GitHub secret NAMED in the env file
@@ -115,5 +123,7 @@ jobs:
             [ -n "$IP" ] && break
             sleep 10
           done
-          echo "Ingress LB IP: ${IP:-<pending — check DigitalOcean networking>}"
-          echo "Point do-api.trytone.ai and do-call.trytone.ai at that IP."
+          API_DOMAIN=$(grep -E '^API_DOMAIN=' "$ENV_FILE" | cut -d= -f2)
+          CALL_DOMAIN=$(grep -E '^CALL_DOMAIN=' "$ENV_FILE" | cut -d= -f2)
+          echo "Ingress LB IP: ${IP:-<pending>}"
+          echo "Point $API_DOMAIN and $CALL_DOMAIN at that IP."
