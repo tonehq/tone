@@ -13,6 +13,7 @@ import type { ProviderCatalogItem, ProviderModel } from '@/types/service';
  * single-shot fetch semantics (one attempt, then the shared error toast).
  */
 export const voiceCatalogKeys = {
+  all: () => ['voice-catalog'] as const,
   sttProviders: () => ['voice-catalog', 'stt-providers'] as const,
   ttsLanguages: () => ['voice-catalog', 'tts-languages'] as const,
   ttsProviders: (language: string) => ['voice-catalog', 'tts-providers', language] as const,

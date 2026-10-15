@@ -1,4 +1,4 @@
-import { Pencil, Trash2 } from 'lucide-react';
+import { Pencil, RefreshCw, Trash2 } from 'lucide-react';
 
 import { CustomButton, CustomDrawer } from '@/components/shared';
 import type { ModelRow } from '@/types/service';
@@ -16,6 +16,8 @@ interface ModelDetailDrawerProps {
   onDeleteModel: (model: ModelRow) => void;
   onEditApiKey: (model: ModelRow) => void;
   onDeleteApiKey: (model: ModelRow) => void;
+  onRefreshVoices: (model: ModelRow) => void;
+  refreshingVoices: boolean;
 }
 
 const ModelDetailDrawer = ({
@@ -27,6 +29,8 @@ const ModelDetailDrawer = ({
   onDeleteModel,
   onEditApiKey,
   onDeleteApiKey,
+  onRefreshVoices,
+  refreshingVoices,
 }: ModelDetailDrawerProps) => (
   <CustomDrawer
     open={open}
@@ -40,14 +44,27 @@ const ModelDetailDrawer = ({
         <section className="flex flex-col gap-4">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-foreground">Provider</h3>
-            <CustomButton
-              type="default"
-              size="sm"
-              icon={<Pencil className="size-3.5" />}
-              onClick={() => onEditProvider(model)}
-            >
-              Edit
-            </CustomButton>
+            <div className="flex items-center gap-2">
+              {model.supports_voice_refresh && (
+                <CustomButton
+                  type="default"
+                  size="sm"
+                  icon={<RefreshCw className="size-3.5" />}
+                  loading={refreshingVoices}
+                  onClick={() => onRefreshVoices(model)}
+                >
+                  Refresh voices
+                </CustomButton>
+              )}
+              <CustomButton
+                type="default"
+                size="sm"
+                icon={<Pencil className="size-3.5" />}
+                onClick={() => onEditProvider(model)}
+              >
+                Edit
+              </CustomButton>
+            </div>
           </div>
           <DetailField label="Name">{model.provider?.display_name ?? '—'}</DetailField>
           <DetailField label="Slug">
