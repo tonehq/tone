@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useAtom } from 'jotai';
 import { useCallback, useState } from 'react';
 
@@ -7,10 +8,12 @@ import {
   deleteProviderModelAtom,
   deleteServiceAtom,
   fetchServiceAtom,
+  refreshProviderVoicesAtom,
   upsertModelProviderAtom,
   upsertProviderModelAtom,
   upsertServiceAtom,
 } from '@/atoms/ServicesAtom';
+import { voiceCatalogKeys } from '@/lib/api/voiceCatalog';
 import {
   getModelProvider,
   listCloudProviders,
@@ -57,6 +60,8 @@ export function useModelActions({ refresh, closeDetail, openDetail }: UseModelAc
   const [, upsertService] = useAtom(upsertServiceAtom);
   const [, deleteService] = useAtom(deleteServiceAtom);
   const [, fetchService] = useAtom(fetchServiceAtom);
+  const [, refreshProviderVoices] = useAtom(refreshProviderVoicesAtom);
+  const queryClient = useQueryClient();
 
   // The row-detail drawer's model that an edit was launched from. Kept so the
   // edit drawers can navigate back to that detail view (breadcrumb / cancel /
@@ -116,6 +121,8 @@ export function useModelActions({ refresh, closeDetail, openDetail }: UseModelAc
   const [deletingModel, setDeletingModel] = useState(false);
   const [deleteKeyTarget, setDeleteKeyTarget] = useState<DeleteKeyTarget | null>(null);
   const [deletingKey, setDeletingKey] = useState(false);
+
+  const [refreshingVoices, setRefreshingVoices] = useState(false);
 
   // ── model ──────────────────────────────────────────────────────────────
   const editModel = useCallback(
@@ -336,6 +343,24 @@ export function useModelActions({ refresh, closeDetail, openDetail }: UseModelAc
     }
   }, [deleteKeyTarget, deleteService, refresh]);
 
+  const refreshVoices = useCallback(
+    async (m: ModelRow) => {
+      setRefreshingVoices(true);
+      try {
+        const result = await refreshProviderVoices(m.provider.id);
+        showToast.success(
+          `Fetched ${result.voices_fetched} voices, added ${result.voices_added} new`,
+        );
+        await queryClient.invalidateQueries({ queryKey: voiceCatalogKeys.all() });
+      } catch (err) {
+        handleApiError(err);
+      } finally {
+        setRefreshingVoices(false);
+      }
+    },
+    [refreshProviderVoices, queryClient],
+  );
+
   return {
     // detail-drawer action callbacks
     editModel,
@@ -343,6 +368,8 @@ export function useModelActions({ refresh, closeDetail, openDetail }: UseModelAc
     editProvider,
     editApiKey,
     deleteApiKey,
+    refreshVoices,
+    refreshingVoices,
     // the model an edit was launched from (drives the edit-drawer breadcrumb)
     detailModel,
     // model editor

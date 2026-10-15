@@ -347,6 +347,15 @@ def delete_provider_model(
     return _service(claims, db).delete_provider_model(provider_id, model_id)
 
 
+@router.post("/providers/{provider_id}/voices/refresh")
+def refresh_provider_voices(
+    provider_id: str,
+    claims: JWTClaims = Depends(require_admin_or_owner),
+    db: Session = Depends(get_db),
+):
+    return _service(claims, db).refresh_provider_voices(provider_id)
+
+
 # ─── TTS cascade (language → provider → voice) ───────────────────────────
 
 

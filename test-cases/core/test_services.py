@@ -626,6 +626,175 @@ class TestDeleteProviderModel:
         assert resp.status_code in (401, 403)
 
 
+def _seed_tts_provider(db_session):
+    from core.models.model import Model
+    from core.models.model_language import ModelLanguage
+    from core.models.model_provider import ModelProvider
+    from core.models.model_voice import ModelVoice
+
+    slug = f"testvoices{uuid.uuid4().hex[:8]}"
+    provider = ModelProvider(provider_id=slug, slug=slug, display_name=slug, is_active=True)
+    db_session.add(provider)
+    db_session.flush()
+    model = Model(provider_id=provider.id, kind="tts", name=f"tts-{slug}", is_active=True)
+    db_session.add(model)
+    db_session.flush()
+    db_session.add_all([
+        ModelVoice(
+            model_id=model.id, voice_id="kept", name="Original", accent=None,
+            language_list=["en"], is_active=True,
+        ),
+        ModelVoice(
+            model_id=model.id, voice_id="disabled", name="Disabled",
+            language_list=["en"], is_active=False,
+        ),
+        ModelVoice(
+            model_id=model.id, voice_id="not-fetched", name="Not fetched",
+            language_list=["en"], is_active=True,
+        ),
+        ModelLanguage(model_id=model.id, name="en", display_name="English (custom)", is_active=True),
+    ])
+    db_session.flush()
+    return provider, model
+
+
+def _fetched_voices(_api_key):
+    return [
+        {"voice_id": "kept", "name": "Renamed", "gender": "feminine", "accent": "British",
+         "description": None, "language_list": ["en"]},
+        {"voice_id": "disabled", "name": "Disabled", "gender": None, "accent": None,
+         "description": None, "language_list": ["en"]},
+        {"voice_id": "new-hindi", "name": "Kavya", "gender": "feminine",
+         "accent": "Standard Hindi", "description": "Calm", "language_list": ["hi"]},
+    ]
+
+
+class TestRefreshProviderVoices:
+    def test_unauthenticated(self, client_unauthenticated):
+        resp = client_unauthenticated.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/voices/refresh",
+        )
+        assert resp.status_code in (401, 403)
+
+    def test_member_cannot_refresh(self, client_as_member):
+        resp = client_as_member.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/voices/refresh",
+        )
+        assert resp.status_code != 200
+
+    def test_unknown_provider(self, client_as_admin):
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{_MISSING_UUID}/voices/refresh",
+        )
+        assert resp.status_code == 404
+
+    def test_unsupported_provider(self, client_as_admin, db_session):
+        provider, _ = _seed_tts_provider(db_session)
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{provider.id}/voices/refresh",
+        )
+        assert resp.status_code == 400
+
+    def test_missing_api_key(self, client_as_admin, db_session, monkeypatch):
+        from core.services import model_provider_service
+
+        provider, _ = _seed_tts_provider(db_session)
+        monkeypatch.setitem(model_provider_service.VOICE_FETCHERS, provider.provider_id, _fetched_voices)
+        monkeypatch.delenv(f"{provider.provider_id.upper()}_API_KEY", raising=False)
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{provider.id}/voices/refresh",
+        )
+        assert resp.status_code == 400
+
+    def test_provider_error(self, client_as_admin, db_session, monkeypatch):
+        from core.services import model_provider_service
+
+        def _failing(_api_key):
+            raise RuntimeError("provider down")
+
+        provider, _ = _seed_tts_provider(db_session)
+        monkeypatch.setitem(model_provider_service.VOICE_FETCHERS, provider.provider_id, _failing)
+        monkeypatch.setenv(f"{provider.provider_id.upper()}_API_KEY", "test-key")
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{provider.id}/voices/refresh",
+        )
+        assert resp.status_code == 502
+
+    def test_inserts_only_missing_voices(self, client_as_admin, db_session, monkeypatch):
+        from core.models.model_language import ModelLanguage
+        from core.models.model_voice import ModelVoice
+        from core.services import model_provider_service
+
+        provider, model = _seed_tts_provider(db_session)
+        monkeypatch.setitem(model_provider_service.VOICE_FETCHERS, provider.provider_id, _fetched_voices)
+        monkeypatch.setenv(f"{provider.provider_id.upper()}_API_KEY", "test-key")
+
+        resp = client_as_admin.post(
+            f"/api/v1/services/providers/{provider.id}/voices/refresh",
+        )
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["voices_fetched"] == 3
+        assert body["voices_added"] == 1
+        assert body["models"][0]["languages_added"] == ["hi"]
+
+        voices = {
+            v.voice_id: v
+            for v in db_session.query(ModelVoice).filter(ModelVoice.model_id == model.id)
+        }
+        assert set(voices) == {"kept", "disabled", "not-fetched", "new-hindi"}
+        assert voices["kept"].name == "Original"
+        assert voices["kept"].accent is None
+        assert voices["disabled"].is_active is False
+        assert voices["not-fetched"].is_active is True
+        assert voices["new-hindi"].accent == "Standard Hindi"
+        assert voices["new-hindi"].language_list == ["hi"]
+        assert voices["new-hindi"].is_active is True
+
+        languages = {
+            lang.name: lang
+            for lang in db_session.query(ModelLanguage).filter(ModelLanguage.model_id == model.id)
+        }
+        assert languages["en"].display_name == "English (custom)"
+        assert languages["hi"].display_name == "Hindi"
+
+    def test_second_refresh_adds_nothing(self, client_as_admin, db_session, monkeypatch):
+        from core.services import model_provider_service
+
+        provider, _ = _seed_tts_provider(db_session)
+        monkeypatch.setitem(model_provider_service.VOICE_FETCHERS, provider.provider_id, _fetched_voices)
+        monkeypatch.setenv(f"{provider.provider_id.upper()}_API_KEY", "test-key")
+        url = f"/api/v1/services/providers/{provider.id}/voices/refresh"
+
+        client_as_admin.post(url)
+        resp = client_as_admin.post(url)
+
+        assert resp.status_code == 200
+        assert resp.json()["voices_added"] == 0
+        assert resp.json()["models"][0]["languages_added"] == []
+
+    def test_model_row_flags_supported_provider(self, db_session, monkeypatch, org_id):
+        from core.services import model_provider_service
+        from core.services.model_provider_service import ModelProviderService
+
+        provider, model = _seed_tts_provider(db_session)
+        monkeypatch.setitem(model_provider_service.VOICE_FETCHERS, provider.provider_id, _fetched_voices)
+
+        rows = ModelProviderService(db_session, org_id=org_id).list_models({"search": model.name})["items"]
+
+        assert [r["supports_voice_refresh"] for r in rows] == [True]
+
+    def test_model_row_not_flagged_for_unsupported_provider(self, db_session, org_id):
+        from core.services.model_provider_service import ModelProviderService
+
+        _, model = _seed_tts_provider(db_session)
+
+        rows = ModelProviderService(db_session, org_id=org_id).list_models({"search": model.name})["items"]
+
+        assert [r["supports_voice_refresh"] for r in rows] == [False]
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/services/tts/languages
 # ---------------------------------------------------------------------------

@@ -14,6 +14,7 @@ import {
   listProviderKeys,
   listProviderModels,
   listServices,
+  refreshProviderVoices,
   updateCloudProvider,
   updateModelProvider,
   updateProviderModel,
@@ -33,6 +34,7 @@ import type {
   Service,
   ServiceKind,
   ServiceUpsertPayload,
+  VoiceRefreshResult,
 } from '@/types/service';
 
 // Each fetch atom tags its call with an incrementing token, so when filters,
@@ -224,6 +226,12 @@ export const deleteProviderModelAtom = atom(
   async (_get, _set, args: { providerId: string; modelId: string }): Promise<void> => {
     await deleteProviderModel(args.providerId, args.modelId);
   },
+);
+
+export const refreshProviderVoicesAtom = atom(
+  null,
+  async (_get, _set, providerId: string): Promise<VoiceRefreshResult> =>
+    refreshProviderVoices(providerId),
 );
 
 // ─── model provider CRUD atoms (admin) ─────────────────────────────────────
