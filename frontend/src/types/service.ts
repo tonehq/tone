@@ -58,6 +58,20 @@ export interface ProviderCatalogItem {
   meta_data_schema?: Record<string, import('@/types/provider').MetaDataSchemaField[]> | null;
 }
 
+export interface VoiceRefreshModelResult {
+  model_id: string;
+  model: string;
+  voices_added: number;
+  languages_added: string[];
+}
+
+export interface VoiceRefreshResult {
+  provider_id: string;
+  voices_fetched: number;
+  voices_added: number;
+  models: VoiceRefreshModelResult[];
+}
+
 /**
  * Aggregated "card" view — one row per (provider, service_type) the org has
  * ≥1 ApiKey for. A Deepgram STT key and a Deepgram TTS key therefore surface
@@ -170,6 +184,7 @@ export interface ModelRow {
   provider: ServiceProviderRef;
   cloud_provider: CloudProviderRef | null;
   api_key: ModelApiKeyStatus | null;
+  supports_voice_refresh: boolean;
   created_at: number;
   updated_at: number;
 }

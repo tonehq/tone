@@ -10,6 +10,7 @@ import type {
   ProviderUsage,
   Service,
   ServiceUpsertPayload,
+  VoiceRefreshResult,
 } from '@/types/service';
 import type { ListFilterParam } from '@/types/facetedList';
 import axios from '@/utils/axios';
@@ -232,6 +233,13 @@ export async function updateProviderModel(
 
 export async function deleteProviderModel(providerId: string, modelId: string): Promise<void> {
   await axios.delete(`/services/providers/${providerId}/models/${modelId}`);
+}
+
+export async function refreshProviderVoices(providerId: string): Promise<VoiceRefreshResult> {
+  const { data } = await axios.post<VoiceRefreshResult>(
+    `/services/providers/${providerId}/voices/refresh`,
+  );
+  return data;
 }
 
 // ─── model provider CRUD (admin) ───────────────────────────────────────────

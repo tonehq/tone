@@ -5,7 +5,9 @@ Model management). Shared by ``core/api/v1/services.py`` and
 from typing import Any, Iterable, List, Optional
 from uuid import UUID
 
+import httpx
 from fastapi import HTTPException, status
+from loguru import logger
 from sqlalchemy import case, distinct, func, or_
 from sqlalchemy.orm import Session, joinedload
 
@@ -18,6 +20,7 @@ from core.models.model_voice import ModelVoice
 from core.services.base import BaseService
 from core.services.common.list_query import apply_search_sort_pagination
 from core.services.crud import list_records
+from core.services.rag.provider_keys import ProviderKeyService
 from core.utils.encryption import encrypt
 from core.utils.faceted_query import apply_filters, build_facets, distinct_values
 
@@ -42,6 +45,9 @@ ALLOWED_PROVIDER_SORT_FIELDS = {
     "created_at",
     "updated_at",
 }
+CARTESIA_VOICES_URL = "https://api.cartesia.ai/voices"
+CARTESIA_API_VERSION = "2025-04-16"
+CARTESIA_VOICES_PAGE_SIZE = 100
 
 
 # ─── module-level helpers (pure, no instance state) ─────────────────────────
@@ -120,6 +126,47 @@ def _optional_str(body: dict, key: str) -> Optional[str]:
     """Trim a request-body string and return ``None`` for empty/missing values.
     Centralises the ``(x or "").strip() or None`` pattern used across model writes."""
     return (body.get(key) or "").strip() or None
+
+
+def _truncate(value: Optional[str], size: int) -> Optional[str]:
+    return (value or "")[:size] or None
+
+
+def _cartesia_native_accent(voice: dict) -> Optional[str]:
+    for accent in voice.get("accents") or []:
+        if accent.get("is_native") and accent.get("accent"):
+            return accent["accent"].replace("-", " ").title()
+    return None
+
+
+def _fetch_cartesia_voices(api_key: str) -> list[dict]:
+    headers = {"X-API-Key": api_key, "Cartesia-Version": CARTESIA_API_VERSION}
+    params: dict = {"limit": CARTESIA_VOICES_PAGE_SIZE}
+    raw: list[dict] = []
+    with httpx.Client(timeout=30) as client:
+        while True:
+            resp = client.get(CARTESIA_VOICES_URL, headers=headers, params=params)
+            resp.raise_for_status()
+            page = resp.json()
+            raw.extend(page.get("data") or [])
+            if not page.get("has_more"):
+                break
+            params["starting_after"] = page.get("next_page")
+    return [
+        {
+            "voice_id": v["id"],
+            "name": v.get("name"),
+            "gender": v.get("gender"),
+            "accent": _cartesia_native_accent(v),
+            "description": v.get("description"),
+            "language_list": [v["language"]] if v.get("language") else [],
+        }
+        for v in raw
+        if v.get("is_public") and v.get("id")
+    ]
+
+
+VOICE_FETCHERS = {"cartesia": _fetch_cartesia_voices}
 
 
 # ─── service class ──────────────────────────────────────────────────────────
@@ -1133,6 +1180,13 @@ class ModelProviderService(BaseService):
         cloud_provider_map = self._ref_map(
             CloudProvider, [m.cloud_provider_id for m in rows if m.cloud_provider_id]
         )
+        voice_refresh_provider_ids = {
+            str(pid)
+            for (pid,) in self.db.query(ModelProvider.id).filter(
+                ModelProvider.id.in_(provider_ids),
+                ModelProvider.provider_id.in_(list(VOICE_FETCHERS)),
+            )
+        } if provider_ids else set()
 
         items = []
         for m in rows:
@@ -1143,6 +1197,9 @@ class ModelProviderService(BaseService):
                 cloud_provider_map.get(str(m.cloud_provider_id)) if m.cloud_provider_id else None
             )
             row["api_key"] = keys_map.get((pid, m.kind))
+            row["supports_voice_refresh"] = (
+                m.kind == "tts" and pid in voice_refresh_provider_ids
+            )
             items.append(row)
 
         return {
@@ -1296,6 +1353,135 @@ class ModelProviderService(BaseService):
         self.db.delete(record)
         self.db.commit()
         return {"ok": True}
+
+    def refresh_provider_voices(self, provider_id: str) -> dict:
+        prov_uuid = _parse_uuid(provider_id, field="provider id")
+        provider = self._provider_or_404(prov_uuid)
+
+        fetch_voices = VOICE_FETCHERS.get(provider.provider_id)
+        if not fetch_voices:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Voice refresh isn't supported for {provider.display_name}",
+            )
+        api_key = ProviderKeyService.get_key(self.db, self.org_id, provider.provider_id)
+        if not api_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Add a {provider.display_name} API key before refreshing voices",
+            )
+        models = (
+            self.db.query(Model)
+            .filter(
+                Model.provider_id == prov_uuid,
+                Model.kind == "tts",
+                Model.is_active.is_(True),
+            )
+            .order_by(Model.name.asc())
+            .all()
+        )
+        if not models:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{provider.display_name} has no active TTS models",
+            )
+
+        try:
+            fetched = fetch_voices(api_key)
+        except Exception:
+            logger.exception(
+                "[model_provider] voice refresh failed for provider={}", provider.provider_id
+            )
+            raise HTTPException(
+                status_code=status.HTTP_502_BAD_GATEWAY,
+                detail=f"Couldn't fetch voices from {provider.display_name}",
+            )
+
+        voices = list({v["voice_id"]: v for v in fetched}.values())
+        language_codes = sorted({code for v in voices for code in v["language_list"]})
+        display_names = self._language_display_names(language_codes)
+        results = [
+            self._insert_missing_voices(model, voices, language_codes, display_names)
+            for model in models
+        ]
+        self.db.commit()
+        logger.info(
+            "[model_provider] voice refresh provider={} fetched={} results={}",
+            provider.provider_id, len(voices), results,
+        )
+        return {
+            "provider_id": str(provider.id),
+            "voices_fetched": len(voices),
+            "voices_added": sum(r["voices_added"] for r in results),
+            "models": results,
+        }
+
+    def _language_display_names(self, codes: list[str]) -> dict[str, str]:
+        if not codes:
+            return {}
+        rows = (
+            self.db.query(ModelLanguage.name, ModelLanguage.display_name)
+            .filter(
+                ModelLanguage.name.in_(codes),
+                ModelLanguage.display_name.isnot(None),
+            )
+            .distinct()
+            .all()
+        )
+        return {name: display_name for name, display_name in rows}
+
+    def _insert_missing_voices(
+        self,
+        model: Model,
+        voices: list[dict],
+        language_codes: list[str],
+        display_names: dict[str, str],
+    ) -> dict:
+        existing_voice_ids = {
+            voice_id
+            for (voice_id,) in self.db.query(ModelVoice.voice_id).filter(
+                ModelVoice.model_id == model.id
+            )
+        }
+        existing_languages = {
+            name
+            for (name,) in self.db.query(ModelLanguage.name).filter(
+                ModelLanguage.model_id == model.id
+            )
+        }
+
+        new_voices = [v for v in voices if v["voice_id"] not in existing_voice_ids]
+        for v in new_voices:
+            self.db.add(
+                ModelVoice(
+                    model_id=model.id,
+                    voice_id=v["voice_id"],
+                    name=_truncate(v["name"], 200),
+                    gender=_truncate(v["gender"], 200),
+                    accent=_truncate(v["accent"], 120),
+                    description=_truncate(v["description"], 200),
+                    language_list=v["language_list"],
+                    is_active=True,
+                )
+            )
+
+        new_languages = [code for code in language_codes if code not in existing_languages]
+        for code in new_languages:
+            self.db.add(
+                ModelLanguage(
+                    model_id=model.id,
+                    name=code,
+                    display_name=display_names.get(code, code),
+                    is_active=True,
+                )
+            )
+
+        return {
+            "model_id": str(model.id),
+            "model": model.name,
+            "voices_added": len(new_voices),
+            "languages_added": new_languages,
+        }
 
     # ─── TTS cascade (language → provider → voice) ────────────────────────
 

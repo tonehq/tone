@@ -179,6 +179,8 @@ export default function ModelsTablePage() {
         onDeleteModel={actions.deleteModel}
         onEditApiKey={actions.editApiKey}
         onDeleteApiKey={actions.deleteApiKey}
+        onRefreshVoices={actions.refreshVoices}
+        refreshingVoices={actions.refreshingVoices}
       />
 
       <ModelActionDrawers actions={actions} />
